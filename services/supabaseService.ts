@@ -310,11 +310,13 @@ export async function fetchMaterials(type?: 'character' | 'plot' | 'idea') {
 
 export async function fetchPrompts(mainCategory?: string) {
     try {
-        const userId = await getCurrentUserId();
-        if (!userId) return [];
-
-        let query = supabase.from('prompts').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+        // Community Mode: Fetch ALL prompts (do not filter by user_id)
+        // We assume the app is used by authenticated users, but for reading prompts, we fetch all.
+        // getCurrentUserId() is optional here for reading, but we might need it elsewhere.
+        
+        let query = supabase.from('prompts').select('*').order('created_at', { ascending: false });
         if (mainCategory) query = query.eq('main_category', mainCategory);
+        
         const { data, error } = await query;
         return error ? [] : data;
     } catch (e) {

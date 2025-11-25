@@ -7,7 +7,7 @@ import CreatePromptModal from './CreatePromptModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import PromptDetailModal from './PromptDetailModal';
 import { Plus, Heart } from './Icon';
-import { savePrompt, fetchPrompts, deletePrompt } from '../services/supabaseService';
+import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId } from '../services/supabaseService';
 
 interface PromptLibraryProps {
     onNavigateToGeneration?: (prompt: Prompt, values: Record<string, string>) => void;
@@ -33,6 +33,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -43,8 +44,11 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
 
     // Load User Prompts from Supabase
     useEffect(() => {
-        const loadUserPrompts = async () => {
+        const loadData = async () => {
             try {
+                const userId = await getCurrentUserId();
+                setCurrentUserId(userId);
+
                 const data = await fetchPrompts(); 
                 if (data) {
                     const mappedPrompts: Prompt[] = data.map((p: any) => {
@@ -71,7 +75,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                             fields: parsedContent.fields || [], 
                             template: parsedContent.template || p.content,
                             heat: 0,
-                            creator: 'user'
+                            creator: 'user',
+                            userId: p.user_id // Store creator ID
                         };
                     });
                     // Merge fetched prompts with system PROMPTS
@@ -81,7 +86,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                 console.error("Failed to load prompts", error);
             }
         };
-        loadUserPrompts();
+        loadData();
     }, []);
 
     const handleSavePrompt = async (data: Omit<Prompt, 'id' | 'heat' | 'content'>) => {
@@ -105,13 +110,16 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
         // Call Supabase
         await savePrompt(data.title, contentToSave, dbMainCat, subCat);
 
+        // Optimistic update
         const newPrompt: Prompt = {
             ...data,
             id: `prompt-user-${Date.now()}`,
             heat: 0,
             content: data.template, 
+            creator: 'user',
+            userId: currentUserId || undefined
         };
-        // Add to local state for immediate feedback
+        
         setPrompts(prev => [newPrompt, ...prev]);
         
         // Automatically add to favorites
@@ -296,6 +304,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                         onDelete={handleOpenDeleteModal}
                         isFavorited={favoritedIds.has(prompt.id)}
                         onToggleFavorite={toggleFavorite}
+                        isOwner={prompt.userId === currentUserId}
                     />
                 ))}
                 {filteredPrompts.length === 0 && (

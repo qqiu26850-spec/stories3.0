@@ -54,6 +54,7 @@ export interface Prompt {
   template: string; // Kept for backwards compatibility with Creative Generation
   heat: number;
   creator: 'system' | 'user';
+  userId?: string;
 }
 
 export interface WorkflowField {

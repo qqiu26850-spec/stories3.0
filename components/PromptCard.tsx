@@ -9,9 +9,10 @@ interface PromptCardProps {
   onDelete: (prompt: Prompt) => void;
   isFavorited?: boolean;
   onToggleFavorite?: (id: string) => void;
+  isOwner?: boolean;
 }
 
-const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, isFavorited = false, onToggleFavorite }) => {
+const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, isFavorited = false, onToggleFavorite, isOwner }) => {
   
   return (
     <div 
@@ -47,8 +48,12 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, isF
             </div>
             <div className="flex items-center gap-1.5">
                 <UserCircle className="w-4 h-4" />
-                <span>{prompt.creator === 'user' ? '我' : '官方'}</span>
-                {prompt.creator === 'user' && (
+                <span>
+                    {prompt.creator === 'user' 
+                        ? (isOwner ? '我' : '社区用户') 
+                        : '官方'}
+                </span>
+                {isOwner && prompt.creator === 'user' && (
                      <button
                         onClick={(e) => {
                             e.stopPropagation();
