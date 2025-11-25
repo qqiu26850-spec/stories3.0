@@ -53,6 +53,34 @@ export async function getCurrentUserId() {
   return session?.user?.id || null;
 }
 
+/**
+ * 5. 注销账号（删除数据保留提示词）
+ */
+export async function deleteUserData(): Promise<boolean> {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+
+        // Delete Projects (Cascade should handle chapters, but this deletes the project root)
+        const { error: pError } = await supabase.from('projects').delete().eq('user_id', userId);
+        if (pError) throw pError;
+
+        // Delete Materials
+        const { error: mError } = await supabase.from('materials').delete().eq('user_id', userId);
+        if (mError) throw mError;
+
+        // Prompts are explicitly EXCLUDED from deletion to preserve community contributions.
+        // Workflows are currently local-only in this version, so no DB delete needed.
+
+        // Sign out the user
+        await signOut();
+        return true;
+    } catch (err: any) {
+        console.error('Failed to delete user data:', err.message);
+        return false;
+    }
+}
+
 // ================= Core Functions =================
 
 /**
@@ -310,10 +338,7 @@ export async function fetchMaterials(type?: 'character' | 'plot' | 'idea') {
 
 export async function fetchPrompts(mainCategory?: string) {
     try {
-        // Community Mode: Fetch ALL prompts (do not filter by user_id)
-        // We assume the app is used by authenticated users, but for reading prompts, we fetch all.
-        // getCurrentUserId() is optional here for reading, but we might need it elsewhere.
-        
+        // Community Mode: Fetch ALL prompts
         let query = supabase.from('prompts').select('*').order('created_at', { ascending: false });
         if (mainCategory) query = query.eq('main_category', mainCategory);
         
@@ -321,6 +346,38 @@ export async function fetchPrompts(mainCategory?: string) {
         return error ? [] : data;
     } catch (e) {
         return [];
+    }
+}
+
+/**
+ * Fetch all content created by the current user for the Personal Center
+ */
+export async function fetchUserLibrary() {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return { prompts: [], materials: [] };
+
+        // Fetch My Prompts
+        const { data: prompts } = await supabase
+            .from('prompts')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        // Fetch My Materials
+        const { data: materials } = await supabase
+            .from('materials')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        return {
+            prompts: prompts || [],
+            materials: materials || []
+        };
+    } catch (e) {
+        console.error("Fetch User Library Error", e);
+        return { prompts: [], materials: [] };
     }
 }
 

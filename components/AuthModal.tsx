@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { signIn, signUp } from '../services/supabaseService';
-import { BookSolid, X } from './Icon';
+import { BookSolid, X, Eye, EyeSlash } from './Icon';
 
 interface AuthModalProps {
     isOpen: boolean;
@@ -12,6 +12,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
     const [mode, setMode] = useState<'login' | 'register'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [message, setMessage] = useState('');
@@ -54,11 +55,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     <div className="w-16 h-16 bg-sky-100 dark:bg-sky-900/30 rounded-full flex items-center justify-center mb-4">
                         <BookSolid className="w-8 h-8 text-sky-600 dark:text-sky-400" />
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {mode === 'login' ? '欢迎回来' : '创建账号'}
-                    </h2>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">
-                        {mode === 'login' ? '登录以同步您的创作数据' : '开启您的 AI 创作之旅'}
+                    <h1 className="text-3xl font-bold text-sky-600 dark:text-sky-400 tracking-wider mb-2">奇思妙写</h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                        {mode === 'login' ? '登录以同步您的创作数据' : '创建账号，开启您的 AI 创作之旅'}
                     </p>
                 </div>
 
@@ -77,14 +76,24 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">密码</label>
-                        <input 
-                            type="password" 
-                            required
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            className="w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition"
-                        />
+                        <div className="relative">
+                            <input 
+                                type={showPassword ? "text" : "password"}
+                                required
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                                className="w-full p-3 pr-10 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                                title={showPassword ? "隐藏密码" : "显示密码"}
+                            >
+                                {showPassword ? <EyeSlash className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
+                        </div>
                     </div>
 
                     {error && (

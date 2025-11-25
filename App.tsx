@@ -11,7 +11,7 @@ import PersonalCenter from './components/PersonalCenter';
 import Placeholder from './components/Placeholder';
 import WorkflowManagement from './components/WorkflowManagement';
 import AuthModal from './components/AuthModal';
-import { getCurrentUserId } from './services/supabaseService';
+import { getCurrentUserId, signOut } from './services/supabaseService';
 
 export type Theme = 'light' | 'dark';
 
@@ -40,6 +40,13 @@ const App: React.FC = () => {
     };
     checkAuth();
   }, []);
+
+  const handleLogout = async () => {
+      await signOut();
+      setIsAuthenticated(false);
+      setShowAuthModal(true);
+      setActiveView('creative-generation'); // Reset view
+  };
 
   const toggleTheme = () => {
     setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
@@ -87,7 +94,7 @@ const App: React.FC = () => {
       case 'script-management':
         return <ScriptManagement />;
       case 'personal-center':
-        return <PersonalCenter />;
+        return <PersonalCenter onLogout={handleLogout} />;
       default:
         return <CreativeGeneration />;
     }
