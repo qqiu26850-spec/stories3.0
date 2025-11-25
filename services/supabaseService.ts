@@ -1,0 +1,258 @@
+
+import { createClient } from '@supabase/supabase-js';
+
+// ================= Configuration =================
+// Please replace with your own Supabase project URL and Anon Key
+const SUPABASE_URL = 'https://vydvxxarfjyjjjhyhfek.supabase.co'; 
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5ZHZ4eGFyZmp5ampqaHloZmVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NzY4OTksImV4cCI6MjA3OTU1Mjg5OX0.Y9Q4JwTZnBBwDDAhz_TUcxZ-Jv-eN8BXqPauIQaI-Ds';
+
+// Initialize Supabase Client
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Define Test User ID (UUID format required)
+export const TEST_USER_ID = '9a775d9f-225c-442f-b5ec-286ceea7ad19'; 
+
+// ================= Core Functions =================
+
+/**
+ * 1. Create New Project (Novel/Script/Short Story)
+ * Table: projects
+ */
+export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short_story'): Promise<string | null> {
+    try {
+        const { data, error } = await supabase
+            .from('projects')
+            .insert([
+                {
+                    user_id: TEST_USER_ID,
+                    title: title,
+                    description: desc,
+                    type: type,
+                    status: 'draft'
+                }
+            ])
+            .select();
+
+        if (error) throw error;
+        return data[0].id;
+    } catch (err: any) {
+        console.error('Failed to create project:', err.message);
+        alert('创建云端项目失败，请查看控制台。');
+        return null;
+    }
+}
+
+/**
+ * 2. Update Project Metadata (Title, etc.)
+ */
+export async function updateProject(projectId: string, updates: { title?: string, description?: string }) {
+    try {
+        const { error } = await supabase
+            .from('projects')
+            .update(updates)
+            .eq('id', projectId);
+
+        if (error) throw error;
+        console.log('Project updated:', updates);
+    } catch (err: any) {
+        console.error('Failed to update project:', err.message);
+    }
+}
+
+/**
+ * 3. Fetch Chapters for a Project
+ */
+export async function fetchChapters(projectId: string) {
+    try {
+        const { data, error } = await supabase
+            .from('chapters')
+            .select('*')
+            .eq('project_id', projectId)
+            .order('order_index', { ascending: true });
+        
+        if (error) throw error;
+        return data;
+    } catch (err: any) {
+        console.error('Failed to fetch chapters:', err.message);
+        return [];
+    }
+}
+
+/**
+ * 4. Smart Save Chapter (Insert or Update)
+ * If chapterId starts with 'ch-' or 'scene-' or 'new-', it's treated as new (Insert).
+ * Otherwise it's treated as existing (Update).
+ */
+export async function saveChapterToDB(
+    projectId: string, 
+    chapterId: string, 
+    title: string, 
+    content: string, 
+    orderIndex: number
+): Promise<string | null> {
+    try {
+        // Check if it's a local temporary ID
+        const isLocalId = chapterId.startsWith('ch-') || chapterId.startsWith('scene-') || chapterId.startsWith('new-');
+
+        if (isLocalId) {
+            // INSERT
+            const { data, error } = await supabase
+                .from('chapters')
+                .insert([
+                    {
+                        project_id: projectId,
+                        title: title,
+                        content: content,
+                        order_index: orderIndex
+                    }
+                ])
+                .select();
+
+            if (error) throw error;
+            return data[0].id; // Return real UUID
+        } else {
+            // UPDATE
+            const { data, error } = await supabase
+                .from('chapters')
+                .update({
+                    title: title,
+                    content: content,
+                    order_index: orderIndex
+                })
+                .eq('id', chapterId)
+                .select();
+
+            if (error) throw error;
+            return data[0].id;
+        }
+    } catch (err: any) {
+        console.error('Failed to save chapter:', err.message);
+        // alert('保存章节失败，请检查网络或控制台。'); // Removed alert for auto-save silence
+        return null;
+    }
+}
+
+/**
+ * 5. Delete Chapter
+ */
+export async function deleteChapterFromDB(chapterId: string): Promise<void> {
+    try {
+        // If it's a local ID, it doesn't exist in DB yet, so just return
+        if (chapterId.startsWith('ch-') || chapterId.startsWith('scene-') || chapterId.startsWith('new-')) {
+            return;
+        }
+
+        const { error } = await supabase
+            .from('chapters')
+            .delete()
+            .eq('id', chapterId);
+
+        if (error) throw error;
+        console.log('Chapter deleted from DB:', chapterId);
+    } catch (err: any) {
+        console.error('Failed to delete chapter:', err.message);
+        alert('删除云端章节失败。');
+    }
+}
+
+// --- Original saveChapter (kept for compatibility if needed, but deprecated) ---
+export async function saveChapter(projectId: string, title: string, content: string): Promise<void> {
+    // This simple version just inserts blindly. Recommended to use saveChapterToDB instead.
+    await saveChapterToDB(projectId, `new-${Date.now()}`, title, content, 999);
+}
+
+// --- Material & Prompt Functions ---
+
+export async function saveMaterial(name: string, content: string, type: 'character' | 'plot' | 'idea', tags: string[] = []): Promise<void> {
+    try {
+        const { error } = await supabase
+            .from('materials')
+            .insert([
+                { user_id: TEST_USER_ID, name, content, type, tags: tags }
+            ]);
+        if (error) throw error;
+        alert('素材已同步到云端！');
+    } catch (err: any) {
+        console.error('Failed to save material:', err.message);
+    }
+}
+
+export async function savePrompt(title: string, content: string, mainCat: string, subCat: string): Promise<void> {
+    try {
+        const { error } = await supabase
+            .from('prompts')
+            .insert([
+                { 
+                    user_id: TEST_USER_ID, 
+                    title, 
+                    content, 
+                    main_category: mainCat, 
+                    sub_category: subCat 
+                }
+            ]);
+        if (error) throw error;
+        alert('提示词已保存到云端库！');
+    } catch (err: any) {
+        console.error('Failed to save prompt:', err.message);
+    }
+}
+
+export async function fetchProjects() {
+    // 1. Get Projects
+    const { data: projects, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('user_id', TEST_USER_ID)
+        .order('created_at', { ascending: false });
+    
+    if (error || !projects) return [];
+
+    // 2. Get all chapters for these projects to calculate word count
+    const projectIds = projects.map(p => p.id);
+    if (projectIds.length === 0) return projects;
+
+    const { data: chapters, error: chapterError } = await supabase
+        .from('chapters')
+        .select('project_id, content')
+        .in('project_id', projectIds);
+
+    if (chapterError) {
+        console.error("Failed to fetch chapters for word count", chapterError);
+        return projects; // Return projects without accurate word count if fail
+    }
+
+    // 3. Calculate and inject word count
+    const projectsWithCount = projects.map(p => {
+        const pChapters = chapters?.filter(c => c.project_id === p.id) || [];
+        const totalWords = pChapters.reduce((acc, c) => acc + (c.content ? c.content.length : 0), 0);
+        return { ...p, word_count: totalWords }; // Inject calculate word_count
+    });
+
+    return projectsWithCount;
+}
+
+export async function fetchMaterials(type?: 'character' | 'plot' | 'idea') {
+    let query = supabase.from('materials').select('*').eq('user_id', TEST_USER_ID).order('created_at', { ascending: false });
+    if (type) query = query.eq('type', type);
+    const { data, error } = await query;
+    return error ? [] : data;
+}
+
+export async function fetchPrompts(mainCategory?: string) {
+    let query = supabase.from('prompts').select('*').eq('user_id', TEST_USER_ID).order('created_at', { ascending: false });
+    if (mainCategory) query = query.eq('main_category', mainCategory);
+    const { data, error } = await query;
+    return error ? [] : data;
+}
+
+export async function deleteProject(id: string): Promise<void> {
+    await supabase.from('projects').delete().eq('id', id);
+}
+
+export async function deleteMaterial(id: string): Promise<void> {
+    await supabase.from('materials').delete().eq('id', id);
+}
+
+export async function deletePrompt(id: string): Promise<void> {
+    await supabase.from('prompts').delete().eq('id', id);
+}

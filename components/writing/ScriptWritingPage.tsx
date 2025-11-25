@@ -1,0 +1,306 @@
+
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Script, Scene } from '../../types';
+import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check } from '../Icon';
+import ScriptEpisodeManager from './ScriptEpisodeManager';
+import ScriptAIPanel from './ScriptAIPanel';
+import ScriptAdaptationPanel from './ScriptAdaptationPanel';
+import WritingToolbar, { ToolbarAction } from './WritingToolbar';
+import { saveChapterToDB, updateProject, fetchChapters, deleteChapterFromDB } from '../../services/supabaseService';
+
+interface ScriptWritingPageProps {
+    script: Script;
+    onBack: () => void;
+}
+
+type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
+
+const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialScript, onBack }) => {
+    const [script, setScript] = useState<Script>(initialScript);
+    const [activeScene, setActiveScene] = useState<Scene | null>(null);
+    const [editorContent, setEditorContent] = useState('');
+    const [sceneTitle, setSceneTitle] = useState('');
+    const [wordCount, setWordCount] = useState(0);
+
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>('left');
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [tempTitle, setTempTitle] = useState(script.title);
+    const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+
+    // Load scenes from Supabase (mapped to chapters table)
+    useEffect(() => {
+        const loadScenes = async () => {
+            if (!script.id || script.id.startsWith('script-')) return;
+
+            const dbChapters = await fetchChapters(script.id);
+            if (dbChapters && dbChapters.length > 0) {
+                const mappedScenes: Scene[] = dbChapters.map((c: any) => ({
+                    id: c.id,
+                    title: c.title,
+                    content: c.content || ''
+                }));
+                setScript(prev => ({ ...prev, scenes: mappedScenes }));
+                setActiveScene(mappedScenes[0]);
+            } else if (script.scenes.length > 0) {
+                setActiveScene(script.scenes[0]);
+            }
+        };
+        loadScenes();
+    }, [script.id]);
+
+    useEffect(() => {
+        if (activeScene) {
+            setSceneTitle(activeScene.title);
+            setEditorContent(activeScene.content);
+            setWordCount(activeScene.content.replace(/\s/g, '').length);
+            setSaveStatus('saved');
+        } else {
+            setSceneTitle('');
+            setEditorContent('');
+            setWordCount(0);
+        }
+    }, [activeScene]);
+
+    // Auto-Save Logic (Real-time / 1s Debounce)
+    useEffect(() => {
+        if (!activeScene) return;
+        
+        const isChanged = sceneTitle !== activeScene.title || editorContent !== activeScene.content;
+        
+        if (isChanged) {
+            setSaveStatus('saving');
+            const timer = setTimeout(async () => {
+                await handleSaveToCloud(true); // Silent save
+            }, 1000); // 1s debounce
+            return () => clearTimeout(timer);
+        }
+    }, [sceneTitle, editorContent, activeScene]);
+
+    const updateEditorState = useCallback((content: string) => {
+        setEditorContent(content);
+        const count = content.replace(/\s/g, '').length;
+        setWordCount(count);
+    }, []);
+
+    const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        updateEditorState(e.target.value);
+    };
+
+    const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSceneTitle(e.target.value);
+    };
+
+    const handleSaveTitle = async () => {
+        if (tempTitle.trim()) {
+            setScript(prev => ({ ...prev, title: tempTitle }));
+            await updateProject(script.id, { title: tempTitle });
+        } else {
+            setTempTitle(script.title);
+        }
+        setIsEditingTitle(false);
+    };
+
+    const handleCreateScene = () => {
+        const newScene: Scene = {
+            id: `scene-${Date.now()}`,
+            title: `第 ${script.scenes.length + 1} 集`,
+            content: ''
+        };
+        setScript(prev => ({ ...prev, scenes: [...prev.scenes, newScene] }));
+        setActiveScene(newScene);
+    };
+
+    const handleDeleteScene = async (id: string) => {
+        await deleteChapterFromDB(id);
+        const newScenes = script.scenes.filter(s => s.id !== id);
+        setScript(prev => ({ ...prev, scenes: newScenes }));
+        if (activeScene?.id === id) {
+            setActiveScene(newScenes.length > 0 ? newScenes[0] : null);
+        }
+    };
+
+    const handleInsertText = (text: string) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+        
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const currentText = editorContent;
+        
+        const newContent = currentText.substring(0, start) + text + currentText.substring(end);
+        updateEditorState(newContent);
+    };
+
+     const handleToolbarAction = (action: ToolbarAction) => {
+         const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const value = textarea.value;
+        let newContent = value;
+
+        if (action === 'copy') { navigator.clipboard.writeText(value); return; }
+        if (action === 'bold') {
+             newContent = value.substring(0, start) + '**' + value.substring(start, end) + '**' + value.substring(end);
+        }
+        if (newContent !== value) {
+            updateEditorState(newContent);
+        }
+    };
+
+    const handleSaveToCloud = async (silent = false) => {
+        if (activeScene) {
+            const orderIndex = script.scenes.findIndex(s => s.id === activeScene.id) + 1;
+            const newId = await saveChapterToDB(
+                script.id,
+                activeScene.id,
+                sceneTitle,
+                editorContent,
+                orderIndex
+            );
+
+            if (newId) {
+                const updatedScene = { 
+                    ...activeScene, 
+                    id: newId, 
+                    title: sceneTitle,
+                    content: editorContent
+                };
+                setScript(prev => ({
+                    ...prev,
+                    scenes: prev.scenes.map(s => s.id === activeScene.id ? updatedScene : s)
+                }));
+                setActiveScene(updatedScene);
+                setSaveStatus('saved');
+                
+                if (!silent && newId !== activeScene.id) {
+                    // alert("已同步并创建云端集数！");
+                }
+            } else {
+                setSaveStatus('error');
+            }
+        }
+    };
+
+
+    return (
+        <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
+            <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm">
+                <div className="w-52 flex-shrink-0 flex items-center gap-2 p-4 border-r border-gray-200 dark:border-gray-800">
+                    <Film className="w-8 h-8 text-sky-500" />
+                    <span className="font-bold text-xl tracking-wider text-gray-900 dark:text-white truncate">
+                        {script.type === 'original' ? '原创剧本' : '剧本改编'}
+                    </span>
+                </div>
+                
+                <div className="flex-1 flex items-center justify-center p-2 relative">
+                    {isEditingTitle ? (
+                        <input 
+                            type="text"
+                            value={tempTitle}
+                            onChange={(e) => setTempTitle(e.target.value)}
+                            onBlur={handleSaveTitle}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
+                            autoFocus
+                            className="text-center text-lg font-bold bg-gray-50 dark:bg-gray-800 border border-sky-500 rounded px-4 py-2 focus:outline-none min-w-[200px] text-gray-900 dark:text-white shadow-inner"
+                        />
+                    ) : (
+                        <div 
+                            className="flex items-center gap-2 group cursor-pointer px-6 py-2 bg-white dark:bg-gray-900 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-700 rounded-md transition-all" 
+                            onClick={() => setIsEditingTitle(true)}
+                        >
+                            <h1 className="font-bold text-lg text-gray-900 dark:text-white min-w-[100px] text-center">
+                                {script.title}
+                            </h1>
+                            <Pencil className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                    )}
+                </div>
+                
+                <div className="w-[29%] flex-shrink-0 flex items-center justify-end p-4 border-l border-gray-200 dark:border-gray-800 gap-3">
+                    <div className="flex items-center gap-2 mr-2">
+                        {saveStatus === 'saving' && <span className="text-xs text-sky-500 font-medium animate-pulse">正在保存...</span>}
+                        {saveStatus === 'saved' && <span className="text-xs text-green-500 font-medium flex items-center gap-1"><Check className="w-3 h-3" /> 已实时保存</span>}
+                        {saveStatus === 'error' && <span className="text-xs text-red-500 font-medium">保存失败</span>}
+                        {saveStatus === 'unsaved' && <span className="text-xs text-gray-400">未保存</span>}
+                    </div>
+                    <button
+                        onClick={() => handleSaveToCloud(false)}
+                        className="px-3 py-2 text-sm font-bold text-sky-600 bg-sky-100 hover:bg-sky-200 dark:bg-sky-900/30 dark:text-sky-400 dark:hover:bg-sky-900/50 rounded-lg transition-colors flex items-center gap-1"
+                        title="手动同步到云端"
+                    >
+                        <ArrowPath className="w-4 h-4" />
+                        同步
+                    </button>
+                    <button
+                        onClick={onBack}
+                        className="px-4 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-lg transition-colors flex items-center gap-1 shadow-sm"
+                    >
+                        <ChevronDoubleLeft className="w-4 h-4" />
+                        返回
+                    </button>
+                </div>
+            </header>
+
+            <div className="flex-1 flex overflow-hidden">
+                <aside className="w-52 flex-shrink-0 flex flex-col">
+                    <ScriptEpisodeManager 
+                        episodes={script.scenes}
+                        activeEpisodeId={activeScene?.id || null}
+                        onSelectEpisode={setActiveScene}
+                        onDeleteEpisode={handleDeleteScene}
+                        onCreateEpisode={handleCreateScene}
+                    />
+                </aside>
+
+                <main className="flex-1 bg-gray-100 dark:bg-gray-900/50 flex flex-col p-4 relative overflow-hidden">
+                     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 w-full h-full overflow-hidden">
+                        {activeScene ? (
+                            <>
+                                <div className="pt-6 px-8 flex-shrink-0">
+                                     <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={sceneTitle}
+                                    onChange={handleTitleChange}
+                                    placeholder="输入集数标题..."
+                                    className="w-full px-8 py-2 text-2xl font-bold bg-transparent focus:outline-none border-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 flex-shrink-0"
+                                />
+                                <div className="px-8 pb-4 border-b border-gray-100 dark:border-gray-800 mb-2 flex-shrink-0">
+                                    <span className="text-xs text-gray-400 font-mono">
+                                        <span className="text-sky-500 font-semibold">{wordCount}</span> 字
+                                    </span>
+                                </div>
+                                <textarea
+                                    ref={textareaRef}
+                                    value={editorContent}
+                                    onChange={handleContentChange}
+                                    placeholder="开始编写剧本... (建议使用标准剧本格式)"
+                                    className="flex-1 w-full px-8 py-4 bg-transparent focus:outline-none resize-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-700 font-mono"
+                                />
+                            </>
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center text-gray-400 flex-col">
+                                <Film className="w-16 h-16 mb-4 opacity-20" />
+                                <p>请新建或选择一集开始创作</p>
+                            </div>
+                        )}
+                     </div>
+                </main>
+
+                <aside className="w-[29%] flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 shadow-xl z-10 flex flex-col">
+                    {script.type === 'adaptation' ? (
+                        <ScriptAdaptationPanel onInsert={handleInsertText} />
+                    ) : (
+                        <ScriptAIPanel onInsert={handleInsertText} />
+                    )}
+                </aside>
+            </div>
+        </div>
+    );
+};
+
+export default ScriptWritingPage;
