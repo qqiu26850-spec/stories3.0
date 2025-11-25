@@ -40,7 +40,9 @@ export interface PromptField {
 }
 
 export type PromptCategory = 'short-story' | 'long-story' | 'script';
-export type PromptSubCategory = 'style' | 'requirements' | 'continue' | 'polish' | 'proofread';
+export type PromptSubCategory = 
+  'style' | 'requirements' | 'continue' | 'polish' | 'proofread' | 
+  'idea' | 'golden_finger' | 'character_design' | 'worldview' | 'outline' | 'detailed_outline' | 'synopsis';
 
 
 export interface Prompt {
@@ -55,6 +57,7 @@ export interface Prompt {
   heat: number;
   creator: 'system' | 'user';
   userId?: string;
+  authorName?: string;
 }
 
 export interface WorkflowField {

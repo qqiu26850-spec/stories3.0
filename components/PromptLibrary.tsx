@@ -1,25 +1,33 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { PROMPTS } from '../constants';
-import { Prompt, PromptCategory, PromptSubCategory } from '../types';
+import { Prompt, PromptCategory, PromptSubCategory, UserProfile } from '../types';
 import PromptCard from './PromptCard';
 import CreatePromptModal from './CreatePromptModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import PromptDetailModal from './PromptDetailModal';
 import { Plus, Heart } from './Icon';
-import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId } from '../services/supabaseService';
+import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile } from '../services/supabaseService';
 
 interface PromptLibraryProps {
     onNavigateToGeneration?: (prompt: Prompt, values: Record<string, string>) => void;
 }
 
-const CATEGORY_TABS: { id: PromptCategory; label: string }[] = [
+const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
+  { id: 'all', label: '全部' },
   { id: 'short-story', label: '短篇小说' },
   { id: 'long-story', label: '长篇小说' },
   { id: 'script', label: '剧本' },
 ];
 
-const SUB_CATEGORIES: { id: PromptSubCategory; label: string }[] = [
+const SUB_CATEGORIES: { id: PromptSubCategory | 'all'; label: string }[] = [
+    { id: 'idea', label: '创意' },
+    { id: 'golden_finger', label: '金手指' },
+    { id: 'character_design', label: '人物设定' },
+    { id: 'worldview', label: '世界观' },
+    { id: 'outline', label: '大纲' },
+    { id: 'detailed_outline', label: '细纲' },
+    { id: 'synopsis', label: '简介' },
     { id: 'style', label: '写作风格' },
     { id: 'requirements', label: '写作要求' },
     { id: 'continue', label: '续写' },
@@ -29,11 +37,12 @@ const SUB_CATEGORIES: { id: PromptSubCategory; label: string }[] = [
 
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration }) => {
     const [prompts, setPrompts] = useState<Prompt[]>(PROMPTS);
-    const [activeTab, setActiveTab] = useState<PromptCategory | 'favorites'>('short-story');
+    const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites'>('short-story');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [userNickname, setUserNickname] = useState<string>('社区用户');
     
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -48,6 +57,13 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             try {
                 const userId = await getCurrentUserId();
                 setCurrentUserId(userId);
+                
+                const profile = await fetchUserProfile();
+                let currentNick = '社区用户';
+                if(profile && profile.nickname) {
+                    currentNick = profile.nickname;
+                    setUserNickname(profile.nickname);
+                }
 
                 const data = await fetchPrompts(); 
                 if (data) {
@@ -65,6 +81,11 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                             parsedContent = { template: p.content };
                         }
 
+                        const isMyPrompt = p.user_id === userId;
+                        // Use current nickname for owned prompts to ensure consistency with Personal Center
+                        // even if the prompt was saved with an older nickname.
+                        const displayAuthor = isMyPrompt ? currentNick : (parsedContent.authorName || '社区用户');
+
                         return {
                             id: p.id,
                             title: p.title,
@@ -76,7 +97,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                             template: parsedContent.template || p.content,
                             heat: 0,
                             creator: 'user',
-                            userId: p.user_id // Store creator ID
+                            userId: p.user_id, // Store creator ID
+                            authorName: displayAuthor
                         };
                     });
                     // Merge fetched prompts with system PROMPTS
@@ -100,11 +122,12 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
 
         const subCat = data.subCategories && data.subCategories.length > 0 ? data.subCategories[0] : 'requirements';
 
-        // Serialize the full prompt structure to JSON
+        // Serialize the full prompt structure to JSON, including authorName
         const contentToSave = JSON.stringify({
             template: data.template,
             fields: data.fields,
-            description: data.description
+            description: data.description,
+            authorName: userNickname
         });
 
         // Call Supabase
@@ -117,7 +140,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             heat: 0,
             content: data.template, 
             creator: 'user',
-            userId: currentUserId || undefined
+            userId: currentUserId || undefined,
+            authorName: userNickname
         };
         
         setPrompts(prev => [newPrompt, ...prev]);
@@ -182,13 +206,15 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             let categoryMatch = false;
             if (activeTab === 'favorites') {
                 categoryMatch = favoritedIds.has(prompt.id);
+            } else if (activeTab === 'all') {
+                categoryMatch = true;
             } else {
                 categoryMatch = prompt.category === activeTab;
             }
 
             if (!categoryMatch) return false;
             
-            const subCategoryMatch = activeSubCategory === 'all' || prompt.subCategories.includes(activeSubCategory);
+            const subCategoryMatch = activeSubCategory === 'all' || prompt.subCategories.includes(activeSubCategory as PromptSubCategory);
             // Subcategory filter only applies to standard categories, not favorites (unless we want it to)
             if(activeTab !== 'favorites' && !subCategoryMatch) return false;
 
@@ -231,7 +257,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                     {CATEGORY_TABS.map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
+                            onClick={() => setActiveTab(tab.id as any)}
                             className={`px-6 py-2.5 rounded-xl font-semibold transition-all ${activeTab === tab.id ? 'bg-white dark:bg-gray-800 text-sky-600 dark:text-sky-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                         >
                             {tab.label}
@@ -269,7 +295,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                         {SUB_CATEGORIES.map(cat => (
                             <button 
                                 key={cat.id}
-                                onClick={() => setActiveSubCategory(cat.id)}
+                                onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
                                 className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${activeSubCategory === cat.id ? 'bg-sky-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
                                 {cat.label}
                             </button>

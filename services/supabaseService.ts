@@ -54,7 +54,43 @@ export async function getCurrentUserId() {
 }
 
 /**
- * 5. 注销账号（删除数据保留提示词）
+ * 5. 获取用户个人资料 (昵称等)
+ */
+export async function fetchUserProfile() {
+    try {
+        // In a real app with a 'profiles' table:
+        // const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+        // return data;
+        
+        // For this demo without a profiles table, we return the default mock or check auth metadata
+        const { data: { session } } = await supabase.auth.getSession();
+        return {
+            nickname: session?.user?.user_metadata?.full_name || '奇思妙想家',
+            avatarUrl: session?.user?.user_metadata?.avatar_url || null
+        };
+    } catch (e) {
+        return { nickname: '奇思妙想家', avatarUrl: null };
+    }
+}
+
+/**
+ * 6. 更新用户个人资料
+ */
+export async function updateUserProfile(nickname: string, avatarUrl: string | null) {
+    try {
+        const { data, error } = await supabase.auth.updateUser({
+            data: { full_name: nickname, avatar_url: avatarUrl }
+        });
+        if (error) throw error;
+        return { data, error: null };
+    } catch (e: any) {
+        console.error("Update Profile Error", e);
+        return { data: null, error: e };
+    }
+}
+
+/**
+ * 7. 注销账号（删除数据保留提示词）
  */
 export async function deleteUserData(): Promise<boolean> {
     try {
@@ -340,7 +376,11 @@ export async function fetchPrompts(mainCategory?: string) {
     try {
         // Community Mode: Fetch ALL prompts
         let query = supabase.from('prompts').select('*').order('created_at', { ascending: false });
-        if (mainCategory) query = query.eq('main_category', mainCategory);
+        // Note: We generally fetch all for community mode, but if a specific category is needed we could filter.
+        // The mainCategory logic in the app is mostly UI-side filtering for 'all', but we can support strict filtering.
+        if (mainCategory && mainCategory !== 'all') {
+             query = query.eq('main_category', mainCategory);
+        }
         
         const { data, error } = await query;
         return error ? [] : data;

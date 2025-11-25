@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, Asset, Prompt } from '../types';
 import EditProfileModal from './EditProfileModal';
 import { Pencil, UserCircle, Sparkles, BookOpen, Box, ArrowPath } from './Icon';
-import { fetchUserLibrary, getCurrentUserId, deleteUserData } from '../services/supabaseService';
+import { fetchUserLibrary, getCurrentUserId, deleteUserData, updateUserProfile } from '../services/supabaseService';
 
 const MOCK_USER_PROFILE: UserProfile = {
     id: 'user-123',
@@ -103,20 +103,30 @@ const PersonalCenter: React.FC<PersonalCenterProps> = ({ onLogout }) => {
     useEffect(() => {
         const init = async () => {
             const userId = await getCurrentUserId();
-            if (userId) {
-                // Here you might fetch real profile data if available
-                setUserProfile(prev => ({...prev, id: userId}));
-            }
+            const profile = await fetchUserLibrary();
+            // Fetch basic profile info from Auth metadata
+            import('../services/supabaseService').then(async (module) => {
+                const metaProfile = await module.fetchUserProfile();
+                if(metaProfile && userId) {
+                    setUserProfile({
+                        id: userId,
+                        nickname: metaProfile.nickname || '奇思妙想家',
+                        avatarUrl: metaProfile.avatarUrl
+                    });
+                }
+            });
             
-            const { prompts, materials } = await fetchUserLibrary();
-            setMyPrompts(prompts);
-            setMyMaterials(materials);
+            setMyPrompts(profile.prompts);
+            setMyMaterials(profile.materials);
             setIsLoading(false);
         };
         init();
     }, []);
 
-    const handleProfileUpdate = (newNickname: string, newAvatarUrl: string | null) => {
+    const handleProfileUpdate = async (newNickname: string, newAvatarUrl: string | null) => {
+        // Save to Supabase Auth Metadata
+        await updateUserProfile(newNickname, newAvatarUrl);
+        // Update local state
         setUserProfile(prev => ({ ...prev, nickname: newNickname, avatarUrl: newAvatarUrl }));
     };
 

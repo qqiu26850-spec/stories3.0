@@ -50,7 +50,7 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, isF
                 <UserCircle className="w-4 h-4" />
                 <span>
                     {prompt.creator === 'user' 
-                        ? (isOwner ? '我' : '社区用户') 
+                        ? (prompt.authorName || '社区用户') 
                         : '官方'}
                 </span>
                 {isOwner && prompt.creator === 'user' && (
