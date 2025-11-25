@@ -10,6 +10,8 @@ import ScriptManagement from './components/ScriptManagement';
 import PersonalCenter from './components/PersonalCenter';
 import Placeholder from './components/Placeholder';
 import WorkflowManagement from './components/WorkflowManagement';
+import AuthModal from './components/AuthModal';
+import { getCurrentUserId } from './services/supabaseService';
 
 export type Theme = 'light' | 'dark';
 
@@ -18,8 +20,26 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>('light');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   // State to pass prompt data from Library to Generation
   const [generationParams, setGenerationParams] = useState<{prompt?: Prompt, values?: Record<string, string>}>({});
+
+  useEffect(() => {
+    const checkAuth = async () => {
+        const userId = await getCurrentUserId();
+        if (userId) {
+            setIsAuthenticated(true);
+            setShowAuthModal(false);
+        } else {
+            setIsAuthenticated(false);
+            setShowAuthModal(true);
+        }
+    };
+    checkAuth();
+  }, []);
 
   const toggleTheme = () => {
     setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
@@ -75,17 +95,31 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 font-sans transition-colors duration-300">
-      <Sidebar 
-        activeView={activeView} 
-        setActiveView={setActiveView} 
-        isCollapsed={isSidebarCollapsed}
-        toggleSidebar={toggleSidebar}
-        theme={theme}
-        toggleTheme={toggleTheme}
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onSuccess={() => {
+            setIsAuthenticated(true);
+            setShowAuthModal(false);
+            // Optional: reload data if needed, or just let components re-mount
+            window.location.reload();
+        }} 
       />
-      <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-black relative">
-        {renderContent()}
-      </main>
+      
+      {isAuthenticated && (
+          <>
+            <Sidebar 
+                activeView={activeView} 
+                setActiveView={setActiveView} 
+                isCollapsed={isSidebarCollapsed}
+                toggleSidebar={toggleSidebar}
+                theme={theme}
+                toggleTheme={toggleTheme}
+            />
+            <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-black relative">
+                {renderContent()}
+            </main>
+          </>
+      )}
     </div>
   );
 };

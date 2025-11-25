@@ -9,8 +9,49 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Initialize Supabase Client
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Define Test User ID (UUID format required)
-export const TEST_USER_ID = '9a775d9f-225c-442f-b5ec-286ceea7ad19'; 
+// =================== 🆕 身份认证 (Auth) 函数 ===================
+
+/**
+ * 1. 用户注册
+ */
+export async function signUp(email, password) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      // window.location.origin 会自动获取当前浏览器地址栏的域名（比如 https://novel2-nine.vercel.app）
+      emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+    },
+  });
+  return { data, error };
+}
+
+/**
+ * 2. 用户登录
+ */
+export async function signIn(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  return { data, error };
+}
+
+/**
+ * 3. 用户登出
+ */
+export async function signOut() {
+  const { error } = await supabase.auth.signOut();
+  return error;
+}
+
+/**
+ * 4. 获取当前登录用户的 ID
+ */
+export async function getCurrentUserId() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id || null;
+}
 
 // ================= Core Functions =================
 
@@ -20,11 +61,14 @@ export const TEST_USER_ID = '9a775d9f-225c-442f-b5ec-286ceea7ad19';
  */
 export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short_story'): Promise<string | null> {
     try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+
         const { data, error } = await supabase
             .from('projects')
             .insert([
                 {
-                    user_id: TEST_USER_ID,
+                    user_id: userId,
                     title: title,
                     description: desc,
                     type: type,
@@ -37,7 +81,7 @@ export async function createProject(title: string, desc: string, type: 'novel' |
         return data[0].id;
     } catch (err: any) {
         console.error('Failed to create project:', err.message);
-        alert('创建云端项目失败，请查看控制台。');
+        alert('创建云端项目失败: ' + err.message);
         return null;
     }
 }
@@ -47,10 +91,14 @@ export async function createProject(title: string, desc: string, type: 'novel' |
  */
 export async function updateProject(projectId: string, updates: { title?: string, description?: string }) {
     try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+
         const { error } = await supabase
             .from('projects')
             .update(updates)
-            .eq('id', projectId);
+            .eq('id', projectId)
+            .eq('user_id', userId); // Ensure ownership
 
         if (error) throw error;
         console.log('Project updated:', updates);
@@ -64,6 +112,9 @@ export async function updateProject(projectId: string, updates: { title?: string
  */
 export async function fetchChapters(projectId: string) {
     try {
+        // Fetching chapters doesn't strictly require user_id check if RLS is set on project_id,
+        // but for read operations, simply querying by project_id is usually sufficient 
+        // assuming the user has access to the project.
         const { data, error } = await supabase
             .from('chapters')
             .select('*')
@@ -80,8 +131,6 @@ export async function fetchChapters(projectId: string) {
 
 /**
  * 4. Smart Save Chapter (Insert or Update)
- * If chapterId starts with 'ch-' or 'scene-' or 'new-', it's treated as new (Insert).
- * Otherwise it's treated as existing (Update).
  */
 export async function saveChapterToDB(
     projectId: string, 
@@ -91,6 +140,9 @@ export async function saveChapterToDB(
     orderIndex: number
 ): Promise<string | null> {
     try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+
         // Check if it's a local temporary ID
         const isLocalId = chapterId.startsWith('ch-') || chapterId.startsWith('scene-') || chapterId.startsWith('new-');
 
@@ -127,7 +179,6 @@ export async function saveChapterToDB(
         }
     } catch (err: any) {
         console.error('Failed to save chapter:', err.message);
-        // alert('保存章节失败，请检查网络或控制台。'); // Removed alert for auto-save silence
         return null;
     }
 }
@@ -137,7 +188,10 @@ export async function saveChapterToDB(
  */
 export async function deleteChapterFromDB(chapterId: string): Promise<void> {
     try {
-        // If it's a local ID, it doesn't exist in DB yet, so just return
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+
+        // If it's a local ID, it doesn't exist in DB yet
         if (chapterId.startsWith('ch-') || chapterId.startsWith('scene-') || chapterId.startsWith('new-')) {
             return;
         }
@@ -148,42 +202,42 @@ export async function deleteChapterFromDB(chapterId: string): Promise<void> {
             .eq('id', chapterId);
 
         if (error) throw error;
-        console.log('Chapter deleted from DB:', chapterId);
     } catch (err: any) {
         console.error('Failed to delete chapter:', err.message);
         alert('删除云端章节失败。');
     }
 }
 
-// --- Original saveChapter (kept for compatibility if needed, but deprecated) ---
-export async function saveChapter(projectId: string, title: string, content: string): Promise<void> {
-    // This simple version just inserts blindly. Recommended to use saveChapterToDB instead.
-    await saveChapterToDB(projectId, `new-${Date.now()}`, title, content, 999);
-}
-
 // --- Material & Prompt Functions ---
 
 export async function saveMaterial(name: string, content: string, type: 'character' | 'plot' | 'idea', tags: string[] = []): Promise<void> {
     try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+
         const { error } = await supabase
             .from('materials')
             .insert([
-                { user_id: TEST_USER_ID, name, content, type, tags: tags }
+                { user_id: userId, name, content, type, tags: tags }
             ]);
         if (error) throw error;
         alert('素材已同步到云端！');
     } catch (err: any) {
         console.error('Failed to save material:', err.message);
+        alert('保存素材失败: ' + err.message);
     }
 }
 
 export async function savePrompt(title: string, content: string, mainCat: string, subCat: string): Promise<void> {
     try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+
         const { error } = await supabase
             .from('prompts')
             .insert([
                 { 
-                    user_id: TEST_USER_ID, 
+                    user_id: userId, 
                     title, 
                     content, 
                     main_category: mainCat, 
@@ -194,65 +248,106 @@ export async function savePrompt(title: string, content: string, mainCat: string
         alert('提示词已保存到云端库！');
     } catch (err: any) {
         console.error('Failed to save prompt:', err.message);
+        alert('保存提示词失败: ' + err.message);
     }
 }
 
 export async function fetchProjects() {
-    // 1. Get Projects
-    const { data: projects, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('user_id', TEST_USER_ID)
-        .order('created_at', { ascending: false });
-    
-    if (error || !projects) return [];
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return []; // Return empty if not logged in (or could handle differently)
 
-    // 2. Get all chapters for these projects to calculate word count
-    const projectIds = projects.map(p => p.id);
-    if (projectIds.length === 0) return projects;
+        // 1. Get Projects
+        const { data: projects, error } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+        
+        if (error || !projects) return [];
 
-    const { data: chapters, error: chapterError } = await supabase
-        .from('chapters')
-        .select('project_id, content')
-        .in('project_id', projectIds);
+        // 2. Get all chapters for these projects to calculate word count
+        const projectIds = projects.map(p => p.id);
+        if (projectIds.length === 0) return projects;
 
-    if (chapterError) {
-        console.error("Failed to fetch chapters for word count", chapterError);
-        return projects; // Return projects without accurate word count if fail
+        const { data: chapters, error: chapterError } = await supabase
+            .from('chapters')
+            .select('project_id, content')
+            .in('project_id', projectIds);
+
+        if (chapterError) {
+            console.error("Failed to fetch chapters for word count", chapterError);
+            return projects; // Return projects without accurate word count if fail
+        }
+
+        // 3. Calculate and inject word count
+        const projectsWithCount = projects.map(p => {
+            const pChapters = chapters?.filter(c => c.project_id === p.id) || [];
+            const totalWords = pChapters.reduce((acc, c) => acc + (c.content ? c.content.length : 0), 0);
+            return { ...p, word_count: totalWords }; // Inject calculate word_count
+        });
+
+        return projectsWithCount;
+    } catch (e) {
+        console.error("Fetch Projects Error", e);
+        return [];
     }
-
-    // 3. Calculate and inject word count
-    const projectsWithCount = projects.map(p => {
-        const pChapters = chapters?.filter(c => c.project_id === p.id) || [];
-        const totalWords = pChapters.reduce((acc, c) => acc + (c.content ? c.content.length : 0), 0);
-        return { ...p, word_count: totalWords }; // Inject calculate word_count
-    });
-
-    return projectsWithCount;
 }
 
 export async function fetchMaterials(type?: 'character' | 'plot' | 'idea') {
-    let query = supabase.from('materials').select('*').eq('user_id', TEST_USER_ID).order('created_at', { ascending: false });
-    if (type) query = query.eq('type', type);
-    const { data, error } = await query;
-    return error ? [] : data;
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return [];
+
+        let query = supabase.from('materials').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+        if (type) query = query.eq('type', type);
+        const { data, error } = await query;
+        return error ? [] : data;
+    } catch (e) {
+        return [];
+    }
 }
 
 export async function fetchPrompts(mainCategory?: string) {
-    let query = supabase.from('prompts').select('*').eq('user_id', TEST_USER_ID).order('created_at', { ascending: false });
-    if (mainCategory) query = query.eq('main_category', mainCategory);
-    const { data, error } = await query;
-    return error ? [] : data;
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return [];
+
+        let query = supabase.from('prompts').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+        if (mainCategory) query = query.eq('main_category', mainCategory);
+        const { data, error } = await query;
+        return error ? [] : data;
+    } catch (e) {
+        return [];
+    }
 }
 
 export async function deleteProject(id: string): Promise<void> {
-    await supabase.from('projects').delete().eq('id', id);
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+        await supabase.from('projects').delete().eq('id', id).eq('user_id', userId);
+    } catch (e) {
+        console.error("Delete Project Error", e);
+    }
 }
 
 export async function deleteMaterial(id: string): Promise<void> {
-    await supabase.from('materials').delete().eq('id', id);
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+        await supabase.from('materials').delete().eq('id', id).eq('user_id', userId);
+    } catch (e) {
+        console.error("Delete Material Error", e);
+    }
 }
 
 export async function deletePrompt(id: string): Promise<void> {
-    await supabase.from('prompts').delete().eq('id', id);
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+        await supabase.from('prompts').delete().eq('id', id).eq('user_id', userId);
+    } catch (e) {
+        console.error("Delete Prompt Error", e);
+    }
 }
