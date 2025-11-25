@@ -14,12 +14,16 @@ interface GenerationOptions {
     topP: number;
 }
 
+const PLAIN_TEXT_INSTRUCTION = "\n\n(IMPORTANT: Please output the result in strictly plain text format. Do NOT use Markdown syntax such as **bold**, *italics*, # headers, or bullet points. Use standard spacing for paragraphs.)";
+
 export const generateText = async (prompt: string, options: GenerationOptions): Promise<string> => {
+  const finalPrompt = prompt + PLAIN_TEXT_INSTRUCTION;
+
   if (options.model.startsWith('gemini')) {
     try {
         const response = await ai.models.generateContent({
             model: options.model,
-            contents: prompt,
+            contents: finalPrompt,
             config: {
                 temperature: options.temperature,
                 topP: options.topP,
@@ -44,7 +48,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
             body: JSON.stringify({
                 model: options.model,
                 messages: [
-                    { role: "user", content: prompt }
+                    { role: "user", content: finalPrompt }
                 ],
                 temperature: options.temperature,
                 top_p: options.topP,
@@ -68,18 +72,20 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
     }
   } else {
     // Simulate other models
-    console.log("Simulating API call for model:", options.model, "with prompt:", prompt);
+    console.log("Simulating API call for model:", options.model, "with prompt:", finalPrompt);
     await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-    return `[来自 ${options.model.toUpperCase()} 的模拟响应]\n\n根据您的提示和设置（温度: ${options.temperature}, Top-P: ${options.topP}），我生成了以下内容：\n\n${prompt.substring(0, 150)}...\n\n(这是一个模拟结果，实际项目中请替换为对应模型的真实API调用。)`;
+    return `[来自 ${options.model.toUpperCase()} 的模拟响应]\n\n${prompt.substring(0, 150)}...`;
   }
 };
 
 export const generateTextStream = async function* (prompt: string, options: GenerationOptions): AsyncGenerator<string, void, unknown> {
+    const finalPrompt = prompt + PLAIN_TEXT_INSTRUCTION;
+
     if (options.model.startsWith('gemini')) {
         try {
             const responseStream = await ai.models.generateContentStream({
                 model: options.model,
-                contents: prompt,
+                contents: finalPrompt,
                 config: {
                     temperature: options.temperature,
                     topP: options.topP,
@@ -111,7 +117,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                 body: JSON.stringify({
                     model: options.model,
                     messages: [
-                        { role: "user", content: prompt }
+                        { role: "user", content: finalPrompt }
                     ],
                     temperature: options.temperature,
                     top_p: options.topP,
@@ -166,7 +172,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
         // Simulate streaming for other models
         console.log("Simulating Streaming API call for model:", options.model);
         
-        const simulatedResponse = `[来自 ${options.model.toUpperCase()} 的模拟流式响应]\n\n这是一个模拟的流式输出效果。\n根据您的提示：\n"${prompt.substring(0, 50)}..."\n\nAI正在逐字生成内容，以提供更好的用户体验。`;
+        const simulatedResponse = `[来自 ${options.model.toUpperCase()} 的模拟流式响应]\n\n${prompt.substring(0, 50)}...`;
         
         const chunks = simulatedResponse.split('');
         for (const char of chunks) {

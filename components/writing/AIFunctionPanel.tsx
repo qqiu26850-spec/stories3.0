@@ -3,10 +3,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Sparkles, BookOpen, DocumentPlus, ChatBubbleLeftRight, Trash, Copy, Pencil, X, Search, ChevronDown, Database } from '../Icon';
 import { generateText } from '../../services/geminiService';
-import { ASSETS, PROMPTS } from '../../constants';
+import { PROMPTS } from '../../constants';
 import { Asset, Prompt, PromptCategory } from '../../types';
 import SelectablePromptCard from '../SelectablePromptCard';
-import { fetchPrompts } from '../../services/supabaseService';
+import { fetchPrompts, fetchMaterials } from '../../services/supabaseService';
 
 interface AIFunctionPanelProps {
     contextText?: string;
@@ -274,6 +274,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [topP, setTopP] = useState(0.95);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
+    const [assets, setAssets] = useState<Asset[]>([]);
 
     // Modals
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
@@ -287,6 +288,23 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [resultText, setResultText] = useState('');
     const [error, setError] = useState('');
     const [lastGeneratedTab, setLastGeneratedTab] = useState<TabType | null>(null);
+
+    // Fetch assets on mount
+    useEffect(() => {
+        const loadAssets = async () => {
+            const data = await fetchMaterials();
+            const mappedAssets: Asset[] = data.map((item: any) => ({
+                id: item.id,
+                name: item.name || item.title,
+                type: item.type === 'idea' ? 'inspiration' : item.type,
+                content: item.content,
+                tags: item.tags || [],
+                data: { name: item.name }
+            }));
+            setAssets(mappedAssets);
+        };
+        loadAssets();
+    }, []);
 
     // Filter prompts based on active tab (for finding defaults only)
     const defaultTabPrompts = useMemo(() => {
@@ -351,7 +369,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         try {
             // 1. Build Asset Context
             const assetContext = Array.from(selectedAssetIds)
-                .map(id => ASSETS.find(a => a.id === id))
+                .map(id => assets.find(a => a.id === id))
                 .filter(Boolean)
                 .map(a => `【参考素材：${a!.name}】\n${a!.content}`)
                 .join('\n\n');
@@ -400,7 +418,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
             <AssetSelectionModal 
                 isOpen={isAssetModalOpen} 
                 onClose={() => setAssetModalOpen(false)}
-                assets={ASSETS}
+                assets={assets}
                 selectedAssetIds={selectedAssetIds}
                 onToggleAsset={(id) => {
                     setSelectedAssetIds(prev => {

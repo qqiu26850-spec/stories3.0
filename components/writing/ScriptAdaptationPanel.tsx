@@ -3,10 +3,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Sparkles, Film, BookOpen, Copy, X, Search, ChevronDown, Database, Workflow } from '../Icon';
 import { generateText } from '../../services/geminiService';
-import { ASSETS, PROMPTS, WORKFLOWS } from '../../constants';
+import { PROMPTS, WORKFLOWS } from '../../constants';
 import { Asset, Prompt, PromptCategory, Workflow as WorkflowType } from '../../types';
 import SelectablePromptCard from '../SelectablePromptCard';
-import { fetchPrompts } from '../../services/supabaseService';
+import { fetchPrompts, fetchMaterials } from '../../services/supabaseService';
 
 interface ScriptAdaptationPanelProps {
     onInsert: (text: string) => void;
@@ -298,6 +298,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert 
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowType | null>(null);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+    const [assets, setAssets] = useState<Asset[]>([]);
     
     // Modals
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
@@ -311,6 +312,23 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert 
     const [isLoading, setIsLoading] = useState(false);
     const [generatedText, setGeneratedText] = useState('');
     const [error, setError] = useState('');
+
+    // Fetch assets on mount
+    useEffect(() => {
+        const loadAssets = async () => {
+            const data = await fetchMaterials();
+            const mappedAssets: Asset[] = data.map((item: any) => ({
+                id: item.id,
+                name: item.name || item.title,
+                type: item.type === 'idea' ? 'inspiration' : item.type,
+                content: item.content,
+                tags: item.tags || [],
+                data: { name: item.name }
+            }));
+            setAssets(mappedAssets);
+        };
+        loadAssets();
+    }, []);
 
     // Initialize form state when selection changes
     useEffect(() => {
@@ -333,7 +351,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert 
         try {
             // 1. Build Asset Context
             const assetContext = Array.from(selectedAssetIds)
-                .map(id => ASSETS.find(a => a.id === id))
+                .map(id => assets.find(a => a.id === id))
                 .filter(Boolean)
                 .map(a => `【参考素材：${a!.name}】\n${a!.content}`)
                 .join('\n\n');
@@ -433,7 +451,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert 
                  <AssetSelectionModal 
                     isOpen={isAssetModalOpen}
                     onClose={() => setAssetModalOpen(false)}
-                    assets={ASSETS}
+                    assets={assets}
                     selectedAssetIds={selectedAssetIds}
                     onToggleAsset={(id) => setSelectedAssetIds(prev => {
                         const next = new Set(prev);

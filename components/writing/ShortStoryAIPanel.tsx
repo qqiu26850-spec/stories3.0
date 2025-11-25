@@ -3,10 +3,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Sparkles, DocumentPlus, ClipboardDocumentCheck, ChatBubbleLeftRight, Copy, Trash, BookOpen, Pencil, Workflow, Search, X, ChevronDown, Database } from '../Icon';
 import { generateText } from '../../services/geminiService';
-import { ASSETS, PROMPTS } from '../../constants';
+import { PROMPTS } from '../../constants';
 import { Asset, Prompt, PromptCategory } from '../../types';
 import SelectablePromptCard from '../SelectablePromptCard';
-import { fetchPrompts } from '../../services/supabaseService';
+import { fetchPrompts, fetchMaterials } from '../../services/supabaseService';
 
 interface ShortStoryAIPanelProps {
     contextText?: string;
@@ -244,6 +244,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const [selectedWorkflow, setSelectedWorkflow] = useState(MOCK_WORKFLOWS[0].id);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
+    const [assets, setAssets] = useState<Asset[]>([]);
 
     // Modals
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
@@ -259,6 +260,23 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const [resultText, setResultText] = useState('');
     const [error, setError] = useState('');
     const [lastGeneratedTab, setLastGeneratedTab] = useState<ShortStoryTab | null>(null);
+
+    // Fetch assets on mount
+    useEffect(() => {
+        const loadAssets = async () => {
+            const data = await fetchMaterials();
+            const mappedAssets: Asset[] = data.map((item: any) => ({
+                id: item.id,
+                name: item.name || item.title,
+                type: item.type === 'idea' ? 'inspiration' : item.type,
+                content: item.content,
+                tags: item.tags || [],
+                data: { name: item.name }
+            }));
+            setAssets(mappedAssets);
+        };
+        loadAssets();
+    }, []);
 
     // Reset inputs when tab changes
     useEffect(() => {
@@ -302,7 +320,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         try {
             // 1. Build Asset Context
             const assetContext = Array.from(selectedAssetIds)
-                .map(id => ASSETS.find(a => a.id === id))
+                .map(id => assets.find(a => a.id === id))
                 .filter(Boolean)
                 .map(a => `【参考素材：${a!.name}】\n${a!.content}`)
                 .join('\n\n');
@@ -376,7 +394,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
             <AssetSelectionModal 
                 isOpen={isAssetModalOpen} 
                 onClose={() => setAssetModalOpen(false)}
-                assets={ASSETS}
+                assets={assets}
                 selectedAssetIds={selectedAssetIds}
                 onToggleAsset={(id) => {
                     setSelectedAssetIds(prev => {
