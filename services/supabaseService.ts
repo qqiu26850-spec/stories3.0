@@ -115,7 +115,8 @@ export async function deleteUserData(): Promise<boolean> {
         const { error: mError } = await supabase.from('materials').delete().eq('user_id', userId);
         if (mError) throw mError;
 
-        // Prompts are explicitly EXCLUDED from deletion to preserve community contributions.
+        // Prompts are explicitly EXCLUDED from deletion as requested.
+        // We do NOT delete from 'prompts' table for this user.
         // Workflows are currently local-only in this version, so no DB delete needed.
 
         // Sign out the user
@@ -127,13 +128,47 @@ export async function deleteUserData(): Promise<boolean> {
     }
 }
 
+// ================= Storage Functions =================
+
+/**
+ * Upload Cover Image to Supabase Storage
+ */
+export async function uploadCoverImage(file: File): Promise<string | null> {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+
+        // Create a unique file path: userId/timestamp-filename
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `${userId}/${fileName}`;
+
+        // Upload to 'covers' bucket
+        const { error: uploadError } = await supabase.storage
+            .from('covers')
+            .upload(filePath, file);
+
+        if (uploadError) {
+            console.error('Upload Error:', uploadError);
+            throw uploadError;
+        }
+
+        // Get Public URL
+        const { data } = supabase.storage.from('covers').getPublicUrl(filePath);
+        return data.publicUrl;
+    } catch (error: any) {
+        console.error('Failed to upload cover:', error.message);
+        return null;
+    }
+}
+
 // ================= Core Functions =================
 
 /**
  * 1. Create New Project (Novel/Script/Short Story)
  * Table: projects
  */
-export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short_story'): Promise<string | null> {
+export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short_story', coverUrl: string | null = null): Promise<string | null> {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
@@ -146,7 +181,8 @@ export async function createProject(title: string, desc: string, type: 'novel' |
                     title: title,
                     description: desc,
                     type: type,
-                    status: 'draft'
+                    status: 'draft',
+                    cover_image: coverUrl // Save the cover URL
                 }
             ])
             .select();
@@ -163,7 +199,7 @@ export async function createProject(title: string, desc: string, type: 'novel' |
 /**
  * 2. Update Project Metadata (Title, etc.)
  */
-export async function updateProject(projectId: string, updates: { title?: string, description?: string }) {
+export async function updateProject(projectId: string, updates: { title?: string, description?: string, cover_image?: string }) {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("User not logged in");

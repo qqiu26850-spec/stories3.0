@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { CREATIVE_MODULES, ASSETS, PROMPTS } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt, PromptCategory } from '../types';
@@ -50,8 +51,8 @@ const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({
 
     if (!isVisible) return null;
 
-    return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center">
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/20 backdrop-blur-sm">
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-80 text-center mx-4 animate-fade-in-up relative">
                 <button 
                     onClick={onClose}
@@ -76,7 +77,8 @@ const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({
                     </p>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -144,7 +146,7 @@ const PromptSelectionModal: React.FC<{
 
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col relative animate-fade-in-up overflow-hidden" onClick={e => e.stopPropagation()}>
                 {/* Header */}
@@ -210,7 +212,8 @@ const PromptSelectionModal: React.FC<{
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -239,7 +242,7 @@ const ImportAssetModal: React.FC<{
 
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md p-8 animate-fade-in-up" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6">
@@ -298,7 +301,8 @@ const ImportAssetModal: React.FC<{
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -510,221 +514,4 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                           
                           <div className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-xl border border-gray-100 dark:border-gray-800 space-y-5">
                               <div>
-                                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">选择模型</label>
-                                  <select 
-                                      value={model} 
-                                      onChange={e => setModel(e.target.value)}
-                                      className="w-full p-2.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-sky-500 focus:outline-none shadow-sm"
-                                  >
-                                      <option value="gemini-2.5-flash">Gemini 2.5 Flash (快速)</option>
-                                      <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
-                                      <option value="deepseek-chat">DeepSeek V3</option>
-                                      <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
-                                  </select>
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 flex justify-between">
-                                          <span>随机性</span>
-                                          <span className="text-gray-700 dark:text-gray-300">{temperature}</span>
-                                      </label>
-                                      <input 
-                                          type="range" min="0" max="2" step="0.1" 
-                                          value={temperature} 
-                                          onChange={e => setTemperature(parseFloat(e.target.value))}
-                                          className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
-                                      />
-                                  </div>
-                                  <div>
-                                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 flex justify-between">
-                                          <span>核采样</span>
-                                          <span className="text-gray-700 dark:text-gray-300">{topP}</span>
-                                      </label>
-                                      <input 
-                                          type="range" min="0" max="1" step="0.05" 
-                                          value={topP} 
-                                          onChange={e => setTopP(parseFloat(e.target.value))}
-                                          className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
-                                      />
-                                  </div>
-                              </div>
-                          </div>
-                      </div>
-
-                      <hr className="border-gray-100 dark:border-gray-800" />
-
-                      {/* Section 2: Prompt Input */}
-                      <div className="flex-1 flex flex-col space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
-                                <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded text-purple-600 dark:text-purple-400">
-                                    <Sparkles className="w-4 h-4" />
-                                </div>
-                                提示词输入
-                            </div>
-                            {selectedPrompt && (
-                                <button 
-                                    onClick={() => setSelectedPrompt(null)}
-                                    className="text-xs text-red-500 hover:underline"
-                                >
-                                    清除模板
-                                </button>
-                            )}
-                          </div>
-
-                          {/* Prompt Selector Button */}
-                          <button 
-                            onClick={() => setPromptModalOpen(true)}
-                            className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between group text-left ${
-                                selectedPrompt 
-                                ? 'bg-sky-50 border-sky-500/50 text-sky-900 dark:bg-sky-900/20 dark:border-sky-500/50 dark:text-sky-100' 
-                                : 'bg-gray-50 dark:bg-gray-800/50 border-dashed border-gray-300 dark:border-gray-700 hover:border-sky-400 dark:hover:border-sky-500 hover:bg-sky-50 dark:hover:bg-gray-800'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3 overflow-hidden">
-                                {selectedPrompt ? (
-                                    <>
-                                        <div className="p-2 bg-sky-200 dark:bg-sky-800 rounded-lg text-sky-700 dark:text-sky-200 flex-shrink-0">
-                                            <Sparkles className="w-5 h-5" />
-                                        </div>
-                                        <div className="truncate">
-                                            <div className="font-bold text-sm">{selectedPrompt.title}</div>
-                                            <div className="text-xs opacity-70 truncate">{selectedPrompt.description}</div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-400 flex-shrink-0 group-hover:bg-sky-200 dark:group-hover:bg-sky-800 group-hover:text-sky-700 dark:group-hover:text-sky-200 transition-colors">
-                                            <Plus className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <div className="font-bold text-sm text-gray-600 dark:text-gray-300 group-hover:text-sky-700 dark:group-hover:text-sky-300">选择提示词模板</div>
-                                            <div className="text-xs text-gray-400 group-hover:text-sky-600/70 dark:group-hover:text-sky-400/70">从库中快速加载专业提示词</div>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${promptModalOpen ? 'rotate-180' : ''}`} />
-                          </button>
-
-                          {/* Form OR Free Input */}
-                          <div className="flex-1">
-                            {selectedPrompt ? (
-                                <div className="space-y-4 animate-fade-in">
-                                    {selectedPrompt.fields.map(field => (
-                                        <div key={field.id}>
-                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                                                {field.label}
-                                            </label>
-                                            {field.type === 'textarea' ? (
-                                                <textarea
-                                                    value={formState[field.id] || ''}
-                                                    onChange={e => setFormState(prev => ({...prev, [field.id]: e.target.value}))}
-                                                    placeholder={field.placeholder}
-                                                    rows={4}
-                                                    className="w-full p-3 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none resize-y shadow-sm"
-                                                />
-                                            ) : (
-                                                <input
-                                                    type="text"
-                                                    value={formState[field.id] || ''}
-                                                    onChange={e => setFormState(prev => ({...prev, [field.id]: e.target.value}))}
-                                                    placeholder={field.placeholder}
-                                                    className="w-full p-3 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none shadow-sm"
-                                                />
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="h-full flex flex-col">
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-                                        自由创作需求
-                                    </label>
-                                    <textarea 
-                                        value={freeInput}
-                                        onChange={e => setFreeInput(e.target.value)}
-                                        placeholder={`请输入您关于“${selectedModule.title}”的详细构思...\n例如：帮我构思一个发生在2077年，关于记忆贩卖的故事背景。`}
-                                        className="w-full flex-1 min-h-[200px] p-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 focus:outline-none resize-none leading-relaxed shadow-sm"
-                                    />
-                                </div>
-                            )}
-                          </div>
-                      </div>
-                  </div>
-                  
-                  {/* Generate Action Bar */}
-                  <div className="p-5 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
-                        <button 
-                          onClick={handleGenerate}
-                          disabled={isGenerating || (!selectedPrompt && !freeInput.trim())}
-                          className="w-full py-4 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-lg rounded-xl disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-sky-500/30 active:scale-[0.98] flex items-center justify-center gap-2"
-                      >
-                          <Sparkles className="w-5 h-5" />
-                          开始生成
-                      </button>
-                  </div>
-              </div>
-
-              {/* Right: Output Panel */}
-              <div className="flex-1 flex flex-col bg-gray-50 dark:bg-black px-4 pb-4 lg:px-6 lg:pb-6 pt-2 lg:pt-2 overflow-hidden relative">
-                  <LoadingOverlay isVisible={isGenerating} onClose={() => setIsGenerating(false)} />
-                  
-                  <div className="flex-1 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col overflow-hidden relative">
-                      <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
-                          <h3 className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                              <Sparkles className="w-4 h-4 text-purple-500" />
-                              AI 生成结果
-                          </h3>
-                          <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-full">
-                              {generatedText.length} 字
-                          </span>
-                      </div>
-                      
-                      <div className="flex-1 p-6 overflow-y-auto relative">
-                          {generatedText ? (
-                              <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap leading-loose text-gray-800 dark:text-gray-200 font-serif text-lg">
-                                  {generatedText}
-                              </div>
-                          ) : (
-                              <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-600">
-                                  <Sparkles className="w-20 h-20 mb-6 opacity-10" />
-                                  <p className="text-base font-medium">在左侧配置参数并点击生成，AI 将为您即时创作。</p>
-                              </div>
-                          )}
-                      </div>
-
-                      {/* Actions Footer */}
-                      {generatedText && (
-                          <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3">
-                              <button 
-                                  onClick={handleGenerate}
-                                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                              >
-                                  <ArrowPath className="w-4 h-4" />
-                                  重新生成
-                              </button>
-                              <button 
-                                  onClick={handleCopy}
-                                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                              >
-                                  <Copy className="w-4 h-4" />
-                                  复制
-                              </button>
-                              <button 
-                                  onClick={() => setImportModalOpen(true)}
-                                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-sky-600 border border-transparent rounded-lg hover:bg-sky-500 transition-colors shadow-md hover:shadow-lg"
-                              >
-                                  <Database className="w-4 h-4" />
-                                  导入素材库
-                              </button>
-                          </div>
-                      )}
-                  </div>
-              </div>
-          </div>
-      </div>
-  );
-};
-
-export default CreativeGeneration;
+                               

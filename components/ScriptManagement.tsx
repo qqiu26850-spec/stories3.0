@@ -6,7 +6,7 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
 import { Film, BookOpen, DocumentPlus } from './Icon';
 import ScriptWritingPage from './writing/ScriptWritingPage';
-import { createProject, fetchProjects, deleteProject } from '../services/supabaseService';
+import { createProject, fetchProjects, deleteProject, uploadCoverImage } from '../services/supabaseService';
 
 type ScriptType = 'original' | 'adaptation';
 type ViewState = 'selection' | 'list';
@@ -20,6 +20,7 @@ const ScriptManagement: React.FC = () => {
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState<Script | null>(null);
+    const [isCreating, setIsCreating] = useState(false);
 
     // Fetch projects on mount or when closing editor
     useEffect(() => {
@@ -32,7 +33,7 @@ const ScriptManagement: React.FC = () => {
                     const mappedScripts: Script[] = filtered.map((p: any) => ({
                         id: p.id,
                         title: p.title,
-                        coverImage: null,
+                        coverImage: p.cover_image || null,
                         wordCount: p.word_count || 0, // Real-time word count from DB
                         type: p.description?.includes('Adaptation') ? 'adaptation' : 'original', // Simple heuristic or store in DB
                         creationDate: p.created_at || new Date().toISOString(),
@@ -52,24 +53,39 @@ const ScriptManagement: React.FC = () => {
         setView('list');
     };
 
-    const handleCreateScript = async (title: string, coverImage: string | null) => {
+    const handleCreateScript = async (title: string, coverFile: File | null) => {
         if (!scriptType) return;
+        setIsCreating(true);
         
-        // Call Supabase
-        const description = scriptType === 'adaptation' ? "Adaptation Project" : "Original Script";
-        const dbId = await createProject(title, description, 'script');
+        try {
+            let coverUrl: string | null = null;
+            
+            // 1. Upload cover if exists
+            if (coverFile) {
+                coverUrl = await uploadCoverImage(coverFile);
+            }
 
-        const newScript: Script = {
-            id: dbId || `script-${Date.now()}`,
-            title,
-            coverImage,
-            wordCount: 0,
-            type: scriptType,
-            creationDate: new Date().toISOString(),
-            scenes: [],
-        };
-        setScripts(prev => [newScript, ...prev]);
-        setCreateModalOpen(false);
+            // 2. Call Supabase
+            const description = scriptType === 'adaptation' ? "Adaptation Project" : "Original Script";
+            const dbId = await createProject(title, description, 'script', coverUrl);
+
+            const newScript: Script = {
+                id: dbId || `script-${Date.now()}`,
+                title,
+                coverImage: coverUrl,
+                wordCount: 0,
+                type: scriptType,
+                creationDate: new Date().toISOString(),
+                scenes: [],
+            };
+            setScripts(prev => [newScript, ...prev]);
+            setCreateModalOpen(false);
+        } catch (e) {
+            console.error("Error creating script", e);
+            alert("创建失败，请重试");
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     const handleOpenDeleteModal = (id: string) => {
@@ -95,14 +111,8 @@ const ScriptManagement: React.FC = () => {
 
     // Filter logic updated to handle local state properly
     const filteredScripts = useMemo(() => {
-        // If we have explicitly set a type (original/adaptation), try to filter.
-        // Note: For simplicity in this version, since DB doesn't strictly enforce 'original' vs 'adaptation' subtype 
-        // in the basic schema beyond description/metadata, we show all 'script' types or just filter if we added a field.
-        // Here we assume the user wants to see all scripts if they are in 'list' view, 
-        // or we can rely on the heuristic used in fetch.
         if (!scriptType) return scripts;
         return scripts; 
-        // To strict filter: return scripts.filter(s => s.type === scriptType);
     }, [scripts, scriptType]);
 
     if (editingScript) {
@@ -170,8 +180,9 @@ const ScriptManagement: React.FC = () => {
                     <button
                         onClick={() => setCreateModalOpen(true)}
                         className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0 self-start md:self-center shadow-sm"
+                        disabled={isCreating}
                     >
-                        + 新建剧本
+                        {isCreating ? '创建中...' : '+ 新建剧本'}
                     </button>
                 )}
             </div>
@@ -211,8 +222,9 @@ const ScriptManagement: React.FC = () => {
                             <button
                                 onClick={() => setCreateModalOpen(true)}
                                 className="px-8 py-3 bg-sky-600 text-white text-lg font-bold rounded-full hover:bg-sky-500 transition-all shadow-lg hover:shadow-sky-500/30 transform hover:-translate-y-1"
+                                disabled={isCreating}
                             >
-                                新建剧本
+                                {isCreating ? '处理中...' : '新建剧本'}
                             </button>
                         </div>
                     </div>

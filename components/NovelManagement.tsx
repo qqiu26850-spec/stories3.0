@@ -6,7 +6,7 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
 import NovelWritingPage from './writing/NovelWritingPage';
 import { BookOpen, Sparkles, DocumentPlus } from './Icon';
-import { createProject, fetchProjects, deleteProject } from '../services/supabaseService';
+import { createProject, fetchProjects, deleteProject, uploadCoverImage } from '../services/supabaseService';
 
 interface NovelManagementProps {
     mode?: 'long' | 'short';
@@ -19,6 +19,7 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState<Novel | null>(null);
+    const [isCreating, setIsCreating] = useState(false);
 
     const pageTitle = mode === 'long' ? '小说管理' : '短篇管理';
     const description = mode === 'long' ? '在这里开始、管理和发展你的长篇故事。' : '快速捕捉灵感，创作精彩的短篇故事。';
@@ -37,7 +38,7 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                     const mappedNovels: Novel[] = filtered.map((p: any) => ({
                         id: p.id,
                         title: p.title,
-                        coverImage: null,
+                        coverImage: p.cover_image || null, // Map from DB column
                         wordCount: p.word_count || 0, // Use real-time word count from DB
                         creationDate: p.created_at || new Date().toISOString(),
                         settings: { 
@@ -59,23 +60,37 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
         loadProjects();
     }, [mode, editingNovel]); // Reload when closing editor to update word count
 
-    const handleCreateNovel = async (title: string, coverImage: string | null) => {
-        // Call Supabase to create project
-        const type = mode === 'long' ? 'novel' : 'short_story';
-        // We use a placeholder description for now, or could add it to modal
-        const dbId = await createProject(title, "Created via Web App", type);
+    const handleCreateNovel = async (title: string, coverFile: File | null) => {
+        setIsCreating(true);
+        try {
+            let coverUrl: string | null = null;
+            
+            // 1. Upload cover if exists
+            if (coverFile) {
+                coverUrl = await uploadCoverImage(coverFile);
+            }
 
-        const newNovel: Novel = {
-            id: dbId || `novel-${Date.now()}`, // Use DB ID if available, else fallback
-            title,
-            coverImage,
-            wordCount: 0,
-            creationDate: new Date().toISOString(),
-            settings: { typeElements: '', theme: '', targetAudience: '', synopsis: '', worldview: '', characterSettings: '' },
-            chapters: [{id: 'ch-new', title: '正文', content: '', wordCount: 0, lastModified: new Date().toISOString()}]
-        };
-        setNovels(prev => [newNovel, ...prev]); // Add new to top
-        setCreateModalOpen(false);
+            // 2. Call Supabase to create project with coverUrl
+            const type = mode === 'long' ? 'novel' : 'short_story';
+            const dbId = await createProject(title, "Created via Web App", type, coverUrl);
+
+            const newNovel: Novel = {
+                id: dbId || `novel-${Date.now()}`,
+                title,
+                coverImage: coverUrl,
+                wordCount: 0,
+                creationDate: new Date().toISOString(),
+                settings: { typeElements: '', theme: '', targetAudience: '', synopsis: '', worldview: '', characterSettings: '' },
+                chapters: [{id: 'ch-new', title: '正文', content: '', wordCount: 0, lastModified: new Date().toISOString()}]
+            };
+            setNovels(prev => [newNovel, ...prev]);
+            setCreateModalOpen(false);
+        } catch (e) {
+            console.error("Error creating novel", e);
+            alert("创建失败，请重试");
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     const handleOpenDeleteModal = (id: string) => {
@@ -127,8 +142,9 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                     <button
                         onClick={() => setCreateModalOpen(true)}
                         className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0 self-start md:self-center shadow-sm"
+                        disabled={isCreating}
                     >
-                        + {createButtonLabel}
+                        {isCreating ? '创建中...' : `+ ${createButtonLabel}`}
                     </button>
                 )}
             </div>
@@ -168,8 +184,9 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                             <button
                                 onClick={() => setCreateModalOpen(true)}
                                 className="px-8 py-3 bg-sky-600 text-white text-lg font-bold rounded-full hover:bg-sky-500 transition-all shadow-lg hover:shadow-sky-500/30 transform hover:-translate-y-1"
+                                disabled={isCreating}
                             >
-                                {createButtonLabel}
+                                {isCreating ? '处理中...' : createButtonLabel}
                             </button>
                         </div>
                     </div>

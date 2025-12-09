@@ -1,4 +1,6 @@
+
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 interface DeleteConfirmationModalProps {
     isOpen: boolean;
@@ -9,8 +11,8 @@ interface DeleteConfirmationModalProps {
 const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({ isOpen, onClose, onConfirm }) => {
     if (!isOpen) return null;
 
-    return (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    return createPortal(
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm" onClick={onClose}>
             <div 
                 className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md p-6 animate-fade-in-up" 
                 onClick={e => e.stopPropagation()}
@@ -22,11 +24,11 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({ isOpe
                         </svg>
                     </div>
                     <h3 className="mt-5 text-lg font-semibold text-gray-900 dark:text-white">
-                        确认删除提示词
+                        确认删除
                     </h3>
                     <div className="mt-2">
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                            您确定要永久删除这个提示词吗？此操作无法撤销。
+                            您确定要执行此删除操作吗？此操作无法撤销。
                         </p>
                     </div>
                 </div>
@@ -47,7 +49,8 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({ isOpe
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

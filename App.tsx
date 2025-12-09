@@ -1,19 +1,31 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { View, Prompt } from './types';
 import Sidebar from './components/Sidebar';
-import CreativeGeneration from './components/CreativeGeneration';
-import PromptLibrary from './components/PromptLibrary';
-import AssetManagement from './components/AssetManagement';
-import NovelManagement from './components/NovelManagement';
-import ScriptManagement from './components/ScriptManagement';
-import PersonalCenter from './components/PersonalCenter';
-import Placeholder from './components/Placeholder';
-import WorkflowManagement from './components/WorkflowManagement';
 import AuthModal from './components/AuthModal';
 import { getCurrentUserId, signOut } from './services/supabaseService';
+import { Sparkles } from './components/Icon';
+
+// --- Lazy Loaded Components ---
+const CreativeGeneration = React.lazy(() => import('./components/CreativeGeneration').then(module => ({ default: (module as any).default || (module as any).CreativeGeneration })));
+const PromptLibrary = React.lazy(() => import('./components/PromptLibrary'));
+const AssetManagement = React.lazy(() => import('./components/AssetManagement'));
+const NovelManagement = React.lazy(() => import('./components/NovelManagement'));
+const ScriptManagement = React.lazy(() => import('./components/ScriptManagement'));
+const PersonalCenter = React.lazy(() => import('./components/PersonalCenter'));
+const WorkflowManagement = React.lazy(() => import('./components/WorkflowManagement'));
 
 export type Theme = 'light' | 'dark';
+
+// Simple Loading Spinner for Suspense Fallback
+const PageLoading = () => (
+    <div className="flex h-full w-full items-center justify-center bg-gray-50 dark:bg-black">
+        <div className="flex flex-col items-center gap-4">
+            <Sparkles className="w-12 h-12 text-sky-500 animate-pulse" />
+            <p className="text-gray-500 dark:text-gray-400 font-medium">资源加载中...</p>
+        </div>
+    </div>
+);
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<View>('creative-generation');
@@ -123,7 +135,9 @@ const App: React.FC = () => {
                 toggleTheme={toggleTheme}
             />
             <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-black relative">
-                {renderContent()}
+                <Suspense fallback={<PageLoading />}>
+                    {renderContent()}
+                </Suspense>
             </main>
           </>
       )}

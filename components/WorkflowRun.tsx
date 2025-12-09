@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Workflow } from '../types';
 import { generateTextStream } from '../services/geminiService';
 import { Sparkles, ChevronDoubleLeft, X } from './Icon';
@@ -32,8 +33,8 @@ const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({
 
     if (!isVisible) return null;
 
-    return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center">
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/20 backdrop-blur-sm">
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-80 text-center mx-4 animate-fade-in-up relative">
                 <button 
                     onClick={onClose}
@@ -53,7 +54,8 @@ const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-4">已耗时: {seconds} 秒</p>
                 <p className="text-xs text-gray-400">弹窗将在 10 秒后自动关闭</p>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -97,6 +99,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col">
+            <LoadingOverlay isVisible={showOverlay} onClose={() => setShowOverlay(false)} />
+            
             <div className="flex items-center gap-4 mb-6">
                  <button onClick={onBack} className="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                     <ChevronDoubleLeft className="w-5 h-5" />
@@ -200,8 +204,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
 
                 {/* Right Panel: Output */}
                 <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm flex flex-col overflow-hidden relative">
-                     <LoadingOverlay isVisible={showOverlay} onClose={() => setShowOverlay(false)} />
-                     
                      <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex-shrink-0">执行结果</h3>
                      {result ? (
                          <div className="flex-1 overflow-y-auto whitespace-pre-wrap text-gray-700 dark:text-gray-300 text-sm leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
