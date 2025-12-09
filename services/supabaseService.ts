@@ -46,6 +46,16 @@ export async function signOut() {
 }
 
 /**
+ * 3.5 找回密码 (发送重置邮件)
+ */
+export async function resetPasswordForEmail(email: string) {
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: typeof window !== 'undefined' ? `${window.location.origin}` : undefined,
+  });
+  return { data, error };
+}
+
+/**
  * 4. 获取当前登录用户的 ID
  */
 export async function getCurrentUserId() {
@@ -305,7 +315,8 @@ export async function savePrompt(title: string, content: string, mainCat: string
                     title, 
                     content, 
                     main_category: mainCat, 
-                    sub_category: subCat 
+                    sub_category: subCat,
+                    heat: 0 // Initialize heat
                 }
             ]);
         if (error) throw error;
@@ -332,6 +343,28 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
     } catch (err: any) {
         console.error('Failed to update prompt:', err.message);
         alert('更新提示词失败: ' + err.message);
+    }
+}
+
+/**
+ * Increment heat for a prompt (Optimistic or DB trigger in real scenario)
+ */
+export async function incrementPromptHeat(id: string): Promise<void> {
+    try {
+        // If it's a local/mock prompt, we can't update DB
+        if (!id || id.startsWith('prompt-user-')) return; 
+
+        // We fetch first to get current heat (atomic increment is better but requires RPC)
+        // RPC method: await supabase.rpc('increment_prompt_heat', { row_id: id });
+        
+        // Client-side increment (subject to race conditions but fine for simple "heat")
+        const { data } = await supabase.from('prompts').select('heat').eq('id', id).single();
+        if (data) {
+            const newHeat = (data.heat || 0) + 1;
+            await supabase.from('prompts').update({ heat: newHeat }).eq('id', id);
+        }
+    } catch (e) {
+        console.error("Failed to increment heat", e);
     }
 }
 
@@ -395,8 +428,7 @@ export async function fetchPrompts(mainCategory?: string) {
     try {
         // Community Mode: Fetch ALL prompts
         let query = supabase.from('prompts').select('*').order('created_at', { ascending: false });
-        // Note: We generally fetch all for community mode, but if a specific category is needed we could filter.
-        // The mainCategory logic in the app is mostly UI-side filtering for 'all', but we can support strict filtering.
+        
         if (mainCategory && mainCategory !== 'all') {
              query = query.eq('main_category', mainCategory);
         }

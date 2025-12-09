@@ -1,13 +1,12 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { PROMPTS } from '../constants';
 import { Prompt, PromptCategory, PromptSubCategory, UserProfile } from '../types';
 import PromptCard from './PromptCard';
 import CreatePromptModal from './CreatePromptModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import PromptDetailModal from './PromptDetailModal';
 import { Plus, Heart, UserCircle } from './Icon';
-import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt } from '../services/supabaseService';
+import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt, incrementPromptHeat } from '../services/supabaseService';
 
 interface PromptLibraryProps {
     onNavigateToGeneration?: (prompt: Prompt, values: Record<string, string>) => void;
@@ -36,7 +35,8 @@ const SUB_CATEGORIES: { id: PromptSubCategory | 'all'; label: string }[] = [
 ];
 
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration }) => {
-    const [prompts, setPrompts] = useState<Prompt[]>(PROMPTS);
+    // Initial state empty, fetching from DB
+    const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('short-story');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
@@ -94,14 +94,13 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                             subCategories: p.sub_category ? [p.sub_category as any] : [],
                             fields: parsedContent.fields || [], 
                             template: parsedContent.template || p.content,
-                            heat: 0,
+                            heat: p.heat || 0, // Load heat from DB
                             creator: 'user',
                             userId: p.user_id,
                             authorName: displayAuthor
                         };
                     });
-                    // Merge fetched prompts with system PROMPTS
-                    setPrompts([...mappedPrompts, ...PROMPTS]);
+                    setPrompts(mappedPrompts);
                 }
             } catch (error) {
                 console.error("Failed to load prompts", error);
@@ -184,14 +183,18 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
         setCreateModalOpen(true);
     };
 
-    const handleRunPrompt = (formValues: Record<string, string>) => {
+    const handleRunPrompt = async (formValues: Record<string, string>) => {
         if (selectedPrompt) {
-             // Update local heat count
+             // 1. Increment heat in DB
+             await incrementPromptHeat(selectedPrompt.id);
+
+             // 2. Update local heat count
             setPrompts(currentPrompts =>
                 currentPrompts.map(p =>
-                    p.id === selectedPrompt.id ? { ...p, heat: p.heat + 1 } : p
+                    p.id === selectedPrompt.id ? { ...p, heat: (p.heat || 0) + 1 } : p
                 )
             );
+            
             if (onNavigateToGeneration) {
                 onNavigateToGeneration(selectedPrompt, formValues);
             }
@@ -370,7 +373,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                 ))}
                 {filteredPrompts.length === 0 && (
                     <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
-                        <p>暂无相关提示词</p>
+                        <p>暂无相关提示词，快去创建一个吧！</p>
                     </div>
                 )}
             </div>

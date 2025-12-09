@@ -4,7 +4,6 @@ import { Sparkles, Film, UserCircle, Plus, Play, Fire, Heart } from './Icon';
 import CreateWorkflow from './CreateWorkflow';
 import WorkflowRun from './WorkflowRun';
 import { Workflow, WorkflowField } from '../types';
-import { WORKFLOWS as MOCK_WORKFLOWS } from '../constants';
 
 type Tab = 'short-story' | 'script' | 'my';
 type ViewState = 'list' | 'create' | 'run';
@@ -14,7 +13,7 @@ const WorkflowManagement: React.FC = () => {
   const [view, setView] = useState<ViewState>('list');
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
-  const [workflows, setWorkflows] = useState<Workflow[]>(MOCK_WORKFLOWS);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
 
   const handleSelectWorkflow = (wf: Workflow) => {
       setSelectedWorkflow(wf);
@@ -151,7 +150,7 @@ const WorkflowManagement: React.FC = () => {
         {filteredWorkflows.length === 0 && (
             <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
                 <Sparkles className="w-12 h-12 mb-4 opacity-20" />
-                <p>暂无相关工作流</p>
+                <p>暂无工作流，请尝试创建一个！</p>
             </div>
         )}
       </div>
