@@ -1,18 +1,19 @@
 
 import React, { useState } from 'react';
 import { Prompt } from '../types';
-import { Heart, Fire, UserCircle, Trash } from './Icon';
+import { Heart, Fire, UserCircle, Trash, Pencil } from './Icon';
 
 interface PromptCardProps {
   prompt: Prompt;
   onSelect: (prompt: Prompt) => void;
   onDelete: (prompt: Prompt) => void;
+  onEdit?: (prompt: Prompt) => void;
   isFavorited?: boolean;
   onToggleFavorite?: (id: string) => void;
   isOwner?: boolean;
 }
 
-const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, isFavorited = false, onToggleFavorite, isOwner }) => {
+const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onEdit, isFavorited = false, onToggleFavorite, isOwner }) => {
   
   return (
     <div 
@@ -54,16 +55,30 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, isF
                         : '官方'}
                 </span>
                 {isOwner && prompt.creator === 'user' && (
-                     <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onDelete(prompt);
-                        }}
-                        className="ml-2 p-1 hover:text-red-500 transition-colors"
-                        title="删除"
-                    >
-                        <Trash className="w-4 h-4" />
-                    </button>
+                    <div className="flex gap-1 ml-2">
+                        {onEdit && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEdit(prompt);
+                                }}
+                                className="p-1 hover:text-sky-500 transition-colors"
+                                title="编辑"
+                            >
+                                <Pencil className="w-4 h-4" />
+                            </button>
+                        )}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(prompt);
+                            }}
+                            className="p-1 hover:text-red-500 transition-colors"
+                            title="删除"
+                        >
+                            <Trash className="w-4 h-4" />
+                        </button>
+                    </div>
                 )}
             </div>
         </div>

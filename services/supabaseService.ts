@@ -316,6 +316,25 @@ export async function savePrompt(title: string, content: string, mainCat: string
     }
 }
 
+export async function updatePrompt(id: string, updates: { title?: string, content?: string, main_category?: string, sub_category?: string }): Promise<void> {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+
+        const { error } = await supabase
+            .from('prompts')
+            .update(updates)
+            .eq('id', id)
+            .eq('user_id', userId);
+
+        if (error) throw error;
+        alert('提示词已更新！');
+    } catch (err: any) {
+        console.error('Failed to update prompt:', err.message);
+        alert('更新提示词失败: ' + err.message);
+    }
+}
+
 export async function fetchProjects() {
     try {
         const userId = await getCurrentUserId();

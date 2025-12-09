@@ -6,8 +6,8 @@ import PromptCard from './PromptCard';
 import CreatePromptModal from './CreatePromptModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import PromptDetailModal from './PromptDetailModal';
-import { Plus, Heart } from './Icon';
-import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile } from '../services/supabaseService';
+import { Plus, Heart, UserCircle } from './Icon';
+import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt } from '../services/supabaseService';
 
 interface PromptLibraryProps {
     onNavigateToGeneration?: (prompt: Prompt, values: Record<string, string>) => void;
@@ -28,16 +28,16 @@ const SUB_CATEGORIES: { id: PromptSubCategory | 'all'; label: string }[] = [
     { id: 'outline', label: '大纲' },
     { id: 'detailed_outline', label: '细纲' },
     { id: 'synopsis', label: '简介' },
-    { id: 'style', label: '写作风格' },
     { id: 'requirements', label: '写作要求' },
+    { id: 'style', label: '写作风格' },
     { id: 'continue', label: '续写' },
     { id: 'polish', label: '润色' },
-    { id: 'proofread', label: '审稿' },
+    { id: 'writing', label: '写稿' },
 ];
 
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration }) => {
     const [prompts, setPrompts] = useState<Prompt[]>(PROMPTS);
-    const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites'>('short-story');
+    const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('short-story');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
@@ -49,6 +49,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
     
     const [promptToDelete, setPromptToDelete] = useState<Prompt | null>(null);
+    const [promptToEdit, setPromptToEdit] = useState<Prompt | null>(null);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
 
     // Load User Prompts from Supabase
@@ -82,8 +83,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                         }
 
                         const isMyPrompt = p.user_id === userId;
-                        // Use current nickname for owned prompts to ensure consistency with Personal Center
-                        // even if the prompt was saved with an older nickname.
                         const displayAuthor = isMyPrompt ? currentNick : (parsedContent.authorName || '社区用户');
 
                         return {
@@ -97,7 +96,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                             template: parsedContent.template || p.content,
                             heat: 0,
                             creator: 'user',
-                            userId: p.user_id, // Store creator ID
+                            userId: p.user_id,
                             authorName: displayAuthor
                         };
                     });
@@ -111,16 +110,14 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
         loadData();
     }, []);
 
-    const handleSavePrompt = async (data: Omit<Prompt, 'id' | 'heat' | 'content'>) => {
+    const handleSavePrompt = async (data: Omit<Prompt, 'id' | 'heat' | 'content'>, promptId?: string) => {
         // Map app categories to DB categories
-        // App: 'short-story', 'long-story', 'script'
-        // DB: 'short', 'long', 'script', 'general'
         let dbMainCat = 'general';
         if (data.category === 'short-story') dbMainCat = 'short';
         if (data.category === 'long-story') dbMainCat = 'long';
         if (data.category === 'script') dbMainCat = 'script';
 
-        const subCat = data.subCategories && data.subCategories.length > 0 ? data.subCategories[0] : 'requirements';
+        const subCat = data.subCategories && data.subCategories.length > 0 ? data.subCategories[0] : 'idea';
 
         // Serialize the full prompt structure to JSON, including authorName
         const contentToSave = JSON.stringify({
@@ -130,30 +127,61 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             authorName: userNickname
         });
 
-        // Call Supabase
-        await savePrompt(data.title, contentToSave, dbMainCat, subCat);
+        if (promptId) {
+            // Update Existing
+            await updatePrompt(promptId, {
+                title: data.title,
+                content: contentToSave,
+                main_category: dbMainCat,
+                sub_category: subCat
+            });
+            
+            // Update local state
+            setPrompts(prev => prev.map(p => {
+                if (p.id === promptId) {
+                    return {
+                        ...p,
+                        ...data,
+                        content: data.template,
+                        userId: currentUserId || undefined,
+                        authorName: userNickname
+                    }
+                }
+                return p;
+            }));
+        } else {
+            // Create New
+            await savePrompt(data.title, contentToSave, dbMainCat, subCat);
 
-        // Optimistic update
-        const newPrompt: Prompt = {
-            ...data,
-            id: `prompt-user-${Date.now()}`,
-            heat: 0,
-            content: data.template, 
-            creator: 'user',
-            userId: currentUserId || undefined,
-            authorName: userNickname
-        };
-        
-        setPrompts(prev => [newPrompt, ...prev]);
-        
-        // Automatically add to favorites
-        setFavoritedIds(prev => {
-            const next = new Set(prev);
-            next.add(newPrompt.id);
-            return next;
-        });
+            // Optimistic update (real ID would come from reload, but we fake it for now)
+            const newPrompt: Prompt = {
+                ...data,
+                id: `prompt-user-${Date.now()}`,
+                heat: 0,
+                content: data.template, 
+                creator: 'user',
+                userId: currentUserId || undefined,
+                authorName: userNickname
+            };
+            
+            setPrompts(prev => [newPrompt, ...prev]);
+            
+            // Automatically add to favorites
+            setFavoritedIds(prev => {
+                const next = new Set(prev);
+                next.add(newPrompt.id);
+                return next;
+            });
+            setActiveTab(newPrompt.category); 
+        }
+
         setCreateModalOpen(false);
-        setActiveTab(newPrompt.category); 
+        setPromptToEdit(null);
+    };
+
+    const handleEditPrompt = (prompt: Prompt) => {
+        setPromptToEdit(prompt);
+        setCreateModalOpen(true);
     };
 
     const handleRunPrompt = (formValues: Record<string, string>) => {
@@ -206,6 +234,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             let categoryMatch = false;
             if (activeTab === 'favorites') {
                 categoryMatch = favoritedIds.has(prompt.id);
+            } else if (activeTab === 'my-prompts') {
+                categoryMatch = prompt.creator === 'user' && prompt.userId === currentUserId;
             } else if (activeTab === 'all') {
                 categoryMatch = true;
             } else {
@@ -215,8 +245,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             if (!categoryMatch) return false;
             
             const subCategoryMatch = activeSubCategory === 'all' || prompt.subCategories.includes(activeSubCategory as PromptSubCategory);
-            // Subcategory filter only applies to standard categories, not favorites (unless we want it to)
-            if(activeTab !== 'favorites' && !subCategoryMatch) return false;
+            // Now apply subcategory filter to all tabs including favorites and my-prompts
+            if (!subCategoryMatch) return false;
 
             if (!term) return true;
 
@@ -225,14 +255,15 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
 
             return titleMatch || descriptionMatch;
         });
-    }, [activeTab, activeSubCategory, searchTerm, prompts, favoritedIds]);
+    }, [activeTab, activeSubCategory, searchTerm, prompts, favoritedIds, currentUserId]);
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in">
             <CreatePromptModal
                 isOpen={isCreateModalOpen}
-                onClose={() => setCreateModalOpen(false)}
+                onClose={() => { setCreateModalOpen(false); setPromptToEdit(null); }}
                 onSave={handleSavePrompt}
+                promptToEdit={promptToEdit}
             />
              <DeleteConfirmationModal
                 isOpen={isDeleteModalOpen}
@@ -267,6 +298,13 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
 
                 <div className="flex flex-wrap gap-4">
                      <button
+                        onClick={() => setActiveTab('my-prompts')}
+                        className={`px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all ${activeTab === 'my-prompts' ? 'bg-white dark:bg-gray-800 text-sky-600 dark:text-sky-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    >
+                        <UserCircle className="w-5 h-5" />
+                        我的提示词
+                    </button>
+                     <button
                         onClick={() => setActiveTab('favorites')}
                         className={`px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all ${activeTab === 'favorites' ? 'bg-white dark:bg-gray-800 text-sky-600 dark:text-sky-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                     >
@@ -274,7 +312,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                         我的收藏
                     </button>
                     <button
-                        onClick={() => setCreateModalOpen(true)}
+                        onClick={() => { setPromptToEdit(null); setCreateModalOpen(true); }}
                         className="px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
                     >
                         <Plus className="w-5 h-5" />
@@ -285,25 +323,21 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
 
             {/* Filters & Search */}
             <div className="flex flex-col lg:flex-row gap-4 mb-6 justify-between">
-                {activeTab !== 'favorites' ? (
-                    <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2">
+                    <button 
+                        onClick={() => setActiveSubCategory('all')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${activeSubCategory === 'all' ? 'bg-sky-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
+                        全部
+                    </button>
+                    {SUB_CATEGORIES.map(cat => (
                         <button 
-                            onClick={() => setActiveSubCategory('all')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${activeSubCategory === 'all' ? 'bg-sky-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
-                            全部
+                            key={cat.id}
+                            onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${activeSubCategory === cat.id ? 'bg-sky-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
+                            {cat.label}
                         </button>
-                        {SUB_CATEGORIES.map(cat => (
-                            <button 
-                                key={cat.id}
-                                onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${activeSubCategory === cat.id ? 'bg-sky-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
-                                {cat.label}
-                            </button>
-                        ))}
-                    </div>
-                ) : (
-                    <div></div> // Spacer
-                )}
+                    ))}
+                </div>
 
                 <div className="relative w-full lg:w-72">
                     <span className="absolute inset-y-0 left-0 flex items-center pl-3">
@@ -328,6 +362,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                         prompt={prompt}
                         onSelect={handleSelectPrompt}
                         onDelete={handleOpenDeleteModal}
+                        onEdit={handleEditPrompt}
                         isFavorited={favoritedIds.has(prompt.id)}
                         onToggleFavorite={toggleFavorite}
                         isOwner={prompt.userId === currentUserId}

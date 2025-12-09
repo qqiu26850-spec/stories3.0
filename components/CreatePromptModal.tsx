@@ -8,29 +8,39 @@ type NewPromptData = Omit<Prompt, 'id' | 'heat' | 'content'>;
 interface CreatePromptModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (data: NewPromptData) => void;
+    onSave: (data: NewPromptData, promptId?: string) => void;
+    promptToEdit?: Prompt | null;
 }
 
-const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, onSave }) => {
+const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, onSave, promptToEdit }) => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [template, setTemplate] = useState('');
     const [category, setCategory] = useState<PromptCategory>('short-story');
-    const [subCategory, setSubCategory] = useState<PromptSubCategory>('requirements');
+    const [subCategory, setSubCategory] = useState<PromptSubCategory>('idea');
     const [fields, setFields] = useState<PromptField[]>([]);
     const [error, setError] = useState('');
 
     useEffect(() => {
         if (isOpen) {
-            setTitle('');
-            setDescription('');
-            setTemplate('');
-            setCategory('short-story');
-            setSubCategory('requirements');
-            setFields([]);
+            if (promptToEdit) {
+                setTitle(promptToEdit.title);
+                setDescription(promptToEdit.description);
+                setTemplate(promptToEdit.template || promptToEdit.content);
+                setCategory(promptToEdit.category);
+                setSubCategory(promptToEdit.subCategories[0] || 'idea');
+                setFields(promptToEdit.fields || []);
+            } else {
+                setTitle('');
+                setDescription('');
+                setTemplate('');
+                setCategory('short-story');
+                setSubCategory('idea');
+                setFields([]);
+            }
             setError('');
         }
-    }, [isOpen]);
+    }, [isOpen, promptToEdit]);
 
     const addField = () => {
         const newId = `field_${Date.now()}`;
@@ -44,7 +54,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
         if (key === 'label') {
             fieldToUpdate.label = value;
             fieldToUpdate.placeholder = `请输入${value}...`;
-            // Remove auto-generation of id/variable name
         } else if (key === 'type') {
             fieldToUpdate.type = value as 'text' | 'textarea';
         } else if (key === 'id') {
@@ -68,6 +77,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             setError('所有自定义字段都必须有标题和变量名。');
             return;
         }
+        
         onSave({
             title,
             description,
@@ -76,7 +86,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             subCategories: [subCategory],
             fields,
             creator: 'user',
-        });
+        }, promptToEdit?.id);
     };
 
     if (!isOpen) return null;
@@ -84,7 +94,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     return (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-2xl p-6 animate-fade-in-up flex flex-col" onClick={e => e.stopPropagation()}>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex-shrink-0">创建新提示词</h3>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex-shrink-0">{promptToEdit ? '编辑提示词' : '创建新提示词'}</h3>
                 <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto pr-2 -mr-2 max-h-[75vh]">
                     {/* Standard Fields */}
                     <div className="grid grid-cols-2 gap-4">
@@ -99,11 +109,18 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                         <div>
                             <label htmlFor="prompt-subcategory" className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">子分类</label>
                             <select id="prompt-subcategory" value={subCategory} onChange={(e) => setSubCategory(e.target.value as PromptSubCategory)} className="w-full p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition">
-                                <option value="requirements">写作要求/构思</option>
+                                <option value="idea">创意</option>
+                                <option value="golden_finger">金手指</option>
+                                <option value="character_design">人物设定</option>
+                                <option value="worldview">世界观</option>
+                                <option value="outline">大纲</option>
+                                <option value="detailed_outline">细纲</option>
+                                <option value="synopsis">简介</option>
+                                <option value="requirements">写作要求</option>
                                 <option value="style">写作风格</option>
                                 <option value="continue">续写</option>
                                 <option value="polish">润色</option>
-                                <option value="proofread">审稿/评审</option>
+                                <option value="writing">写稿</option>
                             </select>
                         </div>
                     </div>
@@ -154,7 +171,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                     
                     <div className="flex justify-end gap-3 pt-4 flex-shrink-0">
                         <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-500 dark:bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 dark:hover:bg-gray-600 transition-colors">取消</button>
-                        <button type="submit" className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors">保存提示词</button>
+                        <button type="submit" className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors">{promptToEdit ? '保存修改' : '保存提示词'}</button>
                     </div>
                 </form>
             </div>
