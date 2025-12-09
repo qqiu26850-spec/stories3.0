@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { CREATIVE_MODULES, ASSETS, PROMPTS } from '../constants';
+import { CREATIVE_MODULES, PROMPTS } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt, PromptCategory } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { ChevronDoubleLeft, Sparkles, Copy, ArrowPath, Database, X, AdjustmentsHorizontal, Search, ChevronDown, Plus } from './Icon';
+import { ChevronDoubleLeft, Sparkles, Copy, Database, X, AdjustmentsHorizontal, Search, ChevronDown, Plus } from './Icon';
 import SelectablePromptCard from './SelectablePromptCard';
 import { fetchPrompts, saveMaterial } from '../services/supabaseService';
 
@@ -321,6 +321,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
 
   const [generatedText, setGeneratedText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
   
   // UI State
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -332,8 +333,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     if (initialData?.prompt) {
         // If we have a prompt coming in, assume we are in a generic "Creative Mode" or default to Brainstorm
         if (!selectedModule) {
-             // Find a default module or create a placeholder 'Custom' context if needed.
-             // For now, let's just set it to 'brainstorm' or keep null if the UI supports prompt-only generation without module
              setSelectedModule(CREATIVE_MODULES[0]); 
         }
         setSelectedPrompt(initialData.prompt);
@@ -347,8 +346,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
   }, [initialData, selectedModule, onClearInitialData]);
 
 
-  // Reset state when module changes, but preserve if we just set it via initialData
-  // Note: We need to be careful not to clear what we just set in the above useEffect
+  // Reset state when module changes
   useEffect(() => {
       if (selectedModule && !initialData?.prompt) {
           setFreeInput('');
@@ -357,13 +355,12 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
           setGeneratedText('');
           setSuccessMessage('');
       }
-  }, [selectedModule]); // initialData.prompt dependency removed to avoid loop, handled logic inside
+  }, [selectedModule]);
 
-  // Auto-init form state when prompt selected (only if not already populated by initialData)
+  // Auto-init form state when prompt selected
   useEffect(() => {
       if (selectedPrompt) {
           setFormState(prev => {
-               // Only initialize fields that are empty
               const next = { ...prev };
               selectedPrompt.fields.forEach(field => {
                   if (next[field.id] === undefined) {
@@ -379,6 +376,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
 
   const handleGenerate = async () => {
       setIsGenerating(true);
+      setShowLoadingOverlay(true);
       setGeneratedText('');
       
       let finalPrompt = '';
@@ -395,13 +393,14 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
           finalPrompt = freeInput;
       }
 
-      // Prepend module context if available
+      // Prepend module context
       if (selectedModule) {
           finalPrompt = `[当前创作任务：${selectedModule.title} - ${selectedModule.description}]\n\n${finalPrompt}`;
       }
       
       if (!finalPrompt.trim()) {
           setIsGenerating(false);
+          setShowLoadingOverlay(false);
           return;
       }
 
@@ -418,6 +417,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
           setGeneratedText(prev => prev + "\n\n[生成中断或出错，请重试]");
       } finally {
           setIsGenerating(false);
+          setShowLoadingOverlay(false);
       }
   };
 
@@ -428,7 +428,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
   };
 
   const handleImportAsset = (data: { name: string; type: Asset['type']; tags: string[] }) => {
-      // Map app types to DB types
       let dbType: 'character' | 'plot' | 'idea' = 'idea';
       if (data.type === 'character') dbType = 'character';
       if (data.type === 'plot') dbType = 'plot';
@@ -460,7 +459,20 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
   }
 
   return (
-      <div className="h-full flex flex-col bg-gray-50 dark:bg-black animate-fade-in overflow-hidden">
+      <div className="h-full flex flex-col bg-gray-50 dark:bg-black animate-fade-in overflow-hidden relative">
+          <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} />
+          <ImportAssetModal 
+            isOpen={importModalOpen} 
+            onClose={() => setImportModalOpen(false)} 
+            content={generatedText}
+            onSave={handleImportAsset}
+          />
+          <PromptSelectionModal
+            isOpen={promptModalOpen}
+            onClose={() => setPromptModalOpen(false)}
+            onSelect={setSelectedPrompt}
+          />
+
           {/* Header */}
           <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm z-20">
               <div className="flex items-center gap-3">
@@ -487,18 +499,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
           {/* Split Content */}
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
               
-              <ImportAssetModal 
-                isOpen={importModalOpen} 
-                onClose={() => setImportModalOpen(false)} 
-                content={generatedText}
-                onSave={handleImportAsset}
-              />
-              <PromptSelectionModal
-                isOpen={promptModalOpen}
-                onClose={() => setPromptModalOpen(false)}
-                onSelect={setSelectedPrompt}
-              />
-
               {/* Left: Input Panel */}
               <div className="w-full lg:w-[450px] xl:w-[500px] flex flex-col border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden z-10 shadow-lg lg:shadow-none">
                   <div className="flex-1 overflow-y-auto p-5 space-y-8">
@@ -514,4 +514,174 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                           
                           <div className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-xl border border-gray-100 dark:border-gray-800 space-y-5">
                               <div>
-                               
+                                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">模型</label>
+                                  <select 
+                                      value={model}
+                                      onChange={(e) => setModel(e.target.value)}
+                                      className="w-full p-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none"
+                                  >
+                                      <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                      <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                      <option value="deepseek-chat">DeepSeek V3</option>
+                                  </select>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 flex justify-between">
+                                          <span>温度 (Randomness)</span>
+                                          <span>{temperature}</span>
+                                      </label>
+                                      <input 
+                                          type="range" min="0" max="2" step="0.1" 
+                                          value={temperature}
+                                          onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                                          className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                                      />
+                                  </div>
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 flex justify-between">
+                                          <span>核采样 (Top P)</span>
+                                          <span>{topP}</span>
+                                      </label>
+                                      <input 
+                                          type="range" min="0" max="1" step="0.05" 
+                                          value={topP}
+                                          onChange={(e) => setTopP(parseFloat(e.target.value))}
+                                          className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                                      />
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+
+                      {/* Section 2: Prompt Config */}
+                      <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
+                                  <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded text-purple-600 dark:text-purple-400">
+                                    <Sparkles className="w-4 h-4" />
+                                  </div>
+                                  提示词配置
+                              </div>
+                              <button 
+                                  onClick={() => setPromptModalOpen(true)}
+                                  className="text-xs font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 transition-colors flex items-center gap-1"
+                              >
+                                  <Search className="w-3 h-3" />
+                                  更换模板
+                              </button>
+                          </div>
+
+                          <div className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-xl border border-gray-100 dark:border-gray-800">
+                              {selectedPrompt ? (
+                                  <div className="space-y-4">
+                                      <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                                          <span className="text-sm font-bold text-gray-900 dark:text-white">{selectedPrompt.title}</span>
+                                          <button onClick={() => setSelectedPrompt(null)} className="text-gray-400 hover:text-red-500 transition-colors text-xs">
+                                              清除
+                                          </button>
+                                      </div>
+                                      {selectedPrompt.fields.map(field => (
+                                          <div key={field.id}>
+                                              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">{field.label}</label>
+                                              {field.type === 'textarea' ? (
+                                                  <textarea
+                                                      value={formState[field.id] || ''}
+                                                      onChange={(e) => setFormState(prev => ({...prev, [field.id]: e.target.value}))}
+                                                      placeholder={field.placeholder}
+                                                      className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none h-24 transition-shadow shadow-sm"
+                                                  />
+                                              ) : (
+                                                  <input
+                                                      type="text"
+                                                      value={formState[field.id] || ''}
+                                                      onChange={(e) => setFormState(prev => ({...prev, [field.id]: e.target.value}))}
+                                                      placeholder={field.placeholder}
+                                                      className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-shadow shadow-sm"
+                                                  />
+                                              )}
+                                          </div>
+                                      ))}
+                                  </div>
+                              ) : (
+                                  <div className="space-y-3">
+                                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400">自由输入</label>
+                                      <textarea 
+                                          value={freeInput}
+                                          onChange={(e) => setFreeInput(e.target.value)}
+                                          placeholder="在此输入你的创作需求、故事梗概或灵感..."
+                                          className="w-full p-4 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none h-40 transition-shadow shadow-sm"
+                                      />
+                                      <div className="text-xs text-gray-400 text-center pt-2">
+                                          或者点击上方“更换模板”选择专业的结构化提示词
+                                      </div>
+                                  </div>
+                              )}
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="p-5 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                      <button
+                          onClick={handleGenerate}
+                          disabled={isGenerating}
+                          className="w-full py-3.5 bg-gradient-to-r from-sky-600 to-purple-600 hover:from-sky-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg hover:shadow-sky-500/30 transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+                      >
+                          {isGenerating ? (
+                              <>
+                                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                  正在生成...
+                              </>
+                          ) : (
+                              <>
+                                  <Sparkles className="w-5 h-5" />
+                                  立即生成
+                              </>
+                          )}
+                      </button>
+                  </div>
+              </div>
+
+              {/* Right: Result Panel */}
+              <div className="flex-1 flex flex-col bg-gray-50 dark:bg-black overflow-hidden relative">
+                  <div className="flex-1 overflow-y-auto p-6 md:p-8">
+                      {generatedText ? (
+                          <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 min-h-full animate-fade-in">
+                              <pre className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-lg">
+                                  {generatedText}
+                              </pre>
+                          </div>
+                      ) : (
+                          <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 opacity-60">
+                              <Sparkles className="w-24 h-24 mb-6 stroke-1" />
+                              <p className="text-xl font-medium">配置左侧参数，开始创作</p>
+                          </div>
+                      )}
+                  </div>
+
+                  {generatedText && (
+                      <div className="p-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-end gap-3 z-10">
+                          <button
+                              onClick={handleCopy}
+                              className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2"
+                          >
+                              <Copy className="w-4 h-4" />
+                              复制
+                          </button>
+                          <button
+                              onClick={() => setImportModalOpen(true)}
+                              className="px-5 py-2.5 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-500 transition-colors shadow-sm flex items-center gap-2"
+                          >
+                              <Database className="w-4 h-4" />
+                              存入素材库
+                          </button>
+                      </div>
+                  )}
+              </div>
+          </div>
+      </div>
+  );
+};
+
+export default CreativeGeneration;

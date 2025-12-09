@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, Suspense } from 'react';
 import { View, Prompt } from './types';
 import Sidebar from './components/Sidebar';
@@ -7,7 +6,7 @@ import { getCurrentUserId, signOut } from './services/supabaseService';
 import { Sparkles } from './components/Icon';
 
 // --- Lazy Loaded Components ---
-const CreativeGeneration = React.lazy(() => import('./components/CreativeGeneration').then(module => ({ default: (module as any).default || (module as any).CreativeGeneration })));
+const CreativeGeneration = React.lazy(() => import('./components/CreativeGeneration'));
 const PromptLibrary = React.lazy(() => import('./components/PromptLibrary'));
 const AssetManagement = React.lazy(() => import('./components/AssetManagement'));
 const NovelManagement = React.lazy(() => import('./components/NovelManagement'));
