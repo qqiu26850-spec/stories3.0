@@ -7,7 +7,7 @@ const SUPABASE_URL = 'https://vydvxxarfjyjjjhyhfek.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5ZHZ4eGFyZmp5ampqaHloZmVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NzY4OTksImV4cCI6MjA3OTU1Mjg5OX0.Y9Q4JwTZnBBwDDAhz_TUcxZ-Jv-eN8BXqPauIQaI-Ds';
 
 // Initialize Supabase Client
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(SUPABASE_URL.trim(), SUPABASE_ANON_KEY.trim());
 
 // =================== 🆕 身份认证 (Auth) 函数 ===================
 
@@ -68,10 +68,6 @@ export async function getCurrentUserId() {
  */
 export async function fetchUserProfile() {
     try {
-        // In a real app with a 'profiles' table:
-        // const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-        // return data;
-        
         // For this demo without a profiles table, we return the default mock or check auth metadata
         const { data: { session } } = await supabase.auth.getSession();
         return {
@@ -107,17 +103,13 @@ export async function deleteUserData(): Promise<boolean> {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
 
-        // Delete Projects (Cascade should handle chapters, but this deletes the project root)
+        // Delete Projects
         const { error: pError } = await supabase.from('projects').delete().eq('user_id', userId);
         if (pError) throw pError;
 
         // Delete Materials
         const { error: mError } = await supabase.from('materials').delete().eq('user_id', userId);
         if (mError) throw mError;
-
-        // Prompts are explicitly EXCLUDED from deletion as requested.
-        // We do NOT delete from 'prompts' table for this user.
-        // Workflows are currently local-only in this version, so no DB delete needed.
 
         // Sign out the user
         await signOut();
@@ -171,7 +163,7 @@ export async function uploadCoverImage(file: File): Promise<string | null> {
 export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short_story', coverUrl: string | null = null): Promise<string | null> {
     try {
         const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
+        if (!userId) throw new Error("用户未登录，请先登录。");
 
         const { data, error } = await supabase
             .from('projects')
@@ -182,7 +174,7 @@ export async function createProject(title: string, desc: string, type: 'novel' |
                     description: desc,
                     type: type,
                     status: 'draft',
-                    cover_image: coverUrl // Save the cover URL
+                    cover_image: coverUrl
                 }
             ])
             .select();
@@ -190,8 +182,12 @@ export async function createProject(title: string, desc: string, type: 'novel' |
         if (error) throw error;
         return data[0].id;
     } catch (err: any) {
-        console.error('Failed to create project:', err.message);
-        alert('创建云端项目失败: ' + err.message);
+        console.error('Failed to create project:', err);
+        let msg = err.message;
+        if (msg === 'Failed to fetch') {
+            msg = '网络连接失败。请检查您的网络，或关闭可能拦截请求的广告拦截器/代理插件。';
+        }
+        alert('创建云端项目失败: ' + msg);
         return null;
     }
 }
@@ -208,10 +204,9 @@ export async function updateProject(projectId: string, updates: { title?: string
             .from('projects')
             .update(updates)
             .eq('id', projectId)
-            .eq('user_id', userId); // Ensure ownership
+            .eq('user_id', userId);
 
         if (error) throw error;
-        console.log('Project updated:', updates);
     } catch (err: any) {
         console.error('Failed to update project:', err.message);
     }
@@ -222,9 +217,6 @@ export async function updateProject(projectId: string, updates: { title?: string
  */
 export async function fetchChapters(projectId: string) {
     try {
-        // Fetching chapters doesn't strictly require user_id check if RLS is set on project_id,
-        // but for read operations, simply querying by project_id is usually sufficient 
-        // assuming the user has access to the project.
         const { data, error } = await supabase
             .from('chapters')
             .select('*')
@@ -253,7 +245,6 @@ export async function saveChapterToDB(
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
 
-        // Check if it's a local temporary ID
         const isLocalId = chapterId.startsWith('ch-') || chapterId.startsWith('scene-') || chapterId.startsWith('new-');
 
         if (isLocalId) {
@@ -271,7 +262,7 @@ export async function saveChapterToDB(
                 .select();
 
             if (error) throw error;
-            return data[0].id; // Return real UUID
+            return data[0].id;
         } else {
             // UPDATE
             const { data, error } = await supabase
@@ -301,7 +292,6 @@ export async function deleteChapterFromDB(chapterId: string): Promise<void> {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
 
-        // If it's a local ID, it doesn't exist in DB yet
         if (chapterId.startsWith('ch-') || chapterId.startsWith('scene-') || chapterId.startsWith('new-')) {
             return;
         }
@@ -352,7 +342,7 @@ export async function savePrompt(title: string, content: string, mainCat: string
                     content, 
                     main_category: mainCat, 
                     sub_category: subCat,
-                    heat: 0 // Initialize heat
+                    heat: 0
                 }
             ]);
         if (error) throw error;
@@ -382,18 +372,9 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
     }
 }
 
-/**
- * Increment heat for a prompt (Optimistic or DB trigger in real scenario)
- */
 export async function incrementPromptHeat(id: string): Promise<void> {
     try {
-        // If it's a local/mock prompt, we can't update DB
         if (!id || id.startsWith('prompt-user-')) return; 
-
-        // We fetch first to get current heat (atomic increment is better but requires RPC)
-        // RPC method: await supabase.rpc('increment_prompt_heat', { row_id: id });
-        
-        // Client-side increment (subject to race conditions but fine for simple "heat")
         const { data } = await supabase.from('prompts').select('heat').eq('id', id).single();
         if (data) {
             const newHeat = (data.heat || 0) + 1;
@@ -407,9 +388,8 @@ export async function incrementPromptHeat(id: string): Promise<void> {
 export async function fetchProjects() {
     try {
         const userId = await getCurrentUserId();
-        if (!userId) return []; // Return empty if not logged in (or could handle differently)
+        if (!userId) return [];
 
-        // 1. Get Projects
         const { data: projects, error } = await supabase
             .from('projects')
             .select('*')
@@ -418,7 +398,6 @@ export async function fetchProjects() {
         
         if (error || !projects) return [];
 
-        // 2. Get all chapters for these projects to calculate word count
         const projectIds = projects.map(p => p.id);
         if (projectIds.length === 0) return projects;
 
@@ -429,14 +408,13 @@ export async function fetchProjects() {
 
         if (chapterError) {
             console.error("Failed to fetch chapters for word count", chapterError);
-            return projects; // Return projects without accurate word count if fail
+            return projects;
         }
 
-        // 3. Calculate and inject word count
         const projectsWithCount = projects.map(p => {
             const pChapters = chapters?.filter(c => c.project_id === p.id) || [];
             const totalWords = pChapters.reduce((acc, c) => acc + (c.content ? c.content.length : 0), 0);
-            return { ...p, word_count: totalWords }; // Inject calculate word_count
+            return { ...p, word_count: totalWords };
         });
 
         return projectsWithCount;
@@ -462,7 +440,6 @@ export async function fetchMaterials(type?: 'character' | 'plot' | 'idea') {
 
 export async function fetchPrompts(mainCategory?: string) {
     try {
-        // Community Mode: Fetch ALL prompts
         let query = supabase.from('prompts').select('*').order('created_at', { ascending: false });
         
         if (mainCategory && mainCategory !== 'all') {
@@ -476,22 +453,17 @@ export async function fetchPrompts(mainCategory?: string) {
     }
 }
 
-/**
- * Fetch all content created by the current user for the Personal Center
- */
 export async function fetchUserLibrary() {
     try {
         const userId = await getCurrentUserId();
         if (!userId) return { prompts: [], materials: [] };
 
-        // Fetch My Prompts
         const { data: prompts } = await supabase
             .from('prompts')
             .select('*')
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
-        // Fetch My Materials
         const { data: materials } = await supabase
             .from('materials')
             .select('*')
