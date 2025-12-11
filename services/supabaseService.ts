@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NovelSettings } from '../types';
 
 // ================= Configuration =================
-const SUPABASE_URL = 'https://vydvxxarfjyjjjhyhfek.supabase.co'; 
+const SUPABASE_URL = 'https://kuvfgccoyekvkolkgwby.supabase.co'; 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5ZHZ4eGFyZmp5ampqaHloZmVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NzY4OTksImV4cCI6MjA3OTU1Mjg5OX0.Y9Q4JwTZnBBwDDAhz_TUcxZ-Jv-eN8BXqPauIQaI-Ds';
 
 // Initialize Supabase Client with more robust settings
@@ -528,7 +528,7 @@ export async function incrementPromptHeat(id: string): Promise<void> {
         const { data } = await withRetry(async () => await supabase.from('prompts').select('usage_count').eq('id', id).single());
         if (data) {
             const newCount = ((data as any).usage_count || 0) + 1;
-            await supabase.from('prompts').update({ usage_count: newCount }).eq('id', id);
+            await supabase.from('prompts').update({ heat: newCount }).eq('id', id);
         }
     } catch (e) {
         console.error("Failed to increment heat", e);
