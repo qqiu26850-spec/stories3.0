@@ -67,7 +67,11 @@ const ScriptManagement: React.FC = () => {
 
             // 2. Call Supabase
             const description = scriptType === 'adaptation' ? "Adaptation Project" : "Original Script";
-            const dbId = await createProject(title, description, 'script', coverUrl);
+            const { id: dbId, error } = await createProject(title, description, 'script', coverUrl);
+
+            if (error) {
+                throw error;
+            }
 
             const newScript: Script = {
                 id: dbId || `script-${Date.now()}`,

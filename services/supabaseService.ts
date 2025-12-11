@@ -14,7 +14,11 @@ export const supabase = createClient(SUPABASE_URL.trim(), SUPABASE_ANON_KEY.trim
         detectSessionInUrl: true
     },
     global: {
-        headers: { 'x-application-name': 'story-weaver' }
+        headers: { 
+            'x-application-name': 'story-weaver',
+            // Explicitly set Authorization header content type just in case
+            'Content-Type': 'application/json' 
+        }
     }
 });
 
@@ -27,6 +31,12 @@ async function withRetry<T>(
     retries = 3, 
     delay = 1000
 ): Promise<{ data: T | null; error: any }> {
+    
+    // Check for offline status immediately
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return { data: null, error: new Error('网络连接已断开，请检查您的网络设置。') };
+    }
+
     let lastError: any;
     
     for (let i = 0; i < retries; i++) {
@@ -34,27 +44,35 @@ async function withRetry<T>(
             const { data, error } = await operation();
             
             if (error) {
-                // Check for potential network-related 5xx errors or specific codes that warrant retry
-                return { data, error };
+                // If it's a known Postgres error (e.g. RLS violation 403, Constraint violation 409), generally don't retry as it won't fix itself.
+                // But for 500s or timeouts, we might.
+                if (error.code && (error.code.startsWith('5') || error.message.includes('fetch'))) {
+                     // Retry logic falls through
+                } else {
+                    return { data, error };
+                }
+                lastError = error;
+            } else {
+                return { data, error: null };
             }
-            
-            return { data, error: null };
         } catch (err: any) {
             lastError = err;
             const message = err.message || '';
             // Retry on network errors
             if (message.includes('fetch') || message.includes('network') || message.includes('Failed to fetch')) {
                 console.warn(`Attempt ${i + 1} failed: ${message}. Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay * (i + 1))); // Exponential backoff-ish
-                continue;
+                if (i < retries - 1) {
+                    await new Promise(resolve => setTimeout(resolve, delay * (i + 1))); 
+                    continue;
+                }
+            } else {
+                // If it's a code error (e.g. syntax), throw immediately or return error
+                return { data: null, error: err };
             }
-            // If it's a code error (e.g. syntax), throw immediately
-            throw err;
         }
     }
     
-    // If we exhausted retries for a thrown error (like fetch failure)
-    return { data: null, error: lastError || new Error('Request failed after multiple retries') };
+    return { data: null, error: lastError || new Error('请求超时或失败，请检查网络连接或稍后重试。') };
 }
 
 // =================== Auth Functions ===================
@@ -98,12 +116,13 @@ export async function getCurrentUserId() {
 export async function fetchUserProfile() {
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        // Check for profile table if exists, otherwise fallback to metadata
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session?.user?.id).single();
+        if (!session) return { nickname: '奇思妙想家', avatarUrl: null };
+
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         
         return {
-            nickname: profile?.username || session?.user?.user_metadata?.full_name || '奇思妙想家',
-            avatarUrl: profile?.avatar_url || session?.user?.user_metadata?.avatar_url || null
+            nickname: profile?.username || session.user.user_metadata?.full_name || '奇思妙想家',
+            avatarUrl: profile?.avatar_url || session.user.user_metadata?.avatar_url || null
         };
     } catch (e) {
         return { nickname: '奇思妙想家', avatarUrl: null };
@@ -180,7 +199,7 @@ function mapProjectTypeToDB(type: 'novel' | 'script' | 'short' | 'short_story'):
     return type as 'novel' | 'script' | 'short_story';
 }
 
-export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short' | 'short_story', coverUrl: string | null = null): Promise<string | null> {
+export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short' | 'short_story', coverUrl: string | null = null): Promise<{ id: string | null, error: any }> {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("用户未登录，请先登录。");
@@ -202,11 +221,10 @@ export async function createProject(title: string, desc: string, type: 'novel' |
             .select());
 
         if (error) throw error;
-        return data ? (data as any[])[0].id : null;
+        return { id: (data as any[])?.[0]?.id, error: null };
     } catch (err: any) {
         console.error('Failed to create project:', err);
-        alert('创建云端项目失败: ' + (err.message === 'Failed to fetch' ? '网络连接错误，请检查网络' : err.message));
-        return null;
+        return { id: null, error: err };
     }
 }
 
@@ -323,7 +341,7 @@ export async function saveChapterToDB(
                 .select());
 
             if (error) throw error;
-            return data ? (data as any[])[0].id : null;
+            return (data as any[])?.[0]?.id;
         } else {
             const { data, error } = await withRetry(async () => await supabase
                 .from('chapters')
@@ -336,7 +354,7 @@ export async function saveChapterToDB(
                 .select());
 
             if (error) throw error;
-            return data ? (data as any[])[0].id : null;
+            return (data as any[])?.[0]?.id;
         }
     } catch (err: any) {
         console.error('Failed to save chapter:', err.message);
@@ -356,7 +374,7 @@ export async function deleteChapterFromDB(chapterId: string): Promise<void> {
 
 // ================= Material Functions =================
 
-export async function saveMaterial(name: string, content: string, type: 'character' | 'plot' | 'idea' | 'inspiration', tags: string[] = []): Promise<void> {
+export async function saveMaterial(name: string, content: string, type: 'character' | 'plot' | 'idea' | 'inspiration', tags: string[] = []): Promise<{ success: boolean, error?: any }> {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
@@ -368,9 +386,10 @@ export async function saveMaterial(name: string, content: string, type: 'charact
             .insert([{ user_id: userId, name, content, type: dbType, tags: tags }]));
             
         if (error) throw error;
+        return { success: true };
     } catch (err: any) {
         console.error('Failed to save material:', err.message);
-        alert('保存素材失败: ' + (err.message === 'Failed to fetch' ? '网络连接错误' : err.message));
+        return { success: false, error: err };
     }
 }
 
@@ -410,7 +429,7 @@ function mapPromptCategoryToDB(cat: string): 'short' | 'long' | 'script' | 'gene
     return 'general';
 }
 
-export async function savePrompt(title: string, content: string, mainCat: string, subCat: string): Promise<void> {
+export async function savePrompt(title: string, content: string, mainCat: string, subCat: string): Promise<{ success: boolean, error?: any }> {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
@@ -439,17 +458,14 @@ export async function savePrompt(title: string, content: string, mainCat: string
             }]));
             
         if (error) throw error;
-        alert('提示词已保存到云端库！');
+        return { success: true };
     } catch (err: any) {
         console.error('Failed to save prompt:', err.message);
-        const msg = err.message === 'Failed to fetch' 
-            ? '无法连接到服务器，请检查您的网络连接或关闭广告拦截插件。' 
-            : err.message;
-        alert('保存提示词失败: ' + msg);
+        return { success: false, error: err };
     }
 }
 
-export async function updatePrompt(id: string, updates: { title?: string, content?: string, main_category?: string, sub_category?: string }): Promise<void> {
+export async function updatePrompt(id: string, updates: { title?: string, content?: string, main_category?: string, sub_category?: string }): Promise<{ success: boolean, error?: any }> {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
@@ -472,10 +488,10 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
             .eq('user_id', userId));
 
         if (error) throw error;
-        alert('提示词已更新！');
+        return { success: true };
     } catch (err: any) {
         console.error('Failed to update prompt:', err.message);
-        alert('更新提示词失败: ' + (err.message === 'Failed to fetch' ? '网络连接错误' : err.message));
+        return { success: false, error: err };
     }
 }
 

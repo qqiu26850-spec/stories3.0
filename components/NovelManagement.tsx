@@ -72,8 +72,14 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
 
             // 2. Call Supabase to create project with coverUrl
             const type = mode === 'long' ? 'novel' : 'short_story';
-            const dbId = await createProject(title, "Created via Web App", type, coverUrl);
+            const { id: dbId, error } = await createProject(title, "Created via Web App", type, coverUrl);
 
+            if (error) {
+                alert(`创建失败: ${error.message || '未知错误'}`);
+                return;
+            }
+
+            // Only update UI if DB insert was successful
             const newNovel: Novel = {
                 id: dbId || `novel-${Date.now()}`,
                 title,

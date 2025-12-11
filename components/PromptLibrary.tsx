@@ -126,13 +126,20 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
 
         if (promptId) {
             // Update Existing
-            await updatePrompt(promptId, {
+            const { success, error } = await updatePrompt(promptId, {
                 title: data.title,
                 content: contentString,
                 main_category: data.category, // Service handles mapping
                 sub_category: subCat
             });
             
+            if (!success) {
+                alert(`更新失败: ${error?.message || '未知错误'}`);
+                return;
+            }
+            
+            alert('提示词更新成功！');
+
             // Update local state
             setPrompts(prev => prev.map(p => {
                 if (p.id === promptId) {
@@ -148,7 +155,14 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             }));
         } else {
             // Create New
-            await savePrompt(data.title, contentString, data.category, subCat);
+            const { success, error } = await savePrompt(data.title, contentString, data.category, subCat);
+
+            if (!success) {
+                alert(`保存失败: ${error?.message || '未知错误'}`);
+                return;
+            }
+            
+            alert('提示词创建成功！');
 
             // Optimistic update
             const newPrompt: Prompt = {
