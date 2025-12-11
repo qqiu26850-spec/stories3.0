@@ -2,11 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { Novel } from '../types';
 import CreateProjectModal from './CreateProjectModal';
+import EditProjectModal from './EditProjectModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
 import NovelWritingPage from './writing/NovelWritingPage';
-import { BookOpen, Sparkles, DocumentPlus } from './Icon';
-import { createProject, fetchProjects, deleteProject, uploadCoverImage } from '../services/supabaseService';
+import { BookOpen, Sparkles } from './Icon';
+import { createProject, fetchProjects, deleteProject, uploadCoverImage, updateProject } from '../services/supabaseService';
 
 interface NovelManagementProps {
     mode?: 'long' | 'short';
@@ -15,11 +16,19 @@ interface NovelManagementProps {
 const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
     // Initialized with empty array, data will be fetched
     const [novels, setNovels] = useState<Novel[]>([]);
+    
+    // Writing State
     const [editingNovel, setEditingNovel] = useState<Novel | null>(null);
+    
+    // Modal States
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+    const [isEditModalOpen, setEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
+    
     const [itemToDelete, setItemToDelete] = useState<Novel | null>(null);
-    const [isCreating, setIsCreating] = useState(false);
+    const [itemToEdit, setItemToEdit] = useState<Novel | null>(null);
+    
+    const [isProcessing, setIsProcessing] = useState(false); // For create/update loading
 
     const pageTitle = mode === 'long' ? '小说管理' : '短篇管理';
     const description = mode === 'long' ? '在这里开始、管理和发展你的长篇故事。' : '快速捕捉灵感，创作精彩的短篇故事。';
@@ -61,7 +70,7 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
     }, [mode, editingNovel]); // Reload when closing editor to update word count
 
     const handleCreateNovel = async (title: string, coverFile: File | null) => {
-        setIsCreating(true);
+        setIsProcessing(true);
         try {
             let coverUrl: string | null = null;
             
@@ -95,7 +104,43 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
             console.error("Error creating novel", e);
             alert("创建失败，请重试");
         } finally {
-            setIsCreating(false);
+            setIsProcessing(false);
+        }
+    };
+
+    const handleUpdateNovel = async (id: string, newTitle: string, newCoverFile: File | null) => {
+        setIsProcessing(true);
+        try {
+            let coverUrl = itemToEdit?.coverImage || null;
+
+            // 1. If new file uploaded, upload it and get new URL
+            if (newCoverFile) {
+                const uploadedUrl = await uploadCoverImage(newCoverFile);
+                if (uploadedUrl) {
+                    coverUrl = uploadedUrl;
+                }
+            }
+
+            // 2. Update DB
+            await updateProject(id, { 
+                title: newTitle, 
+                cover_image: coverUrl || undefined 
+            });
+
+            // 3. Update Local State
+            setNovels(prev => prev.map(n => 
+                n.id === id 
+                ? { ...n, title: newTitle, coverImage: coverUrl } 
+                : n
+            ));
+
+            setEditModalOpen(false);
+            setItemToEdit(null);
+        } catch (e) {
+            console.error("Failed to update novel", e);
+            alert("更新失败，请重试");
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -116,6 +161,11 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
         }
     };
 
+    const handleOpenEditModal = (novel: Novel) => {
+        setItemToEdit(novel);
+        setEditModalOpen(true);
+    };
+
     const handleSelectNovel = (novel: Novel) => {
         setEditingNovel(novel);
     };
@@ -131,6 +181,12 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                 onClose={() => setCreateModalOpen(false)}
                 onSave={handleCreateNovel}
                 projectType={mode === 'long' ? 'novel' : 'short'}
+            />
+            <EditProjectModal 
+                isOpen={isEditModalOpen}
+                onClose={() => { setEditModalOpen(false); setItemToEdit(null); }}
+                onSave={handleUpdateNovel}
+                project={itemToEdit}
             />
             <DeleteConfirmationModal
                 isOpen={isDeleteModalOpen}
@@ -148,9 +204,9 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                     <button
                         onClick={() => setCreateModalOpen(true)}
                         className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0 self-start md:self-center shadow-sm"
-                        disabled={isCreating}
+                        disabled={isProcessing}
                     >
-                        {isCreating ? '创建中...' : `+ ${createButtonLabel}`}
+                        {isProcessing ? '处理中...' : `+ ${createButtonLabel}`}
                     </button>
                 )}
             </div>
@@ -158,12 +214,13 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
             {/* Content Area */}
             <div className="flex-1 flex flex-col">
                 {novels.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fade-in">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fade-in pb-10">
                         {novels.map(novel => (
                            <ProjectCard 
                                 key={novel.id} 
                                 project={novel} 
                                 onDelete={handleOpenDeleteModal}
+                                onEdit={handleOpenEditModal}
                                 onSelect={() => handleSelectNovel(novel)}
                             />
                         ))}
@@ -190,9 +247,9 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                             <button
                                 onClick={() => setCreateModalOpen(true)}
                                 className="px-8 py-3 bg-sky-600 text-white text-lg font-bold rounded-full hover:bg-sky-500 transition-all shadow-lg hover:shadow-sky-500/30 transform hover:-translate-y-1"
-                                disabled={isCreating}
+                                disabled={isProcessing}
                             >
-                                {isCreating ? '处理中...' : createButtonLabel}
+                                {isProcessing ? '处理中...' : createButtonLabel}
                             </button>
                         </div>
                     </div>

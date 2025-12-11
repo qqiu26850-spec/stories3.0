@@ -2,11 +2,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Script, Scene } from '../types';
 import CreateProjectModal from './CreateProjectModal';
+import EditProjectModal from './EditProjectModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
 import { Film, BookOpen, DocumentPlus } from './Icon';
 import ScriptWritingPage from './writing/ScriptWritingPage';
-import { createProject, fetchProjects, deleteProject, uploadCoverImage } from '../services/supabaseService';
+import { createProject, fetchProjects, deleteProject, uploadCoverImage, updateProject } from '../services/supabaseService';
 
 type ScriptType = 'original' | 'adaptation';
 type ViewState = 'selection' | 'list';
@@ -17,10 +18,15 @@ const ScriptManagement: React.FC = () => {
     const [scriptType, setScriptType] = useState<ScriptType | null>(null);
     const [editingScript, setEditingScript] = useState<Script | null>(null);
     
+    // Modals
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+    const [isEditModalOpen, setEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
+    
     const [itemToDelete, setItemToDelete] = useState<Script | null>(null);
-    const [isCreating, setIsCreating] = useState(false);
+    const [itemToEdit, setItemToEdit] = useState<Script | null>(null);
+    
+    const [isProcessing, setIsProcessing] = useState(false);
 
     // Fetch projects on mount or when closing editor
     useEffect(() => {
@@ -55,7 +61,7 @@ const ScriptManagement: React.FC = () => {
 
     const handleCreateScript = async (title: string, coverFile: File | null) => {
         if (!scriptType) return;
-        setIsCreating(true);
+        setIsProcessing(true);
         
         try {
             let coverUrl: string | null = null;
@@ -88,7 +94,40 @@ const ScriptManagement: React.FC = () => {
             console.error("Error creating script", e);
             alert("创建失败，请重试");
         } finally {
-            setIsCreating(false);
+            setIsProcessing(false);
+        }
+    };
+
+    const handleUpdateScript = async (id: string, newTitle: string, newCoverFile: File | null) => {
+        setIsProcessing(true);
+        try {
+            let coverUrl = itemToEdit?.coverImage || null;
+
+            if (newCoverFile) {
+                const uploadedUrl = await uploadCoverImage(newCoverFile);
+                if (uploadedUrl) {
+                    coverUrl = uploadedUrl;
+                }
+            }
+
+            await updateProject(id, { 
+                title: newTitle, 
+                cover_image: coverUrl || undefined 
+            });
+
+            setScripts(prev => prev.map(s => 
+                s.id === id 
+                ? { ...s, title: newTitle, coverImage: coverUrl } 
+                : s
+            ));
+
+            setEditModalOpen(false);
+            setItemToEdit(null);
+        } catch (e) {
+            console.error("Failed to update script", e);
+            alert("更新失败，请重试");
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -109,6 +148,11 @@ const ScriptManagement: React.FC = () => {
         }
     };
     
+    const handleOpenEditModal = (script: Script) => {
+        setItemToEdit(script);
+        setEditModalOpen(true);
+    }
+
     const handleSelectScript = (script: Script) => {
         setEditingScript(script);
     };
@@ -116,6 +160,8 @@ const ScriptManagement: React.FC = () => {
     // Filter logic updated to handle local state properly
     const filteredScripts = useMemo(() => {
         if (!scriptType) return scripts;
+        // In a real app, you might filter by type property if you store it strictly
+        // For now we show all scripts as the "type" property in mappedScripts is derived
         return scripts; 
     }, [scripts, scriptType]);
 
@@ -163,6 +209,12 @@ const ScriptManagement: React.FC = () => {
                 onSave={handleCreateScript}
                 projectType="script"
             />
+            <EditProjectModal
+                isOpen={isEditModalOpen}
+                onClose={() => { setEditModalOpen(false); setItemToEdit(null); }}
+                onSave={handleUpdateScript}
+                project={itemToEdit}
+            />
             <DeleteConfirmationModal
                 isOpen={isDeleteModalOpen}
                 onClose={() => setDeleteModalOpen(false)}
@@ -184,9 +236,9 @@ const ScriptManagement: React.FC = () => {
                     <button
                         onClick={() => setCreateModalOpen(true)}
                         className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0 self-start md:self-center shadow-sm"
-                        disabled={isCreating}
+                        disabled={isProcessing}
                     >
-                        {isCreating ? '创建中...' : '+ 新建剧本'}
+                        {isProcessing ? '创建中...' : '+ 新建剧本'}
                     </button>
                 )}
             </div>
@@ -194,12 +246,13 @@ const ScriptManagement: React.FC = () => {
             {/* Content */}
             <div className="flex-1 flex flex-col">
                  {filteredScripts.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fade-in">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fade-in pb-10">
                         {filteredScripts.map(script => (
                            <ProjectCard 
                             key={script.id} 
                             project={script} 
                             onDelete={handleOpenDeleteModal}
+                            onEdit={handleOpenEditModal}
                             onSelect={() => handleSelectScript(script)}
                            />
                         ))}
@@ -226,9 +279,9 @@ const ScriptManagement: React.FC = () => {
                             <button
                                 onClick={() => setCreateModalOpen(true)}
                                 className="px-8 py-3 bg-sky-600 text-white text-lg font-bold rounded-full hover:bg-sky-500 transition-all shadow-lg hover:shadow-sky-500/30 transform hover:-translate-y-1"
-                                disabled={isCreating}
+                                disabled={isProcessing}
                             >
-                                {isCreating ? '处理中...' : '新建剧本'}
+                                {isProcessing ? '处理中...' : '新建剧本'}
                             </button>
                         </div>
                     </div>
