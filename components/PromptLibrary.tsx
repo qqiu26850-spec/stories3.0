@@ -66,6 +66,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                     setUserNickname(profile.nickname);
                 }
 
+                // Fetch "general" or all based on logic, supabaseService.fetchPrompts logic handles this
                 const data = await fetchPrompts(); 
                 if (data) {
                     const mappedPrompts: Prompt[] = data.map((p: any) => {
@@ -74,27 +75,29 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                         if(p.main_category === 'long') appCat = 'long-story';
                         if(p.main_category === 'script') appCat = 'script';
                         
-                        // Try parsing content as JSON (new format) or use raw (legacy)
+                        // Parse JSON content
                         let parsedContent: any = {};
                         try {
                             parsedContent = JSON.parse(p.content);
                         } catch (e) {
-                            parsedContent = { template: p.content };
+                            // Fallback if content is just a string
+                            parsedContent = { template: p.content, description: p.description };
                         }
 
                         const isMyPrompt = p.user_id === userId;
+                        // Display author fallback logic
                         const displayAuthor = isMyPrompt ? currentNick : (parsedContent.authorName || '社区用户');
 
                         return {
                             id: p.id,
                             title: p.title,
-                            description: parsedContent.description || '用户自定义提示词',
+                            description: p.description || parsedContent.description || '用户自定义提示词',
                             content: parsedContent.template || p.content,
                             category: appCat,
                             subCategories: p.sub_category ? [p.sub_category as any] : [],
                             fields: parsedContent.fields || [], 
                             template: parsedContent.template || p.content,
-                            heat: p.heat || 0, // Load heat from DB
+                            heat: p.usage_count || 0, // Map usage_count to heat
                             creator: 'user',
                             userId: p.user_id,
                             authorName: displayAuthor
@@ -110,28 +113,23 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
     }, []);
 
     const handleSavePrompt = async (data: Omit<Prompt, 'id' | 'heat' | 'content'>, promptId?: string) => {
-        // Map app categories to DB categories
-        let dbMainCat = 'general';
-        if (data.category === 'short-story') dbMainCat = 'short';
-        if (data.category === 'long-story') dbMainCat = 'long';
-        if (data.category === 'script') dbMainCat = 'script';
-
-        const subCat = data.subCategories && data.subCategories.length > 0 ? data.subCategories[0] : 'idea';
-
-        // Serialize the full prompt structure to JSON, including authorName
-        const contentToSave = JSON.stringify({
+        // Prepare the serialized content object to store in DB
+        const contentObject = {
             template: data.template,
             fields: data.fields,
             description: data.description,
             authorName: userNickname
-        });
+        };
+        const contentString = JSON.stringify(contentObject);
+        
+        const subCat = data.subCategories && data.subCategories.length > 0 ? data.subCategories[0] : 'idea';
 
         if (promptId) {
             // Update Existing
             await updatePrompt(promptId, {
                 title: data.title,
-                content: contentToSave,
-                main_category: dbMainCat,
+                content: contentString,
+                main_category: data.category, // Service handles mapping
                 sub_category: subCat
             });
             
@@ -150,12 +148,12 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             }));
         } else {
             // Create New
-            await savePrompt(data.title, contentToSave, dbMainCat, subCat);
+            await savePrompt(data.title, contentString, data.category, subCat);
 
-            // Optimistic update (real ID would come from reload, but we fake it for now)
+            // Optimistic update
             const newPrompt: Prompt = {
                 ...data,
-                id: `prompt-user-${Date.now()}`,
+                id: `prompt-new-${Date.now()}`,
                 heat: 0,
                 content: data.template, 
                 creator: 'user',
@@ -165,7 +163,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             
             setPrompts(prev => [newPrompt, ...prev]);
             
-            // Automatically add to favorites
             setFavoritedIds(prev => {
                 const next = new Set(prev);
                 next.add(newPrompt.id);

@@ -26,7 +26,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const [editorContent, setEditorContent] = useState('');
     const [wordCount, setWordCount] = useState(0);
     
-    const [showLeftSidebar, setShowLeftSidebar] = useState(true); // Enabled for both modes by default
+    const [showLeftSidebar, setShowLeftSidebar] = useState(true);
     const [showRightSidebar, setShowRightSidebar] = useState(true);
     const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>('left');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -37,10 +37,26 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
 
+    // Parse settings from description if needed on init
+    useEffect(() => {
+        // If settings are empty but description exists (loaded from DB), parse it
+        if ((!novel.settings.synopsis && !novel.settings.theme) && (novel as any).description) {
+            try {
+                const parsedSettings = JSON.parse((novel as any).description);
+                if (typeof parsedSettings === 'object') {
+                    setNovel(prev => ({ ...prev, settings: { ...prev.settings, ...parsedSettings } }));
+                }
+            } catch (e) {
+                // If not JSON, assume description is just synopsis
+                setNovel(prev => ({ ...prev, settings: { ...prev.settings, synopsis: (novel as any).description } }));
+            }
+        }
+    }, []);
+
     // Load chapters from Supabase on mount
     useEffect(() => {
         const loadChapters = async () => {
-            if (!novel.id || novel.id.startsWith('novel-')) return; // Skip if local temp project
+            if (!novel.id || novel.id.startsWith('novel-')) return; 
 
             const dbChapters = await fetchChapters(novel.id);
             if (dbChapters && dbChapters.length > 0) {
@@ -54,7 +70,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 setNovel(prev => ({ ...prev, chapters: mappedChapters }));
                 setActiveChapter(mappedChapters[0]);
             } else if (novel.chapters.length > 0) {
-                // Fallback to existing local chapters if DB is empty
                 setActiveChapter(novel.chapters[0]);
             }
         };
@@ -75,22 +90,40 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }
     }, [activeChapter]);
 
-    // Auto-Save Logic (Real-time / 1s Debounce)
+    // Auto-Save Logic for Chapter Content (1s Debounce)
     useEffect(() => {
         if (!activeChapter) return;
         
-        // Only save if content or title changed from current activeChapter state
         const isChanged = chapterTitle !== activeChapter.title || editorContent !== activeChapter.content;
         
         if (isChanged) {
-            setSaveStatus('saving'); // Immediately show saving
+            setSaveStatus('saving');
             const timer = setTimeout(async () => {
-                await handleSaveToCloud(true); // Silent save
-            }, 1000); // 1s debounce for real-time feel
+                await handleSaveToCloud(true);
+            }, 1000); 
             
             return () => clearTimeout(timer);
         }
     }, [chapterTitle, editorContent, activeChapter]);
+
+    // Auto-Save Logic for Settings
+    const handleSettingsUpdate = (key: keyof NovelSettings, value: string) => {
+        setNovel(prev => {
+            const newSettings = { ...prev.settings, [key]: value };
+            const newState = { ...prev, settings: newSettings };
+            
+            // Debounced save for settings could be implemented, but direct save is safer for metadata
+            // We use a small timeout to avoid excessive API calls on every keystroke
+            if (prev.id && !prev.id.startsWith('novel-')) {
+                clearTimeout((window as any)._settingsSaveTimer);
+                (window as any)._settingsSaveTimer = setTimeout(() => {
+                    updateProject(prev.id, { description: JSON.stringify(newSettings) });
+                }, 1000);
+            }
+            
+            return newState;
+        });
+    };
 
     const updateEditorState = useCallback((content: string) => {
         setEditorContent(content);
@@ -148,12 +181,9 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }
     };
 
-    // --- Sync Logic ---
-
     const saveNovelTitle = async () => {
         if (tempTitle.trim()) {
             setNovel(prev => ({ ...prev, title: tempTitle }));
-            // Sync to DB
             await updateProject(novel.id, { title: tempTitle });
         } else {
             setTempTitle(novel.title);
@@ -163,7 +193,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
 
     const handleSaveToCloud = async (silent = false) => {
         if (activeChapter) {
-            // Calculate order index
             const orderIndex = novel.chapters.findIndex(c => c.id === activeChapter.id) + 1;
             
             const newId = await saveChapterToDB(
@@ -188,16 +217,8 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     ...prev,
                     chapters: prev.chapters.map(c => c.id === activeChapter.id ? updatedChapter : c)
                 }));
-                // We don't always setActiveChapter here to avoid re-triggering useEffect loops, 
-                // but we need to update the ref for future comparisons.
-                // Actually, updating state is fine as long as we sync the "reference" activeChapter
                 setActiveChapter(updatedChapter);
                 setSaveStatus('saved');
-                
-                if (!silent && newId !== activeChapter.id) {
-                    // If it was a new insert and not silent
-                    // alert("已同步并创建云端版本！");
-                }
             } else {
                 setSaveStatus('error');
             }
@@ -217,9 +238,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     };
 
     const handleDeleteChapter = async (chapterId: string) => {
-        // Sync Delete to DB
         await deleteChapterFromDB(chapterId);
-
         const newChapters = novel.chapters.filter(c => c.id !== chapterId);
         setNovel(prev => ({ ...prev, chapters: newChapters }));
         
@@ -228,7 +247,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }
     };
 
-    // AI Panel handlers
     const handleAIInsert = (text: string) => {
         const start = selectionRange.start;
         const newContent = editorContent.substring(0, start) + text + editorContent.substring(selectionRange.end);
@@ -272,7 +290,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2 mr-2">
                         {saveStatus === 'saving' && <span className="text-xs text-sky-500 font-medium animate-pulse">正在保存...</span>}
-                        {saveStatus === 'saved' && <span className="text-xs text-green-500 font-medium flex items-center gap-1"><Check className="w-3 h-3" /> 已实时保存</span>}
+                        {saveStatus === 'saved' && <span className="text-green-500 font-medium flex items-center gap-1"><Check className="w-3 h-3" /> 已实时保存</span>}
                         {saveStatus === 'error' && <span className="text-xs text-red-500 font-medium">保存失败</span>}
                         {saveStatus === 'unsaved' && <span className="text-xs text-gray-400">未保存</span>}
                     </div>
@@ -312,7 +330,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                             </button>
                             {openModule === 'settings' && (
                                 <div className="overflow-y-auto max-h-[60vh]">
-                                    <NovelSettingsPanel settings={novel.settings} onUpdate={(k,v) => setNovel(p => ({...p, settings: {...p.settings, [k]: v}}))} />
+                                    <NovelSettingsPanel settings={novel.settings} onUpdate={handleSettingsUpdate} />
                                 </div>
                             )}
                         </div>
