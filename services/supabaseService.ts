@@ -454,7 +454,7 @@ export async function savePrompt(title: string, content: string, mainCat: string
                 description,
                 main_category: dbMainCat, 
                 sub_category: subCat,
-                heat: 0
+                usage_count: 0
             }]));
             
         if (error) throw error;
