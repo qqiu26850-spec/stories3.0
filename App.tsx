@@ -1,30 +1,20 @@
-import React, { useState, useEffect, Suspense } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { View, Prompt } from './types';
 import Sidebar from './components/Sidebar';
 import AuthModal from './components/AuthModal';
 import { getCurrentUserId, signOut } from './services/supabaseService';
-import { Sparkles } from './components/Icon';
 
-// --- Lazy Loaded Components ---
-const CreativeGeneration = React.lazy(() => import('./components/CreativeGeneration'));
-const PromptLibrary = React.lazy(() => import('./components/PromptLibrary'));
-const AssetManagement = React.lazy(() => import('./components/AssetManagement'));
-const NovelManagement = React.lazy(() => import('./components/NovelManagement'));
-const ScriptManagement = React.lazy(() => import('./components/ScriptManagement'));
-const PersonalCenter = React.lazy(() => import('./components/PersonalCenter'));
-const WorkflowManagement = React.lazy(() => import('./components/WorkflowManagement'));
+// --- Static Imports for Instant Access & Data Persistence ---
+import CreativeGeneration from './components/CreativeGeneration';
+import PromptLibrary from './components/PromptLibrary';
+import AssetManagement from './components/AssetManagement';
+import NovelManagement from './components/NovelManagement';
+import ScriptManagement from './components/ScriptManagement';
+import PersonalCenter from './components/PersonalCenter';
+import WorkflowManagement from './components/WorkflowManagement';
 
 export type Theme = 'light' | 'dark';
-
-// Simple Loading Spinner for Suspense Fallback
-const PageLoading = () => (
-    <div className="flex h-full w-full items-center justify-center bg-gray-50 dark:bg-black">
-        <div className="flex flex-col items-center gap-4">
-            <Sparkles className="w-12 h-12 text-sky-500 animate-pulse" />
-            <p className="text-gray-500 dark:text-gray-400 font-medium">资源加载中...</p>
-        </div>
-    </div>
-);
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<View>('creative-generation');
@@ -81,36 +71,6 @@ const App: React.FC = () => {
     setActiveView('creative-generation');
   };
 
-  const renderContent = () => {
-    switch (activeView) {
-      case 'creative-generation':
-        return (
-          <CreativeGeneration 
-            initialData={generationParams} 
-            onClearInitialData={() => setGenerationParams({})} 
-          />
-        );
-      case 'prompt-library':
-        return <PromptLibrary onNavigateToGeneration={handleNavigateToGeneration} />;
-      case 'workflow':
-        return <WorkflowManagement />;
-      case 'character-library':
-      case 'plot-library':
-      case 'inspiration-library':
-        return <AssetManagement view={activeView} setActiveView={setActiveView} />;
-      case 'novel-management':
-        return <NovelManagement mode="long" />;
-      case 'hit-copywriting':
-        return <NovelManagement mode="short" />;
-      case 'script-management':
-        return <ScriptManagement />;
-      case 'personal-center':
-        return <PersonalCenter onLogout={handleLogout} />;
-      default:
-        return <CreativeGeneration />;
-    }
-  };
-
   return (
     <div className="flex h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 font-sans transition-colors duration-300">
       <AuthModal 
@@ -118,7 +78,6 @@ const App: React.FC = () => {
         onSuccess={() => {
             setIsAuthenticated(true);
             setShowAuthModal(false);
-            // Optional: reload data if needed, or just let components re-mount
             window.location.reload();
         }} 
       />
@@ -133,10 +92,55 @@ const App: React.FC = () => {
                 theme={theme}
                 toggleTheme={toggleTheme}
             />
+            {/* 
+              We use `display: none` (via 'hidden' class) instead of conditional rendering.
+              This keeps all components mounted, allowing them to fetch data once on load
+              and retain their state when switching tabs.
+            */}
             <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-black relative">
-                <Suspense fallback={<PageLoading />}>
-                    {renderContent()}
-                </Suspense>
+                
+                <div className={activeView === 'creative-generation' ? 'block h-full' : 'hidden h-full'}>
+                    <CreativeGeneration 
+                        initialData={generationParams} 
+                        onClearInitialData={() => setGenerationParams({})} 
+                    />
+                </div>
+
+                <div className={activeView === 'prompt-library' ? 'block h-full' : 'hidden h-full'}>
+                    <PromptLibrary onNavigateToGeneration={handleNavigateToGeneration} />
+                </div>
+
+                <div className={activeView === 'workflow' ? 'block h-full' : 'hidden h-full'}>
+                    <WorkflowManagement />
+                </div>
+
+                {/* Asset Management - Multiple Views, same component instance logic per type */}
+                <div className={activeView === 'character-library' ? 'block h-full' : 'hidden h-full'}>
+                    <AssetManagement view="character-library" setActiveView={setActiveView} />
+                </div>
+                <div className={activeView === 'plot-library' ? 'block h-full' : 'hidden h-full'}>
+                    <AssetManagement view="plot-library" setActiveView={setActiveView} />
+                </div>
+                <div className={activeView === 'inspiration-library' ? 'block h-full' : 'hidden h-full'}>
+                    <AssetManagement view="inspiration-library" setActiveView={setActiveView} />
+                </div>
+
+                <div className={activeView === 'novel-management' ? 'block h-full' : 'hidden h-full'}>
+                    <NovelManagement mode="long" />
+                </div>
+
+                <div className={activeView === 'hit-copywriting' ? 'block h-full' : 'hidden h-full'}>
+                    <NovelManagement mode="short" />
+                </div>
+
+                <div className={activeView === 'script-management' ? 'block h-full' : 'hidden h-full'}>
+                    <ScriptManagement />
+                </div>
+
+                <div className={activeView === 'personal-center' ? 'block h-full' : 'hidden h-full'}>
+                    <PersonalCenter onLogout={handleLogout} />
+                </div>
+
             </main>
           </>
       )}

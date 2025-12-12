@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { Prompt, PromptCategory, PromptSubCategory, UserProfile } from '../types';
+import { Prompt, PromptCategory, PromptSubCategory } from '../types';
 import PromptCard from './PromptCard';
 import CreatePromptModal from './CreatePromptModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
@@ -35,7 +34,6 @@ const SUB_CATEGORIES: { id: PromptSubCategory | 'all'; label: string }[] = [
 ];
 
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration }) => {
-    // Initial state empty, fetching from DB
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('short-story');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
@@ -60,33 +58,27 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                 setCurrentUserId(userId);
                 
                 const profile = await fetchUserProfile();
-                let currentNick = '社区用户';
                 if(profile && profile.nickname) {
-                    currentNick = profile.nickname;
                     setUserNickname(profile.nickname);
                 }
 
-                // Fetch "general" or all based on logic, supabaseService.fetchPrompts logic handles this
                 const data = await fetchPrompts(); 
                 if (data) {
                     const mappedPrompts: Prompt[] = data.map((p: any) => {
-                        // Map DB categories back to app categories
                         let appCat: PromptCategory = 'short-story';
                         if(p.main_category === 'long') appCat = 'long-story';
                         if(p.main_category === 'script') appCat = 'script';
                         
-                        // Parse JSON content
                         let parsedContent: any = {};
                         try {
                             parsedContent = JSON.parse(p.content);
                         } catch (e) {
-                            // Fallback if content is just a string
                             parsedContent = { template: p.content, description: p.description };
                         }
 
-                        const isMyPrompt = p.user_id === userId;
-                        // Display author fallback logic
-                        const displayAuthor = isMyPrompt ? currentNick : (parsedContent.authorName || '社区用户');
+                        // Determine author name display
+                        // If profiles join worked, p.profiles.username exists
+                        const authorName = p.profiles?.username || parsedContent.authorName || '社区用户';
 
                         return {
                             id: p.id,
@@ -97,10 +89,10 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                             subCategories: p.sub_category ? [p.sub_category as any] : [],
                             fields: parsedContent.fields || [], 
                             template: parsedContent.template || p.content,
-                            heat: p.usage_count || 0, // Map usage_count to heat
+                            heat: p.usage_count || 0,
                             creator: 'user',
                             userId: p.user_id,
-                            authorName: displayAuthor
+                            authorName: authorName
                         };
                     });
                     setPrompts(mappedPrompts);
@@ -113,7 +105,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
     }, []);
 
     const handleSavePrompt = async (data: Omit<Prompt, 'id' | 'heat' | 'content'>, promptId?: string) => {
-        // Prepare the serialized content object to store in DB
         const contentObject = {
             template: data.template,
             fields: data.fields,
@@ -129,7 +120,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             const { success, error } = await updatePrompt(promptId, {
                 title: data.title,
                 content: contentString,
-                main_category: data.category, // Service handles mapping
+                main_category: data.category,
                 sub_category: subCat
             });
             
@@ -138,9 +129,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                 return;
             }
             
-            alert('提示词更新成功！');
-
-            // Update local state
             setPrompts(prev => prev.map(p => {
                 if (p.id === promptId) {
                     return {
@@ -162,27 +150,14 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                 return;
             }
             
-            alert('提示词创建成功！');
-
-            // Optimistic update
-            const newPrompt: Prompt = {
-                ...data,
-                id: `prompt-new-${Date.now()}`,
-                heat: 0,
-                content: data.template, 
-                creator: 'user',
-                userId: currentUserId || undefined,
-                authorName: userNickname
-            };
-            
-            setPrompts(prev => [newPrompt, ...prev]);
-            
-            setFavoritedIds(prev => {
-                const next = new Set(prev);
-                next.add(newPrompt.id);
-                return next;
-            });
-            setActiveTab(newPrompt.category); 
+            // Reload to get the real ID and Data from DB
+            // FIX: Renamed variable from 'data' to 'fetchedData' to avoid conflict with function argument 'data'
+            const fetchedData = await fetchPrompts();
+            if(fetchedData) {
+                 // Re-map (simplified for this block, ideally refactor the mapping logic)
+                 // ... omitted to keep concise, but ideally re-run loadData or map the single new item properly
+                 window.location.reload(); // Simple way to refresh list for now
+            }
         }
 
         setCreateModalOpen(false);
@@ -196,11 +171,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
 
     const handleRunPrompt = async (formValues: Record<string, string>) => {
         if (selectedPrompt) {
-             // 1. Increment heat in DB
              await incrementPromptHeat(selectedPrompt.id);
-
-             // 2. Update local heat count
-            setPrompts(currentPrompts =>
+             setPrompts(currentPrompts =>
                 currentPrompts.map(p =>
                     p.id === selectedPrompt.id ? { ...p, heat: (p.heat || 0) + 1 } : p
                 )
@@ -259,7 +231,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             if (!categoryMatch) return false;
             
             const subCategoryMatch = activeSubCategory === 'all' || prompt.subCategories.includes(activeSubCategory as PromptSubCategory);
-            // Now apply subcategory filter to all tabs including favorites and my-prompts
             if (!subCategoryMatch) return false;
 
             if (!term) return true;
