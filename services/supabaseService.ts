@@ -373,3 +373,69 @@ export async function updateUserProfile(nickname: string, avatarUrl: string | nu
 
     return { error };
 }
+// ================= 补全缺失的 Prompt 和 User 函数 (修复 Build 报错) =================
+
+/**
+ * 更新提示词 (修复 PromptLibrary 报错)
+ */
+export async function updatePrompt(id: string, updates: { title?: string, content?: string, main_category?: string, sub_category?: string }) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+
+        const dbUpdates: any = { ...updates };
+        
+        // 如果更新了分类，需要映射一下数据库字段
+        if (updates.main_category) {
+            if (updates.main_category === 'short-story') dbUpdates.main_category = 'short';
+            else if (updates.main_category === 'long-story') dbUpdates.main_category = 'long';
+            else if (updates.main_category === 'script') dbUpdates.main_category = 'script';
+            else dbUpdates.main_category = 'general';
+        }
+
+        // 如果更新了内容，尝试提取 description
+        if (updates.content) {
+             try {
+                const parsed = JSON.parse(updates.content);
+                if (parsed.description) dbUpdates.description = parsed.description;
+                else dbUpdates.description = updates.content.substring(0, 50) + '...';
+             } catch(e) {
+                dbUpdates.description = updates.content.substring(0, 50) + '...';
+             }
+        }
+
+        const { error } = await supabase
+            .from('prompts')
+            .update(dbUpdates)
+            .eq('id', id)
+            .eq('user_id', userId); // 确保只能改自己的
+
+        if (error) throw error;
+        return { success: true };
+    } catch (err: any) {
+        console.error('更新提示词失败:', err.message);
+        return { success: false, error: err };
+    }
+}
+
+/**
+ * 删除用户所有数据 (修复 PersonalCenter 可能出现的报错)
+ */
+export async function deleteUserData(): Promise<boolean> {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+
+        // 删除关联数据
+        await supabase.from('projects').delete().eq('user_id', userId);
+        await supabase.from('materials').delete().eq('user_id', userId);
+        await supabase.from('prompts').delete().eq('user_id', userId);
+        
+        // 登出
+        await signOut();
+        return true;
+    } catch (err: any) {
+        console.error('删除用户数据失败:', err.message);
+        return false;
+    }
+}
