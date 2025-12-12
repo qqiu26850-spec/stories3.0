@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Prompt, PromptCategory, PromptSubCategory } from '../types';
 import PromptCard from './PromptCard';
@@ -62,9 +63,9 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                     setUserNickname(profile.nickname);
                 }
 
-                const data = await fetchPrompts(); 
-                if (data) {
-                    const mappedPrompts: Prompt[] = data.map((p: any) => {
+                const fetchedData = await fetchPrompts(); 
+                if (fetchedData) {
+                    const mappedPrompts: Prompt[] = fetchedData.map((p: any) => {
                         let appCat: PromptCategory = 'short-story';
                         if(p.main_category === 'long') appCat = 'long-story';
                         if(p.main_category === 'script') appCat = 'script';
@@ -77,7 +78,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                         }
 
                         // Determine author name display
-                        // If profiles join worked, p.profiles.username exists
+                        // Since we removed the strict JOIN, p.profiles might be missing.
+                        // We fallback to the authorName saved inside the JSON content.
                         const authorName = p.profiles?.username || parsedContent.authorName || '社区用户';
 
                         return {
@@ -109,7 +111,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             template: data.template,
             fields: data.fields,
             description: data.description,
-            authorName: userNickname
+            authorName: userNickname // Store nickname in content for display without JOIN
         };
         const contentString = JSON.stringify(contentObject);
         
@@ -151,13 +153,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
             }
             
             // Reload to get the real ID and Data from DB
-            // FIX: Renamed variable from 'data' to 'fetchedData' to avoid conflict with function argument 'data'
-            const fetchedData = await fetchPrompts();
-            if(fetchedData) {
-                 // Re-map (simplified for this block, ideally refactor the mapping logic)
-                 // ... omitted to keep concise, but ideally re-run loadData or map the single new item properly
-                 window.location.reload(); // Simple way to refresh list for now
-            }
+            window.location.reload(); 
         }
 
         setCreateModalOpen(false);

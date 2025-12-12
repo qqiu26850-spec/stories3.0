@@ -397,11 +397,14 @@ export async function savePrompt(title: string, content: string, mainCat: string
             usage_count: 0
         }]);
 
-        if (error) throw error;
+        if (error) {
+            console.error("Supabase Save Error:", error);
+            throw error;
+        }
         return { success: true };
 
     } catch (err: any) {
-        console.error("保存提示词失败", err);
+        console.error("保存提示词失败 - 完整错误:", err);
         return { success: false, error: err };
     }
 }
@@ -439,13 +442,11 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
 
 export async function fetchPrompts(mainCategory?: string) {
     try {
-        // 获取所有人的提示词，同时关联 profiles 表获取作者信息
+        // FIX: Removed JOIN with 'profiles' table. 
+        // We will fetch just the prompts. The `authorName` is embedded in the `content` JSON as a fallback.
         let query = supabase
             .from('prompts')
-            .select(`
-                *,
-                profiles ( username, avatar_url )
-            `)
+            .select('*')
             .order('created_at', { ascending: false });
 
         if (mainCategory && mainCategory !== 'all') {
@@ -454,8 +455,15 @@ export async function fetchPrompts(mainCategory?: string) {
         }
 
         const { data, error } = await query;
-        return error ? [] : data;
-    } catch (e) { return []; }
+        if (error) {
+            console.error("Fetch Prompts Error:", error);
+            return [];
+        }
+        return data;
+    } catch (e) { 
+        console.error("Fetch Prompts Exception:", e);
+        return []; 
+    }
 }
 
 export async function incrementPromptHeat(id: string) {
