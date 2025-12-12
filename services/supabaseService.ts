@@ -443,6 +443,7 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
 export async function fetchPrompts(mainCategory?: string) {
     try {
         // FIX: Removed JOIN with 'profiles' table. 
+        // If the Foreign Key relation is missing in the DB, the entire fetch fails.
         // We will fetch just the prompts. The `authorName` is embedded in the `content` JSON as a fallback.
         let query = supabase
             .from('prompts')
