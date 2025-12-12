@@ -1,247 +1,94 @@
-
 import { createClient } from '@supabase/supabase-js';
-import { NovelSettings } from '../types';
 
-// ================= Configuration =================
+// ================= 配置区域 =================
+// 🔴 请务必填入你的 Key，不要留空！
 const SUPABASE_URL = 'https://kuvfgccoyekvkolkgwby.supabase.co'; 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1dmZnY2NveWVrdmtvbGtnd2J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0NDc5NzIsImV4cCI6MjA4MTAyMzk3Mn0.94-LLSUIN5HSfi4-wq0dhmxAP1T2beyKiR8z7CdWstg';
 
-// Initialize Supabase Client with more robust settings
-export const supabase = createClient(SUPABASE_URL.trim(), SUPABASE_ANON_KEY.trim(), {
+// 初始化客户端
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true
-    },
-    global: {
-        headers: { 
-            'x-application-name': 'story-weaver',
-            // Explicitly set Authorization header content type just in case
-            'Content-Type': 'application/json' 
-        }
     }
 });
 
-// ================= Helper: Retry Logic =================
+// ================= 辅助函数 =================
+
 /**
- * Wraps Supabase operations with retry logic for network failures (Failed to fetch)
+ * 获取当前登录用户ID
  */
-async function withRetry<T>(
-    operation: () => PromiseLike<{ data: T | null; error: any }>, 
-    retries = 3, 
-    delay = 1000
-): Promise<{ data: T | null; error: any }> {
-    
-    // Check for offline status immediately
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        return { data: null, error: new Error('网络连接已断开，请检查您的网络设置。') };
-    }
+export async function getCurrentUserId() {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+}
 
-    let lastError: any;
-    
-    for (let i = 0; i < retries; i++) {
-        try {
-            const { data, error } = await operation();
-            
-            if (error) {
-                // If it's a known Postgres error (e.g. RLS violation 403, Constraint violation 409), generally don't retry as it won't fix itself.
-                // But for 500s or timeouts, we might.
-                if (error.code && (error.code.startsWith('5') || error.message.includes('fetch'))) {
-                     // Retry logic falls through
-                } else {
-                    return { data, error };
-                }
-                lastError = error;
-            } else {
-                return { data, error: null };
-            }
-        } catch (err: any) {
-            lastError = err;
-            const message = err.message || '';
-            // Retry on network errors
-            if (message.includes('fetch') || message.includes('network') || message.includes('Failed to fetch')) {
-                console.warn(`Attempt ${i + 1} failed: ${message}. Retrying in ${delay}ms...`);
-                if (i < retries - 1) {
-                    await new Promise(resolve => setTimeout(resolve, delay * (i + 1))); 
-                    continue;
-                }
-            } else {
-                // If it's a code error (e.g. syntax), throw immediately or return error
-                return { data: null, error: err };
-            }
+/**
+ * 通用的重试逻辑 (处理网络波动)
+ */
+async function withRetry<T>(operation: () => Promise<T>, retries = 3): Promise<T> {
+    try {
+        return await operation();
+    } catch (err: any) {
+        if (retries > 0 && (err.message?.includes('fetch') || err.status === 500)) {
+            console.warn(`请求失败，正在重试... 剩余次数: ${retries}`);
+            await new Promise(r => setTimeout(r, 1000));
+            return withRetry(operation, retries - 1);
         }
+        throw err;
     }
-    
-    return { data: null, error: lastError || new Error('请求超时或失败，请检查网络连接或稍后重试。') };
 }
 
-// =================== Auth Functions ===================
+// ================= 身份认证 =================
 
-export async function signUp(email, password) {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
-    },
-  });
-  return { data, error };
+export async function signUp(email: string, password: string) {
+    return await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+            // 关闭邮箱验证后，这一行其实可以不加，但加上更保险
+            emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined
+        }
+    });
 }
 
-export async function signIn(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-  return { data, error };
+export async function signIn(email: string, password: string) {
+    return await supabase.auth.signInWithPassword({ email, password });
 }
 
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  return error;
+    return await supabase.auth.signOut();
 }
 
-export async function resetPasswordForEmail(email: string) {
-  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: typeof window !== 'undefined' ? `${window.location.origin}` : undefined,
-  });
-  return { data, error };
-}
+// ================= 小说项目 (Projects) - 私有 =================
 
-export async function getCurrentUserId() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user?.id || null;
-}
-
-export async function fetchUserProfile() {
-    try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return { nickname: '奇思妙想家', avatarUrl: null };
-
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        
-        return {
-            nickname: profile?.username || session.user.user_metadata?.full_name || '奇思妙想家',
-            avatarUrl: profile?.avatar_url || session.user.user_metadata?.avatar_url || null
-        };
-    } catch (e) {
-        return { nickname: '奇思妙想家', avatarUrl: null };
-    }
-}
-
-export async function updateUserProfile(nickname: string, avatarUrl: string | null) {
-    try {
-        const { data, error } = await supabase.auth.updateUser({
-            data: { full_name: nickname, avatar_url: avatarUrl }
-        });
-        
-        const userId = await getCurrentUserId();
-        if(userId) {
-            await supabase.from('profiles').upsert({ 
-                id: userId, 
-                username: nickname, 
-                avatar_url: avatarUrl 
-            });
-        }
-
-        if (error) throw error;
-        return { data, error: null };
-    } catch (e: any) {
-        console.error("Update Profile Error", e);
-        return { data: null, error: e };
-    }
-}
-
-export async function deleteUserData(): Promise<boolean> {
+export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short' | 'short_story', coverUrl: string | null = null) {
     try {
         const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
+        if (!userId) throw new Error("请先登录");
 
-        await supabase.from('projects').delete().eq('user_id', userId);
-        await supabase.from('materials').delete().eq('user_id', userId);
-        await signOut();
-        return true;
-    } catch (err: any) {
-        console.error('Failed to delete user data:', err.message);
-        return false;
-    }
-}
-
-// ================= Storage Functions =================
-
-export async function uploadCoverImage(file: File): Promise<string | null> {
-    try {
-        const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
-
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `${userId}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-            .from('covers')
-            .upload(filePath, file);
-
-        if (uploadError) throw uploadError;
-
-        const { data } = supabase.storage.from('covers').getPublicUrl(filePath);
-        return data.publicUrl;
-    } catch (error: any) {
-        console.error('Failed to upload cover:', error.message);
-        return null;
-    }
-}
-
-// ================= Project Functions (Novels/Scripts) =================
-
-function mapProjectTypeToDB(type: 'novel' | 'script' | 'short' | 'short_story'): 'novel' | 'script' | 'short_story' {
-    if (type === 'short') return 'short_story';
-    return type as 'novel' | 'script' | 'short_story';
-}
-
-export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short' | 'short_story', coverUrl: string | null = null): Promise<{ id: string | null, error: any }> {
-    try {
-        const userId = await getCurrentUserId();
-        if (!userId) throw new Error("用户未登录，请先登录。");
-
-        const dbType = mapProjectTypeToDB(type);
+        // 统一类型映射
+        const dbType = type === 'short' ? 'short_story' : type;
 
         const { data, error } = await withRetry(async () => await supabase
             .from('projects')
-            .insert([
-                {
-                    user_id: userId,
-                    title: title,
-                    description: desc,
-                    type: dbType,
-                    status: 'draft',
-                    cover_image: coverUrl
-                }
-            ])
-            .select());
+            .insert([{
+                user_id: userId,
+                title,
+                description: desc,
+                type: dbType,
+                cover_image: coverUrl,
+                status: 'draft'
+            }])
+            .select()
+        );
 
         if (error) throw error;
-        return { id: (data as any[])?.[0]?.id, error: null };
+        return { id: data?.[0]?.id, error: null };
     } catch (err: any) {
-        console.error('Failed to create project:', err);
+        console.error("创建项目失败:", err.message);
         return { id: null, error: err };
-    }
-}
-
-export async function updateProject(projectId: string, updates: { title?: string, description?: string, cover_image?: string }) {
-    try {
-        const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
-
-        const { error } = await withRetry(async () => await supabase
-            .from('projects')
-            .update(updates)
-            .eq('id', projectId)
-            .eq('user_id', userId));
-
-        if (error) throw error;
-    } catch (err: any) {
-        console.error('Failed to update project:', err.message);
     }
 }
 
@@ -250,314 +97,226 @@ export async function fetchProjects() {
         const userId = await getCurrentUserId();
         if (!userId) return [];
 
-        const { data: projects, error } = await withRetry(async () => await supabase
+        const { data, error } = await withRetry(async () => await supabase
             .from('projects')
             .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false }));
-        
-        if (error || !projects) return [];
+            .eq('user_id', userId) // 🔒 私有：只查自己的
+            .order('created_at', { ascending: false })
+        );
 
-        // Fetch word counts via chapters
-        const projectList = projects as any[];
-        const projectIds = projectList.map(p => p.id);
-        let wordCounts: Record<string, number> = {};
-        
-        if (projectIds.length > 0) {
-             const { data: chapters } = await withRetry(async () => await supabase
-                .from('chapters')
-                .select('project_id, content')
-                .in('project_id', projectIds));
-            
-            if (chapters) {
-                (chapters as any[]).forEach(c => {
-                    const count = c.content ? c.content.length : 0;
-                    wordCounts[c.project_id] = (wordCounts[c.project_id] || 0) + count;
-                });
-            }
-        }
-
-        return projectList.map(p => ({
-            ...p,
-            word_count: wordCounts[p.id] || 0,
-            description: p.description
-        }));
+        return error ? [] : data;
     } catch (e) {
-        console.error("Fetch Projects Error", e);
+        console.error("获取项目失败", e);
         return [];
     }
 }
 
-export async function deleteProject(id: string): Promise<void> {
-    try {
-        const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
-        await withRetry(async () => await supabase.from('projects').delete().eq('id', id).eq('user_id', userId));
-    } catch (e) {
-        console.error("Delete Project Error", e);
-    }
+export async function deleteProject(id: string) {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    await supabase.from('projects').delete().eq('id', id).eq('user_id', userId);
 }
 
-// ================= Chapter Functions =================
+// ================= 章节 (Chapters) - 私有 =================
 
 export async function fetchChapters(projectId: string) {
     try {
-        const { data, error } = await withRetry(async () => await supabase
+        const { data, error } = await supabase
             .from('chapters')
             .select('*')
             .eq('project_id', projectId)
-            .order('order_index', { ascending: true }));
-        
-        if (error) throw error;
-        return data as any[];
-    } catch (err: any) {
-        console.error('Failed to fetch chapters:', err.message);
-        return [];
-    }
+            .order('order_index', { ascending: true });
+        return error ? [] : data;
+    } catch (e) { return []; }
 }
 
-export async function saveChapterToDB(
-    projectId: string, 
-    chapterId: string, 
-    title: string, 
-    content: string, 
-    orderIndex: number
-): Promise<string | null> {
+export async function saveChapterToDB(projectId: string, chapterId: string, title: string, content: string, orderIndex: number) {
     try {
         const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
+        if (!userId) throw new Error("未登录");
 
-        const isLocalId = chapterId.startsWith('ch-') || chapterId.startsWith('scene-') || chapterId.startsWith('new-');
+        // 判断是新建还是更新 (本地临时ID通常以 ch- 开头)
+        const isNew = chapterId.startsWith('ch-') || chapterId.startsWith('new-');
 
-        if (isLocalId) {
-            const { data, error } = await withRetry(async () => await supabase
-                .from('chapters')
-                .insert([{
-                    project_id: projectId,
-                    title: title,
-                    content: content,
-                    order_index: orderIndex
-                }])
-                .select());
-
+        if (isNew) {
+            const { data, error } = await supabase.from('chapters').insert([{
+                project_id: projectId,
+                title,
+                content,
+                order_index: orderIndex
+            }]).select();
             if (error) throw error;
-            return (data as any[])?.[0]?.id;
+            return data[0].id;
         } else {
-            const { data, error } = await withRetry(async () => await supabase
-                .from('chapters')
-                .update({
-                    title: title,
-                    content: content,
-                    order_index: orderIndex
-                })
-                .eq('id', chapterId)
-                .select());
-
+            const { data, error } = await supabase.from('chapters').update({
+                title,
+                content,
+                order_index: orderIndex
+            }).eq('id', chapterId).select();
             if (error) throw error;
-            return (data as any[])?.[0]?.id;
+            return data[0].id;
         }
-    } catch (err: any) {
-        console.error('Failed to save chapter:', err.message);
+    } catch (e) {
+        console.error("保存章节失败", e);
         return null;
     }
 }
 
-export async function deleteChapterFromDB(chapterId: string): Promise<void> {
-    try {
-        if (chapterId.startsWith('ch-') || chapterId.startsWith('scene-') || chapterId.startsWith('new-')) return;
-        const { error } = await withRetry(async () => await supabase.from('chapters').delete().eq('id', chapterId));
-        if (error) throw error;
-    } catch (err: any) {
-        console.error('Failed to delete chapter:', err.message);
-    }
+export async function deleteChapterFromDB(chapterId: string) {
+    if (chapterId.startsWith('ch-')) return;
+    await supabase.from('chapters').delete().eq('id', chapterId);
 }
 
-// ================= Material Functions =================
+// ================= 素材 (Materials) - 私有 =================
 
-export async function saveMaterial(name: string, content: string, type: 'character' | 'plot' | 'idea' | 'inspiration', tags: string[] = []): Promise<{ success: boolean, error?: any }> {
+export async function saveMaterial(name: string, content: string, type: 'character' | 'plot' | 'idea' | 'inspiration') {
     try {
         const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
+        if (!userId) throw new Error("未登录");
 
         const dbType = type === 'inspiration' ? 'idea' : type;
 
-        const { error } = await withRetry(async () => await supabase
-            .from('materials')
-            .insert([{ user_id: userId, name, content, type: dbType, tags: tags }]));
-            
+        const { error } = await supabase.from('materials').insert([{
+            user_id: userId,
+            name,
+            content,
+            type: dbType,
+            tags: []
+        }]);
+
         if (error) throw error;
         return { success: true };
     } catch (err: any) {
-        console.error('Failed to save material:', err.message);
         return { success: false, error: err };
     }
 }
 
-export async function fetchMaterials(type?: 'character' | 'plot' | 'idea' | 'inspiration') {
+export async function fetchMaterials(type?: string) {
     try {
         const userId = await getCurrentUserId();
         if (!userId) return [];
 
-        const dbType = type === 'inspiration' ? 'idea' : type;
-
         let query = supabase.from('materials').select('*').eq('user_id', userId).order('created_at', { ascending: false });
-        if (dbType) query = query.eq('type', dbType);
         
-        const { data, error } = await withRetry(async () => await query);
-        return error ? [] : (data as any[]);
-    } catch (e) {
-        return [];
-    }
+        // 处理类型映射
+        if (type) {
+            const dbType = type === 'inspiration' ? 'idea' : type;
+            query = query.eq('type', dbType);
+        }
+        
+        const { data, error } = await query;
+        return error ? [] : data;
+    } catch (e) { return []; }
 }
 
-export async function deleteMaterial(id: string): Promise<void> {
-    try {
-        const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
-        await withRetry(async () => await supabase.from('materials').delete().eq('id', id).eq('user_id', userId));
-    } catch (e) {
-        console.error("Delete Material Error", e);
-    }
+export async function deleteMaterial(id: string) {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    await supabase.from('materials').delete().eq('id', id).eq('user_id', userId);
 }
 
-// ================= Prompt Functions =================
+// ================= 提示词 (Prompts) - 🌍 公开共享 =================
 
-function mapPromptCategoryToDB(cat: string): 'short' | 'long' | 'script' | 'general' {
+function mapPromptCategory(cat: string) {
     if (cat === 'short-story') return 'short';
     if (cat === 'long-story') return 'long';
-    if (cat === 'script') return 'script';
     return 'general';
 }
 
-export async function savePrompt(title: string, content: string, mainCat: string, subCat: string): Promise<{ success: boolean, error?: any }> {
+export async function savePrompt(title: string, content: string, mainCat: string, subCat: string) {
     try {
         const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
+        if (!userId) throw new Error("未登录");
 
-        const dbMainCat = mapPromptCategoryToDB(mainCat);
+        const dbMainCat = mapPromptCategory(mainCat);
         
-        // Safe Parse Description
-        let description = 'No description';
+        // ✅ 尝试从 content JSON 中解析 description
+        let description = '';
         try {
             const parsed = JSON.parse(content);
-            if(parsed.description) description = parsed.description;
-        } catch(e) {
-            // Content might not be JSON, ignore
+            if (parsed.description) description = parsed.description;
+            else description = content.substring(0, 50) + '...'; // 如果没json，截取前50字
+        } catch (e) {
+            description = content.substring(0, 50) + '...';
         }
 
-        const { error } = await withRetry(async () => await supabase
-            .from('prompts')
-            .insert([{ 
-                user_id: userId, 
-                title, 
-                content, 
-                description,
-                main_category: dbMainCat, 
-                sub_category: subCat,
-                usage_count: 0
-            }]));
-            
-        if (error) throw error;
-        return { success: true };
-    } catch (err: any) {
-        console.error('Failed to save prompt:', err.message);
-        return { success: false, error: err };
-    }
-}
-
-export async function updatePrompt(id: string, updates: { title?: string, content?: string, main_category?: string, sub_category?: string }): Promise<{ success: boolean, error?: any }> {
-    try {
-        const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
-
-        const dbUpdates: any = { ...updates };
-        if (updates.main_category) {
-            dbUpdates.main_category = mapPromptCategoryToDB(updates.main_category);
-        }
-        if (updates.content) {
-             try {
-                const parsed = JSON.parse(updates.content);
-                if (parsed.description) dbUpdates.description = parsed.description;
-             } catch(e) {}
-        }
-
-        const { error } = await withRetry(async () => await supabase
-            .from('prompts')
-            .update(dbUpdates)
-            .eq('id', id)
-            .eq('user_id', userId));
+        const { error } = await supabase.from('prompts').insert([{
+            user_id: userId,
+            title,
+            content,
+            description: description, // ✅ 这里使用了 description 字段
+            main_category: dbMainCat,
+            sub_category: subCat,
+            usage_count: 0 // ✅ 这里使用了 usage_count 字段
+        }]);
 
         if (error) throw error;
         return { success: true };
+
     } catch (err: any) {
-        console.error('Failed to update prompt:', err.message);
+        console.error("保存提示词失败", err);
         return { success: false, error: err };
     }
 }
 
 export async function fetchPrompts(mainCategory?: string) {
     try {
-        let query = supabase.from('prompts').select('*').order('created_at', { ascending: false });
-        
-        if (mainCategory && mainCategory !== 'all') {
-             const dbCat = mapPromptCategoryToDB(mainCategory);
-             query = query.eq('main_category', dbCat);
-        }
-        
-        const { data, error } = await withRetry(async () => await query);
-        return error ? [] : (data as any[]);
-    } catch (e) {
-        return [];
-    }
-}
-
-export async function deletePrompt(id: string): Promise<void> {
-    try {
-        const userId = await getCurrentUserId();
-        if (!userId) throw new Error("User not logged in");
-        await withRetry(async () => await supabase.from('prompts').delete().eq('id', id).eq('user_id', userId));
-    } catch (e) {
-        console.error("Delete Prompt Error", e);
-    }
-}
-
-export async function incrementPromptHeat(id: string): Promise<void> {
-    try {
-        if (!id || id.startsWith('prompt-user-')) return; 
-        
-        const { data } = await withRetry(async () => await supabase.from('prompts').select('usage_count').eq('id', id).single());
-        if (data) {
-            const newCount = ((data as any).usage_count || 0) + 1;
-            await supabase.from('prompts').update({ heat: newCount }).eq('id', id);
-        }
-    } catch (e) {
-        console.error("Failed to increment heat", e);
-    }
-}
-
-export async function fetchUserLibrary() {
-    try {
-        const userId = await getCurrentUserId();
-        if (!userId) return { prompts: [], materials: [] };
-
-        const { data: prompts } = await withRetry(async () => await supabase
+        // 🌍 注意：这里没有 .eq('user_id', userId)
+        // 我们要获取所有人的提示词
+        let query = supabase
             .from('prompts')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false }));
+            .select(`
+                *,
+                profiles ( username, avatar_url )
+            `)
+            .order('created_at', { ascending: false });
 
-        const { data: materials } = await withRetry(async () => await supabase
-            .from('materials')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false }));
+        if (mainCategory && mainCategory !== 'all') {
+            const dbCat = mapPromptCategory(mainCategory);
+            query = query.eq('main_category', dbCat);
+        }
 
-        return {
-            prompts: (prompts as any[]) || [],
-            materials: (materials as any[]) || []
-        };
+        const { data, error } = await query;
+        return error ? [] : data;
+    } catch (e) { return []; }
+}
+
+export async function incrementPromptHeat(id: string) {
+    try {
+        // ✅ 统一使用 usage_count
+        const { data } = await supabase.from('prompts').select('usage_count').eq('id', id).single();
+        if (data) {
+            const newCount = (data.usage_count || 0) + 1;
+            await supabase.from('prompts').update({ usage_count: newCount }).eq('id', id);
+        }
+    } catch (e) { console.error(e); }
+}
+
+export async function deletePrompt(id: string) {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    // RLS 会保证只有作者能删除，这里加 user_id 只是双重保险
+    await supabase.from('prompts').delete().eq('id', id).eq('user_id', userId);
+}
+
+// ================= 文件存储 (Storage) =================
+
+export async function uploadCoverImage(file: File) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `${userId}/${fileName}`;
+
+        const { error } = await supabase.storage.from('covers').upload(filePath, file);
+        if (error) throw error;
+
+        const { data } = supabase.storage.from('covers').getPublicUrl(filePath);
+        return data.publicUrl;
     } catch (e) {
-        console.error("Fetch User Library Error", e);
-        return { prompts: [], materials: [] };
+        console.error("上传封面失败", e);
+        return null;
     }
 }
