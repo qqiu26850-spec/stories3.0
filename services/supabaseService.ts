@@ -320,3 +320,56 @@ export async function uploadCoverImage(file: File) {
         return null;
     }
 }
+// ================= 补全缺失的 Auth 函数 (修复报错) =================
+
+/**
+ * 重置密码 (修复 AuthModal 报错)
+ */
+export async function resetPasswordForEmail(email: string) {
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+  });
+  return { data, error };
+}
+
+/**
+ * 获取用户个人资料 (修复可能出现的个人中心报错)
+ */
+export async function fetchUserProfile() {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return { nickname: '用户', avatarUrl: null };
+
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        
+        return {
+            nickname: profile?.username || session.user.user_metadata?.full_name || '用户',
+            avatarUrl: profile?.avatar_url || session.user.user_metadata?.avatar_url || null
+        };
+    } catch (e) {
+        return { nickname: '用户', avatarUrl: null };
+    }
+}
+
+/**
+ * 更新用户个人资料
+ */
+export async function updateUserProfile(nickname: string, avatarUrl: string | null) {
+    const userId = await getCurrentUserId();
+    if (!userId) return { error: '未登录' };
+    
+    // 1. 更新 Auth 元数据
+    await supabase.auth.updateUser({
+        data: { full_name: nickname, avatar_url: avatarUrl }
+    });
+    
+    // 2. 更新 profiles 表 (确保数据同步)
+    const { error } = await supabase.from('profiles').upsert({ 
+        id: userId, 
+        username: nickname, 
+        avatar_url: avatarUrl,
+        updated_at: new Date().toISOString()
+    });
+
+    return { error };
+}
