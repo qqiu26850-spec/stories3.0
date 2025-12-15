@@ -79,7 +79,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             let prompt = workflow.template || '';
             workflow.fields?.forEach(field => {
                 const value = formState[field.variable] || '';
-                prompt = prompt.replace(`\${${field.variable}}`, value);
+                // Global replacement for variables
+                prompt = prompt.replace(new RegExp(`\\$\\{${field.variable}\\}`, 'g'), value);
             });
 
             const stream = generateTextStream(prompt, { model, temperature, topP });

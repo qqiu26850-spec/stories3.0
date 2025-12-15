@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { CREATIVE_MODULES, PROMPTS } from '../constants';
@@ -9,7 +10,7 @@ import { ChevronDoubleLeft, Sparkles, Copy, Database, X, AdjustmentsHorizontal, 
 import SelectablePromptCard from './SelectablePromptCard';
 import { fetchPrompts, saveMaterial } from '../services/supabaseService';
 
-// --- Types ---
+// ... existing code for types and LoadingOverlay ...
 type PromptFormState = Record<string, string>;
 
 interface CreativeGenerationProps {
@@ -82,7 +83,7 @@ const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({
     );
 };
 
-// --- Prompt Selection Modal ---
+// ... PromptSelectionModal and ImportAssetModal ...
 const PROMPT_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'all', label: '全部' },
   { id: 'long-story', label: '长篇' },
@@ -217,13 +218,14 @@ const PromptSelectionModal: React.FC<{
     );
 };
 
-// --- Import Asset Modal ---
+// ... ImportAssetModal ...
 const ImportAssetModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     content: string;
     onSave: (data: { name: string; type: Asset['type']; tags: string[] }) => void;
 }> = ({ isOpen, onClose, content, onSave }) => {
+    // ... existing implementation ...
     const [name, setName] = useState('');
     const [type, setType] = useState<Asset['type']>('inspiration');
     const [tags, setTags] = useState('');
@@ -328,10 +330,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Handle incoming initial data from props (e.g. from Prompt Library)
+  // ... existing useEffects ...
   useEffect(() => {
     if (initialData?.prompt) {
-        // If we have a prompt coming in, assume we are in a generic "Creative Mode" or default to Brainstorm
         if (!selectedModule) {
              setSelectedModule(CREATIVE_MODULES[0]); 
         }
@@ -345,8 +346,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     }
   }, [initialData, selectedModule, onClearInitialData]);
 
-
-  // Reset state when module changes
   useEffect(() => {
       if (selectedModule && !initialData?.prompt) {
           setFreeInput('');
@@ -357,7 +356,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
       }
   }, [selectedModule]);
 
-  // Auto-init form state when prompt selected
   useEffect(() => {
       if (selectedPrompt) {
           setFormState(prev => {
@@ -383,7 +381,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
       
       // Construct prompt
       if (selectedPrompt) {
-          let template = selectedPrompt.template;
+          let template = selectedPrompt.template || selectedPrompt.content; // Use fallback
           for (const field of selectedPrompt.fields) {
               const val = formState[field.id] || '';
               template = template.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
@@ -421,6 +419,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
       }
   };
 
+  // ... rest of the component (handleCopy, handleImportAsset, render) ...
   const handleCopy = () => {
       navigator.clipboard.writeText(generatedText);
       setSuccessMessage('内容已复制！');
