@@ -36,10 +36,12 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const [openModule, setOpenModule] = useState<SidebarModule>('chapters');
     
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+    
+    // For AI Streaming
+    const insertionRef = useRef<{start: number, end: number} | null>(null);
 
     // Parse settings from description if needed on init
     useEffect(() => {
-        // If settings are empty but description exists (loaded from DB), parse it
         if ((!novel.settings.synopsis && !novel.settings.theme) && (novel as any).description) {
             try {
                 const parsedSettings = JSON.parse((novel as any).description);
@@ -47,13 +49,12 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     setNovel(prev => ({ ...prev, settings: { ...prev.settings, ...parsedSettings } }));
                 }
             } catch (e) {
-                // If not JSON, assume description is just synopsis
                 setNovel(prev => ({ ...prev, settings: { ...prev.settings, synopsis: (novel as any).description } }));
             }
         }
     }, []);
 
-    // Load chapters from Supabase on mount
+    // Load chapters
     useEffect(() => {
         const loadChapters = async () => {
             if (!novel.id || novel.id.startsWith('novel-')) return; 
@@ -79,18 +80,15 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     useEffect(() => {
         if (activeChapter) {
             setChapterTitle(activeChapter.title);
-            setEditorContent(activeChapter.content);
-            const count = activeChapter.content.replace(/\s/g, '').length;
-            setWordCount(count);
+            updateEditorState(activeChapter.content);
             setSaveStatus('saved');
         } else {
             setChapterTitle('');
-            setEditorContent('');
-            setWordCount(0);
+            updateEditorState('');
         }
     }, [activeChapter]);
 
-    // Auto-Save Logic for Chapter Content (1s Debounce)
+    // Auto-Save Chapter
     useEffect(() => {
         if (!activeChapter) return;
         
@@ -101,26 +99,20 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             const timer = setTimeout(async () => {
                 await handleSaveToCloud(true);
             }, 1000); 
-            
             return () => clearTimeout(timer);
         }
     }, [chapterTitle, editorContent, activeChapter]);
 
-    // Auto-Save Logic for Settings
     const handleSettingsUpdate = (key: keyof NovelSettings, value: string) => {
         setNovel(prev => {
             const newSettings = { ...prev.settings, [key]: value };
             const newState = { ...prev, settings: newSettings };
-            
-            // Debounced save for settings could be implemented, but direct save is safer for metadata
-            // We use a small timeout to avoid excessive API calls on every keystroke
             if (prev.id && !prev.id.startsWith('novel-')) {
                 clearTimeout((window as any)._settingsSaveTimer);
                 (window as any)._settingsSaveTimer = setTimeout(() => {
                     updateProject(prev.id, { description: JSON.stringify(newSettings) });
                 }, 1000);
             }
-            
             return newState;
         });
     };
@@ -129,6 +121,11 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         setEditorContent(content);
         const count = content.replace(/\s/g, '').length;
         setWordCount(count);
+        // Auto-adjust height
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+        }
     }, []);
 
     const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -194,7 +191,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleSaveToCloud = async (silent = false) => {
         if (activeChapter) {
             const orderIndex = novel.chapters.findIndex(c => c.id === activeChapter.id) + 1;
-            
             const newId = await saveChapterToDB(
                 novel.id, 
                 activeChapter.id, 
@@ -241,12 +237,12 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         await deleteChapterFromDB(chapterId);
         const newChapters = novel.chapters.filter(c => c.id !== chapterId);
         setNovel(prev => ({ ...prev, chapters: newChapters }));
-        
         if (activeChapter?.id === chapterId) {
             setActiveChapter(newChapters.length > 0 ? newChapters[0] : null);
         }
     };
 
+    // AI Insert/Replace Handlers (Legacy non-streaming)
     const handleAIInsert = (text: string) => {
         const start = selectionRange.start;
         const newContent = editorContent.substring(0, start) + text + editorContent.substring(selectionRange.end);
@@ -257,11 +253,47 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         updateEditorState(newContent);
     };
 
+    // Streaming Handler
+    const handleAIStream = (chunk: string, isFirst: boolean) => {
+        setEditorContent(prev => {
+            let nextContent = prev;
+            if (isFirst) {
+                const start = selectionRange.start;
+                // If text selected, stream replaces it? Or appends? Usually inserts.
+                // Assuming insert at cursor/replace selection
+                const end = selectionRange.end;
+                insertionRef.current = { start: start, end: start + chunk.length };
+                nextContent = prev.substring(0, start) + chunk + prev.substring(end);
+            } else {
+                if (insertionRef.current) {
+                    const { end } = insertionRef.current;
+                    nextContent = prev.substring(0, end) + chunk + prev.substring(end);
+                    insertionRef.current.end += chunk.length;
+                }
+            }
+            
+            // Sync word count
+            const count = nextContent.replace(/\s/g, '').length;
+            setWordCount(count);
+            
+            // Auto resize (needed for streaming too)
+            setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+                }
+            }, 0);
+
+            return nextContent;
+        });
+    };
+
     const rightSidebarWidthClass = mode === 'short' ? 'w-[30rem]' : 'w-80';
     const selectedText = editorContent.substring(selectionRange.start, selectionRange.end);
 
     return (
         <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900/50 text-gray-900 dark:text-gray-100">
+            {/* Header */}
             <header className="flex-shrink-0 bg-white dark:bg-black flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 z-20 relative shadow-sm">
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -304,6 +336,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             </header>
 
             <div className="flex flex-1 overflow-hidden relative">
+                {/* Left Toggle */}
                 <button 
                     onClick={() => setShowLeftSidebar(!showLeftSidebar)}
                     className={`absolute top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 border-l-0 shadow-md text-gray-400 hover:text-sky-500 transition-all flex items-center justify-center rounded-r-lg`}
@@ -311,6 +344,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 >
                     {showLeftSidebar ? <ChevronDoubleLeft className="w-3 h-3" /> : <ChevronDoubleRight className="w-3 h-3" />}
                 </button>
+                {/* Right Toggle */}
                 <button 
                     onClick={() => setShowRightSidebar(!showRightSidebar)}
                     className={`absolute top-1/2 -translate-y-1/2 z-30 w-5 h-12 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 border-r-0 shadow-md text-gray-400 hover:text-sky-500 transition-all flex items-center justify-center rounded-l-lg`}
@@ -319,6 +353,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     {showRightSidebar ? <ChevronDoubleRight className="w-3 h-3" /> : <ChevronDoubleLeft className="w-3 h-3" />}
                 </button>
 
+                {/* Left Sidebar */}
                 <aside className={`flex-shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${showLeftSidebar ? 'w-80 translate-x-0' : 'w-0 -translate-x-full opacity-0'}`}>
                     <div className="flex flex-col h-full w-80">
                         <div className="flex flex-col border-b border-gray-200 dark:border-gray-800">
@@ -354,35 +389,48 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     </div>
                 </aside>
 
-                <main className="flex-1 flex flex-col p-4 sm:p-6 overflow-y-auto bg-gray-100 dark:bg-gray-900/50 transition-all duration-300">
+                {/* Main Editor */}
+                <main className="flex-1 flex flex-col p-4 sm:p-6 bg-gray-100 dark:bg-gray-900/50 transition-all duration-300 overflow-hidden">
                     <div className="relative flex-1 flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 max-w-4xl mx-auto w-full overflow-hidden">
                         {activeChapter ? (
                             <>
-                                <div className="pt-6 px-8 flex-shrink-0">
+                                {/* 1. Fixed Toolbar at Top */}
+                                <div className="pt-4 px-8 pb-2 flex-shrink-0 bg-white dark:bg-gray-900 z-10">
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
                                 </div>
-                                <input
-                                    type="text"
-                                    value={chapterTitle}
-                                    onChange={handleTitleChange}
-                                    placeholder={mode === 'short' ? "在此输入标题" : "在此输入章节标题"}
-                                    className="w-full px-8 py-2 text-3xl font-bold bg-transparent focus:outline-none border-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 flex-shrink-0"
-                                />
-                                <div className="px-8 pb-4 border-b border-gray-100 dark:border-gray-800 mb-2 flex-shrink-0">
-                                    <span className="text-xs text-gray-400 font-mono">
-                                        {new Date().toLocaleDateString()} • <span className="text-sky-500 font-semibold">{wordCount}</span> 字
-                                    </span>
+                                
+                                {/* 2. Scrollable Content Area */}
+                                <div className="flex-1 overflow-y-auto px-8 pb-4">
+                                    <input
+                                        type="text"
+                                        value={chapterTitle}
+                                        onChange={handleTitleChange}
+                                        placeholder={mode === 'short' ? "在此输入标题" : "在此输入章节标题"}
+                                        className="w-full py-4 text-3xl font-bold bg-transparent focus:outline-none border-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 block"
+                                    />
+                                    <div className="pb-4 border-b border-gray-100 dark:border-gray-800 mb-6">
+                                        <span className="text-xs text-gray-400 font-mono">
+                                            {new Date().toLocaleDateString()} • <span className="text-sky-500 font-semibold">{wordCount}</span> 字
+                                        </span>
+                                    </div>
+                                    <textarea
+                                        ref={textareaRef}
+                                        value={editorContent}
+                                        onChange={handleContentChange}
+                                        onSelect={handleSelect}
+                                        onClick={handleSelect}
+                                        onKeyUp={handleSelect}
+                                        placeholder="开始你的创作..."
+                                        style={{ minHeight: '60vh', height: 'auto' }}
+                                        onInput={(e) => {
+                                            e.currentTarget.style.height = 'auto';
+                                            e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+                                        }}
+                                        className={`w-full bg-transparent focus:outline-none resize-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-700 text-${alignment} overflow-hidden`}
+                                    />
                                 </div>
-                                <textarea
-                                    ref={textareaRef}
-                                    value={editorContent}
-                                    onChange={handleContentChange}
-                                    onSelect={handleSelect}
-                                    onClick={handleSelect}
-                                    onKeyUp={handleSelect}
-                                    placeholder="开始你的创作..."
-                                    className={`flex-1 w-full px-8 py-4 bg-transparent focus:outline-none resize-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-700 text-${alignment}`}
-                                />
+
+                                {/* Footer Info */}
                                 <footer className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-800 text-xs text-gray-400 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 rounded-b-lg">
                                     <div className="flex gap-4">
                                         <span className="flex items-center gap-2">
@@ -404,13 +452,26 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     </div>
                 </main>
                 
+                {/* Right Sidebar */}
                 <aside className={`flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 overflow-hidden transition-all duration-300 ease-in-out ${showRightSidebar ? `${rightSidebarWidthClass} translate-x-0` : 'w-0 translate-x-full opacity-0'}`}>
                     <div className={`flex flex-col h-full ${rightSidebarWidthClass}`}>
                         <div className="flex-1 overflow-y-auto">
                             {mode === 'short' ? (
-                                <ShortStoryAIPanel contextText={editorContent} selectedText={selectedText} onInsert={handleAIInsert} onReplace={handleAIReplace} />
+                                <ShortStoryAIPanel 
+                                    contextText={editorContent} 
+                                    selectedText={selectedText} 
+                                    onInsert={handleAIInsert} 
+                                    onReplace={handleAIReplace} 
+                                    onStream={handleAIStream} // Pass stream handler
+                                />
                             ) : (
-                                <AIFunctionPanel contextText={editorContent} selectedText={selectedText} onInsert={handleAIInsert} onReplace={handleAIReplace} />
+                                <AIFunctionPanel 
+                                    contextText={editorContent} 
+                                    selectedText={selectedText} 
+                                    onInsert={handleAIInsert} 
+                                    onReplace={handleAIReplace} 
+                                    onStream={handleAIStream} // Pass stream handler
+                                />
                             )}
                         </div>
                     </div>

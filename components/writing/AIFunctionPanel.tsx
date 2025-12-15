@@ -1,261 +1,106 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Sparkles, BookOpen, DocumentPlus, ChatBubbleLeftRight, Trash, Copy, Pencil, X, Search, ChevronDown, Database } from '../Icon';
-import { generateText } from '../../services/geminiService';
+import { Asset, Prompt } from '../../types';
+import { generateText, generateTextStream } from '../../services/geminiService';
+import { fetchMaterials, fetchPrompts, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
-import { Asset, Prompt, PromptCategory } from '../../types';
+import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, X } from '../Icon';
 import SelectablePromptCard from '../SelectablePromptCard';
-import { fetchPrompts, fetchMaterials } from '../../services/supabaseService';
-
-interface AIFunctionPanelProps {
-    contextText?: string;
-    selectedText?: string;
-    onInsert: (text: string) => void;
-    onReplace: (text: string) => void;
-}
 
 type TabType = 'plot' | 'continue' | 'polish' | 'review';
 
-// --- Asset Selection Modal ---
-const ASSET_TYPES: { id: Asset['type']; label: string }[] = [
-    { id: 'character', label: '角色库' },
-    { id: 'plot', label: '剧情库' },
-    { id: 'inspiration', label: '灵光库' },
-];
+interface AIFunctionPanelProps {
+    contextText: string;
+    selectedText: string;
+    onInsert: (text: string) => void;
+    onReplace: (text: string) => void;
+    onStream?: (text: string, isFirst: boolean) => void;
+}
 
 const AssetSelectionModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     assets: Asset[];
     selectedAssetIds: Set<string>;
-    onToggleAsset: (assetId: string) => void;
+    onToggleAsset: (id: string) => void;
 }> = ({ isOpen, onClose, assets, selectedAssetIds, onToggleAsset }) => {
-    const [activeAssetType, setActiveAssetType] = useState<Asset['type']>('character');
-    
-    const groupedAssets = useMemo(() => {
-        return assets.reduce((acc, asset) => {
-            if (!acc[asset.type]) {
-                acc[asset.type] = [];
-            }
-            acc[asset.type].push(asset);
-            return acc;
-        }, {} as Record<Asset['type'], Asset[]>);
-    }, [assets]);
-
     if (!isOpen) return null;
-
-    const assetsToShow = groupedAssets[activeAssetType] || [];
-
     return createPortal(
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[9999] p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col relative animate-fade-in-up" onClick={e => e.stopPropagation()}>
-                <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <Database className="w-6 h-6 text-sky-500" />
-                        素材管理
-                    </h3>
-                    <button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-                        <X className="w-6 h-6" />
-                    </button>
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl p-6 flex flex-col max-h-[85vh] animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">选择素材</h3>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
                 </div>
-
-                <div className="flex flex-1 overflow-hidden">
-                    {/* Left: Categories */}
-                    <div className="w-48 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 p-4 space-y-2">
-                        {ASSET_TYPES.map(tab => (
-                             <button
-                                key={tab.id}
-                                onClick={() => setActiveAssetType(tab.id)}
-                                className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-colors ${
-                                    activeAssetType === tab.id
-                                    ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400'
-                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'
-                                }`}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Right: Asset List */}
-                    <div className="flex-1 p-6 overflow-y-auto bg-white dark:bg-gray-900">
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {assetsToShow.length > 0 ? assetsToShow.map(asset => (
-                                <label key={asset.id} className={`flex items-start p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
-                                    selectedAssetIds.has(asset.id) 
-                                        ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20' 
-                                        : 'border-gray-200 dark:border-gray-800 hover:border-sky-300 dark:hover:border-sky-700'
-                                }`}>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedAssetIds.has(asset.id)}
-                                        onChange={() => onToggleAsset(asset.id)}
-                                        className="mt-1 h-5 w-5 rounded border-gray-300 dark:border-gray-600 text-sky-500 focus:ring-sky-500 flex-shrink-0"
-                                    />
-                                    <div className="ml-4 flex-1">
-                                        <p className="font-bold text-gray-900 dark:text-white text-lg mb-1">{asset.name}</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3">{asset.content}</p>
-                                    </div>
-                                </label>
-                            )) : (
-                                <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-500">
-                                    <Database className="w-12 h-12 mb-4 opacity-20" />
-                                    <p>该分类下暂无素材。</p>
-                                </div>
-                            )}
+                <div className="flex-1 overflow-y-auto space-y-3 p-1">
+                    {assets.map(asset => (
+                        <div key={asset.id} 
+                             onClick={() => onToggleAsset(asset.id)}
+                             className={`p-4 rounded-lg border cursor-pointer transition-all ${selectedAssetIds.has(asset.id) ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20' : 'border-gray-200 dark:border-gray-800 hover:border-sky-300'}`}
+                        >
+                            <div className="flex justify-between items-center">
+                                <h4 className="font-bold text-gray-800 dark:text-gray-200">{asset.name}</h4>
+                                {selectedAssetIds.has(asset.id) && <div className="w-3 h-3 bg-sky-500 rounded-full" />}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{asset.content}</p>
                         </div>
-                    </div>
+                    ))}
+                    {assets.length === 0 && <div className="text-center text-gray-500 py-8">暂无素材</div>}
                 </div>
-
-                <div className="p-6 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex justify-between items-center">
-                    <span className="text-gray-500 dark:text-gray-400 font-medium">
-                        已选 <span className="text-sky-600 dark:text-sky-400 font-bold">{selectedAssetIds.size}</span> 个素材
-                    </span>
-                    <div className="flex gap-3">
-                        <button onClick={onClose} className="px-6 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                            取消
-                        </button>
-                        <button onClick={onClose} className="px-6 py-2.5 rounded-lg bg-sky-600 text-white font-bold hover:bg-sky-500 transition-colors shadow-sm">
-                            确认关联
-                        </button>
-                    </div>
-                </div>
+                <button onClick={onClose} className="mt-4 w-full py-2 bg-sky-600 text-white rounded-lg font-bold">确定</button>
             </div>
         </div>,
         document.body
     );
 };
-
-// --- Prompt Selection Modal ---
-const PROMPT_TABS: { id: PromptCategory | 'all'; label: string }[] = [
-  { id: 'all', label: '全部' },
-  { id: 'long-story', label: '长篇小说' },
-  { id: 'short-story', label: '短篇小说' },
-  { id: 'script', label: '剧本' },
-];
 
 const PromptSelectionModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     onSelectPrompt: (prompt: Prompt) => void;
 }> = ({ isOpen, onClose, onSelectPrompt }) => {
-    const [activeTab, setActiveTab] = useState<PromptCategory | 'all'>('long-story');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [allPrompts, setAllPrompts] = useState<Prompt[]>(PROMPTS);
-
+    const [localPrompts, setLocalPrompts] = useState<Prompt[]>([]);
+    
     useEffect(() => {
-        const loadPrompts = async () => {
-            const dbPrompts = await fetchPrompts();
-            if (dbPrompts) {
-                const mapped: Prompt[] = dbPrompts.map((p: any) => {
-                    let appCat: PromptCategory = 'short-story';
-                    if(p.main_category === 'long') appCat = 'long-story';
-                    if(p.main_category === 'script') appCat = 'script';
-                    
-                    let parsedContent: any = {};
-                    try {
-                        parsedContent = JSON.parse(p.content);
-                    } catch (e) {
-                        parsedContent = { template: p.content };
-                    }
-
+        if(isOpen) {
+            const load = async () => {
+                const dbPrompts = await fetchPrompts();
+                const mapped = dbPrompts ? dbPrompts.map((p: any) => {
+                    let parsed: any = {};
+                    try { parsed = JSON.parse(p.content); } catch (e) {}
                     return {
                         id: p.id,
                         title: p.title,
-                        description: parsedContent.description || '用户自定义提示词',
-                        content: parsedContent.template || p.content,
-                        category: appCat,
-                        subCategories: p.sub_category ? [p.sub_category as any] : [],
-                        fields: parsedContent.fields || [],
-                        template: parsedContent.template || p.content,
-                        heat: 0,
+                        description: parsed.description || p.description,
+                        content: parsed.template || p.content,
+                        category: p.main_category === 'long' ? 'long-story' : p.main_category === 'script' ? 'script' : 'short-story',
+                        subCategories: p.sub_category ? [p.sub_category] : [],
+                        fields: parsed.fields || [],
+                        template: parsed.template || p.content,
+                        heat: p.usage_count,
                         creator: 'user'
-                    };
-                });
-                setAllPrompts([...mapped, ...PROMPTS]);
-            }
-        };
-        if (isOpen) {
-            loadPrompts();
+                    } as Prompt;
+                }) : [];
+                setLocalPrompts([...mapped, ...PROMPTS]);
+            };
+            load();
         }
     }, [isOpen]);
 
-    const filteredPrompts = useMemo(() => {
-        return allPrompts.filter(prompt => {
-            const categoryMatch = activeTab === 'all' || prompt.category === activeTab;
-            const searchMatch = !searchTerm || prompt.title.toLowerCase().includes(searchTerm.toLowerCase()) || prompt.description.includes(searchTerm);
-            return categoryMatch && searchMatch;
-        });
-    }, [activeTab, searchTerm, allPrompts]);
-    
     if (!isOpen) return null;
-
     return createPortal(
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[9999] p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-6xl h-[85vh] flex flex-col relative animate-fade-in-up" onClick={e => e.stopPropagation()}>
-                
-                {/* Header */}
-                <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <Sparkles className="w-6 h-6 text-purple-500" />
-                            提示词库
-                        </h3>
-                        <div className="h-6 w-px bg-gray-300 dark:bg-gray-700 mx-2"></div>
-                        <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-                            {PROMPT_TABS.map(tab => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`px-4 py-1.5 text-sm font-bold rounded-md transition-all ${
-                                        activeTab === tab.id 
-                                        ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' 
-                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                    }`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                        <div className="relative w-64">
-                            <input 
-                                type="text" 
-                                placeholder="搜索提示词..." 
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 border border-transparent focus:bg-white dark:focus:bg-gray-900 focus:border-sky-500 rounded-full focus:outline-none transition-colors"
-                            />
-                            <Search className="w-4 h-4 absolute left-3.5 top-2.5 text-gray-400" />
-                        </div>
-                        <button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-                            <X className="w-6 h-6" />
-                        </button>
-                    </div>
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-800">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">选择提示词模板</h3>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
                 </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900/50">
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredPrompts.length > 0 ? filteredPrompts.map(prompt => (
-                            <div key={prompt.id} className="h-full">
-                                <SelectablePromptCard
-                                    prompt={prompt}
-                                    onSelect={() => {
-                                        onSelectPrompt(prompt);
-                                        onClose();
-                                    }}
-                                />
-                            </div>
-                        )) : (
-                            <div className="col-span-full flex flex-col items-center justify-center py-32 text-gray-400">
-                                <Sparkles className="w-16 h-16 mb-4 opacity-20" />
-                                <p className="text-lg">没有找到匹配的提示词。</p>
-                            </div>
-                        )}
+                <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-black/20">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {localPrompts.map(p => (
+                            <SelectablePromptCard key={p.id} prompt={p} onSelect={() => { onSelectPrompt(p); onClose(); }} />
+                        ))}
                     </div>
                 </div>
             </div>
@@ -264,8 +109,7 @@ const PromptSelectionModal: React.FC<{
     );
 };
 
-
-const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace }) => {
+const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream }) => {
     const [activeTab, setActiveTab] = useState<TabType>('plot');
     
     // Config State
@@ -289,7 +133,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [error, setError] = useState('');
     const [lastGeneratedTab, setLastGeneratedTab] = useState<TabType | null>(null);
 
-    // Fetch assets on mount
     useEffect(() => {
         const loadAssets = async () => {
             const data = await fetchMaterials();
@@ -367,6 +210,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         setLastGeneratedTab(activeTab);
 
         try {
+            // Increment heat
+            incrementPromptHeat(selectedPrompt.id);
+
             // 1. Build Asset Context
             const assetContext = Array.from(selectedAssetIds)
                 .map(id => assets.find(a => a.id === id))
@@ -383,14 +229,27 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
             const finalPrompt = assetContext ? `${assetContext}\n\n---\n\n${prompt}` : prompt;
 
-            const text = await generateText(finalPrompt, { model, temperature, topP });
-            
-            // 3. Handle Output based on Mode
-            if (activeTab === 'plot' || activeTab === 'continue') {
-                onInsert(text); // Direct insertion for Plot & Continue
+            // Stream Handling
+            if (onStream && (activeTab === 'plot' || activeTab === 'continue')) {
+                const stream = generateTextStream(finalPrompt, { model, temperature, topP });
+                let isFirst = true;
+                let fullText = '';
+                
+                for await (const chunk of stream) {
+                    onStream(chunk, isFirst);
+                    fullText += chunk;
+                    setResultText(fullText); // Update local display
+                    isFirst = false;
+                }
+            } else {
+                // Fallback / Non-stream / Polish / Review
+                const text = await generateText(finalPrompt, { model, temperature, topP });
+                
+                if (activeTab === 'plot' || activeTab === 'continue') {
+                    onInsert(text); // Insert final result if not streamed
+                }
+                setResultText(text);
             }
-            
-            setResultText(text);
 
         } catch (err: any) {
             setError(err.message || '生成失败');
@@ -435,7 +294,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 onSelectPrompt={setSelectedPrompt}
             />
 
-            {/* 1. Tabs */}
             <div className="flex border-b border-gray-200 dark:border-gray-800">
                 {renderTabButton('plot', '剧情', BookOpen)}
                 {renderTabButton('continue', '续写', DocumentPlus)}
@@ -445,10 +303,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 
-                {/* 2. Enhanced Config (Model, Prompt, Assets) */}
                 <div className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 space-y-5 shadow-sm">
-                     
-                     {/* Model Selection */}
                      <div className="flex flex-col gap-2">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型选择</label>
                         <select 
@@ -463,7 +318,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         </select>
                     </div>
 
-                    {/* Parameters Sliders - Horizontal Layout */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex justify-between items-center">
@@ -491,7 +345,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         </div>
                     </div>
 
-                    {/* Prompt Selection */}
                      <div className="flex flex-col gap-2">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">提示词选择</label>
                         <button 
@@ -512,7 +365,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         </button>
                     </div>
 
-                    {/* Asset Selection */}
                     <div className="flex flex-col gap-2">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">关联素材</label>
                         <button 
@@ -534,7 +386,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     </div>
                 </div>
 
-                {/* 3. Dynamic Form Fields */}
                 {selectedPrompt ? (
                     <div className="space-y-4 animate-fade-in">
                         <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-800">
@@ -572,7 +423,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                      </div>
                 )}
 
-                {/* 4. Generate Button */}
                 <button 
                     onClick={handleGenerate}
                     disabled={isLoading || !selectedPrompt}
@@ -591,14 +441,12 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     )}
                 </button>
 
-                {/* Error Message */}
                 {error && (
                     <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/50">
                         {error}
                     </div>
                 )}
 
-                {/* 5. Result & Actions */}
                 {resultText && (
                     <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-800 animate-fade-in-up">
                         <div className="flex justify-between items-center">
@@ -630,7 +478,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             {resultText}
                         </div>
                         
-                        {/* Specific Actions based on Tab */}
                         {lastGeneratedTab === 'polish' && (
                             <button 
                                 onClick={() => onReplace(resultText)}

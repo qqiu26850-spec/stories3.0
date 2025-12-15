@@ -1,16 +1,14 @@
 
-// ... existing imports ...
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { CREATIVE_MODULES, PROMPTS } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt, PromptCategory } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { ChevronDoubleLeft, Sparkles, Copy, Database, X, AdjustmentsHorizontal, Search, ChevronDown, Plus } from './Icon';
+import { ChevronDoubleLeft, Sparkles, Copy, Database, X, AdjustmentsHorizontal, Search, ChevronDown, Plus, DocumentText } from './Icon';
 import SelectablePromptCard from './SelectablePromptCard';
-import { fetchPrompts, saveMaterial } from '../services/supabaseService';
+import { fetchPrompts, saveMaterial, incrementPromptHeat } from '../services/supabaseService';
 
-// ... existing code for types and LoadingOverlay ...
 type PromptFormState = Record<string, string>;
 
 interface CreativeGenerationProps {
@@ -96,6 +94,7 @@ const PromptSelectionModal: React.FC<{
     onClose: () => void;
     onSelect: (prompt: Prompt) => void;
 }> = ({ isOpen, onClose, onSelect }) => {
+    // ... same implementation ...
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [allPrompts, setAllPrompts] = useState<Prompt[]>(PROMPTS);
@@ -150,7 +149,6 @@ const PromptSelectionModal: React.FC<{
     return createPortal(
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col relative animate-fade-in-up overflow-hidden" onClick={e => e.stopPropagation()}>
-                {/* Header */}
                 <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
                     <div className="flex items-center gap-6">
                         <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -191,7 +189,6 @@ const PromptSelectionModal: React.FC<{
                     </div>
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-black/20">
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredPrompts.length > 0 ? filteredPrompts.map(prompt => (
@@ -218,27 +215,28 @@ const PromptSelectionModal: React.FC<{
     );
 };
 
-// ... ImportAssetModal ...
 const ImportAssetModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     content: string;
-    onSave: (data: { name: string; type: Asset['type']; tags: string[] }) => void;
+    onSave: (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => void;
 }> = ({ isOpen, onClose, content, onSave }) => {
-    // ... existing implementation ...
+    // ... same implementation ...
     const [name, setName] = useState('');
+    const [assetContent, setAssetContent] = useState('');
     const [type, setType] = useState<Asset['type']>('inspiration');
     const [tags, setTags] = useState('');
 
     useEffect(() => {
         if (isOpen && content) {
             setName(content.slice(0, 15).replace(/\n/g, ' ').trim() + (content.length > 15 ? '...' : ''));
+            setAssetContent(content);
         }
     }, [isOpen, content]);
 
     const handleSave = () => {
         const tagList = tags.split(/[,，]/).map(t => t.trim()).filter(Boolean);
-        onSave({ name, type, tags: tagList });
+        onSave({ name, type, tags: tagList, content: assetContent });
         onClose();
     };
 
@@ -246,15 +244,15 @@ const ImportAssetModal: React.FC<{
 
     return createPortal(
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md p-8 animate-fade-in-up" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg p-8 animate-fade-in-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6 flex-shrink-0">
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white">导入素材库</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                         <X className="w-6 h-6" />
                     </button>
                 </div>
                 
-                <div className="space-y-5">
+                <div className="space-y-5 overflow-y-auto pr-2">
                     <div>
                         <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">素材名称</label>
                         <input 
@@ -283,6 +281,14 @@ const ImportAssetModal: React.FC<{
                         </div>
                     </div>
                     <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">内容预览</label>
+                        <textarea
+                            value={assetContent}
+                            onChange={e => setAssetContent(e.target.value)}
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-gray-900 dark:text-white h-32 resize-none"
+                        />
+                    </div>
+                    <div>
                         <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">标签</label>
                         <input 
                             type="text" 
@@ -294,7 +300,7 @@ const ImportAssetModal: React.FC<{
                     </div>
                 </div>
 
-                <div className="mt-8 flex gap-3">
+                <div className="mt-8 flex gap-3 flex-shrink-0">
                     <button onClick={onClose} className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                         取消
                     </button>
@@ -309,28 +315,22 @@ const ImportAssetModal: React.FC<{
 };
 
 const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, onClearInitialData }) => {
+  // ... state ...
   const [selectedModule, setSelectedModule] = useState<CreativeModule | null>(null);
-  
-  // Generation State
   const [model, setModel] = useState('gemini-2.5-flash');
   const [temperature, setTemperature] = useState(1);
   const [topP, setTopP] = useState(0.95);
-  
-  // Prompt & Input State
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
   const [formState, setFormState] = useState<PromptFormState>({});
   const [freeInput, setFreeInput] = useState('');
-
   const [generatedText, setGeneratedText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
-  
-  // UI State
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  // ... existing useEffects ...
+  // ... useEffects ...
   useEffect(() => {
     if (initialData?.prompt) {
         if (!selectedModule) {
@@ -379,9 +379,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
       
       let finalPrompt = '';
       
-      // Construct prompt
       if (selectedPrompt) {
-          let template = selectedPrompt.template || selectedPrompt.content; // Use fallback
+          incrementPromptHeat(selectedPrompt.id);
+          let template = selectedPrompt.template || selectedPrompt.content; 
           for (const field of selectedPrompt.fields) {
               const val = formState[field.id] || '';
               template = template.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
@@ -391,7 +391,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
           finalPrompt = freeInput;
       }
 
-      // Prepend module context
       if (selectedModule) {
           finalPrompt = `[当前创作任务：${selectedModule.title} - ${selectedModule.description}]\n\n${finalPrompt}`;
       }
@@ -408,7 +407,12 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
               { model, temperature, topP }
           );
 
+          let firstChunk = true;
           for await (const chunk of stream) {
+              if (firstChunk) {
+                  setShowLoadingOverlay(false); 
+                  firstChunk = false;
+              }
               setGeneratedText(prev => prev + chunk);
           }
       } catch (e) {
@@ -419,19 +423,18 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
       }
   };
 
-  // ... rest of the component (handleCopy, handleImportAsset, render) ...
   const handleCopy = () => {
       navigator.clipboard.writeText(generatedText);
       setSuccessMessage('内容已复制！');
       setTimeout(() => setSuccessMessage(''), 2000);
   };
 
-  const handleImportAsset = (data: { name: string; type: Asset['type']; tags: string[] }) => {
+  const handleImportAsset = (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => {
       let dbType: 'character' | 'plot' | 'idea' = 'idea';
       if (data.type === 'character') dbType = 'character';
       if (data.type === 'plot') dbType = 'plot';
 
-      saveMaterial(data.name, generatedText, dbType, data.tags);
+      saveMaterial(data.name, data.content, dbType, data.tags);
 
       setSuccessMessage('已成功导入素材库！');
       setTimeout(() => setSuccessMessage(''), 2000);
@@ -500,8 +503,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
               
               {/* Left: Input Panel */}
               <div className="w-full lg:w-[450px] xl:w-[500px] flex flex-col border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden z-10 shadow-lg lg:shadow-none">
+                  {/* ... Model & Prompt sections ... */}
                   <div className="flex-1 overflow-y-auto p-5 space-y-8">
-                      
                       {/* Section 1: Model Selection */}
                       <div className="space-y-4">
                           <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
@@ -645,6 +648,14 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
 
               {/* Right: Result Panel */}
               <div className="flex-1 flex flex-col bg-gray-50 dark:bg-black overflow-hidden relative">
+                  {/* Added Header for Output */}
+                  {generatedText && (
+                      <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center gap-2 text-gray-900 dark:text-white font-bold animate-fade-in">
+                          <DocumentText className="w-5 h-5 text-purple-500" />
+                          <span>生成内容</span>
+                      </div>
+                  )}
+
                   <div className="flex-1 overflow-y-auto p-6 md:p-8">
                       {generatedText ? (
                           <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 min-h-full animate-fade-in">

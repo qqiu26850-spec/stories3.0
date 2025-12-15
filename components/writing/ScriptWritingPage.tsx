@@ -27,8 +27,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [tempTitle, setTempTitle] = useState(script.title);
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+    
+    // For AI Streaming
+    const insertionRef = useRef<{start: number, end: number} | null>(null);
+    const [selectionRange, setSelectionRange] = useState<{start: number, end: number}>({ start: 0, end: 0 });
 
-    // Load scenes from Supabase (mapped to chapters table)
+    // Load scenes
     useEffect(() => {
         const loadScenes = async () => {
             if (!script.id || script.id.startsWith('script-')) return;
@@ -52,17 +56,15 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     useEffect(() => {
         if (activeScene) {
             setSceneTitle(activeScene.title);
-            setEditorContent(activeScene.content);
-            setWordCount(activeScene.content.replace(/\s/g, '').length);
+            updateEditorState(activeScene.content);
             setSaveStatus('saved');
         } else {
             setSceneTitle('');
-            setEditorContent('');
-            setWordCount(0);
+            updateEditorState('');
         }
     }, [activeScene]);
 
-    // Auto-Save Logic (Real-time / 1s Debounce)
+    // Auto-Save Logic
     useEffect(() => {
         if (!activeScene) return;
         
@@ -71,8 +73,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         if (isChanged) {
             setSaveStatus('saving');
             const timer = setTimeout(async () => {
-                await handleSaveToCloud(true); // Silent save
-            }, 1000); // 1s debounce
+                await handleSaveToCloud(true);
+            }, 1000);
             return () => clearTimeout(timer);
         }
     }, [sceneTitle, editorContent, activeScene]);
@@ -81,11 +83,22 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         setEditorContent(content);
         const count = content.replace(/\s/g, '').length;
         setWordCount(count);
+        // Auto-resize
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+        }
     }, []);
 
     const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         updateEditorState(e.target.value);
+        setSelectionRange({ start: e.target.selectionStart, end: e.target.selectionEnd });
     };
+    
+    const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+        const target = e.target as HTMLTextAreaElement;
+        setSelectionRange({ start: target.selectionStart, end: target.selectionEnd });
+    }
 
     const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSceneTitle(e.target.value);
@@ -121,15 +134,41 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     };
 
     const handleInsertText = (text: string) => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-        
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const currentText = editorContent;
-        
-        const newContent = currentText.substring(0, start) + text + currentText.substring(end);
+        const start = selectionRange.start;
+        const end = selectionRange.end;
+        const newContent = editorContent.substring(0, start) + text + editorContent.substring(end);
         updateEditorState(newContent);
+    };
+    
+    // Streaming Handler
+    const handleAIStream = (chunk: string, isFirst: boolean) => {
+        setEditorContent(prev => {
+            let nextContent = prev;
+            if (isFirst) {
+                const start = selectionRange.start;
+                const end = selectionRange.end;
+                insertionRef.current = { start: start, end: start + chunk.length };
+                nextContent = prev.substring(0, start) + chunk + prev.substring(end);
+            } else {
+                if (insertionRef.current) {
+                    const { end } = insertionRef.current;
+                    nextContent = prev.substring(0, end) + chunk + prev.substring(end);
+                    insertionRef.current.end += chunk.length;
+                }
+            }
+            
+            // Sync word count & resize
+            const count = nextContent.replace(/\s/g, '').length;
+            setWordCount(count);
+            setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+                }
+            }, 0);
+
+            return nextContent;
+        });
     };
 
      const handleToolbarAction = (action: ToolbarAction) => {
@@ -165,7 +204,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 const updatedScene = { 
                     ...activeScene, 
                     id: newId, 
-                    title: sceneTitle,
+                    title: sceneTitle, 
                     content: editorContent
                 };
                 setScript(prev => ({
@@ -174,10 +213,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 }));
                 setActiveScene(updatedScene);
                 setSaveStatus('saved');
-                
-                if (!silent && newId !== activeScene.id) {
-                    // alert("已同步并创建云端集数！");
-                }
             } else {
                 setSaveStatus('error');
             }
@@ -255,32 +290,45 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     />
                 </aside>
 
-                <main className="flex-1 bg-gray-100 dark:bg-gray-900/50 flex flex-col p-4 relative overflow-hidden">
+                <main className="flex-1 bg-gray-100 dark:bg-gray-900/50 flex flex-col p-4 relative overflow-hidden transition-all duration-300">
                      <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 w-full h-full overflow-hidden">
                         {activeScene ? (
                             <>
-                                <div className="pt-6 px-8 flex-shrink-0">
+                                {/* Fixed Toolbar */}
+                                <div className="pt-4 px-8 pb-2 flex-shrink-0 bg-white dark:bg-gray-900 z-10">
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
                                 </div>
-                                <input
-                                    type="text"
-                                    value={sceneTitle}
-                                    onChange={handleTitleChange}
-                                    placeholder="输入集数标题..."
-                                    className="w-full px-8 py-2 text-2xl font-bold bg-transparent focus:outline-none border-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 flex-shrink-0"
-                                />
-                                <div className="px-8 pb-4 border-b border-gray-100 dark:border-gray-800 mb-2 flex-shrink-0">
-                                    <span className="text-xs text-gray-400 font-mono">
-                                        <span className="text-sky-500 font-semibold">{wordCount}</span> 字
-                                    </span>
+                                
+                                {/* Scrollable Area */}
+                                <div className="flex-1 overflow-y-auto px-8 pb-4">
+                                    <input
+                                        type="text"
+                                        value={sceneTitle}
+                                        onChange={handleTitleChange}
+                                        placeholder="输入集数标题..."
+                                        className="w-full py-4 text-2xl font-bold bg-transparent focus:outline-none border-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 block"
+                                    />
+                                    <div className="pb-4 border-b border-gray-100 dark:border-gray-800 mb-6">
+                                        <span className="text-xs text-gray-400 font-mono">
+                                            <span className="text-sky-500 font-semibold">{wordCount}</span> 字
+                                        </span>
+                                    </div>
+                                    <textarea
+                                        ref={textareaRef}
+                                        value={editorContent}
+                                        onChange={handleContentChange}
+                                        onSelect={handleSelect}
+                                        onClick={handleSelect}
+                                        onKeyUp={handleSelect}
+                                        placeholder="开始编写剧本... (建议使用标准剧本格式)"
+                                        style={{ minHeight: '60vh', height: 'auto' }}
+                                        onInput={(e) => {
+                                            e.currentTarget.style.height = 'auto';
+                                            e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+                                        }}
+                                        className="w-full bg-transparent focus:outline-none resize-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-700 font-mono overflow-hidden"
+                                    />
                                 </div>
-                                <textarea
-                                    ref={textareaRef}
-                                    value={editorContent}
-                                    onChange={handleContentChange}
-                                    placeholder="开始编写剧本... (建议使用标准剧本格式)"
-                                    className="flex-1 w-full px-8 py-4 bg-transparent focus:outline-none resize-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-700 font-mono"
-                                />
                             </>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-gray-400 flex-col">
@@ -293,9 +341,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
                 <aside className="w-[29%] flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 shadow-xl z-10 flex flex-col">
                     {script.type === 'adaptation' ? (
-                        <ScriptAdaptationPanel onInsert={handleInsertText} />
+                        <ScriptAdaptationPanel onInsert={handleInsertText} onStream={handleAIStream} />
                     ) : (
-                        <ScriptAIPanel onInsert={handleInsertText} />
+                        <ScriptAIPanel onInsert={handleInsertText} onStream={handleAIStream} />
                     )}
                 </aside>
             </div>
