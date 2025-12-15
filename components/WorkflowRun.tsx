@@ -1,63 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { Workflow } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { Sparkles, ChevronDoubleLeft, X } from './Icon';
+import { Sparkles, ChevronDoubleLeft } from './Icon';
+import LoadingOverlay from './LoadingOverlay';
 
 interface WorkflowRunProps {
     workflow: Workflow;
     onBack: () => void;
 }
-
-const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({ isVisible, onClose }) => {
-    const [seconds, setSeconds] = useState(0);
-
-    useEffect(() => {
-        let interval: any;
-        if (isVisible) {
-            setSeconds(0);
-            interval = setInterval(() => {
-                setSeconds(s => s + 1);
-            }, 1000);
-        }
-        return () => clearInterval(interval);
-    }, [isVisible]);
-
-    // Auto close after 10 seconds
-    useEffect(() => {
-        if (isVisible && seconds >= 10) {
-            onClose();
-        }
-    }, [seconds, isVisible, onClose]);
-
-    if (!isVisible) return null;
-
-    return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/20 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-80 text-center mx-4 animate-fade-in-up relative">
-                <button 
-                    onClick={onClose}
-                    className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    title="关闭/取消"
-                >
-                    <X className="w-5 h-5" />
-                </button>
-
-                <div className="relative w-12 h-12 mx-auto mb-4">
-                    <div className="absolute inset-0 border-2 border-gray-100 dark:border-gray-800 rounded-full"></div>
-                    <div className="absolute inset-0 border-2 border-sky-500 rounded-full border-t-transparent animate-spin"></div>
-                    <Sparkles className="absolute inset-0 w-5 h-5 m-auto text-sky-500 animate-pulse" />
-                </div>
-                
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">AI 正在创作...</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-4">已耗时: {seconds} 秒</p>
-                <p className="text-xs text-gray-400">弹窗将在 10 秒后自动关闭</p>
-            </div>
-        </div>,
-        document.body
-    );
-};
 
 const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [model, setModel] = useState('gemini-2.5-flash');
@@ -84,8 +35,12 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             });
 
             const stream = generateTextStream(prompt, { model, temperature, topP });
-            
+            let isFirst = true;
             for await (const chunk of stream) {
+                if (isFirst) {
+                    setShowOverlay(false);
+                    isFirst = false;
+                }
                 setResult(prev => prev + chunk);
             }
         } catch (e: any) {
@@ -205,6 +160,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
 
                 {/* Right Panel: Output */}
                 <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm flex flex-col overflow-hidden relative">
+                     
                      <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex-shrink-0">执行结果</h3>
                      {result ? (
                          <div className="flex-1 overflow-y-auto whitespace-pre-wrap text-gray-700 dark:text-gray-300 text-sm leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">

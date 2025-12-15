@@ -7,6 +7,7 @@ import { fetchMaterials, fetchPrompts, incrementPromptHeat } from '../../service
 import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
 import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash } from '../Icon';
 import SelectablePromptCard from '../SelectablePromptCard';
+import LoadingOverlay from '../LoadingOverlay';
 
 type ShortStoryTab = 'original' | 'imitate' | 'polish' | 'review';
 
@@ -17,51 +18,6 @@ interface ShortStoryAIPanelProps {
     onReplace: (text: string) => void;
     onStream?: (text: string, isFirst: boolean) => void;
 }
-
-// Reusable Loading Overlay
-const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({ isVisible, onClose }) => {
-    const [seconds, setSeconds] = useState(0);
-
-    useEffect(() => {
-        let interval: any;
-        if (isVisible) {
-            setSeconds(0);
-            interval = setInterval(() => {
-                setSeconds(s => s + 1);
-            }, 1000);
-        }
-        return () => clearInterval(interval);
-    }, [isVisible]);
-
-    if (!isVisible) return null;
-
-    return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/20 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-80 text-center mx-4 animate-fade-in-up relative">
-                <button 
-                    onClick={onClose}
-                    className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    title="关闭/取消"
-                >
-                    <X className="w-5 h-5" />
-                </button>
-
-                <div className="relative w-12 h-12 mx-auto mb-4">
-                    <div className="absolute inset-0 border-2 border-gray-100 dark:border-gray-800 rounded-full"></div>
-                    <div className="absolute inset-0 border-2 border-sky-500 rounded-full border-t-transparent animate-spin"></div>
-                    <Sparkles className="absolute inset-0 w-5 h-5 m-auto text-sky-500 animate-pulse" />
-                </div>
-                
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">AI 正在创作...</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-4">已耗时: {seconds} 秒</p>
-                <div className="bg-sky-50 dark:bg-sky-900/20 p-2 rounded text-xs text-sky-700 dark:text-sky-300">
-                    耐心等待，精彩即将呈现
-                </div>
-            </div>
-        </div>,
-        document.body
-    );
-};
 
 const AssetSelectionModal: React.FC<{
     isOpen: boolean;
