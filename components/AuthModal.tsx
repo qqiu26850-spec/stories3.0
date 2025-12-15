@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { signIn, signUp, resetPasswordForEmail } from '../services/supabaseService';
+import { signIn, signUp, resetPasswordForEmail, signOut } from '../services/supabaseService';
 import { BookSolid, X, Eye, EyeSlash } from './Icon';
 
 interface AuthModalProps {
@@ -27,8 +27,15 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
 
         try {
             if (mode === 'login') {
-                const { error } = await signIn(email, password);
+                const { data, error } = await signIn(email, password);
                 if (error) throw error;
+
+                // Check for soft-delete flag in user metadata
+                if (data.user?.user_metadata?.is_deleted) {
+                    await signOut(); // Ensure session is cleared
+                    throw new Error("该账号已注销，无法登录。");
+                }
+
                 setMessage('登录成功！正在跳转...');
                 setTimeout(() => {
                     onSuccess();
@@ -58,6 +65,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-fade-in-up relative">
+                <button 
+                    onClick={() => {
+                        if (mode === 'login' && !loading) {
+                            // Can't close without login if it's the main entry, but for now we rely on external handling
+                        }
+                    }}
+                    className="hidden absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                    <X className="w-6 h-6" />
+                </button>
                 
                 {/* Header */}
                 <div className="p-8 pb-0 flex flex-col items-center">

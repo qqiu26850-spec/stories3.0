@@ -1,4 +1,5 @@
 
+// ... existing imports
 import { createClient } from '@supabase/supabase-js';
 
 // ================= 配置区域 =================
@@ -134,12 +135,24 @@ export async function deleteUserData(): Promise<boolean> {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
 
-        // 删除关联数据 (由于设置了 RLS，只能删除自己的)
+        // 1. Mark account as deleted in Auth metadata (Soft Delete)
+        // This flag will be checked during login to prevent access
+        const { error: updateError } = await supabase.auth.updateUser({
+            data: { is_deleted: true }
+        });
+
+        if (updateError) {
+            console.error("Failed to mark user as deleted:", updateError);
+            throw updateError;
+        }
+
+        // 2. Delete data (Projects & Materials only)
+        // Retain Prompts as per requirement
         await supabase.from('projects').delete().eq('user_id', userId);
         await supabase.from('materials').delete().eq('user_id', userId);
-        await supabase.from('prompts').delete().eq('user_id', userId);
+        // await supabase.from('prompts').delete().eq('user_id', userId); // 保留提示词
         
-        // 登出
+        // 3. Logout
         await signOut();
         return true;
     } catch (err: any) {
@@ -149,7 +162,7 @@ export async function deleteUserData(): Promise<boolean> {
 }
 
 // ================= 📚 用户资源库 (聚合查询) =================
-
+// ... rest of the file stays the same
 export async function fetchUserLibrary() {
     try {
         const userId = await getCurrentUserId();
