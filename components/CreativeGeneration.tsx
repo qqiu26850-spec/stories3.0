@@ -522,6 +522,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                       <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                                       <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                                       <option value="deepseek-chat">DeepSeek V3</option>
+                                      <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
                                   </select>
                               </div>
                               
