@@ -8,7 +8,7 @@ interface PromptDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
     prompt: Prompt | null;
-    onRun: (filledValues: Record<string, string>) => void;
+    onRun?: (filledValues: Record<string, string>) => void;
 }
 
 const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, prompt, onRun }) => {
@@ -50,7 +50,9 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
     };
     
     const handleRun = () => {
-        onRun(formState);
+        if (onRun) {
+            onRun(formState);
+        }
     };
 
     const isTemplateBased = prompt.fields && prompt.fields.length > 0;
@@ -114,13 +116,15 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                         <Copy className="w-4 h-4" />
                         {copied ? '已复制' : '复制提示词'}
                     </button>
-                    <button
-                        onClick={handleRun}
-                        className="flex-[2] bg-sky-600 text-white font-bold py-3 px-4 rounded-md hover:bg-sky-500 transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-sky-500/30"
-                    >
-                        <Sparkles className="w-5 h-5" />
-                        AI 立即生成
-                    </button>
+                    {onRun && (
+                        <button
+                            onClick={handleRun}
+                            className="flex-[2] bg-sky-600 text-white font-bold py-3 px-4 rounded-md hover:bg-sky-500 transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-sky-500/30"
+                        >
+                            <Sparkles className="w-5 h-5" />
+                            AI 立即生成
+                        </button>
+                    )}
                 </div>
             </div>
         </div>,

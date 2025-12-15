@@ -156,6 +156,7 @@ export type Project = Novel | Script;
 export interface UserProfile {
   id: string;
   nickname: string;
+  email?: string; // Added email field
   avatarUrl: string | null;
 }
 

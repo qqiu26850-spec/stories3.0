@@ -26,16 +26,77 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
         }
     }, [isOpen, project]);
 
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Client-side image compression
+    const compressImage = (file: File): Promise<File> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target?.result as string;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800;
+                    const MAX_HEIGHT = 800;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(img, 0, 0, width, height);
+
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            const compressedFile = new File([blob], file.name, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now(),
+                            });
+                            resolve(compressedFile);
+                        } else {
+                            reject(new Error('Canvas is empty'));
+                        }
+                    }, 'image/jpeg', 0.7); // 70% quality JPEG
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
+    };
+
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            setCoverFile(file);
-            
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setCoverPreview(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            try {
+                const compressedFile = await compressImage(file);
+                setCoverFile(compressedFile);
+                
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setCoverPreview(reader.result as string);
+                };
+                reader.readAsDataURL(compressedFile);
+            } catch (err) {
+                console.error("Compression failed", err);
+                setCoverFile(file);
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setCoverPreview(reader.result as string);
+                };
+                reader.readAsDataURL(file);
+            }
         }
     };
 
@@ -75,7 +136,7 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
                             </div>
                             <div className="flex-1">
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
-                                    支持 JPG, PNG 格式。<br/>建议比例 2:3 (例如 200x300)。
+                                    支持 JPG, PNG 格式。<br/>会自动压缩以优化加载。
                                 </p>
                                 <label htmlFor="edit-cover-upload" className="inline-block cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
                                     <span>更换封面</span>

@@ -28,16 +28,79 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
         }
     }, [isOpen]);
 
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Client-side image compression
+    const compressImage = (file: File): Promise<File> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target?.result as string;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800;
+                    const MAX_HEIGHT = 800;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(img, 0, 0, width, height);
+
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            const compressedFile = new File([blob], file.name, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now(),
+                            });
+                            resolve(compressedFile);
+                        } else {
+                            reject(new Error('Canvas is empty'));
+                        }
+                    }, 'image/jpeg', 0.7); // 70% quality JPEG
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
+    };
+
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            setCoverFile(file);
-            
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setCoverPreview(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            try {
+                const compressedFile = await compressImage(file);
+                setCoverFile(compressedFile);
+                
+                // Update preview
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setCoverPreview(reader.result as string);
+                };
+                reader.readAsDataURL(compressedFile);
+            } catch (err) {
+                console.error("Compression failed", err);
+                // Fallback to original if compression fails
+                setCoverFile(file);
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setCoverPreview(reader.result as string);
+                };
+                reader.readAsDataURL(file);
+            }
         }
     };
 
@@ -79,7 +142,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                                 <input id="cover-upload" name="cover-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageChange} />
                             </label>
                         </div>
-                        <p className="text-xs text-gray-400 mt-2">支持 JPG, PNG 格式，建议尺寸 200x300</p>
+                        <p className="text-xs text-gray-400 mt-2">支持 JPG, PNG 格式，会自动压缩</p>
                     </div>
                     {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
                     <div className="flex justify-end gap-3 pt-4">

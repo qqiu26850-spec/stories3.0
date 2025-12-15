@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Asset, Prompt } from '../../types';
@@ -13,6 +14,51 @@ interface ScriptAIPanelProps {
 }
 
 type ScriptTab = 'idea' | 'script';
+
+// Reusable Loading Overlay
+const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({ isVisible, onClose }) => {
+    const [seconds, setSeconds] = useState(0);
+
+    useEffect(() => {
+        let interval: any;
+        if (isVisible) {
+            setSeconds(0);
+            interval = setInterval(() => {
+                setSeconds(s => s + 1);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [isVisible]);
+
+    if (!isVisible) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-80 text-center mx-4 animate-fade-in-up relative">
+                <button 
+                    onClick={onClose}
+                    className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    title="关闭/取消"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+
+                <div className="relative w-12 h-12 mx-auto mb-4">
+                    <div className="absolute inset-0 border-2 border-gray-100 dark:border-gray-800 rounded-full"></div>
+                    <div className="absolute inset-0 border-2 border-sky-500 rounded-full border-t-transparent animate-spin"></div>
+                    <Sparkles className="absolute inset-0 w-5 h-5 m-auto text-sky-500 animate-pulse" />
+                </div>
+                
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">AI 正在创作...</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-4">已耗时: {seconds} 秒</p>
+                <div className="bg-sky-50 dark:bg-sky-900/20 p-2 rounded text-xs text-sky-700 dark:text-sky-300">
+                    耐心等待，精彩即将呈现
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
 
 const AssetSelectionModal: React.FC<{
     isOpen: boolean;
@@ -127,6 +173,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
 
     // Result
     const [isLoading, setIsLoading] = useState(false);
+    const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [generatedIdeas, setGeneratedIdeas] = useState<string[]>([]); // For Idea tab
     const [generatedText, setGeneratedText] = useState(''); // For Script tab
     const [error, setError] = useState('');
@@ -164,6 +211,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
 
     const handleGenerate = async () => {
         setIsLoading(true);
+        setShowLoadingOverlay(true);
         setGeneratedIdeas([]);
         setGeneratedText('');
         setError('');
@@ -210,6 +258,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
 
             if (activeTab === 'idea') {
                 const result = await generateText(finalPrompt, { model, temperature, topP });
+                setShowLoadingOverlay(false);
                 // Parse ideas
                 const ideas = result.split(/【方案[一二三]】/).filter(s => s.trim().length > 10);
                 if (ideas.length === 0) {
@@ -223,6 +272,9 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                     let isFirst = true;
                     let fullText = '';
                     for await (const chunk of stream) {
+                        if (isFirst) {
+                            setShowLoadingOverlay(false);
+                        }
                         onStream(chunk, isFirst);
                         fullText += chunk;
                         setGeneratedText(fullText);
@@ -230,6 +282,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                     }
                 } else {
                     const result = await generateText(finalPrompt, { model, temperature, topP });
+                    setShowLoadingOverlay(false);
                     setGeneratedText(result);
                 }
             }
@@ -238,6 +291,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
             setError(err.message || '生成失败');
         } finally {
             setIsLoading(false);
+            setShowLoadingOverlay(false);
         }
     };
 
@@ -257,6 +311,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full">
+            <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} />
             <AssetSelectionModal 
                 isOpen={isAssetModalOpen} 
                 onClose={() => setAssetModalOpen(false)}
@@ -385,7 +440,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                                             value={formState[field.id] || ''}
                                             onChange={e => handleInputChange(field.id, e.target.value)}
                                             placeholder={field.placeholder}
-                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-shadow shadow-sm"
+                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-shadow shadow-sm"
                                         />
                                     )}
                                 </div>

@@ -90,17 +90,18 @@ export async function resetPasswordForEmail(email: string) {
 export async function fetchUserProfile() {
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return { nickname: '未登录用户', avatarUrl: null };
+        if (!session) return { nickname: '未登录用户', avatarUrl: null, email: '' };
 
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         
         return {
             nickname: profile?.username || session.user.user_metadata?.full_name || '奇思妙想家',
-            avatarUrl: profile?.avatar_url || session.user.user_metadata?.avatar_url || null
+            avatarUrl: profile?.avatar_url || session.user.user_metadata?.avatar_url || null,
+            email: session.user.email
         };
     } catch (e) {
         console.error("Fetch Profile Error:", e);
-        return { nickname: '奇思妙想家', avatarUrl: null };
+        return { nickname: '奇思妙想家', avatarUrl: null, email: '' };
     }
 }
 

@@ -9,6 +9,7 @@ const MOCK_USER_PROFILE: UserProfile = {
     id: 'user-123',
     nickname: '奇思妙想家',
     avatarUrl: 'https://source.unsplash.com/random/200x200?avatar,person',
+    email: 'user@example.com' // Mock email
 };
 
 // --- Retention Modal ---
@@ -111,7 +112,8 @@ const PersonalCenter: React.FC<PersonalCenterProps> = ({ onLogout }) => {
                     setUserProfile({
                         id: userId,
                         nickname: metaProfile.nickname || '奇思妙想家',
-                        avatarUrl: metaProfile.avatarUrl
+                        avatarUrl: metaProfile.avatarUrl,
+                        email: metaProfile.email
                     });
                 }
             });
@@ -253,13 +255,20 @@ const PersonalCenter: React.FC<PersonalCenterProps> = ({ onLogout }) => {
                     </div>
                     
                     <div className="flex-grow text-center md:text-left">
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 flex items-center justify-center md:justify-start gap-3">
-                            {userProfile.nickname}
-                            <button onClick={() => setEditModalOpen(true)} className="text-gray-400 hover:text-sky-500 transition-colors">
-                                <Pencil className="w-5 h-5" />
-                            </button>
-                        </h1>
-                        <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-gray-500 dark:text-gray-400">
+                        <div className="mb-2">
+                            <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center justify-center md:justify-start gap-3">
+                                {userProfile.nickname}
+                                <button onClick={() => setEditModalOpen(true)} className="text-gray-400 hover:text-sky-500 transition-colors">
+                                    <Pencil className="w-5 h-5" />
+                                </button>
+                            </h1>
+                            {userProfile.email && (
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 font-mono">
+                                    {userProfile.email}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-gray-500 dark:text-gray-400 mt-4">
                             <div className="flex items-center gap-1">
                                 <Box className="w-4 h-4" />
                                 <span>提示词: {myPrompts.length}</span>

@@ -13,6 +13,7 @@ type AssetLibraryView = 'character-library' | 'plot-library' | 'inspiration-libr
 interface AssetManagementProps {
   view: AssetLibraryView;
   setActiveView: (view: View) => void;
+  isActive: boolean;
 }
 
 const viewConfig: Record<AssetLibraryView, { title: string; assetType: Asset['type']; description: string; }> = {
@@ -102,7 +103,7 @@ const formatAssetContent = (type: Asset['type'], data: AssetFormData): string =>
     }
 }
 
-const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView }) => {
+const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, isActive }) => {
     const { title, assetType, description } = viewConfig[view];
     // Initialize with empty array, data will be fetched from Supabase
     const [assets, setAssets] = useState<Asset[]>([]);
@@ -118,9 +119,10 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView }
     
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Fetch data from Supabase when assetType changes
+    // Fetch data from Supabase when assetType changes or view becomes active
     useEffect(() => {
         const loadAssets = async () => {
+            if (!isActive) return; // Only fetch if this view is active
             try {
                 // Map UI type to DB type if needed
                 const typeForDb = assetType === 'inspiration' ? 'idea' : assetType;
@@ -142,7 +144,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView }
             }
         };
         loadAssets();
-    }, [assetType]);
+    }, [assetType, isActive]);
 
     const filteredAssets = useMemo(() => {
         return assets.filter(asset => {
@@ -176,7 +178,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView }
 
         // Refresh list locally (or ideally refetch)
         const newAsset: Asset = {
-            id: `asset-${Date.now()}-${Math.random()}`,
+            id: `asset-${Date.now()}`,
             type: assetType,
             name: formData.name,
             content: formattedContent,
@@ -230,20 +232,16 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView }
         }
     };
 
-    const handleViewDetail = (asset: Asset) => {
+    const handleSelectAsset = (asset: Asset) => {
         setSelectedAsset(asset);
         setDetailModalOpen(true);
     };
 
-    const handleDeleteFromDetail = (id: string) => {
-        handleOpenDeleteModal(id);
-    };
-
     return (
-        <div className="p-4 sm:p-6 lg:p-8 h-full">
+        <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in">
             <CreateAssetModal
                 isOpen={isCreateModalOpen}
-                onClose={() => { setCreateModalOpen(false); setEditingAsset(null); }}
+                onClose={() => setCreateModalOpen(false)}
                 onSave={handleSaveAsset}
                 assetType={assetType}
                 assetToEdit={editingAsset}
@@ -257,111 +255,81 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView }
                 isOpen={isDetailModalOpen}
                 onClose={() => setDetailModalOpen(false)}
                 asset={selectedAsset}
-                onDelete={handleDeleteFromDetail}
+                onDelete={handleOpenDeleteModal}
                 onEdit={handleEdit}
             />
 
-            <div className="space-y-6 animate-fade-in">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">{description}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                         <div className="relative flex-grow md:flex-grow-0">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                                </svg>
-                            </span>
-                            <input
-                                type="text"
-                                placeholder="搜索素材、标签..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
-                            />
-                        </div>
-                         <button 
-                            onClick={() => setActiveView('creative-generation')}
-                            className="px-4 py-2 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-white font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors flex-shrink-0">
-                            从创意生成中导入
-                        </button>
-                        <button 
-                            onClick={handleCreate}
-                            className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0">
-                            + 创建素材
-                        </button>
-                    </div>
+            <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1>
+                    <p className="text-gray-500 dark:text-gray-400 mt-1">{description}</p>
                 </div>
+                <button
+                    onClick={handleCreate}
+                    className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors shadow-sm flex-shrink-0 self-start md:self-center"
+                >
+                    + 新建素材
+                </button>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredAssets.length > 0 ? filteredAssets.map(asset => {
-                        const styles = ASSET_STYLES[asset.type];
-                        return (
-                            <div 
-                                key={asset.id} 
-                                onClick={() => handleViewDetail(asset)}
-                                className={`p-5 rounded-xl border flex flex-col relative group transition-all cursor-pointer shadow-sm hover:shadow-md ${styles.border} bg-white dark:bg-gray-900`}
-                            >
-                                <div className="mb-3 pr-16">
-                                    <h3 className="font-bold text-lg text-gray-900 dark:text-white truncate">{asset.name}</h3>
-                                </div>
-                                
-                                <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed mb-4 line-clamp-3 h-16 overflow-hidden">
-                                    {asset.content}
-                                </p>
+            <div className="mb-6">
+                <div className="relative max-w-md">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                        <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                        </svg>
+                    </span>
+                    <input
+                        type="text"
+                        placeholder="搜索素材..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+                    />
+                </div>
+            </div>
 
-                                <div className="mt-auto">
-                                    <div className="flex flex-wrap gap-2">
-                                        {asset.tags && asset.tags.map((tag, index) => (
-                                            <span key={index} className={`text-xs px-2 py-1 rounded-md font-medium ${getTagStyle(tag)}`}>
-                                                #{tag}
-                                            </span>
-                                        ))}
-                                        {(!asset.tags || asset.tags.length === 0) && (
-                                            <span className="text-xs text-gray-400 italic">无标签</span>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Beautified Action Buttons - Blended style */}
-                                <div className="absolute top-3 right-3 flex gap-1 z-10 opacity-100">
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleEdit(asset);
-                                        }}
-                                        className="p-2 text-gray-400 hover:text-sky-600 dark:text-gray-500 dark:hover:text-sky-400 rounded-full transition-all transform hover:scale-110"
-                                        title="编辑"
-                                    >
-                                        <Pencil className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleOpenDeleteModal(asset.id);
-                                        }}
-                                        className="p-2 text-gray-400 hover:text-red-600 dark:text-gray-500 dark:hover:text-red-400 rounded-full transition-all transform hover:scale-110"
-                                        title="删除"
-                                    >
-                                        <Trash className="w-4 h-4" />
-                                    </button>
-                                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredAssets.map(asset => (
+                    <div 
+                        key={asset.id} 
+                        className={`bg-white dark:bg-gray-900 p-6 rounded-xl border ${ASSET_STYLES[asset.type].border} hover:shadow-lg hover:border-sky-400 transition-all duration-300 group cursor-pointer flex flex-col h-full relative`}
+                        onClick={() => handleSelectAsset(asset)}
+                    >
+                        <div className="flex justify-between items-start mb-3">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate flex-1 pr-2">{asset.name}</h3>
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                 <button 
+                                    onClick={(e) => { e.stopPropagation(); handleEdit(asset); }}
+                                    className="p-1 text-gray-400 hover:text-sky-500 transition-colors"
+                                >
+                                    <Pencil className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleOpenDeleteModal(asset.id); }}
+                                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                >
+                                    <Trash className="w-4 h-4" />
+                                </button>
                             </div>
-                        );
-                    }) : (
-                        <div className="col-span-full text-center py-16 bg-white dark:bg-gray-900 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-800">
-                            <p className="text-gray-400 dark:text-gray-500">
-                                {searchTerm ? `没有找到与“${searchTerm}”相关的素材。` : '你的素材库是空的。'}
-                            </p>
-                            <p className="text-gray-400 dark:text-gray-500 mt-1">
-                                {searchTerm ? '请尝试不同的关键词。' : '尝试创建一个新的素材吧！'}
-                            </p>
                         </div>
-                    )}
-                </div>
-
+                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-4 line-clamp-3 leading-relaxed flex-grow whitespace-pre-wrap">
+                            {asset.content}
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-auto">
+                            {asset.tags.map((tag, index) => (
+                                <span key={index} className={`text-xs px-2 py-1 rounded-md font-medium border ${getTagStyle(tag)}`}>
+                                    #{tag}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+                {filteredAssets.length === 0 && (
+                    <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
+                        <p>暂无相关素材</p>
+                    </div>
+                )}
             </div>
         </div>
     );

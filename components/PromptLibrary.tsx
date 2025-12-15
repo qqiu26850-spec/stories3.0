@@ -10,6 +10,7 @@ import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProf
 
 interface PromptLibraryProps {
     onNavigateToGeneration?: (prompt: Prompt, values: Record<string, string>) => void;
+    isActive: boolean;
 }
 
 const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
@@ -34,7 +35,7 @@ const SUB_CATEGORIES: { id: PromptSubCategory | 'all'; label: string }[] = [
     { id: 'writing', label: '写稿' },
 ];
 
-const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration }) => {
+const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('short-story');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
@@ -58,9 +59,12 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                 const userId = await getCurrentUserId();
                 setCurrentUserId(userId);
                 
+                // Fetch latest profile to get current nickname
+                let currentNickname = '社区用户';
                 const profile = await fetchUserProfile();
                 if(profile && profile.nickname) {
                     setUserNickname(profile.nickname);
+                    currentNickname = profile.nickname;
                 }
 
                 const fetchedData = await fetchPrompts(); 
@@ -77,10 +81,11 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                             parsedContent = { template: p.content, description: p.description };
                         }
 
-                        // Determine author name display
-                        // Since we removed the strict JOIN, p.profiles might be missing.
-                        // We fallback to the authorName saved inside the JSON content.
-                        const authorName = p.profiles?.username || parsedContent.authorName || '社区用户';
+                        // Use current nickname if user is the owner, otherwise use stored/fetched author name
+                        let authorName = p.profiles?.username || parsedContent.authorName || '社区用户';
+                        if (p.user_id === userId) {
+                            authorName = currentNickname;
+                        }
 
                         return {
                             id: p.id,
@@ -103,8 +108,11 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                 console.error("Failed to load prompts", error);
             }
         };
-        loadData();
-    }, []);
+        
+        if (isActive) {
+            loadData();
+        }
+    }, [isActive]);
 
     const handleSavePrompt = async (data: Omit<Prompt, 'id' | 'heat' | 'content'>, promptId?: string) => {
         const contentObject = {
@@ -163,22 +171,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
     const handleEditPrompt = (prompt: Prompt) => {
         setPromptToEdit(prompt);
         setCreateModalOpen(true);
-    };
-
-    const handleRunPrompt = async (formValues: Record<string, string>) => {
-        if (selectedPrompt) {
-             await incrementPromptHeat(selectedPrompt.id);
-             setPrompts(currentPrompts =>
-                currentPrompts.map(p =>
-                    p.id === selectedPrompt.id ? { ...p, heat: (p.heat || 0) + 1 } : p
-                )
-            );
-            
-            if (onNavigateToGeneration) {
-                onNavigateToGeneration(selectedPrompt, formValues);
-            }
-            setDetailModalOpen(false);
-        }
     };
     
     const handleOpenDeleteModal = (prompt: Prompt) => {
@@ -255,7 +247,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration })
                 isOpen={isDetailModalOpen}
                 onClose={() => setDetailModalOpen(false)}
                 prompt={selectedPrompt}
-                onRun={handleRunPrompt}
+                // No onRun passed here to disable execution in Library view
             />
             
             <div className="mb-8">

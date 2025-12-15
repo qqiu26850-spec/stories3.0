@@ -107,7 +107,10 @@ const App: React.FC = () => {
                 </div>
 
                 <div className={activeView === 'prompt-library' ? 'block h-full' : 'hidden h-full'}>
-                    <PromptLibrary onNavigateToGeneration={handleNavigateToGeneration} />
+                    <PromptLibrary 
+                        isActive={activeView === 'prompt-library'} 
+                        onNavigateToGeneration={handleNavigateToGeneration} 
+                    />
                 </div>
 
                 <div className={activeView === 'workflow' ? 'block h-full' : 'hidden h-full'}>
@@ -116,13 +119,13 @@ const App: React.FC = () => {
 
                 {/* Asset Management - Multiple Views, same component instance logic per type */}
                 <div className={activeView === 'character-library' ? 'block h-full' : 'hidden h-full'}>
-                    <AssetManagement view="character-library" setActiveView={setActiveView} />
+                    <AssetManagement view="character-library" setActiveView={setActiveView} isActive={activeView === 'character-library'} />
                 </div>
                 <div className={activeView === 'plot-library' ? 'block h-full' : 'hidden h-full'}>
-                    <AssetManagement view="plot-library" setActiveView={setActiveView} />
+                    <AssetManagement view="plot-library" setActiveView={setActiveView} isActive={activeView === 'plot-library'} />
                 </div>
                 <div className={activeView === 'inspiration-library' ? 'block h-full' : 'hidden h-full'}>
-                    <AssetManagement view="inspiration-library" setActiveView={setActiveView} />
+                    <AssetManagement view="inspiration-library" setActiveView={setActiveView} isActive={activeView === 'inspiration-library'} />
                 </div>
 
                 <div className={activeView === 'novel-management' ? 'block h-full' : 'hidden h-full'}>
