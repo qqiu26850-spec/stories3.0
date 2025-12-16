@@ -12,12 +12,28 @@ interface CreatePromptModalProps {
     promptToEdit?: Prompt | null;
 }
 
+const TAG_OPTIONS: { id: PromptSubCategory; label: string }[] = [
+    { id: 'idea', label: '创意' },
+    { id: 'golden_finger', label: '金手指' },
+    { id: 'character_design', label: '人物设定' },
+    { id: 'worldview', label: '世界观' },
+    { id: 'outline', label: '大纲' },
+    { id: 'detailed_outline', label: '细纲' },
+    { id: 'synopsis', label: '简介' },
+    { id: 'requirements', label: '写作要求' },
+    { id: 'style', label: '写作风格' },
+    { id: 'continue', label: '续写' },
+    { id: 'polish', label: '润色' },
+    { id: 'writing', label: '写稿' },
+    { id: 'proofread', label: '校对' },
+];
+
 const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, onSave, promptToEdit }) => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [template, setTemplate] = useState('');
     const [category, setCategory] = useState<PromptCategory>('short-story');
-    const [subCategory, setSubCategory] = useState<PromptSubCategory>('idea');
+    const [subCategories, setSubCategories] = useState<PromptSubCategory[]>(['idea']);
     const [fields, setFields] = useState<PromptField[]>([]);
     const [error, setError] = useState('');
 
@@ -28,14 +44,14 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 setDescription(promptToEdit.description);
                 setTemplate(promptToEdit.template || promptToEdit.content);
                 setCategory(promptToEdit.category);
-                setSubCategory(promptToEdit.subCategories[0] || 'idea');
+                setSubCategories(promptToEdit.subCategories && promptToEdit.subCategories.length > 0 ? promptToEdit.subCategories : ['idea']);
                 setFields(promptToEdit.fields || []);
             } else {
                 setTitle('');
                 setDescription('');
                 setTemplate('');
                 setCategory('short-story');
-                setSubCategory('idea');
+                setSubCategories(['idea']);
                 setFields([]);
             }
             setError('');
@@ -67,6 +83,20 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     const removeField = (index: number) => {
         setFields(fields.filter((_, i) => i !== index));
     };
+
+    const toggleSubCategory = (tag: PromptSubCategory) => {
+        setSubCategories(prev => {
+            if (prev.includes(tag)) {
+                // Prevent removing the last tag
+                if (prev.length <= 1) return prev;
+                return prev.filter(t => t !== tag);
+            } else {
+                // Limit max tags if needed, e.g. max 3
+                if (prev.length >= 3) return prev;
+                return [...prev, tag];
+            }
+        });
+    };
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -77,13 +107,17 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             setError('所有自定义字段都必须有标题和变量名。');
             return;
         }
+        if (subCategories.length === 0) {
+            setError('请至少选择一个标签。');
+            return;
+        }
         
         onSave({
             title,
             description,
             template,
             category,
-            subCategories: [subCategory],
+            subCategories: subCategories,
             fields,
             creator: 'user',
         }, promptToEdit?.id);
@@ -97,9 +131,9 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex-shrink-0">{promptToEdit ? '编辑提示词' : '创建新提示词'}</h3>
                 <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto pr-2 -mr-2 max-h-[75vh]">
                     {/* Standard Fields */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                         <div>
-                            <label htmlFor="prompt-category" className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">分类</label>
+                            <label htmlFor="prompt-category" className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">主分类</label>
                             <select id="prompt-category" value={category} onChange={(e) => setCategory(e.target.value as PromptCategory)} className="w-full p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition">
                                 <option value="short-story">短篇小说</option>
                                 <option value="long-story">长篇小说</option>
@@ -107,21 +141,24 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             </select>
                         </div>
                         <div>
-                            <label htmlFor="prompt-subcategory" className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">子分类</label>
-                            <select id="prompt-subcategory" value={subCategory} onChange={(e) => setSubCategory(e.target.value as PromptSubCategory)} className="w-full p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition">
-                                <option value="idea">创意</option>
-                                <option value="golden_finger">金手指</option>
-                                <option value="character_design">人物设定</option>
-                                <option value="worldview">世界观</option>
-                                <option value="outline">大纲</option>
-                                <option value="detailed_outline">细纲</option>
-                                <option value="synopsis">简介</option>
-                                <option value="requirements">写作要求</option>
-                                <option value="style">写作风格</option>
-                                <option value="continue">续写</option>
-                                <option value="polish">润色</option>
-                                <option value="writing">写稿</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">功能标签 (多选)</label>
+                            <div className="flex flex-wrap gap-2">
+                                {TAG_OPTIONS.map(tag => (
+                                    <button
+                                        key={tag.id}
+                                        type="button"
+                                        onClick={() => toggleSubCategory(tag.id)}
+                                        className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
+                                            subCategories.includes(tag.id)
+                                            ? 'bg-sky-100 border-sky-500 text-sky-700 dark:bg-sky-900/50 dark:border-sky-400 dark:text-sky-300'
+                                            : 'bg-gray-50 border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                        }`}
+                                    >
+                                        {tag.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1">请选择 1-3 个标签</p>
                         </div>
                     </div>
                     <div>

@@ -462,7 +462,7 @@ export async function fetchPrompts(mainCategory?: string) {
         let query = supabase
             .from('prompts')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('usage_count', { ascending: false });
 
         if (mainCategory && mainCategory !== 'all') {
             const dbCat = mapPromptCategory(mainCategory);
