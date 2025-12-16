@@ -4,7 +4,7 @@ import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen } from './Icon';
+import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown } from './Icon';
 import PromptSelectionModal from './PromptSelectionModal';
 import AssetSelectionModal from './AssetSelectionModal'; // New Import
 import { saveMaterial, incrementPromptHeat, fetchMaterials } from '../services/supabaseService';
@@ -390,16 +390,19 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                           <div className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-xl border border-gray-100 dark:border-gray-800 space-y-5">
                               <div>
                                   <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">模型</label>
-                                  <select 
-                                      value={model}
-                                      onChange={(e) => setModel(e.target.value)}
-                                      className="w-full p-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none"
-                                  >
-                                      <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                                      <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                                      <option value="deepseek-chat">DeepSeek V3</option>
-                                      <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
-                                  </select>
+                                  <div className="relative">
+                                      <select 
+                                          value={model}
+                                          onChange={(e) => setModel(e.target.value)}
+                                          className="w-full p-2.5 pr-8 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none appearance-none"
+                                      >
+                                          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                          <option value="deepseek-chat">DeepSeek V3</option>
+                                          <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
+                                      </select>
+                                      <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
+                                  </div>
                               </div>
                               
                               <div className="grid grid-cols-2 gap-4">

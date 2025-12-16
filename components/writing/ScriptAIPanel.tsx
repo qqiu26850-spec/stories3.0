@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
 import { Sparkles, Film, X, ChevronDown, BookOpen, Copy, Trash } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
+import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
 
 interface ScriptAIPanelProps {
@@ -15,43 +15,6 @@ interface ScriptAIPanelProps {
 }
 
 type ScriptTab = 'idea' | 'script';
-
-const AssetSelectionModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    assets: Asset[];
-    selectedAssetIds: Set<string>;
-    onToggleAsset: (id: string) => void;
-}> = ({ isOpen, onClose, assets, selectedAssetIds, onToggleAsset }) => {
-    if (!isOpen) return null;
-    return createPortal(
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl p-6 flex flex-col max-h-[85vh] animate-fade-in-up" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">选择素材</h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
-                </div>
-                <div className="flex-1 overflow-y-auto space-y-3 p-1">
-                    {assets.map(asset => (
-                        <div key={asset.id} 
-                             onClick={() => onToggleAsset(asset.id)}
-                             className={`p-4 rounded-lg border cursor-pointer transition-all ${selectedAssetIds.has(asset.id) ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20' : 'border-gray-200 dark:border-gray-800 hover:border-sky-300'}`}
-                        >
-                            <div className="flex justify-between items-center">
-                                <h4 className="font-bold text-gray-800 dark:text-gray-200">{asset.name}</h4>
-                                {selectedAssetIds.has(asset.id) && <div className="w-3 h-3 bg-sky-500 rounded-full" />}
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{asset.content}</p>
-                        </div>
-                    ))}
-                    {assets.length === 0 && <div className="text-center text-gray-500 py-8">暂无素材</div>}
-                </div>
-                <button onClick={onClose} className="mt-4 w-full py-2 bg-sky-600 text-white rounded-lg font-bold">确定</button>
-            </div>
-        </div>,
-        document.body
-    );
-};
 
 const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => {
     const [activeTab, setActiveTab] = useState<ScriptTab>('idea');
@@ -272,16 +235,19 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                 <div className="space-y-4 bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
                     <div>
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">模型选择</label>
-                        <select 
-                            value={model} 
-                            onChange={e => setModel(e.target.value)} 
-                            className="w-full p-2 text-sm rounded bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                        >
-                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                            <option value="deepseek-chat">DeepSeek V3</option>
-                            <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
-                        </select>
+                        <div className="relative">
+                            <select 
+                                value={model} 
+                                onChange={e => setModel(e.target.value)} 
+                                className="w-full p-2 text-sm rounded bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-sky-500 focus:outline-none appearance-none pr-8"
+                            >
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                <option value="deepseek-chat">DeepSeek V3</option>
+                                <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
+                            </select>
+                            <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2 top-2.5 pointer-events-none" />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -318,7 +284,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                         >
                             <div className="flex items-center gap-2 truncate">
                                 <Sparkles className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{selectedPrompt ? selectedPrompt.title : '选择提示词模板'}</span>
+                                <span className="truncate text-xs">{selectedPrompt ? selectedPrompt.title : '选择提示词模板'}</span>
                             </div>
                             {selectedPrompt ? (
                                 <X 
@@ -339,7 +305,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                         >
                             <div className="flex items-center gap-2">
                                 <BookOpen className="w-4 h-4 flex-shrink-0" />
-                                <span>关联素材库</span>
+                                <span className="text-xs">关联素材库</span>
                             </div>
                              {selectedAssetIds.size > 0 && <span className="text-xs bg-purple-200 dark:bg-purple-800 px-1.5 py-0.5 rounded">{selectedAssetIds.size}</span>}
                         </button>

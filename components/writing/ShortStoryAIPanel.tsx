@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
 import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
+import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
 
 type ShortStoryTab = 'original' | 'imitate' | 'polish' | 'review';
@@ -18,43 +18,6 @@ interface ShortStoryAIPanelProps {
     onReplace: (text: string) => void;
     onStream?: (text: string, isFirst: boolean) => void;
 }
-
-const AssetSelectionModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    assets: Asset[];
-    selectedAssetIds: Set<string>;
-    onToggleAsset: (id: string) => void;
-}> = ({ isOpen, onClose, assets, selectedAssetIds, onToggleAsset }) => {
-    if (!isOpen) return null;
-    return createPortal(
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl p-6 flex flex-col max-h-[85vh] animate-fade-in-up" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">选择素材</h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
-                </div>
-                <div className="flex-1 overflow-y-auto space-y-3 p-1">
-                    {assets.map(asset => (
-                        <div key={asset.id} 
-                             onClick={() => onToggleAsset(asset.id)}
-                             className={`p-4 rounded-lg border cursor-pointer transition-all ${selectedAssetIds.has(asset.id) ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20' : 'border-gray-200 dark:border-gray-800 hover:border-sky-300'}`}
-                        >
-                            <div className="flex justify-between items-center">
-                                <h4 className="font-bold text-gray-800 dark:text-gray-200">{asset.name}</h4>
-                                {selectedAssetIds.has(asset.id) && <div className="w-3 h-3 bg-sky-500 rounded-full" />}
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{asset.content}</p>
-                        </div>
-                    ))}
-                    {assets.length === 0 && <div className="text-center text-gray-500 py-8">暂无素材</div>}
-                </div>
-                <button onClick={onClose} className="mt-4 w-full py-2 bg-sky-600 text-white rounded-lg font-bold">确定</button>
-            </div>
-        </div>,
-        document.body
-    );
-};
 
 const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream }) => {
     const [activeTab, setActiveTab] = useState<ShortStoryTab>('original');
@@ -293,16 +256,19 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">模型配置</label>
-                        <select 
-                            value={model} 
-                            onChange={e => setModel(e.target.value)} 
-                            className="w-full p-2.5 text-sm rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition shadow-sm"
-                        >
-                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (快速)</option>
-                            <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
-                            <option value="deepseek-chat">DeepSeek V3</option>
-                            <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
-                        </select>
+                        <div className="relative">
+                            <select 
+                                value={model} 
+                                onChange={e => setModel(e.target.value)} 
+                                className="w-full p-2.5 pr-8 text-sm rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition shadow-sm appearance-none"
+                            >
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (快速)</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
+                                <option value="deepseek-chat">DeepSeek V3</option>
+                                <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
+                            </select>
+                            <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
+                        </div>
                     </div>
                     
                     <div className="col-span-2 grid grid-cols-2 gap-4">
@@ -345,7 +311,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             <div className="flex items-center justify-between relative z-10">
                                 <div className="flex items-center gap-2 overflow-hidden">
                                     <Sparkles className={`w-4 h-4 flex-shrink-0 ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-400'}`} />
-                                    <span className="font-semibold truncate">{selectedPrompt ? selectedPrompt.title : '点击选择提示词模板...'}</span>
+                                    <span className="font-semibold truncate text-xs">{selectedPrompt ? selectedPrompt.title : '点击选择提示词模板...'}</span>
                                 </div>
                                 {selectedPrompt ? (
                                     <X className="w-4 h-4 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); setSelectedPrompt(null); }} />
@@ -363,13 +329,14 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 <select 
                                     value={selectedWorkflow} 
                                     onChange={e => setSelectedWorkflow(e.target.value)} 
-                                    className="w-full p-2.5 pl-9 text-sm rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition shadow-sm appearance-none"
+                                    className="w-full p-2.5 pl-9 pr-8 text-sm rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition shadow-sm appearance-none"
                                 >
                                     {MOCK_WORKFLOWS.map(wf => (
                                         <option key={wf.id} value={wf.id}>{wf.title}</option>
                                     ))}
                                 </select>
-                                <WorkflowIcon className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                                <WorkflowIcon className="w-4 h-4 absolute left-3 top-3 text-gray-400 pointer-events-none" />
+                                <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
                         </div>
                     )}
@@ -379,7 +346,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             onClick={() => setAssetModalOpen(true)}
                             className={`w-full p-2.5 text-sm rounded-lg border focus:ring-2 focus:ring-sky-500 focus:outline-none transition shadow-sm flex items-center justify-between ${selectedAssetIds.size > 0 ? 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-900/30 dark:border-sky-800 dark:text-sky-400' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}
                         >
-                            <span className="truncate">{selectedAssetIds.size > 0 ? `已选 ${selectedAssetIds.size} 项` : '选择素材'}</span>
+                            <span className="truncate text-xs">{selectedAssetIds.size > 0 ? `已选 ${selectedAssetIds.size} 项` : '选择素材'}</span>
                             <BookOpen className="w-4 h-4 flex-shrink-0" />
                         </button>
                     </div>

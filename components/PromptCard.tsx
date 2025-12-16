@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Prompt, PromptSubCategory } from '../types';
 import { Heart, Fire, UserCircle, Trash, Pencil } from './Icon';
+import { GENRE_TAGS } from '../constants';
 
 interface PromptCardProps {
   prompt: Prompt;
@@ -47,6 +48,10 @@ const CATEGORY_LABELS: Record<string, string> = {
     'script': '剧本',
 };
 
+const isGenre = (tag: string) => {
+    return GENRE_TAGS.some(g => g.id === tag);
+};
+
 const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onEdit, isFavorited = false, onToggleFavorite, isOwner }) => {
   
   return (
@@ -82,7 +87,11 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onE
                     {CATEGORY_LABELS[prompt.category] || prompt.category}
                 </span>
                 {prompt.subCategories && prompt.subCategories.slice(0, 2).map((sub) => (
-                    <span key={sub} className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 whitespace-nowrap">
+                    <span key={sub} className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap ${
+                        isGenre(sub as string) 
+                        ? 'bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-300' 
+                        : 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+                    }`}>
                         {SUB_CATEGORY_LABELS[sub] || sub}
                     </span>
                 ))}

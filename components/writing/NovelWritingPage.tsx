@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Novel, Chapter, NovelSettings } from '../../types';
-import { BookSolid, ChevronDown, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, PanelLeft, PanelRight } from '../Icon';
+import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight } from '../Icon';
 import NovelSettingsPanel from './NovelSettingsPanel';
 import ChapterManager from './ChapterManager';
 import AIFunctionPanel from './AIFunctionPanel';
@@ -340,13 +340,13 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             </header>
 
             <div className="flex-1 flex overflow-hidden relative">
-                {/* Left Sidebar Toggle */}
+                {/* Left Sidebar Toggle - Floating Style */}
                 <button
                     onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
-                    className="absolute top-1/2 left-0 z-30 transform -translate-y-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-1 rounded-r-md shadow-md text-gray-500 hover:text-sky-500 transition-colors"
+                    className="absolute top-1/2 z-30 transform -translate-y-1/2 p-1 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black text-gray-400 hover:text-sky-500 rounded-r-lg shadow-sm border border-l-0 border-gray-200 dark:border-gray-800 transition-all backdrop-blur-sm"
                     style={{ left: isLeftSidebarOpen ? '16rem' : '0' }}
                 >
-                    <PanelLeft className="w-4 h-4" />
+                    {isLeftSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 </button>
 
                 {/* Left Sidebar */}
@@ -432,13 +432,13 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                      </div>
                 </main>
 
-                {/* Right Sidebar Toggle */}
+                {/* Right Sidebar Toggle - Floating Style */}
                 <button
                     onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
-                    className="absolute top-1/2 right-0 z-30 transform -translate-y-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-1 rounded-l-md shadow-md text-gray-500 hover:text-sky-500 transition-colors"
+                    className="absolute top-1/2 z-30 transform -translate-y-1/2 p-1 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black text-gray-400 hover:text-sky-500 rounded-l-lg shadow-sm border border-r-0 border-gray-200 dark:border-gray-800 transition-all backdrop-blur-sm"
                     style={{ right: isRightSidebarOpen ? '29%' : '0' }}
                 >
-                    <PanelRight className="w-4 h-4" />
+                    {isRightSidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
                 </button>
 
                 {/* Right AI Panel */}

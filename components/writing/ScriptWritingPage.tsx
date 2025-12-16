@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Script, Scene } from '../../types';
-import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check, PanelLeft, PanelRight } from '../Icon';
+import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check, ChevronLeft, ChevronRight } from '../Icon';
 import ScriptEpisodeManager from './ScriptEpisodeManager';
 import ScriptAIPanel from './ScriptAIPanel';
 import ScriptAdaptationPanel from './ScriptAdaptationPanel';
@@ -284,13 +284,13 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             </header>
 
             <div className="flex-1 flex overflow-hidden relative">
-                {/* Left Sidebar Toggle */}
+                {/* Left Sidebar Toggle - Floating Style */}
                 <button
                     onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
-                    className="absolute top-1/2 left-0 z-30 transform -translate-y-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-1 rounded-r-md shadow-md text-gray-500 hover:text-sky-500 transition-colors"
+                    className="absolute top-1/2 z-30 transform -translate-y-1/2 p-1 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black text-gray-400 hover:text-sky-500 rounded-r-lg shadow-sm border border-l-0 border-gray-200 dark:border-gray-800 transition-all backdrop-blur-sm"
                     style={{ left: isLeftSidebarOpen ? '13rem' : '0' }}
                 >
-                    <PanelLeft className="w-4 h-4" />
+                    {isLeftSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 </button>
 
                 <aside className={`flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-52' : 'w-0 border-r-0'}`}>
@@ -354,13 +354,13 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                      </div>
                 </main>
 
-                {/* Right Sidebar Toggle */}
+                {/* Right Sidebar Toggle - Floating Style */}
                 <button
                     onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
-                    className="absolute top-1/2 right-0 z-30 transform -translate-y-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-1 rounded-l-md shadow-md text-gray-500 hover:text-sky-500 transition-colors"
+                    className="absolute top-1/2 z-30 transform -translate-y-1/2 p-1 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black text-gray-400 hover:text-sky-500 rounded-l-lg shadow-sm border border-r-0 border-gray-200 dark:border-gray-800 transition-all backdrop-blur-sm"
                     style={{ right: isRightSidebarOpen ? '29%' : '0' }}
                 >
-                    <PanelRight className="w-4 h-4" />
+                    {isRightSidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
                 </button>
 
                 <aside className={`flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 shadow-xl z-10 flex flex-col transition-all duration-300 overflow-hidden ${isRightSidebarOpen ? 'w-[29%]' : 'w-0 border-l-0'}`}>
