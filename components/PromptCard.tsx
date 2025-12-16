@@ -14,6 +14,7 @@ interface PromptCardProps {
 }
 
 const SUB_CATEGORY_LABELS: Record<string, string> = {
+    // Functions
     'idea': '创意',
     'golden_finger': '金手指',
     'character_design': '人设',
@@ -26,13 +27,8 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'continue': '续写',
     'polish': '润色',
     'proofread': '校对',
-    'writing': '写稿'
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-    'long-story': '长篇',
-    'short-story': '短篇',
-    'script': '剧本',
+    'writing': '写稿',
+    // Genres
     'modern-romance': '现言',
     'ancient-romance': '古言',
     'period': '年代',
@@ -43,6 +39,12 @@ const CATEGORY_LABELS: Record<string, string> = {
     'social': '世情',
     'suspense': '悬疑',
     'sci-fi': '科幻'
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+    'long-story': '长篇',
+    'short-story': '短篇',
+    'script': '剧本',
 };
 
 const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onEdit, isFavorited = false, onToggleFavorite, isOwner }) => {

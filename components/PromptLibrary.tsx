@@ -18,31 +18,31 @@ const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'short-story', label: '短篇小说' },
   { id: 'long-story', label: '长篇小说' },
   { id: 'script', label: '剧本' },
-  { id: 'modern-romance', label: '现言' },
-  { id: 'ancient-romance', label: '古言' },
-  { id: 'period', label: '年代' },
-  { id: 'apocalypse', label: '末世' },
-  { id: 'urban', label: '都市' },
-  { id: 'fantasy', label: '玄幻' },
-  { id: 'history', label: '历史' },
-  { id: 'social', label: '世情' },
-  { id: 'suspense', label: '悬疑' },
-  { id: 'sci-fi', label: '科幻' },
 ];
 
-const SUB_CATEGORIES: { id: PromptSubCategory | 'all'; label: string }[] = [
-    { id: 'idea', label: '创意' },
-    { id: 'golden_finger', label: '金手指' },
-    { id: 'character_design', label: '人物设定' },
-    { id: 'worldview', label: '世界观' },
-    { id: 'outline', label: '大纲' },
-    { id: 'detailed_outline', label: '细纲' },
-    { id: 'synopsis', label: '简介' },
-    { id: 'requirements', label: '写作要求' },
-    { id: 'style', label: '写作风格' },
-    { id: 'continue', label: '续写' },
-    { id: 'polish', label: '润色' },
-    { id: 'writing', label: '写稿' },
+const SUB_CATEGORIES: { id: PromptSubCategory | 'all'; label: string; group?: string }[] = [
+    { id: 'modern-romance', label: '现言', group: 'genre' },
+    { id: 'ancient-romance', label: '古言', group: 'genre' },
+    { id: 'period', label: '年代', group: 'genre' },
+    { id: 'apocalypse', label: '末世', group: 'genre' },
+    { id: 'urban', label: '都市', group: 'genre' },
+    { id: 'fantasy', label: '玄幻', group: 'genre' },
+    { id: 'history', label: '历史', group: 'genre' },
+    { id: 'social', label: '世情', group: 'genre' },
+    { id: 'suspense', label: '悬疑', group: 'genre' },
+    { id: 'sci-fi', label: '科幻', group: 'genre' },
+    { id: 'idea', label: '创意', group: 'func' },
+    { id: 'golden_finger', label: '金手指', group: 'func' },
+    { id: 'character_design', label: '人物设定', group: 'func' },
+    { id: 'worldview', label: '世界观', group: 'func' },
+    { id: 'outline', label: '大纲', group: 'func' },
+    { id: 'detailed_outline', label: '细纲', group: 'func' },
+    { id: 'synopsis', label: '简介', group: 'func' },
+    { id: 'requirements', label: '写作要求', group: 'func' },
+    { id: 'style', label: '写作风格', group: 'func' },
+    { id: 'continue', label: '续写', group: 'func' },
+    { id: 'polish', label: '润色', group: 'func' },
+    { id: 'writing', label: '写稿', group: 'func' },
 ];
 
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
@@ -69,7 +69,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 const userId = await getCurrentUserId();
                 setCurrentUserId(userId);
                 
-                // Fetch latest profile to get current nickname
                 let currentNickname = '社区用户';
                 const profile = await fetchUserProfile();
                 if(profile && profile.nickname) {
@@ -81,11 +80,11 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 if (fetchedData) {
                     const mappedPrompts: Prompt[] = fetchedData.map((p: any) => {
                         let appCat: PromptCategory = 'short-story';
-                        // Simple check to map legacy 'short'/'long'/'script' or keep new string
+                        // Map legacy or keep string
                         if(p.main_category === 'long') appCat = 'long-story';
                         else if(p.main_category === 'script') appCat = 'script';
                         else if(p.main_category === 'short') appCat = 'short-story';
-                        else appCat = p.main_category as PromptCategory; // Keep original if it's one of the new ones
+                        else appCat = p.main_category as PromptCategory;
                         
                         let parsedContent: any = {};
                         try {
@@ -94,11 +93,13 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                             parsedContent = { template: p.content, description: p.description };
                         }
 
-                        // Use current nickname if user is the owner, otherwise use stored/fetched author name
                         let authorName = p.profiles?.username || parsedContent.authorName || '社区用户';
                         if (p.user_id === userId) {
                             authorName = currentNickname;
                         }
+
+                        // Prefer subCategories from JSON content to support multiple tags, fall back to DB column
+                        const tags = parsedContent.subCategories || (p.sub_category ? [p.sub_category as any] : []);
 
                         return {
                             id: p.id,
@@ -106,7 +107,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                             description: p.description || parsedContent.description || '用户自定义提示词',
                             content: parsedContent.template || p.content,
                             category: appCat,
-                            subCategories: p.sub_category ? [p.sub_category as any] : [],
+                            subCategories: tags,
                             fields: parsedContent.fields || [], 
                             template: parsedContent.template || p.content,
                             heat: p.usage_count || 0,
@@ -132,14 +133,15 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             template: data.template,
             fields: data.fields,
             description: data.description,
-            authorName: userNickname // Store nickname in content for display without JOIN
+            authorName: userNickname,
+            subCategories: data.subCategories // Store ALL tags in content JSON
         };
         const contentString = JSON.stringify(contentObject);
         
+        // Use first tag for legacy DB column column if needed for basic query, though we rely on JSON for full list
         const subCat = data.subCategories && data.subCategories.length > 0 ? data.subCategories[0] : 'idea';
 
         if (promptId) {
-            // Update Existing
             const { success, error } = await updatePrompt(promptId, {
                 title: data.title,
                 content: contentString,
@@ -165,7 +167,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 return p;
             }));
         } else {
-            // Create New
             const { success, error } = await savePrompt(data.title, contentString, data.category, subCat);
 
             if (!success) {
@@ -173,7 +174,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 return;
             }
             
-            // Reload to get the real ID and Data from DB
             window.location.reload(); 
         }
 
@@ -231,7 +231,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
 
             if (!categoryMatch) return false;
             
-            const subCategoryMatch = activeSubCategory === 'all' || prompt.subCategories.includes(activeSubCategory as PromptSubCategory);
+            const subCategoryMatch = activeSubCategory === 'all' || (prompt.subCategories && prompt.subCategories.includes(activeSubCategory as PromptSubCategory));
             if (!subCategoryMatch) return false;
 
             if (!term) return true;
@@ -260,7 +260,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 isOpen={isDetailModalOpen}
                 onClose={() => setDetailModalOpen(false)}
                 prompt={selectedPrompt}
-                // No onRun passed here to disable execution in Library view
             />
             
             <div className="mb-8 flex-shrink-0">
@@ -316,11 +315,23 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                             className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
                             全部标签
                         </button>
-                        {SUB_CATEGORIES.map(cat => (
+                        {/* Render functional tags first */}
+                        {SUB_CATEGORIES.filter(c => c.group !== 'genre').map(cat => (
                             <button 
                                 key={cat.id}
                                 onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
                                 className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+                                {cat.label}
+                            </button>
+                        ))}
+                        {/* Divider if needed, or simple space */}
+                        <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1"></div>
+                        {/* Render genre tags */}
+                        {SUB_CATEGORIES.filter(c => c.group === 'genre').map(cat => (
+                            <button 
+                                key={cat.id}
+                                onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
+                                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-300 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
                                 {cat.label}
                             </button>
                         ))}

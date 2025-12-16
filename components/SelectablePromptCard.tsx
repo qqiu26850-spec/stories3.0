@@ -12,19 +12,10 @@ const CATEGORY_LABELS: Record<string, string> = {
     'long-story': '长篇',
     'short-story': '短篇',
     'script': '剧本',
-    'modern-romance': '现言',
-    'ancient-romance': '古言',
-    'period': '年代',
-    'apocalypse': '末世',
-    'urban': '都市',
-    'fantasy': '玄幻',
-    'history': '历史',
-    'social': '世情',
-    'suspense': '悬疑',
-    'sci-fi': '科幻'
 };
 
 const SUB_CATEGORY_LABELS: Record<string, string> = {
+    // Functions
     'idea': '创意',
     'golden_finger': '金手指',
     'character_design': '人设',
@@ -37,7 +28,18 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'continue': '续写',
     'polish': '润色',
     'proofread': '校对',
-    'writing': '写稿'
+    'writing': '写稿',
+    // Genres
+    'modern-romance': '现言',
+    'ancient-romance': '古言',
+    'period': '年代',
+    'apocalypse': '末世',
+    'urban': '都市',
+    'fantasy': '玄幻',
+    'history': '历史',
+    'social': '世情',
+    'suspense': '悬疑',
+    'sci-fi': '科幻'
 };
 
 const SelectablePromptCard: React.FC<SelectablePromptCardProps> = ({ prompt, onSelect }) => {
@@ -59,7 +61,7 @@ const SelectablePromptCard: React.FC<SelectablePromptCardProps> = ({ prompt, onS
              <span className={`px-2 py-0.5 rounded text-[10px] font-medium border bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-900/20 dark:border-sky-800`}>
                 {CATEGORY_LABELS[prompt.category] || prompt.category}
             </span>
-            {prompt.subCategories && prompt.subCategories.slice(0, 2).map((sub) => (
+            {prompt.subCategories && prompt.subCategories.slice(0, 3).map((sub) => (
                 <span key={sub} className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-600">
                     {SUB_CATEGORY_LABELS[sub] || sub}
                 </span>

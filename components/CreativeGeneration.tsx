@@ -51,13 +51,16 @@ const PromptSelectionModal: React.FC<{
                         parsedContent = { template: p.content };
                     }
 
+                    // Prefer subCategories from JSON content, fallback to DB col
+                    const tags = parsedContent.subCategories || (p.sub_category ? [p.sub_category as any] : []);
+
                     return {
                         id: p.id,
                         title: p.title,
                         description: parsedContent.description || '用户自定义提示词',
                         content: parsedContent.template || p.content,
                         category: appCat,
-                        subCategories: p.sub_category ? [p.sub_category as any] : [],
+                        subCategories: tags,
                         fields: parsedContent.fields || [],
                         template: parsedContent.template || p.content,
                         heat: 0,

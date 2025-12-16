@@ -16,6 +16,9 @@ const CATEGORIES: { id: PromptCategory; label: string }[] = [
     { id: 'short-story', label: '短篇小说' },
     { id: 'long-story', label: '长篇小说' },
     { id: 'script', label: '剧本' },
+];
+
+const GENRE_TAGS: { id: PromptSubCategory; label: string }[] = [
     { id: 'modern-romance', label: '现言' },
     { id: 'ancient-romance', label: '古言' },
     { id: 'period', label: '年代' },
@@ -28,7 +31,7 @@ const CATEGORIES: { id: PromptCategory; label: string }[] = [
     { id: 'sci-fi', label: '科幻' },
 ];
 
-const TAG_OPTIONS: { id: PromptSubCategory; label: string }[] = [
+const FUNCTION_TAGS: { id: PromptSubCategory; label: string }[] = [
     { id: 'idea', label: '创意' },
     { id: 'golden_finger', label: '金手指' },
     { id: 'character_design', label: '人物设定' },
@@ -106,7 +109,8 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 if (prev.length <= 1) return prev;
                 return prev.filter(t => t !== tag);
             } else {
-                if (prev.length >= 3) return prev;
+                // Limit max tags if needed, e.g. max 5 to allow mixed usage
+                if (prev.length >= 5) return prev;
                 return [...prev, tag];
             }
         });
@@ -175,24 +179,51 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">功能标签 (多选)</label>
-                        <div className="flex flex-wrap gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-800">
-                            {TAG_OPTIONS.map(tag => (
-                                <button
-                                    key={tag.id}
-                                    type="button"
-                                    onClick={() => toggleSubCategory(tag.id)}
-                                    className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
-                                        subCategories.includes(tag.id)
-                                        ? 'bg-sky-100 border-sky-500 text-sky-700 dark:bg-sky-900/50 dark:border-sky-400 dark:text-sky-300 shadow-sm'
-                                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                    }`}
-                                >
-                                    {tag.label}
-                                </button>
-                            ))}
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">标签选择 (多选)</label>
+                        <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-800">
+                            {/* Genre Tags */}
+                            <div>
+                                <span className="text-xs font-bold text-gray-400 mb-2 block uppercase">题材标签</span>
+                                <div className="flex flex-wrap gap-2">
+                                    {GENRE_TAGS.map(tag => (
+                                        <button
+                                            key={tag.id}
+                                            type="button"
+                                            onClick={() => toggleSubCategory(tag.id)}
+                                            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
+                                                subCategories.includes(tag.id)
+                                                ? 'bg-purple-100 border-purple-500 text-purple-700 dark:bg-purple-900/50 dark:border-purple-400 dark:text-purple-300 shadow-sm'
+                                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                            }`}
+                                        >
+                                            {tag.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            {/* Function Tags */}
+                            <div>
+                                <span className="text-xs font-bold text-gray-400 mb-2 block uppercase">功能标签</span>
+                                <div className="flex flex-wrap gap-2">
+                                    {FUNCTION_TAGS.map(tag => (
+                                        <button
+                                            key={tag.id}
+                                            type="button"
+                                            onClick={() => toggleSubCategory(tag.id)}
+                                            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
+                                                subCategories.includes(tag.id)
+                                                ? 'bg-sky-100 border-sky-500 text-sky-700 dark:bg-sky-900/50 dark:border-sky-400 dark:text-sky-300 shadow-sm'
+                                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                            }`}
+                                        >
+                                            {tag.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
-                        <p className="text-xs text-gray-400 mt-1.5 ml-1">请选择 1-3 个标签，精准定位功能</p>
+                        <p className="text-xs text-gray-400 mt-1.5 ml-1">可组合选择题材与功能</p>
                     </div>
 
                     <div>
