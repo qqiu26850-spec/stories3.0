@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Prompt } from './types';
 import Sidebar from './components/Sidebar';
 import AuthModal from './components/AuthModal';
-import { getCurrentUserId, signOut, checkUserStatus } from './services/supabaseService';
+import { getCurrentUserId, signOut } from './services/supabaseService';
 
 // --- Static Imports for Instant Access & Data Persistence ---
 import CreativeGeneration from './components/CreativeGeneration';
@@ -30,10 +30,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
-        // Strict check: Not just if session exists, but if account is valid (not soft deleted)
-        const isValid = await checkUserStatus();
-        
-        if (isValid) {
+        const userId = await getCurrentUserId();
+        if (userId) {
             setIsAuthenticated(true);
             setShowAuthModal(false);
         } else {
