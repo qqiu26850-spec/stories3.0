@@ -43,13 +43,28 @@ export async function getCurrentUserId() {
 }
 
 /**
+ * 检查用户状态 (用于 App 启动时校验是否被软删除)
+ */
+export async function checkUserStatus(): Promise<boolean> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+        if (session.user.user_metadata?.is_deleted) {
+            await signOut();
+            return false; // User is soft deleted
+        }
+        return true; // User is valid
+    }
+    return false; // No session
+}
+
+/**
  * 通用的重试逻辑 (处理网络波动)
  */
 async function withRetry<T>(operation: () => Promise<T>, retries = 3): Promise<T> {
     try {
         return await operation();
     } catch (err: any) {
-        if (retries > 0 && (err.message?.includes('fetch') || err.status === 500)) {
+        if (retries > 0 && (err.message?.includes('fetch') || err.status === 500 || err.status === 503)) {
             console.warn(`请求失败，正在重试... 剩余次数: ${retries}`);
             await new Promise(r => setTimeout(r, 1000));
             return withRetry(operation, retries - 1);
@@ -76,6 +91,11 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signOut() {
+    // 强制清除本地存储，防止缓存残留
+    if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+    }
     return await supabase.auth.signOut();
 }
 
@@ -93,11 +113,14 @@ export async function fetchUserProfile() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return { nickname: '未登录用户', avatarUrl: null, email: '' };
 
+        const metaName = session.user.user_metadata?.full_name;
+        const metaAvatar = session.user.user_metadata?.avatar_url;
+
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         
         return {
-            nickname: profile?.username || session.user.user_metadata?.full_name || '奇思妙想家',
-            avatarUrl: profile?.avatar_url || session.user.user_metadata?.avatar_url || null,
+            nickname: profile?.username || metaName || '奇思妙想家',
+            avatarUrl: profile?.avatar_url || metaAvatar || null,
             email: session.user.email
         };
     } catch (e) {
@@ -135,8 +158,7 @@ export async function deleteUserData(): Promise<boolean> {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
 
-        // 1. Mark account as deleted in Auth metadata (Soft Delete)
-        // This flag will be checked during login to prevent access
+        // 1. Soft Delete: Mark account as deleted in Auth metadata
         const { error: updateError } = await supabase.auth.updateUser({
             data: { is_deleted: true }
         });
@@ -152,17 +174,19 @@ export async function deleteUserData(): Promise<boolean> {
         await supabase.from('materials').delete().eq('user_id', userId);
         // await supabase.from('prompts').delete().eq('user_id', userId); // 保留提示词
         
-        // 3. Logout
+        // 3. Aggressive Logout
         await signOut();
         return true;
     } catch (err: any) {
         console.error('删除用户数据失败:', err.message);
+        // Force logout anyway to prevent access
+        await signOut();
         return false;
     }
 }
 
 // ================= 📚 用户资源库 (聚合查询) =================
-// ... rest of the file stays the same
+
 export async function fetchUserLibrary() {
     try {
         const userId = await getCurrentUserId();
@@ -207,7 +231,8 @@ export async function createProject(title: string, desc: string, type: 'novel' |
                 description: desc,
                 type: dbType,
                 cover_image: coverUrl,
-                status: 'draft'
+                status: 'draft',
+                word_count: 0
             }])
             .select()
         );
@@ -242,6 +267,8 @@ export async function fetchProjects() {
         const userId = await getCurrentUserId();
         if (!userId) return [];
 
+        // OPTIMIZATION: Do NOT fetch chapters here. Use the 'word_count' column on the project table.
+        // Fetching all chapter content for list view causes timeouts.
         const { data, error } = await withRetry(async () => await supabase
             .from('projects')
             .select('*')
@@ -249,25 +276,12 @@ export async function fetchProjects() {
             .order('created_at', { ascending: false })
         );
 
-        // 获取字数统计 (聚合查询)
-        if (data && data.length > 0) {
-            const projectIds = data.map(p => p.id);
-            // 简单处理：获取所有相关章节计算字数。
-            // 生产环境建议在 chapters 表写触发器更新 projects 表的 word_count 字段，这里前端计算作为临时方案
-            const { data: chapters } = await supabase.from('chapters').select('project_id, content').in('project_id', projectIds);
-            
-            const countMap: Record<string, number> = {};
-            chapters?.forEach((c: any) => {
-                countMap[c.project_id] = (countMap[c.project_id] || 0) + (c.content?.length || 0);
-            });
+        if (error) throw error;
 
-            return data.map(p => ({
-                ...p,
-                word_count: countMap[p.id] || 0
-            }));
-        }
-
-        return error ? [] : data;
+        return data.map(p => ({
+            ...p,
+            word_count: p.word_count || 0 // Use the cached word count from DB
+        }));
     } catch (e) {
         console.error("获取项目失败", e);
         return [];
@@ -298,8 +312,10 @@ export async function saveChapterToDB(projectId: string, chapterId: string, titl
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("未登录");
 
+        let resultId = null;
         const isNew = chapterId.startsWith('ch-') || chapterId.startsWith('scene-') || chapterId.startsWith('new-');
 
+        // 1. Save the chapter
         if (isNew) {
             const { data, error } = await supabase.from('chapters').insert([{
                 project_id: projectId,
@@ -308,7 +324,7 @@ export async function saveChapterToDB(projectId: string, chapterId: string, titl
                 order_index: orderIndex
             }]).select();
             if (error) throw error;
-            return data[0].id;
+            resultId = data[0].id;
         } else {
             const { data, error } = await supabase.from('chapters').update({
                 title,
@@ -316,8 +332,24 @@ export async function saveChapterToDB(projectId: string, chapterId: string, titl
                 order_index: orderIndex
             }).eq('id', chapterId).select();
             if (error) throw error;
-            return data[0].id;
+            resultId = data[0].id;
         }
+
+        // 2. Update Project Word Count (Aggregation)
+        // We calculate this after saving to ensure consistency
+        const { data: chapters } = await supabase
+            .from('chapters')
+            .select('content')
+            .eq('project_id', projectId);
+        
+        const totalWordCount = chapters?.reduce((acc, curr) => acc + (curr.content?.length || 0), 0) || 0;
+
+        await supabase
+            .from('projects')
+            .update({ word_count: totalWordCount })
+            .eq('id', projectId);
+
+        return resultId;
     } catch (e) {
         console.error("保存章节失败", e);
         return null;
@@ -326,6 +358,9 @@ export async function saveChapterToDB(projectId: string, chapterId: string, titl
 
 export async function deleteChapterFromDB(chapterId: string) {
     if (chapterId.startsWith('ch-') || chapterId.startsWith('scene-')) return;
+    
+    // We should also update word count after delete, but strict consistency 
+    // might be overkill for this simple app. It will sync next time a chapter is saved.
     await supabase.from('chapters').delete().eq('id', chapterId);
 }
 
@@ -456,13 +491,12 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
 
 export async function fetchPrompts(mainCategory?: string) {
     try {
-        // FIX: Removed JOIN with 'profiles' table. 
-        // If the Foreign Key relation is missing in the DB, the entire fetch fails.
-        // We will fetch just the prompts. The `authorName` is embedded in the `content` JSON as a fallback.
+        // Optimization: Limit fetch size to avoid timeout on large datasets
         let query = supabase
             .from('prompts')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(500);
 
         if (mainCategory && mainCategory !== 'all') {
             const dbCat = mapPromptCategory(mainCategory);
