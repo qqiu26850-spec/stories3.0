@@ -416,6 +416,8 @@ export async function savePrompt(title: string, content: string, mainCat: string
             console.error("Supabase Save Error:", error);
             throw error;
         }
+        // Invalidate Cache
+        promptsCache = null;
         return { success: true };
 
     } catch (err: any) {
@@ -449,17 +451,32 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
             .eq('user_id', userId);
 
         if (error) throw error;
+        // Invalidate Cache
+        promptsCache = null;
         return { success: true };
     } catch (err: any) {
         return { success: false, error: err };
     }
 }
 
-export async function fetchPrompts(mainCategory?: string) {
+// Simple Cache to avoid repeated fetches for Modal
+let promptsCache: any[] | null = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 60000 * 5; // 5 minutes cache
+
+export async function fetchPrompts(mainCategory?: string, forceRefresh = false) {
     try {
-        // FIX: Removed JOIN with 'profiles' table. 
-        // If the Foreign Key relation is missing in the DB, the entire fetch fails.
-        // We will fetch just the prompts. The `authorName` is embedded in the `content` JSON as a fallback.
+        const now = Date.now();
+        if (!forceRefresh && promptsCache && (now - lastFetchTime < CACHE_DURATION)) {
+            // Serve from cache
+            let data = promptsCache;
+            if (mainCategory && mainCategory !== 'all') {
+                const dbCat = mapPromptCategory(mainCategory);
+                data = data.filter(p => p.main_category === dbCat);
+            }
+            return data;
+        }
+
         let query = supabase
             .from('prompts')
             .select('*')
@@ -475,6 +492,17 @@ export async function fetchPrompts(mainCategory?: string) {
             console.error("Fetch Prompts Error:", error);
             return [];
         }
+        
+        // Update cache only if we fetched everything (no filter) or merge? 
+        // For simplicity, caching works best if we fetch ALL prompts once.
+        // If mainCategory is provided, we won't cache partial result generally, 
+        // but here we can just cache the request result if it's the full list.
+        // Let's optimize: Always fetch ALL for cache if mainCategory is not provided.
+        if (!mainCategory || mainCategory === 'all') {
+            promptsCache = data;
+            lastFetchTime = now;
+        }
+
         return data;
     } catch (e) { 
         console.error("Fetch Prompts Exception:", e);
@@ -497,6 +525,7 @@ export async function deletePrompt(id: string) {
     const userId = await getCurrentUserId();
     if (!userId) return;
     await supabase.from('prompts').delete().eq('id', id).eq('user_id', userId);
+    promptsCache = null; // Invalidate
 }
 
 // ================= 🖼️ 文件存储 (Storage) =================

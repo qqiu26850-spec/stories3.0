@@ -125,7 +125,7 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
                     <div>
                         <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">封面预览</label>
                         <div className="flex items-start gap-4">
-                            <div className="w-28 h-40 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 flex-shrink-0 overflow-hidden shadow-sm relative group">
+                            <div className="w-28 aspect-[2/3] bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 flex-shrink-0 overflow-hidden shadow-sm relative group">
                                 {coverPreview ? (
                                     <img src={coverPreview} alt="封面预览" className="w-full h-full object-cover" />
                                 ) : (

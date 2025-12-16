@@ -7,6 +7,7 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import PromptDetailModal from './PromptDetailModal';
 import { Plus, Heart, UserCircle } from './Icon';
 import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt, incrementPromptHeat } from '../services/supabaseService';
+import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
 
 interface PromptLibraryProps {
     onNavigateToGeneration?: (prompt: Prompt, values: Record<string, string>) => void;
@@ -20,39 +21,9 @@ const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'script', label: '剧本' },
 ];
 
-const FUNCTIONAL_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
-    { id: 'idea', label: '创意' },
-    { id: 'golden_finger', label: '金手指' },
-    { id: 'character_design', label: '人物设定' },
-    { id: 'worldview', label: '世界观' },
-    { id: 'outline', label: '大纲' },
-    { id: 'detailed_outline', label: '细纲' },
-    { id: 'synopsis', label: '简介' },
-    { id: 'requirements', label: '写作要求' },
-    { id: 'style', label: '写作风格' },
-    { id: 'continue', label: '续写' },
-    { id: 'polish', label: '润色' },
-    { id: 'writing', label: '写稿' },
-];
-
-const GENRE_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
-    { id: 'modern-romance', label: '现言' },
-    { id: 'ancient-romance', label: '古言' },
-    { id: 'period', label: '年代' },
-    { id: 'apocalypse', label: '末世' },
-    { id: 'urban', label: '都市' },
-    { id: 'fantasy', label: '玄幻' },
-    { id: 'history', label: '历史' },
-    { id: 'social', label: '世情' },
-    { id: 'suspense', label: '悬疑' },
-    { id: 'sci-fi', label: '科幻' },
-];
-
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('all');
-    // We can store active tags for both rows if we want multi-filter, or just one generic filter.
-    // For simplicity, let's allow `activeSubCategory` to match EITHER list.
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
     
     const [searchTerm, setSearchTerm] = useState('');
@@ -82,7 +53,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                     currentNickname = profile.nickname;
                 }
 
-                const fetchedData = await fetchPrompts(); 
+                const fetchedData = await fetchPrompts('all'); // Utilize cache via service
                 if (fetchedData) {
                     const mappedPrompts: Prompt[] = fetchedData.map((p: any) => {
                         let appCat: PromptCategory = 'short-story';

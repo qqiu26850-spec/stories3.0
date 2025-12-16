@@ -13,7 +13,7 @@ interface ProjectCardProps {
 const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete, onEdit, onSelect }) => {
     return (
         <div className="group relative flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-md border border-gray-200 dark:border-gray-800 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 h-full">
-            <div onClick={onSelect} className="cursor-pointer relative group/image h-48 sm:h-56 bg-gray-100 dark:bg-gray-800 overflow-hidden">
+            <div onClick={onSelect} className="cursor-pointer relative group/image aspect-[2/3] w-full bg-gray-100 dark:bg-gray-800 overflow-hidden border-b border-gray-100 dark:border-gray-800">
                 {project.coverImage ? (
                     <img src={project.coverImage} alt={`${project.title} cover`} className="w-full h-full object-cover transition-transform duration-500 group-hover/image:scale-105" />
                 ) : (

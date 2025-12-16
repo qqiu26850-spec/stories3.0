@@ -3,10 +3,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
-import { fetchMaterials, fetchPrompts, incrementPromptHeat } from '../../services/supabaseService';
+import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
 import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash } from '../Icon';
-import SelectablePromptCard from '../SelectablePromptCard';
+import PromptSelectionModal from '../PromptSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
 
 type ShortStoryTab = 'original' | 'imitate' | 'polish' | 'review';
@@ -50,60 +50,6 @@ const AssetSelectionModal: React.FC<{
                     {assets.length === 0 && <div className="text-center text-gray-500 py-8">暂无素材</div>}
                 </div>
                 <button onClick={onClose} className="mt-4 w-full py-2 bg-sky-600 text-white rounded-lg font-bold">确定</button>
-            </div>
-        </div>,
-        document.body
-    );
-};
-
-const PromptSelectionModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onSelectPrompt: (prompt: Prompt) => void;
-}> = ({ isOpen, onClose, onSelectPrompt }) => {
-    const [localPrompts, setLocalPrompts] = useState<Prompt[]>([]);
-    
-    useEffect(() => {
-        if(isOpen) {
-            const load = async () => {
-                const dbPrompts = await fetchPrompts();
-                const mapped = dbPrompts ? dbPrompts.map((p: any) => {
-                    let parsed: any = {};
-                    try { parsed = JSON.parse(p.content); } catch (e) {}
-                    return {
-                        id: p.id,
-                        title: p.title,
-                        description: parsed.description || p.description,
-                        content: parsed.template || p.content,
-                        category: p.main_category === 'long' ? 'long-story' : p.main_category === 'script' ? 'script' : 'short-story',
-                        subCategories: p.sub_category ? [p.sub_category] : [],
-                        fields: parsed.fields || [],
-                        template: parsed.template || p.content,
-                        heat: p.usage_count,
-                        creator: 'user'
-                    } as Prompt;
-                }) : [];
-                setLocalPrompts([...mapped, ...PROMPTS]);
-            };
-            load();
-        }
-    }, [isOpen]);
-
-    if (!isOpen) return null;
-    return createPortal(
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col animate-fade-in-up" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-800">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">选择提示词模板</h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-black/20">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {localPrompts.map(p => (
-                            <SelectablePromptCard key={p.id} prompt={p} onSelect={() => { onSelectPrompt(p); onClose(); }} />
-                        ))}
-                    </div>
-                </div>
             </div>
         </div>,
         document.body
@@ -303,7 +249,10 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
             <PromptSelectionModal 
                 isOpen={isPromptModalOpen}
                 onClose={() => setPromptModalOpen(false)}
-                onSelectPrompt={setSelectedPrompt}
+                onSelect={(prompt) => {
+                    setSelectedPrompt(prompt);
+                    setPromptModalOpen(false);
+                }}
             />
 
             <div className="flex border-b border-gray-200 dark:border-gray-800">

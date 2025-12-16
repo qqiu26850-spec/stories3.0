@@ -1,5 +1,33 @@
 
-import { CreativeModule, Prompt, Asset, Workflow } from './types';
+import { CreativeModule, Prompt, Asset, Workflow, PromptSubCategory } from './types';
+
+export const FUNCTIONAL_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
+    { id: 'idea', label: '创意' },
+    { id: 'golden_finger', label: '金手指' },
+    { id: 'character_design', label: '人物设定' },
+    { id: 'worldview', label: '世界观' },
+    { id: 'outline', label: '大纲' },
+    { id: 'detailed_outline', label: '细纲' },
+    { id: 'synopsis', label: '简介' },
+    { id: 'requirements', label: '写作要求' },
+    { id: 'style', label: '写作风格' },
+    { id: 'continue', label: '续写' },
+    { id: 'polish', label: '润色' },
+    { id: 'writing', label: '写稿' },
+];
+
+export const GENRE_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
+    { id: 'modern-romance', label: '现言' },
+    { id: 'ancient-romance', label: '古言' },
+    { id: 'period', label: '年代' },
+    { id: 'apocalypse', label: '末世' },
+    { id: 'urban', label: '都市' },
+    { id: 'fantasy', label: '玄幻' },
+    { id: 'history', label: '历史' },
+    { id: 'social', label: '世情' },
+    { id: 'suspense', label: '悬疑' },
+    { id: 'sci-fi', label: '科幻' },
+];
 
 export const CREATIVE_MODULES: CreativeModule[] = [
   {
