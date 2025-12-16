@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Prompt } from '../types';
-import { Fire } from './Icon';
+import { Fire, UserCircle } from './Icon';
 
 interface SelectablePromptCardProps {
   prompt: Prompt;
@@ -56,23 +56,32 @@ const SelectablePromptCard: React.FC<SelectablePromptCardProps> = ({ prompt, onS
         {prompt.description}
       </p>
 
-      <div className="mt-auto pt-3 border-t border-gray-100 dark:border-gray-700 w-full">
-          <div className="flex flex-wrap gap-1.5 mb-2">
-             <span className={`px-2 py-0.5 rounded text-[10px] font-medium border bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-900/20 dark:border-sky-800`}>
+      {/* Single Line Footer */}
+      <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700 w-full mt-auto gap-2">
+          
+          {/* Left: Tags */}
+          <div className="flex items-center gap-1.5 overflow-hidden">
+             <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-900/20 dark:border-sky-800`}>
                 {CATEGORY_LABELS[prompt.category] || prompt.category}
             </span>
-            {prompt.subCategories && prompt.subCategories.slice(0, 3).map((sub) => (
-                <span key={sub} className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-600">
+            {prompt.subCategories && prompt.subCategories.slice(0, 2).map((sub) => (
+                <span key={sub} className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-600 whitespace-nowrap">
                     {SUB_CATEGORY_LABELS[sub] || sub}
                 </span>
             ))}
           </div>
-          <div className="flex items-center justify-between text-xs text-gray-400">
+
+          {/* Right: Meta */}
+          <div className="flex items-center gap-3 flex-shrink-0 text-xs text-gray-400">
              <div className="flex items-center gap-1 text-orange-400">
                 <Fire className="w-3 h-3" />
                 <span>{prompt.heat}</span>
              </div>
-             <span className="text-sky-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">选择 →</span>
+             <div className="flex items-center gap-1 hidden sm:flex">
+                <UserCircle className="w-3 h-3" />
+                <span className="truncate max-w-[50px]">{prompt.creator === 'system' ? '官方' : (prompt.authorName || '用户')}</span>
+             </div>
+             <span className="text-sky-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">选择</span>
           </div>
       </div>
     </button>
