@@ -17,7 +17,6 @@ interface CreativeGenerationProps {
     onClearInitialData?: () => void;
 }
 
-// ... PromptSelectionModal and ImportAssetModal ...
 const PROMPT_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'all', label: '全部' },
   { id: 'long-story', label: '长篇' },
@@ -30,7 +29,6 @@ const PromptSelectionModal: React.FC<{
     onClose: () => void;
     onSelect: (prompt: Prompt) => void;
 }> = ({ isOpen, onClose, onSelect }) => {
-    // ... same implementation ...
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [allPrompts, setAllPrompts] = useState<Prompt[]>(PROMPTS);
@@ -42,7 +40,9 @@ const PromptSelectionModal: React.FC<{
                 const mapped: Prompt[] = dbPrompts.map((p: any) => {
                     let appCat: PromptCategory = 'short-story';
                     if(p.main_category === 'long') appCat = 'long-story';
-                    if(p.main_category === 'script') appCat = 'script';
+                    else if(p.main_category === 'script') appCat = 'script';
+                    else if(p.main_category === 'short') appCat = 'short-story';
+                    else appCat = p.main_category as PromptCategory;
                     
                     let parsedContent: any = {};
                     try {
@@ -84,7 +84,7 @@ const PromptSelectionModal: React.FC<{
 
     return createPortal(
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col relative animate-fade-in-up overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col relative animate-fade-in-up overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
                     <div className="flex items-center gap-6">
                         <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -126,7 +126,7 @@ const PromptSelectionModal: React.FC<{
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-black/20">
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {filteredPrompts.length > 0 ? filteredPrompts.map(prompt => (
                             <div key={prompt.id} className="h-full transform hover:scale-[1.02] transition-transform">
                                 <SelectablePromptCard

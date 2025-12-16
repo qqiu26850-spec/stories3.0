@@ -39,7 +39,11 @@ export interface PromptField {
   placeholder: string;
 }
 
-export type PromptCategory = 'short-story' | 'long-story' | 'script';
+export type PromptCategory = 
+  'short-story' | 'long-story' | 'script' | 
+  'modern-romance' | 'ancient-romance' | 'period' | 'apocalypse' | 
+  'urban' | 'fantasy' | 'history' | 'social' | 'suspense' | 'sci-fi';
+
 export type PromptSubCategory = 
   'style' | 'requirements' | 'continue' | 'polish' | 'proofread' | 
   'idea' | 'golden_finger' | 'character_design' | 'worldview' | 'outline' | 'detailed_outline' | 'synopsis' | 'writing';

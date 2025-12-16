@@ -18,6 +18,16 @@ const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'short-story', label: '短篇小说' },
   { id: 'long-story', label: '长篇小说' },
   { id: 'script', label: '剧本' },
+  { id: 'modern-romance', label: '现言' },
+  { id: 'ancient-romance', label: '古言' },
+  { id: 'period', label: '年代' },
+  { id: 'apocalypse', label: '末世' },
+  { id: 'urban', label: '都市' },
+  { id: 'fantasy', label: '玄幻' },
+  { id: 'history', label: '历史' },
+  { id: 'social', label: '世情' },
+  { id: 'suspense', label: '悬疑' },
+  { id: 'sci-fi', label: '科幻' },
 ];
 
 const SUB_CATEGORIES: { id: PromptSubCategory | 'all'; label: string }[] = [
@@ -37,7 +47,7 @@ const SUB_CATEGORIES: { id: PromptSubCategory | 'all'; label: string }[] = [
 
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
     const [prompts, setPrompts] = useState<Prompt[]>([]);
-    const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('short-story');
+    const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('all');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
@@ -71,8 +81,11 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 if (fetchedData) {
                     const mappedPrompts: Prompt[] = fetchedData.map((p: any) => {
                         let appCat: PromptCategory = 'short-story';
+                        // Simple check to map legacy 'short'/'long'/'script' or keep new string
                         if(p.main_category === 'long') appCat = 'long-story';
-                        if(p.main_category === 'script') appCat = 'script';
+                        else if(p.main_category === 'script') appCat = 'script';
+                        else if(p.main_category === 'short') appCat = 'short-story';
+                        else appCat = p.main_category as PromptCategory; // Keep original if it's one of the new ones
                         
                         let parsedContent: any = {};
                         try {
@@ -231,7 +244,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     }, [activeTab, activeSubCategory, searchTerm, prompts, favoritedIds, currentUserId]);
 
     return (
-        <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in">
+        <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col">
             <CreatePromptModal
                 isOpen={isCreateModalOpen}
                 onClose={() => { setCreateModalOpen(false); setPromptToEdit(null); }}
@@ -250,102 +263,107 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 // No onRun passed here to disable execution in Library view
             />
             
-            <div className="mb-8">
+            <div className="mb-8 flex-shrink-0">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">提示词库</h1>
                 <p className="text-gray-500 dark:text-gray-400 mt-1">使用和创建专业的提示词，激发AI的无限潜能。</p>
             </div>
             
             {/* Top Navigation Bar */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                <div className="flex flex-wrap gap-4">
-                    {CATEGORY_TABS.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
-                            className={`px-6 py-2.5 rounded-xl font-semibold transition-all ${activeTab === tab.id ? 'bg-white dark:bg-gray-800 text-sky-600 dark:text-sky-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="flex flex-wrap gap-4">
-                     <button
-                        onClick={() => setActiveTab('my-prompts')}
-                        className={`px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all ${activeTab === 'my-prompts' ? 'bg-white dark:bg-gray-800 text-sky-600 dark:text-sky-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                        <UserCircle className="w-5 h-5" />
-                        我的提示词
-                    </button>
-                     <button
-                        onClick={() => setActiveTab('favorites')}
-                        className={`px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all ${activeTab === 'favorites' ? 'bg-white dark:bg-gray-800 text-sky-600 dark:text-sky-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                        <Heart className="w-5 h-5" />
-                        我的收藏
-                    </button>
-                    <button
-                        onClick={() => { setPromptToEdit(null); setCreateModalOpen(true); }}
-                        className="px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-                    >
-                        <Plus className="w-5 h-5" />
-                        创建提示词
-                    </button>
-                </div>
-            </div>
-
-            {/* Filters & Search */}
-            <div className="flex flex-col lg:flex-row gap-4 mb-6 justify-between">
-                <div className="flex flex-wrap gap-2">
-                    <button 
-                        onClick={() => setActiveSubCategory('all')}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${activeSubCategory === 'all' ? 'bg-sky-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
-                        全部
-                    </button>
-                    {SUB_CATEGORIES.map(cat => (
-                        <button 
-                            key={cat.id}
-                            onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${activeSubCategory === cat.id ? 'bg-sky-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
-                            {cat.label}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="relative w-full lg:w-72">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                        <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                        </svg>
-                    </span>
-                    <input
-                        type="text"
-                        placeholder="搜索标题或描述..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
-                    />
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredPrompts.map(prompt => (
-                    <PromptCard 
-                        key={prompt.id} 
-                        prompt={prompt}
-                        onSelect={handleSelectPrompt}
-                        onDelete={handleOpenDeleteModal}
-                        onEdit={handleEditPrompt}
-                        isFavorited={favoritedIds.has(prompt.id)}
-                        onToggleFavorite={toggleFavorite}
-                        isOwner={prompt.userId === currentUserId}
-                    />
-                ))}
-                {filteredPrompts.length === 0 && (
-                    <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
-                        <p>暂无相关提示词，快去创建一个吧！</p>
+            <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
+                <div className="flex justify-between items-center">
+                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1 mr-4">
+                        {CATEGORY_TABS.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as any)}
+                                className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
                     </div>
-                )}
+                    
+                    <div className="flex gap-2 flex-shrink-0">
+                         <button
+                            onClick={() => setActiveTab('my-prompts')}
+                            className={`p-2 rounded-xl font-semibold transition-all ${activeTab === 'my-prompts' ? 'bg-sky-100 text-sky-600 dark:bg-sky-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                            title="我的提示词"
+                        >
+                            <UserCircle className="w-5 h-5" />
+                        </button>
+                         <button
+                            onClick={() => setActiveTab('favorites')}
+                            className={`p-2 rounded-xl font-semibold transition-all ${activeTab === 'favorites' ? 'bg-red-100 text-red-600 dark:bg-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                            title="我的收藏"
+                        >
+                            <Heart className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => { setPromptToEdit(null); setCreateModalOpen(true); }}
+                            className="px-4 py-2 rounded-xl font-bold bg-sky-600 text-white hover:bg-sky-500 transition-all flex items-center gap-1 shadow-lg shadow-sky-500/30 text-sm"
+                        >
+                            <Plus className="w-4 h-4" />
+                            创建
+                        </button>
+                    </div>
+                </div>
+
+                {/* Filters & Search */}
+                <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-gray-100 dark:bg-gray-900/50 p-2 rounded-xl">
+                    <div className="flex flex-wrap gap-2 overflow-x-auto w-full lg:w-auto pb-1 lg:pb-0 scrollbar-hide">
+                        <button 
+                            onClick={() => setActiveSubCategory('all')}
+                            className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+                            全部标签
+                        </button>
+                        {SUB_CATEGORIES.map(cat => (
+                            <button 
+                                key={cat.id}
+                                onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
+                                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+                                {cat.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="relative w-full lg:w-64 flex-shrink-0">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                            <svg className="w-4 h-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                            </svg>
+                        </span>
+                        <input
+                            type="text"
+                            placeholder="搜索..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-4 py-1.5 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
+                    {filteredPrompts.map(prompt => (
+                        <div key={prompt.id} className="h-full">
+                            <PromptCard 
+                                prompt={prompt}
+                                onSelect={handleSelectPrompt}
+                                onDelete={handleOpenDeleteModal}
+                                onEdit={handleEditPrompt}
+                                isFavorited={favoritedIds.has(prompt.id)}
+                                onToggleFavorite={toggleFavorite}
+                                isOwner={prompt.userId === currentUserId}
+                            />
+                        </div>
+                    ))}
+                    {filteredPrompts.length === 0 && (
+                        <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
+                            <p>暂无相关提示词，快去创建一个吧！</p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

@@ -382,7 +382,8 @@ function mapPromptCategory(cat: string) {
     if (cat === 'short-story') return 'short';
     if (cat === 'long-story') return 'long';
     if (cat === 'script') return 'script';
-    return 'general';
+    // Return original string for new categories to allow storing them in DB
+    return cat;
 }
 
 export async function savePrompt(title: string, content: string, mainCat: string, subCat: string) {
