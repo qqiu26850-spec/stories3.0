@@ -20,35 +20,41 @@ const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'script', label: '剧本' },
 ];
 
-const SUB_CATEGORIES: { id: PromptSubCategory | 'all'; label: string; group?: string }[] = [
-    { id: 'modern-romance', label: '现言', group: 'genre' },
-    { id: 'ancient-romance', label: '古言', group: 'genre' },
-    { id: 'period', label: '年代', group: 'genre' },
-    { id: 'apocalypse', label: '末世', group: 'genre' },
-    { id: 'urban', label: '都市', group: 'genre' },
-    { id: 'fantasy', label: '玄幻', group: 'genre' },
-    { id: 'history', label: '历史', group: 'genre' },
-    { id: 'social', label: '世情', group: 'genre' },
-    { id: 'suspense', label: '悬疑', group: 'genre' },
-    { id: 'sci-fi', label: '科幻', group: 'genre' },
-    { id: 'idea', label: '创意', group: 'func' },
-    { id: 'golden_finger', label: '金手指', group: 'func' },
-    { id: 'character_design', label: '人物设定', group: 'func' },
-    { id: 'worldview', label: '世界观', group: 'func' },
-    { id: 'outline', label: '大纲', group: 'func' },
-    { id: 'detailed_outline', label: '细纲', group: 'func' },
-    { id: 'synopsis', label: '简介', group: 'func' },
-    { id: 'requirements', label: '写作要求', group: 'func' },
-    { id: 'style', label: '写作风格', group: 'func' },
-    { id: 'continue', label: '续写', group: 'func' },
-    { id: 'polish', label: '润色', group: 'func' },
-    { id: 'writing', label: '写稿', group: 'func' },
+const FUNCTIONAL_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
+    { id: 'idea', label: '创意' },
+    { id: 'golden_finger', label: '金手指' },
+    { id: 'character_design', label: '人物设定' },
+    { id: 'worldview', label: '世界观' },
+    { id: 'outline', label: '大纲' },
+    { id: 'detailed_outline', label: '细纲' },
+    { id: 'synopsis', label: '简介' },
+    { id: 'requirements', label: '写作要求' },
+    { id: 'style', label: '写作风格' },
+    { id: 'continue', label: '续写' },
+    { id: 'polish', label: '润色' },
+    { id: 'writing', label: '写稿' },
+];
+
+const GENRE_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
+    { id: 'modern-romance', label: '现言' },
+    { id: 'ancient-romance', label: '古言' },
+    { id: 'period', label: '年代' },
+    { id: 'apocalypse', label: '末世' },
+    { id: 'urban', label: '都市' },
+    { id: 'fantasy', label: '玄幻' },
+    { id: 'history', label: '历史' },
+    { id: 'social', label: '世情' },
+    { id: 'suspense', label: '悬疑' },
+    { id: 'sci-fi', label: '科幻' },
 ];
 
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('all');
+    // We can store active tags for both rows if we want multi-filter, or just one generic filter.
+    // For simplicity, let's allow `activeSubCategory` to match EITHER list.
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
+    
     const [searchTerm, setSearchTerm] = useState('');
     const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -80,7 +86,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 if (fetchedData) {
                     const mappedPrompts: Prompt[] = fetchedData.map((p: any) => {
                         let appCat: PromptCategory = 'short-story';
-                        // Map legacy or keep string
                         if(p.main_category === 'long') appCat = 'long-story';
                         else if(p.main_category === 'script') appCat = 'script';
                         else if(p.main_category === 'short') appCat = 'short-story';
@@ -98,7 +103,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                             authorName = currentNickname;
                         }
 
-                        // Prefer subCategories from JSON content to support multiple tags, fall back to DB column
                         const tags = parsedContent.subCategories || (p.sub_category ? [p.sub_category as any] : []);
 
                         return {
@@ -134,11 +138,9 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             fields: data.fields,
             description: data.description,
             authorName: userNickname,
-            subCategories: data.subCategories // Store ALL tags in content JSON
+            subCategories: data.subCategories 
         };
         const contentString = JSON.stringify(contentObject);
-        
-        // Use first tag for legacy DB column column if needed for basic query, though we rely on JSON for full list
         const subCat = data.subCategories && data.subCategories.length > 0 ? data.subCategories[0] : 'idea';
 
         if (promptId) {
@@ -148,11 +150,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 main_category: data.category,
                 sub_category: subCat
             });
-            
-            if (!success) {
-                alert(`更新失败: ${error?.message || '未知错误'}`);
-                return;
-            }
+            if (!success) { alert(`更新失败: ${error?.message || '未知错误'}`); return; }
             
             setPrompts(prev => prev.map(p => {
                 if (p.id === promptId) {
@@ -168,15 +166,9 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             }));
         } else {
             const { success, error } = await savePrompt(data.title, contentString, data.category, subCat);
-
-            if (!success) {
-                alert(`保存失败: ${error?.message || '未知错误'}`);
-                return;
-            }
-            
+            if (!success) { alert(`保存失败: ${error?.message || '未知错误'}`); return; }
             window.location.reload(); 
         }
-
         setCreateModalOpen(false);
         setPromptToEdit(null);
     };
@@ -243,6 +235,19 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         });
     }, [activeTab, activeSubCategory, searchTerm, prompts, favoritedIds, currentUserId]);
 
+    const renderTagButton = (cat: { id: PromptSubCategory | 'all'; label: string }, isGenre: boolean) => (
+        <button 
+            key={cat.id}
+            onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
+            className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
+                activeSubCategory === cat.id 
+                ? (isGenre ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 ring-1 ring-purple-500/50' : 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-1 ring-sky-500/50')
+                : 'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}>
+            {cat.label}
+        </button>
+    );
+
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col">
             <CreatePromptModal
@@ -285,17 +290,19 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                     <div className="flex gap-2 flex-shrink-0">
                          <button
                             onClick={() => setActiveTab('my-prompts')}
-                            className={`p-2 rounded-xl font-semibold transition-all ${activeTab === 'my-prompts' ? 'bg-sky-100 text-sky-600 dark:bg-sky-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'my-prompts' ? 'bg-sky-100 text-sky-600 dark:bg-sky-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                             title="我的提示词"
                         >
-                            <UserCircle className="w-5 h-5" />
+                            <UserCircle className="w-4 h-4" />
+                            我的提示词
                         </button>
                          <button
                             onClick={() => setActiveTab('favorites')}
-                            className={`p-2 rounded-xl font-semibold transition-all ${activeTab === 'favorites' ? 'bg-red-100 text-red-600 dark:bg-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600 dark:bg-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                             title="我的收藏"
                         >
-                            <Heart className="w-5 h-5" />
+                            <Heart className="w-4 h-4" />
+                            我的收藏
                         </button>
                         <button
                             onClick={() => { setPromptToEdit(null); setCreateModalOpen(true); }}
@@ -307,37 +314,28 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                     </div>
                 </div>
 
-                {/* Filters & Search */}
-                <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-gray-100 dark:bg-gray-900/50 p-2 rounded-xl">
-                    <div className="flex flex-wrap gap-2 overflow-x-auto w-full lg:w-auto pb-1 lg:pb-0 scrollbar-hide">
-                        <button 
-                            onClick={() => setActiveSubCategory('all')}
-                            className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
-                            全部标签
-                        </button>
-                        {/* Render functional tags first */}
-                        {SUB_CATEGORIES.filter(c => c.group !== 'genre').map(cat => (
+                {/* Filters & Search - Updated to 2 Lines */}
+                <div className="flex flex-col lg:flex-row gap-4 justify-between items-start bg-gray-100 dark:bg-gray-900/50 p-3 rounded-xl">
+                    <div className="flex-1 w-full space-y-2">
+                        {/* Row 1: Functional Tags */}
+                        <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide items-center">
+                            <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">功能:</span>
                             <button 
-                                key={cat.id}
-                                onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
-                                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
-                                {cat.label}
+                                onClick={() => setActiveSubCategory('all')}
+                                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}>
+                                全部
                             </button>
-                        ))}
-                        {/* Divider if needed, or simple space */}
-                        <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1"></div>
-                        {/* Render genre tags */}
-                        {SUB_CATEGORIES.filter(c => c.group === 'genre').map(cat => (
-                            <button 
-                                key={cat.id}
-                                onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
-                                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-300 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
-                                {cat.label}
-                            </button>
-                        ))}
+                            {FUNCTIONAL_TAGS.map(cat => renderTagButton(cat, false))}
+                        </div>
+                        
+                        {/* Row 2: Genre Tags */}
+                        <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide items-center border-t border-gray-200 dark:border-gray-700 pt-2">
+                            <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">题材:</span>
+                            {GENRE_TAGS.map(cat => renderTagButton(cat, true))}
+                        </div>
                     </div>
 
-                    <div className="relative w-full lg:w-64 flex-shrink-0">
+                    <div className="relative w-full lg:w-64 flex-shrink-0 self-center">
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3">
                             <svg className="w-4 h-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
@@ -348,7 +346,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                             placeholder="搜索..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-4 py-1.5 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
                         />
                     </div>
                 </div>

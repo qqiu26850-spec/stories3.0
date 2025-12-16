@@ -231,7 +231,7 @@ const ImportAssetModal: React.FC<{
     content: string;
     onSave: (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => void;
 }> = ({ isOpen, onClose, content, onSave }) => {
-    // ... (No changes here)
+    // ... same implementation ...
     const [name, setName] = useState('');
     const [assetContent, setAssetContent] = useState('');
     const [type, setType] = useState<Asset['type']>('inspiration');
@@ -583,10 +583,10 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                               </div>
                               <button 
                                   onClick={() => setPromptModalOpen(true)}
-                                  className="text-xs font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 transition-colors flex items-center gap-1"
+                                  className="px-4 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 rounded-full transition-all shadow-sm hover:shadow flex items-center gap-1"
                               >
                                   <Search className="w-3 h-3" />
-                                  更换模板
+                                  选择模板
                               </button>
                           </div>
 
@@ -631,7 +631,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                           className="w-full p-4 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none h-40 transition-shadow shadow-sm"
                                       />
                                       <div className="text-xs text-gray-400 text-center pt-2">
-                                          或者点击上方“更换模板”选择专业的结构化提示词
+                                          或者点击上方“选择模板”按钮使用专业提示词
                                       </div>
                                   </div>
                               )}
