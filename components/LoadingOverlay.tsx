@@ -21,9 +21,10 @@ interface LoadingOverlayProps {
     onStop?: () => void;
     onMinimize?: () => void;
     status?: 'loading' | 'success';
+    message?: string;
 }
 
-const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ isVisible, onClose, onStop, onMinimize, status = 'loading' }) => {
+const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ isVisible, onClose, onStop, onMinimize, status = 'loading', message }) => {
     const [seconds, setSeconds] = useState(0);
     const [tipIndex, setTipIndex] = useState(0);
     const [fade, setFade] = useState(true);
@@ -49,17 +50,17 @@ const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ isVisible, onClose, onS
     // Timer for seconds
     useEffect(() => {
         let interval: any;
-        if (isVisible && status === 'loading' && !isMinimized) {
+        if (isVisible && status === 'loading' && !isMinimized && !message) {
             interval = setInterval(() => {
                 setSeconds(s => s + 1);
             }, 1000);
         }
         return () => clearInterval(interval);
-    }, [isVisible, status, isMinimized]);
+    }, [isVisible, status, isMinimized, message]);
 
     // Timer for tips rotation
     useEffect(() => {
-        if (isVisible && status === 'loading' && !isMinimized) {
+        if (isVisible && status === 'loading' && !isMinimized && !message) {
             const tipInterval = setInterval(() => {
                 setFade(false); // Start fade out
                 setTimeout(() => {
@@ -69,7 +70,7 @@ const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ isVisible, onClose, onS
             }, 3000); // Change every 3 seconds
             return () => clearInterval(tipInterval);
         }
-    }, [isVisible, status, isMinimized]);
+    }, [isVisible, status, isMinimized, message]);
 
     // Auto close on success
     useEffect(() => {
@@ -84,7 +85,20 @@ const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ isVisible, onClose, onS
 
     if (!isVisible) return null;
 
-    // Render minimized state (small floating widget)
+    // Simple Loading Mode (Data Fetching)
+    if (message && status === 'loading') {
+        return createPortal(
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/10 backdrop-blur-[1px]">
+                <div className="bg-white dark:bg-gray-900 px-6 py-4 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 flex items-center gap-4 animate-fade-in-up">
+                    <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{message}</span>
+                </div>
+            </div>,
+            document.body
+        );
+    }
+
+    // Render minimized state (small floating widget) for AI Generation
     if (isMinimized && status === 'loading') {
         return createPortal(
             <div className="fixed bottom-6 right-6 z-[9999] animate-fade-in-up">

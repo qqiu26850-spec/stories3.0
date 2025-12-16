@@ -8,6 +8,7 @@ import PromptDetailModal from './PromptDetailModal';
 import { Plus, Heart, UserCircle } from './Icon';
 import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt, incrementPromptHeat } from '../services/supabaseService';
 import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
+import LoadingOverlay from './LoadingOverlay';
 
 interface PromptLibraryProps {
     onNavigateToGeneration?: (prompt: Prompt, values: Record<string, string>) => void;
@@ -38,10 +39,13 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     const [promptToDelete, setPromptToDelete] = useState<Prompt | null>(null);
     const [promptToEdit, setPromptToEdit] = useState<Prompt | null>(null);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
+    
+    const [isLoading, setIsLoading] = useState(false);
 
     // Load User Prompts from Supabase
     useEffect(() => {
         const loadData = async () => {
+            setIsLoading(true);
             try {
                 const userId = await getCurrentUserId();
                 setCurrentUserId(userId);
@@ -95,6 +99,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 }
             } catch (error) {
                 console.error("Failed to load prompts", error);
+            } finally {
+                setIsLoading(false);
             }
         };
         
@@ -221,6 +227,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col">
+            <LoadingOverlay isVisible={isLoading} onClose={() => {}} message="正在加载提示词库..." />
             <CreatePromptModal
                 isOpen={isCreateModalOpen}
                 onClose={() => { setCreateModalOpen(false); setPromptToEdit(null); }}

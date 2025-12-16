@@ -7,6 +7,7 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import AssetDetailModal from './AssetDetailModal';
 import { Pencil, Trash } from './Icon';
 import { saveMaterial, fetchMaterials, deleteMaterial } from '../services/supabaseService';
+import LoadingOverlay from './LoadingOverlay';
 
 type AssetLibraryView = 'character-library' | 'plot-library' | 'inspiration-library';
 
@@ -107,6 +108,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     const { title, assetType, description } = viewConfig[view];
     // Initialize with empty array, data will be fetched from Supabase
     const [assets, setAssets] = useState<Asset[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
     
     // Modal States
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
@@ -123,6 +125,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     useEffect(() => {
         const loadAssets = async () => {
             if (!isActive) return; // Only fetch if this view is active
+            setIsLoading(true);
             try {
                 // Map UI type to DB type if needed
                 const typeForDb = assetType === 'inspiration' ? 'idea' : assetType;
@@ -141,6 +144,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                 }
             } catch (error) {
                 console.error("Failed to load assets", error);
+            } finally {
+                setIsLoading(false);
             }
         };
         loadAssets();
@@ -239,6 +244,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in">
+            <LoadingOverlay isVisible={isLoading} onClose={() => {}} message={`正在加载${title}...`} />
             <CreateAssetModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setCreateModalOpen(false)}
