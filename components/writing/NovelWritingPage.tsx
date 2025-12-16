@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Novel, Chapter, NovelSettings } from '../../types';
-import { BookSolid, ChevronDown, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles } from '../Icon';
+import { BookSolid, ChevronDown, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, PanelLeft, PanelRight } from '../Icon';
 import NovelSettingsPanel from './NovelSettingsPanel';
 import ChapterManager from './ChapterManager';
 import AIFunctionPanel from './AIFunctionPanel';
@@ -34,6 +34,10 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>('left');
     
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+    
+    // Sidebar Visibility
+    const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
+    const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
     
     // For AI Streaming
     const insertionRef = useRef<{start: number, end: number} | null>(null);
@@ -335,10 +339,21 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 </div>
             </header>
 
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden relative">
+                {/* Left Sidebar Toggle */}
+                <button
+                    onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
+                    className="absolute top-1/2 left-0 z-30 transform -translate-y-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-1 rounded-r-md shadow-md text-gray-500 hover:text-sky-500 transition-colors"
+                    style={{ left: isLeftSidebarOpen ? '16rem' : '0' }}
+                >
+                    <PanelLeft className="w-4 h-4" />
+                </button>
+
                 {/* Left Sidebar */}
-                <aside className="w-64 flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800">
-                    <div className="flex border-b border-gray-200 dark:border-gray-800">
+                <aside 
+                    className={`flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-64' : 'w-0 border-r-0'}`}
+                >
+                    <div className="flex border-b border-gray-200 dark:border-gray-800 min-w-[16rem]">
                         <button 
                             className={`flex-1 py-3 text-sm font-medium transition-colors ${openModule === 'chapters' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50 dark:bg-sky-900/10' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white'}`}
                             onClick={() => setOpenModule('chapters')}
@@ -352,7 +367,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                             设定
                         </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto min-w-[16rem]">
                         {openModule === 'chapters' ? (
                             <ChapterManager 
                                 chapters={novel.chapters}
@@ -417,13 +432,20 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                      </div>
                 </main>
 
+                {/* Right Sidebar Toggle */}
+                <button
+                    onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
+                    className="absolute top-1/2 right-0 z-30 transform -translate-y-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-1 rounded-l-md shadow-md text-gray-500 hover:text-sky-500 transition-colors"
+                    style={{ right: isRightSidebarOpen ? '29%' : '0' }}
+                >
+                    <PanelRight className="w-4 h-4" />
+                </button>
+
                 {/* Right AI Panel */}
-                <aside className="w-[29%] flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 shadow-xl z-10 flex flex-col">
-                    <div className="p-4 border-b border-gray-200 dark:border-gray-800 font-bold flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-purple-500" />
-                        AI 助手
-                    </div>
-                    <div className="flex-1 overflow-hidden">
+                <aside 
+                    className={`flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 shadow-xl z-10 flex flex-col transition-all duration-300 overflow-hidden ${isRightSidebarOpen ? 'w-[29%]' : 'w-0 border-l-0'}`}
+                >
+                    <div className="flex-1 overflow-hidden min-w-[300px]">
                         {mode === 'long' ? (
                             <AIFunctionPanel 
                                 contextText={editorContent}

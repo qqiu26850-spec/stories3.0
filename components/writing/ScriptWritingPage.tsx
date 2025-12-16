@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Script, Scene } from '../../types';
-import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check } from '../Icon';
+import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check, PanelLeft, PanelRight } from '../Icon';
 import ScriptEpisodeManager from './ScriptEpisodeManager';
 import ScriptAIPanel from './ScriptAIPanel';
 import ScriptAdaptationPanel from './ScriptAdaptationPanel';
@@ -27,6 +27,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [tempTitle, setTempTitle] = useState(script.title);
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+    
+    // Sidebar Visibility
+    const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
+    const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
     
     // For AI Streaming
     const insertionRef = useRef<{start: number, end: number} | null>(null);
@@ -279,15 +283,26 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 </div>
             </header>
 
-            <div className="flex-1 flex overflow-hidden">
-                <aside className="w-52 flex-shrink-0 flex flex-col">
-                    <ScriptEpisodeManager 
-                        episodes={script.scenes}
-                        activeEpisodeId={activeScene?.id || null}
-                        onSelectEpisode={setActiveScene}
-                        onDeleteEpisode={handleDeleteScene}
-                        onCreateEpisode={handleCreateScene}
-                    />
+            <div className="flex-1 flex overflow-hidden relative">
+                {/* Left Sidebar Toggle */}
+                <button
+                    onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
+                    className="absolute top-1/2 left-0 z-30 transform -translate-y-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-1 rounded-r-md shadow-md text-gray-500 hover:text-sky-500 transition-colors"
+                    style={{ left: isLeftSidebarOpen ? '13rem' : '0' }}
+                >
+                    <PanelLeft className="w-4 h-4" />
+                </button>
+
+                <aside className={`flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-52' : 'w-0 border-r-0'}`}>
+                    <div className="min-w-[13rem] h-full flex flex-col">
+                        <ScriptEpisodeManager 
+                            episodes={script.scenes}
+                            activeEpisodeId={activeScene?.id || null}
+                            onSelectEpisode={setActiveScene}
+                            onDeleteEpisode={handleDeleteScene}
+                            onCreateEpisode={handleCreateScene}
+                        />
+                    </div>
                 </aside>
 
                 <main className="flex-1 bg-gray-100 dark:bg-gray-900/50 flex flex-col p-4 relative overflow-hidden transition-all duration-300">
@@ -339,12 +354,23 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                      </div>
                 </main>
 
-                <aside className="w-[29%] flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 shadow-xl z-10 flex flex-col">
-                    {script.type === 'adaptation' ? (
-                        <ScriptAdaptationPanel onInsert={handleInsertText} onStream={handleAIStream} />
-                    ) : (
-                        <ScriptAIPanel onInsert={handleInsertText} onStream={handleAIStream} />
-                    )}
+                {/* Right Sidebar Toggle */}
+                <button
+                    onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
+                    className="absolute top-1/2 right-0 z-30 transform -translate-y-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-1 rounded-l-md shadow-md text-gray-500 hover:text-sky-500 transition-colors"
+                    style={{ right: isRightSidebarOpen ? '29%' : '0' }}
+                >
+                    <PanelRight className="w-4 h-4" />
+                </button>
+
+                <aside className={`flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 shadow-xl z-10 flex flex-col transition-all duration-300 overflow-hidden ${isRightSidebarOpen ? 'w-[29%]' : 'w-0 border-l-0'}`}>
+                    <div className="flex-1 overflow-hidden min-w-[300px]">
+                        {script.type === 'adaptation' ? (
+                            <ScriptAdaptationPanel onInsert={handleInsertText} onStream={handleAIStream} />
+                        ) : (
+                            <ScriptAIPanel onInsert={handleInsertText} onStream={handleAIStream} />
+                        )}
+                    </div>
                 </aside>
             </div>
         </div>

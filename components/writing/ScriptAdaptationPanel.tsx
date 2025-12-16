@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -104,8 +104,11 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
     // Result
     const [isLoading, setIsLoading] = useState(false);
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+    const [overlayStatus, setOverlayStatus] = useState<'loading' | 'success'>('loading');
     const [generatedText, setGeneratedText] = useState('');
     const [error, setError] = useState('');
+    
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         const loadAssets = async () => {
@@ -136,11 +139,24 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
         setError('');
     }, [selectedPrompt, selectedWorkflow, selectionMode]);
 
+    const handleStop = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsLoading(false);
+        setShowLoadingOverlay(false);
+    };
+
     const handleGenerate = async () => {
         setIsLoading(true);
+        setOverlayStatus('loading');
         setShowLoadingOverlay(true);
         setGeneratedText('');
         setError('');
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
         try {
             // 1. Build Asset Context
@@ -176,7 +192,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
              finalPrompt = `${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
 
             if (onStream) {
-                const stream = generateTextStream(finalPrompt, { model, temperature, topP });
+                const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
                 let isFirst = true;
                 let fullText = '';
                 for await (const chunk of stream) {
@@ -188,17 +204,21 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                     setGeneratedText(fullText);
                     isFirst = false;
                 }
+                setOverlayStatus('success');
             } else {
-                const result = await generateText(finalPrompt, { model, temperature, topP });
-                setShowLoadingOverlay(false);
+                const result = await generateText(finalPrompt, { model, temperature, topP, signal: controller.signal });
                 setGeneratedText(result);
+                setOverlayStatus('success');
             }
 
         } catch (err: any) {
-            setError(err.message || '生成失败');
+            if (err.message !== 'Aborted') {
+                setError(err.message || '生成失败');
+                setShowLoadingOverlay(false);
+            }
         } finally {
             setIsLoading(false);
-            setShowLoadingOverlay(false);
+            abortControllerRef.current = null;
         }
     };
 
@@ -253,7 +273,12 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full">
-            <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} />
+            <LoadingOverlay 
+                isVisible={showLoadingOverlay} 
+                onClose={() => setShowLoadingOverlay(false)}
+                onStop={handleStop}
+                status={overlayStatus}
+            />
             {/* Header */}
             <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center gap-2 text-gray-900 dark:text-white font-bold">
                 <Film className="w-5 h-5 text-sky-500" />

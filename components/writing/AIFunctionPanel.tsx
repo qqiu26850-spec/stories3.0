@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -77,9 +77,12 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     // Result State
     const [isLoading, setIsLoading] = useState(false);
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+    const [overlayStatus, setOverlayStatus] = useState<'loading' | 'success'>('loading');
     const [resultText, setResultText] = useState('');
     const [error, setError] = useState('');
     const [lastGeneratedTab, setLastGeneratedTab] = useState<TabType | null>(null);
+    
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         const loadAssets = async () => {
@@ -149,14 +152,28 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         setFormState(prev => ({ ...prev, [id]: val }));
     };
 
+    const handleStop = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsLoading(false);
+        setShowLoadingOverlay(false);
+    };
+
     const handleGenerate = async () => {
         if (!selectedPrompt) return;
 
         setIsLoading(true);
+        setOverlayStatus('loading');
         setShowLoadingOverlay(true);
         setResultText('');
         setError('');
         setLastGeneratedTab(activeTab);
+
+        // Abort Control
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
         try {
             // Increment heat
@@ -180,12 +197,14 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
             // Stream Handling
             if (onStream && (activeTab === 'plot' || activeTab === 'continue')) {
-                const stream = generateTextStream(finalPrompt, { model, temperature, topP });
+                const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
                 let isFirst = true;
                 let fullText = '';
                 
                 for await (const chunk of stream) {
                     if (isFirst) {
+                        // Keep overlay open but possibly minimized, we don't auto-close streaming overlay immediately
+                        // Actually for streaming into editor, we usually close overlay once first chunk arrives
                         setShowLoadingOverlay(false);
                     }
                     onStream(chunk, isFirst);
@@ -193,41 +212,52 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     setResultText(fullText); // Update local display
                     isFirst = false;
                 }
+                // Completed streaming
+                setOverlayStatus('success'); 
             } else {
                 // Fallback / Non-stream / Polish / Review
-                const text = await generateText(finalPrompt, { model, temperature, topP });
+                const text = await generateText(finalPrompt, { model, temperature, topP, signal: controller.signal });
                 
                 if (activeTab === 'plot' || activeTab === 'continue') {
                     onInsert(text); // Insert final result if not streamed
                 }
                 setResultText(text);
+                setOverlayStatus('success');
             }
 
         } catch (err: any) {
-            setError(err.message || '生成失败');
+            if (err.message !== 'Aborted') {
+                setError(err.message || '生成失败');
+                setShowLoadingOverlay(false);
+            }
         } finally {
             setIsLoading(false);
-            setShowLoadingOverlay(false);
+            abortControllerRef.current = null;
         }
     };
 
     const renderTabButton = (type: TabType, label: string, Icon: React.ElementType) => (
         <button
             onClick={() => setActiveTab(type)}
-            className={`flex-1 py-4 flex flex-col items-center justify-center gap-2 transition-colors border-b-2 ${
+            className={`flex-1 py-2 flex flex-col items-center justify-center gap-1 transition-colors border-b-2 ${
                 activeTab === type 
                     ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20' 
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
             }`}
         >
-            <Icon className="w-6 h-6" />
-            <span className="text-base font-bold">{label}</span>
+            <Icon className="w-4 h-4" />
+            <span className="text-xs font-bold">{label}</span>
         </button>
     );
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800">
-            <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} />
+            <LoadingOverlay 
+                isVisible={showLoadingOverlay} 
+                onClose={() => setShowLoadingOverlay(false)} 
+                onStop={handleStop}
+                status={overlayStatus}
+            />
             <AssetSelectionModal 
                 isOpen={isAssetModalOpen} 
                 onClose={() => setAssetModalOpen(false)}

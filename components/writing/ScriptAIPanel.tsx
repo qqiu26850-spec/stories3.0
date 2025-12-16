@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -76,9 +76,12 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
     // Result
     const [isLoading, setIsLoading] = useState(false);
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+    const [overlayStatus, setOverlayStatus] = useState<'loading' | 'success'>('loading');
     const [generatedIdeas, setGeneratedIdeas] = useState<string[]>([]); // For Idea tab
     const [generatedText, setGeneratedText] = useState(''); // For Script tab
     const [error, setError] = useState('');
+    
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         const loadAssets = async () => {
@@ -111,12 +114,25 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
         setFormState(prev => ({ ...prev, [id]: val }));
     };
 
+    const handleStop = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsLoading(false);
+        setShowLoadingOverlay(false);
+    };
+
     const handleGenerate = async () => {
         setIsLoading(true);
+        setOverlayStatus('loading');
         setShowLoadingOverlay(true);
         setGeneratedIdeas([]);
         setGeneratedText('');
         setError('');
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
         try {
             // 1. Build Asset Context
@@ -159,8 +175,8 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
             }
 
             if (activeTab === 'idea') {
-                const result = await generateText(finalPrompt, { model, temperature, topP });
-                setShowLoadingOverlay(false);
+                const result = await generateText(finalPrompt, { model, temperature, topP, signal: controller.signal });
+                setOverlayStatus('success');
                 // Parse ideas
                 const ideas = result.split(/【方案[一二三]】/).filter(s => s.trim().length > 10);
                 if (ideas.length === 0) {
@@ -170,7 +186,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                 }
             } else {
                 if (onStream) {
-                    const stream = generateTextStream(finalPrompt, { model, temperature, topP });
+                    const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
                     let isFirst = true;
                     let fullText = '';
                     for await (const chunk of stream) {
@@ -182,18 +198,22 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                         setGeneratedText(fullText);
                         isFirst = false;
                     }
+                    setOverlayStatus('success');
                 } else {
-                    const result = await generateText(finalPrompt, { model, temperature, topP });
-                    setShowLoadingOverlay(false);
+                    const result = await generateText(finalPrompt, { model, temperature, topP, signal: controller.signal });
                     setGeneratedText(result);
+                    setOverlayStatus('success');
                 }
             }
 
         } catch (err: any) {
-            setError(err.message || '生成失败');
+            if (err.message !== 'Aborted') {
+                setError(err.message || '生成失败');
+                setShowLoadingOverlay(false);
+            }
         } finally {
             setIsLoading(false);
-            setShowLoadingOverlay(false);
+            abortControllerRef.current = null;
         }
     };
 
@@ -207,13 +227,18 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
             }`}
         >
             <Icon className="w-4 h-4" />
-            <span className="text-sm font-bold">{label}</span>
+            <span className="text-xs font-bold">{label}</span>
         </button>
     );
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full">
-            <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} />
+            <LoadingOverlay 
+                isVisible={showLoadingOverlay} 
+                onClose={() => setShowLoadingOverlay(false)}
+                onStop={handleStop}
+                status={overlayStatus}
+            />
             <AssetSelectionModal 
                 isOpen={isAssetModalOpen} 
                 onClose={() => setAssetModalOpen(false)}
