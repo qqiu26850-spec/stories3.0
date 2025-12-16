@@ -105,7 +105,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     }
 
     const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSceneTitle(e.target.value);
+        const val = e.target.value;
+        if (val.length <= 15) {
+            setSceneTitle(val);
+        }
     };
 
     const handleSaveTitle = async () => {
@@ -121,7 +124,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const handleCreateScene = () => {
         const newScene: Scene = {
             id: `scene-${Date.now()}`,
-            title: `第 ${script.scenes.length + 1} 集`,
+            title: `第 ${script.scenes.length + 1} 集：`,
             content: ''
         };
         setScript(prev => ({ ...prev, scenes: [...prev.scenes, newScene] }));
@@ -306,7 +309,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 </aside>
 
                 <main className="flex-1 bg-gray-100 dark:bg-gray-900/50 flex flex-col p-4 relative overflow-hidden transition-all duration-300">
-                     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 w-full h-full overflow-hidden">
+                     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 w-full h-full overflow-hidden relative">
                         {activeScene ? (
                             <>
                                 {/* Fixed Toolbar */}
@@ -315,19 +318,15 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 </div>
                                 
                                 {/* Scrollable Area */}
-                                <div className="flex-1 overflow-y-auto px-8 pb-4">
+                                <div className="flex-1 overflow-y-auto px-8 pb-12">
                                     <input
                                         type="text"
                                         value={sceneTitle}
                                         onChange={handleTitleChange}
                                         placeholder="输入集数标题..."
-                                        className="w-full py-4 text-2xl font-bold bg-transparent focus:outline-none border-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 block"
+                                        className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none border-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 block leading-tight"
                                     />
-                                    <div className="pb-4 border-b border-gray-100 dark:border-gray-800 mb-6">
-                                        <span className="text-xs text-gray-400 font-mono">
-                                            <span className="text-sky-500 font-semibold">{wordCount}</span> 字
-                                        </span>
-                                    </div>
+                                    <div className="h-4"></div>
                                     <textarea
                                         ref={textareaRef}
                                         value={editorContent}
@@ -344,6 +343,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         className="w-full bg-transparent focus:outline-none resize-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-700 font-mono overflow-hidden"
                                     />
                                 </div>
+
+                                {/* Word Count - Bottom Right */}
+                                <div className="absolute bottom-2 right-6 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-gray-400 font-mono pointer-events-none border border-gray-100 dark:border-gray-800">
+                                    <span className="text-sky-500 font-semibold">{wordCount}</span> 字
+                                </div>
                             </>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-gray-400 flex-col">
@@ -357,7 +361,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 {/* Right Sidebar Toggle - Floating Style */}
                 <button
                     onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
-                    className="absolute top-1/2 z-30 transform -translate-y-1/2 p-1 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black text-gray-400 hover:text-sky-500 rounded-l-lg shadow-sm border border-r-0 border-gray-200 dark:border-gray-800 transition-all backdrop-blur-sm"
+                    className="absolute top-1/2 right-0 z-30 transform -translate-y-1/2 p-1 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black text-gray-400 hover:text-sky-500 rounded-l-lg shadow-sm border border-r-0 border-gray-200 dark:border-gray-800 transition-all backdrop-blur-sm"
                     style={{ right: isRightSidebarOpen ? '29%' : '0' }}
                 >
                     {isRightSidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
