@@ -38,8 +38,9 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                 img.src = event.target?.result as string;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800;
-                    const MAX_HEIGHT = 800;
+                    // Aggressive compression for web display
+                    const MAX_WIDTH = 400; 
+                    const MAX_HEIGHT = 400;
                     let width = img.width;
                     let height = img.height;
 
@@ -62,7 +63,9 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
 
                     canvas.toBlob((blob) => {
                         if (blob) {
-                            const compressedFile = new File([blob], file.name, {
+                            // Ensure extension is .jpg
+                            const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+                            const compressedFile = new File([blob], newName, {
                                 type: 'image/jpeg',
                                 lastModified: Date.now(),
                             });
@@ -70,7 +73,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                         } else {
                             reject(new Error('Canvas is empty'));
                         }
-                    }, 'image/jpeg', 0.7); // 70% quality JPEG
+                    }, 'image/jpeg', 0.5); // 50% quality JPEG
                 };
                 img.onerror = (err) => reject(err);
             };

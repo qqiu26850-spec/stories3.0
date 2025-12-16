@@ -36,8 +36,9 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
                 img.src = event.target?.result as string;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800;
-                    const MAX_HEIGHT = 800;
+                    // Aggressive compression for web display
+                    const MAX_WIDTH = 400; 
+                    const MAX_HEIGHT = 400;
                     let width = img.width;
                     let height = img.height;
 
@@ -60,7 +61,9 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
 
                     canvas.toBlob((blob) => {
                         if (blob) {
-                            const compressedFile = new File([blob], file.name, {
+                            // Ensure extension is .jpg
+                            const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+                            const compressedFile = new File([blob], newName, {
                                 type: 'image/jpeg',
                                 lastModified: Date.now(),
                             });
@@ -68,7 +71,7 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
                         } else {
                             reject(new Error('Canvas is empty'));
                         }
-                    }, 'image/jpeg', 0.7); // 70% quality JPEG
+                    }, 'image/jpeg', 0.5); // 50% quality JPEG
                 };
                 img.onerror = (err) => reject(err);
             };
@@ -125,7 +128,7 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
                     <div>
                         <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">封面预览</label>
                         <div className="flex items-start gap-4">
-                            <div className="w-28 aspect-[2/3] bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 flex-shrink-0 overflow-hidden shadow-sm relative group">
+                            <div className="w-28 aspect-[2/1] bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 flex-shrink-0 overflow-hidden shadow-sm relative group">
                                 {coverPreview ? (
                                     <img src={coverPreview} alt="封面预览" className="w-full h-full object-cover" />
                                 ) : (
