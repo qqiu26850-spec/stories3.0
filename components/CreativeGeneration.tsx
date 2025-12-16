@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X } from './Icon';
+import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen } from './Icon';
 import PromptSelectionModal from './PromptSelectionModal';
-import { saveMaterial, incrementPromptHeat } from '../services/supabaseService';
+import AssetSelectionModal from './AssetSelectionModal'; // New Import
+import { saveMaterial, incrementPromptHeat, fetchMaterials } from '../services/supabaseService';
 import LoadingOverlay from './LoadingOverlay';
 import { createPortal } from 'react-dom';
 
@@ -116,7 +117,6 @@ const ImportAssetModal: React.FC<{
 };
 
 const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, onClearInitialData }) => {
-  // ... state ...
   const [selectedModule, setSelectedModule] = useState<CreativeModule | null>(null);
   const [model, setModel] = useState('gemini-2.5-flash');
   const [temperature, setTemperature] = useState(1);
@@ -127,11 +127,37 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
   const [generatedText, setGeneratedText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+  
+  // Modal States
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [promptModalOpen, setPromptModalOpen] = useState(false);
+  const [assetModalOpen, setAssetModalOpen] = useState(false);
+  
   const [successMessage, setSuccessMessage] = useState('');
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  
+  // Abort Controller
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // ... useEffects ...
+  // Load Assets
+  useEffect(() => {
+      const loadAssets = async () => {
+          const data = await fetchMaterials();
+          const mappedAssets: Asset[] = data.map((item: any) => ({
+              id: item.id,
+              name: item.name || item.title,
+              type: item.type === 'idea' ? 'inspiration' : item.type,
+              content: item.content,
+              tags: item.tags || [],
+              data: { name: item.name }
+          }));
+          setAssets(mappedAssets);
+      };
+      loadAssets();
+  }, []);
+
+  // ... (rest of prompts/initial data logic)
   useEffect(() => {
     if (initialData?.prompt) {
         if (!selectedModule) {
@@ -154,6 +180,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
           setFormState({});
           setGeneratedText('');
           setSuccessMessage('');
+          setSelectedAssetIds(new Set());
       }
   }, [selectedModule]);
 
@@ -173,13 +200,27 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
       }
   }, [selectedPrompt]);
 
+  const handleStop = () => {
+      if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+      }
+      setIsGenerating(false);
+      setShowLoadingOverlay(false);
+  };
+
   const handleGenerate = async () => {
+      if (isGenerating) {
+          handleStop();
+          return;
+      }
+
       setIsGenerating(true);
       setShowLoadingOverlay(true);
       setGeneratedText('');
       
-      let finalPrompt = '';
-      
+      // 1. Prepare Prompt
+      let basePrompt = '';
       if (selectedPrompt) {
           incrementPromptHeat(selectedPrompt.id);
           let template = selectedPrompt.template || selectedPrompt.content; 
@@ -187,10 +228,19 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
               const val = formState[field.id] || '';
               template = template.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
           }
-          finalPrompt = template;
+          basePrompt = template;
       } else {
-          finalPrompt = freeInput;
+          basePrompt = freeInput;
       }
+
+      // 2. Add Assets
+      const assetContext = Array.from(selectedAssetIds)
+          .map(id => assets.find(a => a.id === id))
+          .filter(Boolean)
+          .map(a => `【关联素材：${a!.name}】\n${a!.content}`)
+          .join('\n\n');
+      
+      let finalPrompt = assetContext ? `${assetContext}\n\n---\n\n${basePrompt}` : basePrompt;
 
       if (selectedModule) {
           finalPrompt = `[当前创作任务：${selectedModule.title} - ${selectedModule.description}]\n\n${finalPrompt}`;
@@ -202,10 +252,14 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
           return;
       }
 
+      // 3. Init AbortController
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       try {
           const stream = generateTextStream(
               finalPrompt, 
-              { model, temperature, topP }
+              { model, temperature, topP, signal: controller.signal }
           );
 
           let firstChunk = true;
@@ -216,11 +270,14 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
               }
               setGeneratedText(prev => prev + chunk);
           }
-      } catch (e) {
-          setGeneratedText(prev => prev + "\n\n[生成中断或出错，请重试]");
+      } catch (e: any) {
+          if (e.message !== 'Aborted') {
+             setGeneratedText(prev => prev + "\n\n[生成中断或出错，请重试]");
+          }
       } finally {
           setIsGenerating(false);
           setShowLoadingOverlay(false);
+          abortControllerRef.current = null;
       }
   };
 
@@ -266,7 +323,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
 
   return (
       <div className="h-full flex flex-col bg-gray-50 dark:bg-black animate-fade-in overflow-hidden relative">
-          <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} />
+          <LoadingOverlay isVisible={showLoadingOverlay} onClose={handleStop} />
           <ImportAssetModal 
             isOpen={importModalOpen} 
             onClose={() => setImportModalOpen(false)} 
@@ -277,7 +334,18 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             isOpen={promptModalOpen}
             onClose={() => setPromptModalOpen(false)}
             onSelect={setSelectedPrompt}
-            initialSubCategory={moduleInitialTag} // Auto-select tag filter
+            initialSubCategory={moduleInitialTag} 
+          />
+          <AssetSelectionModal 
+            isOpen={assetModalOpen} 
+            onClose={() => setAssetModalOpen(false)}
+            assets={assets}
+            selectedAssetIds={selectedAssetIds}
+            onToggleAsset={(id) => setSelectedAssetIds(prev => {
+                const next = new Set(prev);
+                if(next.has(id)) next.delete(id); else next.add(id);
+                return next;
+            })}
           />
 
           {/* Header */}
@@ -370,7 +438,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                   <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded text-purple-600 dark:text-purple-400">
                                     <Sparkles className="w-4 h-4" />
                                   </div>
-                                  提示词配置
+                                  提示词与素材
                               </div>
                               <button 
                                   onClick={() => setPromptModalOpen(true)}
@@ -380,6 +448,24 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                   选择模板
                               </button>
                           </div>
+
+                          {/* Asset Selection Button */}
+                          <button 
+                                onClick={() => setAssetModalOpen(true)}
+                                className={`w-full p-3 rounded-lg border text-left transition-all flex items-center justify-between group ${
+                                    selectedAssetIds.size > 0 
+                                    ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' 
+                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-purple-400'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Database className={`w-4 h-4 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-purple-600' : 'text-gray-400'}`} />
+                                    <span className={`font-medium ${selectedAssetIds.size > 0 ? '' : 'text-gray-500 dark:text-gray-400'}`}>
+                                        {selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 个素材` : '关联素材库 (可选)'}
+                                    </span>
+                                </div>
+                                {selectedAssetIds.size > 0 && <span className="text-xs bg-purple-200 dark:bg-purple-800 px-1.5 py-0.5 rounded">修改</span>}
+                          </button>
 
                           <div className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-xl border border-gray-100 dark:border-gray-800">
                               {selectedPrompt ? (
@@ -433,13 +519,16 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                   <div className="p-5 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
                       <button
                           onClick={handleGenerate}
-                          disabled={isGenerating}
-                          className="w-full py-3.5 bg-gradient-to-r from-sky-600 to-purple-600 hover:from-sky-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg hover:shadow-sky-500/30 transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+                          className={`w-full py-3.5 font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] ${
+                              isGenerating 
+                              ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/30' 
+                              : 'bg-gradient-to-r from-sky-600 to-purple-600 hover:from-sky-500 hover:to-purple-500 text-white hover:shadow-sky-500/30'
+                          }`}
                       >
                           {isGenerating ? (
                               <>
                                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                  正在生成...
+                                  停止生成
                               </>
                           ) : (
                               <>

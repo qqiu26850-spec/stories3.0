@@ -238,11 +238,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 prompt={selectedPrompt}
             />
             
-            <div className="mb-8 flex-shrink-0">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">提示词库</h1>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">使用和创建专业的提示词，激发AI的无限潜能。</p>
-            </div>
-            
             {/* Top Navigation Bar */}
             <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
                 <div className="flex justify-between items-center">

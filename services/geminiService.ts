@@ -12,6 +12,7 @@ interface GenerationOptions {
     model: string;
     temperature: number;
     topP: number;
+    signal?: AbortSignal;
 }
 
 const PLAIN_TEXT_INSTRUCTION = "\n\n(IMPORTANT: Please output the result in strictly plain text format. Do NOT use Markdown syntax such as **bold**, *italics*, # headers, or bullet points. Use standard spacing for paragraphs.)";
@@ -21,6 +22,10 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 
   if (options.model.startsWith('gemini')) {
     try {
+        // Note: Gemini SDK generateContent doesn't natively support signal in the simple signature yet,
+        // but we can check it before ensuring logic.
+        if (options.signal?.aborted) throw new Error("Aborted");
+        
         const response = await ai.models.generateContent({
             model: options.model,
             contents: finalPrompt,
@@ -53,7 +58,8 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
                 temperature: options.temperature,
                 top_p: options.topP,
                 stream: false
-            })
+            }),
+            signal: options.signal
         });
 
         if (!response.ok) {
@@ -63,7 +69,10 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 
         const data = await response.json();
         return data.choices?.[0]?.message?.content || "";
-    } catch (error) {
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            throw new Error('已停止生成');
+        }
         console.error("Error generating text with DeepSeek:", error);
         if (error instanceof Error) {
             return `DeepSeek 生成内容时出错：${error.message}`;
@@ -71,9 +80,15 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         return "DeepSeek 生成内容时发生未知错误。";
     }
   } else {
-    // Simulate other models
-    console.log("Simulating API call for model:", options.model, "with prompt:", finalPrompt);
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+    // Simulate
+    if (options.signal?.aborted) throw new Error("Aborted");
+    await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, 1500);
+        options.signal?.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new Error("Aborted"));
+        });
+    });
     return `[来自 ${options.model.toUpperCase()} 的模拟响应]\n\n${prompt.substring(0, 150)}...`;
   }
 };
@@ -93,18 +108,20 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             });
 
             for await (const chunk of responseStream) {
+                if (options.signal?.aborted) throw new Error("Aborted");
                 const text = chunk.text;
                 if (text) {
                     yield text;
                 }
             }
-        } catch (error) {
-            console.error("Error generating text stream with Gemini:", error);
-            if (error instanceof Error) {
-                yield `Gemini 生成内容时出错：${error.message}`;
-            } else {
-                yield "Gemini 生成内容时发生未知错误。";
+        } catch (error: any) {
+            if (error.message === 'Aborted' || options.signal?.aborted) {
+                // Silent return or yield stop message? 
+                // Yielding nothing ends the stream.
+                return; 
             }
+            console.error("Error generating text stream with Gemini:", error);
+            yield `Gemini 生成内容时出错：${error.message}`;
         }
     } else if (options.model.startsWith('deepseek')) {
         try {
@@ -122,13 +139,11 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                     temperature: options.temperature,
                     top_p: options.topP,
                     stream: true
-                })
+                }),
+                signal: options.signal
             });
 
-            if (!response.ok) {
-                throw new Error(`DeepSeek API Error: ${response.status}`);
-            }
-
+            if (!response.ok) throw new Error(`DeepSeek API Error: ${response.status}`);
             if (!response.body) throw new Error("No response body");
 
             const reader = response.body.getReader();
@@ -136,6 +151,10 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             let buffer = "";
 
             while (true) {
+                if (options.signal?.aborted) {
+                    reader.cancel();
+                    break;
+                }
                 const { done, value } = await reader.read();
                 if (done) break;
                 
@@ -152,31 +171,24 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                     try {
                         const json = JSON.parse(jsonStr);
                         const content = json.choices?.[0]?.delta?.content;
-                        if (content) {
-                            yield content;
-                        }
+                        if (content) yield content;
                     } catch (e) {
                         console.error("Error parsing DeepSeek stream chunk", e);
                     }
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
+            if (error.name === 'AbortError' || options.signal?.aborted) return;
             console.error("Error generating text stream with DeepSeek:", error);
-            if (error instanceof Error) {
-                yield `DeepSeek 生成内容时出错：${error.message}`;
-            } else {
-                yield "DeepSeek 生成内容时发生未知错误。";
-            }
+            yield `DeepSeek 生成内容时出错：${error.message}`;
         }
     } else {
-        // Simulate streaming for other models
-        console.log("Simulating Streaming API call for model:", options.model);
-        
+        // Simulate
         const simulatedResponse = `[来自 ${options.model.toUpperCase()} 的模拟流式响应]\n\n${prompt.substring(0, 50)}...`;
-        
         const chunks = simulatedResponse.split('');
         for (const char of chunks) {
-            await new Promise(resolve => setTimeout(resolve, 30)); // Simulate typing delay
+            if (options.signal?.aborted) break;
+            await new Promise(resolve => setTimeout(resolve, 30));
             yield char;
         }
     }
