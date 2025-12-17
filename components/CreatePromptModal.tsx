@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Prompt, PromptCategory, PromptField, PromptSubCategory } from '../types';
-import { Trash, Sparkles, Check } from './Icon';
+import { Trash, Sparkles, Check, Bars2 } from './Icon';
 
 type NewPromptData = Omit<Prompt, 'id' | 'heat' | 'content'>;
 
@@ -56,6 +56,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     const [subCategories, setSubCategories] = useState<PromptSubCategory[]>(['idea']);
     const [fields, setFields] = useState<PromptField[]>([]);
     const [error, setError] = useState('');
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -75,6 +76,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 setFields([]);
             }
             setError('');
+            setDraggedIndex(null);
         }
     }, [isOpen, promptToEdit]);
 
@@ -126,6 +128,31 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 return [...prev, tag];
             }
         });
+    };
+
+    // Drag and Drop Logic
+    const handleDragStart = (index: number) => {
+        setDraggedIndex(index);
+    };
+
+    const handleDragOver = (e: React.DragEvent, index: number) => {
+        e.preventDefault();
+        // Just prevent default to allow drop
+    };
+
+    const handleDrop = (targetIndex: number) => {
+        if (draggedIndex === null || draggedIndex === targetIndex) return;
+        
+        const newFields = [...fields];
+        const draggedItem = newFields[draggedIndex];
+        
+        // Remove from old pos
+        newFields.splice(draggedIndex, 1);
+        // Insert at new pos
+        newFields.splice(targetIndex, 0, draggedItem);
+        
+        setFields(newFields);
+        setDraggedIndex(null);
     };
     
     const handleSubmit = (e: React.FormEvent) => {
@@ -274,34 +301,70 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                         )}
 
                         {fields.map((field, index) => (
-                            <div key={index} className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-12 gap-3 relative shadow-sm">
-                                {/* Numbering */}
-                                <div className="absolute top-2 left-2 text-[10px] text-gray-300 font-bold select-none">{index + 1}.</div>
+                            <div 
+                                key={field.id} 
+                                className={`p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-12 gap-3 relative shadow-sm transition-all duration-200 ${draggedIndex === index ? 'opacity-50 scale-[0.98] border-sky-300 ring-2 ring-sky-100' : ''}`}
+                                draggable
+                                onDragStart={() => handleDragStart(index)}
+                                onDragOver={(e) => handleDragOver(e, index)}
+                                onDrop={() => handleDrop(index)}
+                            >
+                                {/* Numbering & Handle */}
+                                <div className="absolute top-2 left-2 flex items-center gap-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-sky-500" title="拖拽排序">
+                                    <Bars2 className="w-3 h-3" />
+                                    <span className="text-[10px] font-bold select-none">{index + 1}.</span>
+                                </div>
                                 
                                 {/* Row 1 */}
-                                <div className="md:col-span-5">
+                                <div className="md:col-span-5 pl-4"> {/* Added padding-left for handle space */}
                                     <label className="block text-xs font-medium text-gray-500 mb-1">字段标题</label>
-                                    <input type="text" value={field.label} onChange={(e) => updateField(index, 'label', e.target.value)} placeholder="如：写作风格" className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none"/>
+                                    <input 
+                                        type="text" 
+                                        value={field.label} 
+                                        onChange={(e) => updateField(index, 'label', e.target.value)} 
+                                        placeholder="如：写作风格" 
+                                        className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none"
+                                        onMouseDown={(e) => e.stopPropagation()} 
+                                    />
                                 </div>
                                 <div className="md:col-span-4">
                                     <label className="block text-xs font-medium text-gray-500 mb-1">变量名 (English)</label>
-                                    <input type="text" value={field.id} onChange={(e) => updateField(index, 'id', e.target.value)} placeholder="如：style" className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none font-mono"/>
+                                    <input 
+                                        type="text" 
+                                        value={field.id} 
+                                        onChange={(e) => updateField(index, 'id', e.target.value)} 
+                                        placeholder="如：style" 
+                                        className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none font-mono"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    />
                                 </div>
                                 <div className="md:col-span-3">
                                      <label className="block text-xs font-medium text-gray-500 mb-1">类型</label>
-                                    <select value={field.type} onChange={(e) => updateField(index, 'type', e.target.value)} className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none">
+                                    <select 
+                                        value={field.type} 
+                                        onChange={(e) => updateField(index, 'type', e.target.value)} 
+                                        className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
                                         <option value="text">单行</option>
                                         <option value="textarea">多行</option>
                                     </select>
                                 </div>
 
                                 {/* Row 2 */}
-                                <div className="md:col-span-8">
+                                <div className="md:col-span-8 pl-4">
                                     <label className="block text-xs font-medium text-blue-500 mb-1">填写说明 (选填)</label>
-                                    <input type="text" value={field.description || ''} onChange={(e) => updateField(index, 'description', e.target.value)} placeholder="如：请描述您希望的文章基调" className="w-full p-2 text-[10px] bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none text-gray-600 dark:text-gray-400"/>
+                                    <input 
+                                        type="text" 
+                                        value={field.description || ''} 
+                                        onChange={(e) => updateField(index, 'description', e.target.value)} 
+                                        placeholder="如：请描述您希望的文章基调" 
+                                        className="w-full p-2 text-[10px] bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none text-gray-600 dark:text-gray-400"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    />
                                 </div>
                                 <div className="md:col-span-3 flex items-end pb-2">
-                                    <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-300">
+                                    <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-300" onMouseDown={(e) => e.stopPropagation()}>
                                         <input 
                                             type="checkbox" 
                                             checked={field.required !== false} 
@@ -312,7 +375,13 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                     </label>
                                 </div>
                                 <div className="md:col-span-1 flex justify-center items-end pb-1">
-                                    <button type="button" onClick={() => removeField(index)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="删除字段">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => removeField(index)} 
+                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" 
+                                        title="删除字段"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
                                         <Trash className="w-4 h-4" />
                                     </button>
                                 </div>

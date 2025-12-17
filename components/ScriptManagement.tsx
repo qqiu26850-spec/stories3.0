@@ -5,7 +5,7 @@ import CreateProjectModal from './CreateProjectModal';
 import EditProjectModal from './EditProjectModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
-import { Film, BookOpen, DocumentPlus } from './Icon';
+import { Film, BookOpen, DocumentPlus, Check } from './Icon';
 import ScriptWritingPage from './writing/ScriptWritingPage';
 import { createProject, fetchProjects, deleteProject, uploadCoverImage, updateProject } from '../services/supabaseService';
 
@@ -27,6 +27,7 @@ const ScriptManagement: React.FC = () => {
     const [itemToEdit, setItemToEdit] = useState<Script | null>(null);
     
     const [isProcessing, setIsProcessing] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
 
     // Fetch projects on mount or when closing editor
     useEffect(() => {
@@ -89,7 +90,9 @@ const ScriptManagement: React.FC = () => {
                 scenes: [],
             };
             setScripts(prev => [newScript, ...prev]);
+            setSuccessMessage('剧本创建成功');
             setCreateModalOpen(false);
+            setTimeout(() => setSuccessMessage(''), 2500);
         } catch (e) {
             console.error("Error creating script", e);
             alert("创建失败，请重试");
@@ -121,8 +124,10 @@ const ScriptManagement: React.FC = () => {
                 : s
             ));
 
+            setSuccessMessage('剧本更新成功');
             setEditModalOpen(false);
             setItemToEdit(null);
+            setTimeout(() => setSuccessMessage(''), 2500);
         } catch (e) {
             console.error("Failed to update script", e);
             alert("更新失败，请重试");
@@ -143,8 +148,10 @@ const ScriptManagement: React.FC = () => {
         if (itemToDelete) {
             await deleteProject(itemToDelete.id);
             setScripts(prev => prev.filter(s => s.id !== itemToDelete.id));
+            setSuccessMessage('剧本删除成功');
             setDeleteModalOpen(false);
             setItemToDelete(null);
+            setTimeout(() => setSuccessMessage(''), 2500);
         }
     };
     
@@ -232,15 +239,23 @@ const ScriptManagement: React.FC = () => {
                         <p className="text-gray-500 dark:text-gray-400 mt-1">管理你的剧本创作项目。</p>
                     </div>
                 </div>
-                {filteredScripts.length > 0 && (
-                    <button
-                        onClick={() => setCreateModalOpen(true)}
-                        className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0 self-start md:self-center shadow-sm"
-                        disabled={isProcessing}
-                    >
-                        {isProcessing ? '创建中...' : '+ 新建剧本'}
-                    </button>
-                )}
+                <div className="flex items-center gap-4">
+                    {successMessage && (
+                        <div className="px-4 py-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-lg text-sm font-bold animate-pulse shadow-sm flex items-center gap-2">
+                            <Check className="w-4 h-4" />
+                            {successMessage}
+                        </div>
+                    )}
+                    {filteredScripts.length > 0 && (
+                        <button
+                            onClick={() => setCreateModalOpen(true)}
+                            className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0 shadow-sm"
+                            disabled={isProcessing}
+                        >
+                            {isProcessing ? '创建中...' : '+ 新建剧本'}
+                        </button>
+                    )}
+                </div>
             </div>
             
             {/* Content */}

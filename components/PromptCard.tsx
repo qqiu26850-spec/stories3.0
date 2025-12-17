@@ -61,7 +61,7 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onE
         className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 hover:shadow-lg hover:border-sky-500 transition-all duration-300 cursor-pointer group flex flex-col h-full relative"
     >
         <div className="flex justify-between items-start mb-2">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-sky-600 transition-colors line-clamp-1">{prompt.title}</h3>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-sky-600 transition-colors line-clamp-1">{prompt.title}</h3>
             {onToggleFavorite && (
                 <button
                     onClick={(e) => {
@@ -76,7 +76,7 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onE
             )}
         </div>
 
-        <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed mb-4 line-clamp-3 flex-grow">
+        <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-4 line-clamp-3 flex-grow">
             {prompt.description}
         </p>
         

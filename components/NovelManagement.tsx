@@ -6,7 +6,7 @@ import EditProjectModal from './EditProjectModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
 import NovelWritingPage from './writing/NovelWritingPage';
-import { BookOpen, Sparkles } from './Icon';
+import { BookOpen, Sparkles, Check } from './Icon';
 import { createProject, fetchProjects, deleteProject, uploadCoverImage, updateProject } from '../services/supabaseService';
 
 interface NovelManagementProps {
@@ -29,6 +29,7 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
     const [itemToEdit, setItemToEdit] = useState<Novel | null>(null);
     
     const [isProcessing, setIsProcessing] = useState(false); // For create/update loading
+    const [successMessage, setSuccessMessage] = useState('');
 
     const pageTitle = mode === 'long' ? '长篇小说' : '短篇管理';
     const description = mode === 'long' ? '在这里开始、管理和发展你的长篇故事。' : '快速捕捉灵感，创作精彩的短篇故事。';
@@ -99,7 +100,9 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                 chapters: [] // Initialize with empty chapters
             };
             setNovels(prev => [newNovel, ...prev]);
+            setSuccessMessage('作品创建成功');
             setCreateModalOpen(false);
+            setTimeout(() => setSuccessMessage(''), 2500);
         } catch (e) {
             console.error("Error creating novel", e);
             alert("创建失败，请重试");
@@ -134,8 +137,10 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                 : n
             ));
 
+            setSuccessMessage('作品更新成功');
             setEditModalOpen(false);
             setItemToEdit(null);
+            setTimeout(() => setSuccessMessage(''), 2500);
         } catch (e) {
             console.error("Failed to update novel", e);
             alert("更新失败，请重试");
@@ -158,6 +163,8 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
             setNovels(prev => prev.filter(n => n.id !== itemToDelete.id));
             setDeleteModalOpen(false);
             setItemToDelete(null);
+            setSuccessMessage('作品删除成功');
+            setTimeout(() => setSuccessMessage(''), 2500);
         }
     };
 
@@ -200,15 +207,23 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{pageTitle}</h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">{description}</p>
                 </div>
-                {novels.length > 0 && (
-                    <button
-                        onClick={() => setCreateModalOpen(true)}
-                        className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0 self-start md:self-center shadow-sm"
-                        disabled={isProcessing}
-                    >
-                        {isProcessing ? '处理中...' : `+ ${createButtonLabel}`}
-                    </button>
-                )}
+                <div className="flex items-center gap-4">
+                    {successMessage && (
+                        <div className="px-4 py-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-lg text-sm font-bold animate-pulse shadow-sm flex items-center gap-2">
+                            <Check className="w-4 h-4" />
+                            {successMessage}
+                        </div>
+                    )}
+                    {novels.length > 0 && (
+                        <button
+                            onClick={() => setCreateModalOpen(true)}
+                            className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0 shadow-sm"
+                            disabled={isProcessing}
+                        >
+                            {isProcessing ? '处理中...' : `+ ${createButtonLabel}`}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Content Area */}

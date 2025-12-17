@@ -5,7 +5,7 @@ import { View, Asset, AssetFormData } from '../types';
 import CreateAssetModal from './CreateAssetModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import AssetDetailModal from './AssetDetailModal';
-import { Pencil, Trash } from './Icon';
+import { Pencil, Trash, Check } from './Icon';
 import { saveMaterial, fetchMaterials, deleteMaterial } from '../services/supabaseService';
 
 type AssetLibraryView = 'character-library' | 'plot-library' | 'inspiration-library';
@@ -117,6 +117,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     const [assetToDeleteId, setAssetToDeleteId] = useState<string | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+    const [successMessage, setSuccessMessage] = useState('');
     
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -227,12 +228,14 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
             await deleteMaterial(assetToDeleteId);
             
             setAssets(prevAssets => prevAssets.filter(asset => asset.id !== assetToDeleteId));
+            setSuccessMessage('素材删除成功');
             handleCloseDeleteModal();
             // Also close detail modal if we deleted the currently viewed asset
             if (selectedAsset?.id === assetToDeleteId) {
                 setDetailModalOpen(false);
                 setSelectedAsset(null);
             }
+            setTimeout(() => setSuccessMessage(''), 2500);
         }
     };
 
@@ -268,12 +271,20 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">{description}</p>
                 </div>
-                <button
-                    onClick={handleCreate}
-                    className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors shadow-sm flex-shrink-0 self-start md:self-center"
-                >
-                    + 新建素材
-                </button>
+                <div className="flex items-center gap-4">
+                    {successMessage && (
+                        <div className="px-4 py-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-lg text-sm font-bold animate-pulse shadow-sm flex items-center gap-2">
+                            <Check className="w-4 h-4" />
+                            {successMessage}
+                        </div>
+                    )}
+                    <button
+                        onClick={handleCreate}
+                        className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors shadow-sm flex-shrink-0 self-start md:self-center"
+                    >
+                        + 新建素材
+                    </button>
+                </div>
             </div>
 
             <div className="mb-6">

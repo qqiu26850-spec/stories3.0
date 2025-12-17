@@ -158,10 +158,20 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
                             <span className={`px-2 py-0.5 rounded font-bold ${style.badge}`}>
                                 {CATEGORY_LABELS[prompt.category] || style.label}
                             </span>
+                            
+                            {/* Tags Moved Here */}
+                            {prompt.subCategories && prompt.subCategories.length > 0 && prompt.subCategories.map(tag => (
+                                <span key={tag} className="px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
+                                    #{SUB_CATEGORY_LABELS[tag] || tag}
+                                </span>
+                            ))}
+
+                            <div className="w-px h-3 bg-gray-300 dark:bg-gray-700 mx-1"></div>
+
                             <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
                                 <UserCircle className="w-3.5 h-3.5" />
                                 {prompt.creator === 'system' ? '官方' : (prompt.authorName || '用户')}
@@ -176,23 +186,14 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
 
                 {/* Main Content Area */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-gray-50/50 dark:bg-black/20">
-                    {/* Description - Livelier Color */}
-                    <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30 shadow-sm">
-                        <h4 className="text-xs font-bold text-amber-500 dark:text-amber-400 uppercase mb-2 tracking-wider flex items-center gap-1">
+                    {/* Description - Livelier Blue Color, Tags moved to header */}
+                    <div className="bg-sky-50 dark:bg-sky-900/10 p-4 rounded-xl border border-sky-100 dark:border-sky-900/30 shadow-sm">
+                        <h4 className="text-xs font-bold text-sky-600 dark:text-sky-400 uppercase mb-2 tracking-wider flex items-center gap-1">
                             📝 简介
                         </h4>
                         <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-medium">
                             {prompt.description || "暂无简介"}
                         </p>
-                        {prompt.subCategories && prompt.subCategories.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-amber-100 dark:border-amber-900/30">
-                                {prompt.subCategories.map(tag => (
-                                    <span key={tag} className="text-[10px] px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 bg-white dark:bg-gray-800">
-                                        #{SUB_CATEGORY_LABELS[tag] || tag}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
                     </div>
 
                     {/* Configuration Form */}
@@ -219,10 +220,10 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                             )}
 
                             <div className="grid gap-4">
-                                {prompt.fields.map(field => (
+                                {prompt.fields.map((field, index) => (
                                     <div key={field.id} className="group">
                                         <label htmlFor={field.id} className={`block text-sm font-bold text-gray-600 dark:text-gray-300 mb-1.5 transition-colors group-focus-within:${style.accent.split(' ')[0]}`}>
-                                            {field.label}
+                                            <span className="opacity-50 mr-1">{index + 1}.</span> {field.label}
                                             {field.required !== false && <span className="text-red-500 ml-1">*</span>}
                                             {field.required === false && <span className="text-gray-400 text-xs font-normal ml-1">(选填)</span>}
                                         </label>
@@ -245,7 +246,9 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                                             />
                                         )}
                                         {field.description && (
-                                            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{field.description}</p>
+                                            <p className="mt-1.5 text-xs text-blue-600 dark:text-blue-400 font-medium bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded inline-block">
+                                                💡 {field.description}
+                                            </p>
                                         )}
                                     </div>
                                 ))}

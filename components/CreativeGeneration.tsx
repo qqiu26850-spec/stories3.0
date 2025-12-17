@@ -443,38 +443,38 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                       </div>
 
                       <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
-                                  <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded text-purple-600 dark:text-purple-400">
-                                    <Sparkles className="w-4 h-4" />
-                                  </div>
-                                  提示词与素材
+                          <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
+                              <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded text-purple-600 dark:text-purple-400">
+                                <Sparkles className="w-4 h-4" />
                               </div>
-                              <button 
-                                  onClick={() => setPromptModalOpen(true)}
-                                  className="px-4 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 rounded-full transition-all shadow-sm hover:shadow flex items-center gap-1"
-                              >
-                                  <Search className="w-3 h-3" />
-                                  选择模板
-                              </button>
+                              提示词与素材
                           </div>
 
-                          <button 
-                                onClick={() => setAssetModalOpen(true)}
-                                className={`w-full p-3 rounded-lg border text-left transition-all flex items-center justify-between group ${
-                                    selectedAssetIds.size > 0 
-                                    ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' 
-                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-purple-400'
-                                }`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Database className={`w-4 h-4 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-purple-600' : 'text-gray-400'}`} />
-                                    <span className={`font-medium ${selectedAssetIds.size > 0 ? '' : 'text-gray-500 dark:text-gray-400'}`}>
-                                        {selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 个素材` : '关联素材库 (可选)'}
-                                    </span>
-                                </div>
-                                {selectedAssetIds.size > 0 && <span className="text-xs bg-purple-200 dark:bg-purple-800 px-1.5 py-0.5 rounded">修改</span>}
-                          </button>
+                          <div className="grid grid-cols-2 gap-3">
+                              <button 
+                                  onClick={() => setPromptModalOpen(true)}
+                                  className={`p-3 rounded-lg border text-left transition-all flex flex-col justify-center items-center gap-2 group ${
+                                      selectedPrompt 
+                                      ? 'bg-sky-50 border-sky-300 text-sky-900 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-100' 
+                                      : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-400 hover:text-sky-500'
+                                  }`}
+                              >
+                                  <Search className="w-5 h-5" />
+                                  <span className="font-bold text-xs">{selectedPrompt ? '更换模板' : '选择提示词'}</span>
+                              </button>
+
+                              <button 
+                                    onClick={() => setAssetModalOpen(true)}
+                                    className={`p-3 rounded-lg border text-left transition-all flex flex-col justify-center items-center gap-2 group ${
+                                        selectedAssetIds.size > 0 
+                                        ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' 
+                                        : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400 hover:text-purple-500'
+                                    }`}
+                                >
+                                    <Database className="w-5 h-5" />
+                                    <span className="font-bold text-xs">{selectedAssetIds.size > 0 ? `已选 ${selectedAssetIds.size} 项` : '关联素材'}</span>
+                              </button>
+                          </div>
 
                           <div className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-xl border border-gray-100 dark:border-gray-800">
                               {selectedPrompt ? (
@@ -521,7 +521,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                           className="w-full p-4 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none h-40 transition-shadow shadow-sm"
                                       />
                                       <div className="text-xs text-gray-400 text-center pt-2">
-                                          或者点击上方“选择模板”按钮使用专业提示词
+                                          或者点击上方“选择提示词”按钮使用专业模板
                                       </div>
                                   </div>
                               )}

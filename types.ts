@@ -41,7 +41,7 @@ export interface PromptField {
   description?: string;
 }
 
-export type PromptCategory = 'short-story' | 'long-story' | 'script';
+export type PromptCategory = 'general' | 'short-story' | 'long-story' | 'script';
 
 export type PromptSubCategory = 
   // Functional
