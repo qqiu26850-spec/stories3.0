@@ -17,10 +17,10 @@ interface PromptLibraryProps {
 
 const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'all', label: '全部' },
-  { id: 'general', label: '通用' },
   { id: 'short-story', label: '短篇小说' },
   { id: 'long-story', label: '长篇小说' },
   { id: 'script', label: '剧本' },
+  { id: 'general', label: '通用' },
 ];
 
 const PostCreationModal: React.FC<{

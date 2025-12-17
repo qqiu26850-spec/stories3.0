@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Prompt } from '../types';
 import { X, Sparkles, Copy, BookOpen, Film, Fire, UserCircle, Eye, EyeSlash, Check } from './Icon';
+import { GENRE_TAGS } from '../constants';
 
 interface PromptDetailModalProps {
     isOpen: boolean;
@@ -44,6 +45,11 @@ const CATEGORY_LABELS: Record<string, string> = {
     'long-story': '长篇',
     'short-story': '短篇',
     'script': '剧本',
+    'general': '通用',
+};
+
+const isGenre = (tag: string) => {
+    return GENRE_TAGS.some(g => g.id === tag);
 };
 
 const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, prompt, onRun }) => {
@@ -163,10 +169,14 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                                 {CATEGORY_LABELS[prompt.category] || style.label}
                             </span>
                             
-                            {/* Tags Moved Here */}
+                            {/* Tags Moved Here - Updated Styling */}
                             {prompt.subCategories && prompt.subCategories.length > 0 && prompt.subCategories.map(tag => (
-                                <span key={tag} className="px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
-                                    #{SUB_CATEGORY_LABELS[tag] || tag}
+                                <span key={tag} className={`px-2 py-0.5 rounded border ${
+                                    isGenre(tag as string) 
+                                    ? 'bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-300' 
+                                    : 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+                                }`}>
+                                    {SUB_CATEGORY_LABELS[tag] || tag}
                                 </span>
                             ))}
 
@@ -186,9 +196,9 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
 
                 {/* Main Content Area */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-gray-50/50 dark:bg-black/20">
-                    {/* Description - Livelier Blue Color, Tags moved to header */}
+                    {/* Description - Updated font size for title (text-base) vs content (text-sm) */}
                     <div className="bg-sky-50 dark:bg-sky-900/10 p-4 rounded-xl border border-sky-100 dark:border-sky-900/30 shadow-sm">
-                        <h4 className="text-xs font-bold text-sky-600 dark:text-sky-400 uppercase mb-2 tracking-wider flex items-center gap-1">
+                        <h4 className="text-base font-bold text-sky-600 dark:text-sky-400 uppercase mb-2 tracking-wider flex items-center gap-1">
                             📝 简介
                         </h4>
                         <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-medium">

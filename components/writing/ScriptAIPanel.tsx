@@ -5,7 +5,7 @@ import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
-import { Sparkles, Film, X, ChevronDown, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal } from '../Icon';
+import { Sparkles, Film, X, ChevronDown, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, Database } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -232,24 +232,26 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                 {renderTabButton('script', '剧本', Film)}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 
-                <div className="space-y-4 bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+                {/* Configuration Card - Aligned with Long Novel Panel */}
+                <div className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 space-y-5 shadow-sm">
+                    {/* Model Selection */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型选择</label>
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型配置</label>
                         <div className="flex gap-2">
                             <div className="relative flex-1">
                                 <select 
                                     value={model} 
                                     onChange={e => setModel(e.target.value)} 
-                                    className="w-full p-2.5 pr-8 text-sm font-medium rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-all cursor-pointer appearance-none"
+                                    className="w-full py-2 pl-3 pr-8 text-xs font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer"
                                 >
                                     <option value="deepseek-chat">DeepSeek V3 (通用对话)</option>
                                     <option value="deepseek-reasoner">DeepSeek R1 (深度推理)</option>
                                     <option value="gemini-2.5-flash">Gemini 2.5 Flash (极速)</option>
                                     <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
                                 </select>
-                                <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
+                                <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
                             <button 
                                 onClick={() => setShowConfig(!showConfig)}
@@ -293,41 +295,50 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                         </div>
                     )}
                     
-                    <div className="space-y-2">
+                    {/* Prompt Selection */}
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">提示词选择</label>
                         <button 
                             onClick={() => setPromptModalOpen(true)}
-                            className={`w-full py-2 px-3 text-sm rounded border transition-colors flex items-center justify-between group ${selectedPrompt ? 'bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-400' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 hover:border-sky-400'}`}
+                            className={`w-full p-3 rounded-lg border text-left transition-all group relative overflow-hidden ${
+                                selectedPrompt 
+                                ? 'bg-sky-50 border-sky-300 text-sky-900 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-100' 
+                                : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-400'
+                            }`}
                         >
-                            <div className="flex items-center gap-2 truncate">
-                                <Sparkles className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate text-xs">{selectedPrompt ? selectedPrompt.title : '选择提示词模板'}</span>
-                            </div>
-                            {selectedPrompt ? (
-                                <X 
-                                    className="w-4 h-4 opacity-50 hover:opacity-100 z-10" 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedPrompt(null);
-                                    }}
-                                />
-                            ) : (
+                            <div className="flex items-center justify-between relative z-10">
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                    <Search className={`w-4 h-4 flex-shrink-0 ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-400'}`} />
+                                    <span className="font-semibold truncate text-xs">{selectedPrompt ? selectedPrompt.title : '点击选择提示词模板...'}</span>
+                                </div>
                                 <ChevronDown className="w-4 h-4 opacity-50" />
-                            )}
+                            </div>
                         </button>
+                    </div>
 
+                    {/* Asset Association */}
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">关联素材</label>
                         <button 
                             onClick={() => setAssetModalOpen(true)}
-                            className={`w-full py-2 px-3 text-sm rounded border transition-colors flex items-center justify-between ${selectedAssetIds.size > 0 ? 'bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-400' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 hover:border-sky-400'}`}
+                            className={`w-full p-3 rounded-lg border text-left transition-all ${
+                                selectedAssetIds.size > 0 
+                                ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' 
+                                : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'
+                            }`}
                         >
-                            <div className="flex items-center gap-2">
-                                <BookOpen className="w-4 h-4 flex-shrink-0" />
-                                <span className="text-xs">关联素材库</span>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Database className={`w-4 h-4 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400'}`} />
+                                    <span className="font-semibold text-xs">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 个素材` : '关联人物/剧情/设定...'}</span>
+                                </div>
+                                <ChevronDown className="w-4 h-4 opacity-50" />
                             </div>
-                             {selectedAssetIds.size > 0 && <span className="text-xs bg-purple-200 dark:bg-purple-800 px-1.5 py-0.5 rounded">{selectedAssetIds.size}</span>}
                         </button>
                     </div>
                 </div>
 
+                {/* Prompts / Input */}
                 <div>
                     {selectedPrompt ? (
                         <div className="space-y-4 animate-fade-in">
@@ -353,7 +364,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                                             value={formState[field.id] || ''}
                                             onChange={e => handleInputChange(field.id, e.target.value)}
                                             placeholder={field.placeholder}
-                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-shadow shadow-sm"
+                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-shadow shadow-sm"
                                         />
                                     )}
                                     {field.description && <p className="text-[10px] text-gray-400 mt-1">{field.description}</p>}
@@ -378,7 +389,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                 <button 
                     onClick={isLoading ? handleStop : handleGenerate}
                     disabled={false}
-                    className={`w-full py-3 font-bold text-lg rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
+                    className={`w-full py-3.5 font-bold rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 ${
                         isLoading
                         ? 'bg-red-500 hover:bg-red-600 text-white'
                         : 'bg-sky-600 hover:bg-sky-500 text-white disabled:bg-gray-400'

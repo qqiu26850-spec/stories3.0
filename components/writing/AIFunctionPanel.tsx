@@ -4,7 +4,7 @@ import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
-import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal } from '../Icon';
+import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, Search } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -243,14 +243,14 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 <select 
                                     value={model} 
                                     onChange={e => setModel(e.target.value)} 
-                                    className="w-full p-2.5 pr-8 text-sm font-medium rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-all cursor-pointer appearance-none"
+                                    className="w-full py-2 pl-3 pr-8 text-xs font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer"
                                 >
                                     <option value="deepseek-chat">DeepSeek V3 (通用对话)</option>
                                     <option value="deepseek-reasoner">DeepSeek R1 (深度推理)</option>
                                     <option value="gemini-2.5-flash">Gemini 2.5 Flash (极速)</option>
                                     <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
                                 </select>
-                                <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
+                                <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
                             <button 
                                 onClick={() => setShowConfig(!showConfig)}
@@ -306,7 +306,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         >
                             <div className="flex items-center justify-between relative z-10">
                                 <div className="flex items-center gap-2 overflow-hidden">
-                                    <Sparkles className={`w-4 h-4 flex-shrink-0 ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-400'}`} />
+                                    <Search className={`w-4 h-4 flex-shrink-0 ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-400'}`} />
                                     <span className="font-semibold truncate text-xs">{selectedPrompt ? selectedPrompt.title : '点击选择提示词模板...'}</span>
                                 </div>
                                 <ChevronDown className="w-4 h-4 opacity-50" />

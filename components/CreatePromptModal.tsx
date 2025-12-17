@@ -16,6 +16,7 @@ const CATEGORIES: { id: PromptCategory; label: string }[] = [
     { id: 'short-story', label: '短篇小说' },
     { id: 'long-story', label: '长篇小说' },
     { id: 'script', label: '剧本' },
+    { id: 'general', label: '通用' },
 ];
 
 const GENRE_TAGS: { id: PromptSubCategory; label: string }[] = [
@@ -207,13 +208,18 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">主分类</label>
-                            <select 
-                                value={category} 
-                                onChange={(e) => setCategory(e.target.value as PromptCategory)} 
-                                className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition"
-                            >
-                                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                            </select>
+                            <div className="relative">
+                                <select 
+                                    value={category} 
+                                    onChange={(e) => setCategory(e.target.value as PromptCategory)} 
+                                    className="w-full py-3 pl-3 pr-8 text-sm font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition appearance-none cursor-pointer"
+                                >
+                                    {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                </select>
+                                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-gray-500">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

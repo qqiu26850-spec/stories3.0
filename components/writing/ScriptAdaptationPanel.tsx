@@ -5,7 +5,7 @@ import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS } from '../../constants';
-import { Film, Sparkles, Workflow as WorkflowIcon, ChevronDown, Database, Copy, X, Stop, AdjustmentsHorizontal } from '../Icon';
+import { Film, Sparkles, Workflow as WorkflowIcon, ChevronDown, Database, Copy, X, Stop, AdjustmentsHorizontal, Search } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -253,7 +253,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                 分集改编
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
                  {/* Modals */}
                  <AssetSelectionModal 
                     isOpen={isAssetModalOpen}
@@ -283,22 +283,22 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
 
                 {/* Configuration Card */}
                 <div className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-5">
-                    {/* 1. Model Selection */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">模型选择</label>
+                    {/* 1. Model Config */}
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型配置</label>
                         <div className="flex gap-2">
                             <div className="relative flex-1">
                                 <select 
                                     value={model} 
                                     onChange={e => setModel(e.target.value)} 
-                                    className="w-full p-2.5 pr-8 text-sm rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition appearance-none"
+                                    className="w-full py-2 pl-3 pr-8 text-xs font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer"
                                 >
                                     <option value="deepseek-chat">DeepSeek V3 (通用对话)</option>
                                     <option value="deepseek-reasoner">DeepSeek R1 (深度推理)</option>
                                     <option value="gemini-2.5-flash">Gemini 2.5 Flash (极速)</option>
                                     <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
                                 </select>
-                                <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
+                                <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
                             <button 
                                 onClick={() => setShowConfig(!showConfig)}
@@ -343,20 +343,20 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                         </div>
                     )}
 
-                    {/* 2. Selection Mode (Prompt vs Workflow) */}
-                    <div>
-                        <div className="flex items-center justify-between mb-2">
-                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">生成方式</label>
+                    {/* 2. Generation Method (Prompt/Workflow) Selection Block */}
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between mb-1">
+                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">生成方式</label>
                              <div className="flex bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
                                  <button 
                                     onClick={() => setSelectionMode('prompt')}
-                                    className={`px-2 py-0.5 text-xs rounded transition-colors ${selectionMode === 'prompt' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                                    className={`px-2 py-0.5 text-xs rounded transition-colors ${selectionMode === 'prompt' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white font-medium' : 'text-gray-500 dark:text-gray-400'}`}
                                  >
                                      提示词
                                  </button>
                                  <button 
                                     onClick={() => setSelectionMode('workflow')}
-                                    className={`px-2 py-0.5 text-xs rounded transition-colors ${selectionMode === 'workflow' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                                    className={`px-2 py-0.5 text-xs rounded transition-colors ${selectionMode === 'workflow' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white font-medium' : 'text-gray-500 dark:text-gray-400'}`}
                                  >
                                      工作流
                                  </button>
@@ -372,7 +372,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                             }`}
                         >
                             <div className="flex items-center gap-2 truncate">
-                                {selectionMode === 'prompt' ? <Sparkles className="w-4 h-4" /> : <WorkflowIcon className="w-4 h-4" />}
+                                {selectionMode === 'prompt' ? <Search className="w-4 h-4" /> : <WorkflowIcon className="w-4 h-4" />}
                                 <span className="truncate font-medium text-xs">
                                     {selectionMode === 'prompt' 
                                         ? (selectedPrompt ? selectedPrompt.title : '选择提示词模板')
@@ -385,8 +385,8 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                     </div>
 
                      {/* 3. Asset Association */}
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">关联素材 (可选)</label>
+                     <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">关联素材</label>
                         <button 
                             onClick={() => setAssetModalOpen(true)}
                             className={`w-full p-3 rounded-lg border text-left transition-all flex items-center justify-between ${
@@ -397,7 +397,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                         >
                             <div className="flex items-center gap-2">
                                 <Database className="w-4 h-4" />
-                                <span className="font-medium text-xs">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 个素材` : '选择素材...'}</span>
+                                <span className="font-medium text-xs">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 个素材` : '关联人物/剧情/设定...'}</span>
                             </div>
                             {selectedAssetIds.size > 0 && <span className="text-xs bg-purple-200 dark:bg-purple-800 px-1.5 py-0.5 rounded text-purple-800 dark:text-purple-200">{selectedAssetIds.size}</span>}
                         </button>
@@ -414,7 +414,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                 <button 
                     onClick={isLoading ? handleStop : handleGenerate}
                     disabled={isLoading ? false : ((selectionMode === 'prompt' && !selectedPrompt) || (selectionMode === 'workflow' && !selectedWorkflow))}
-                    className={`w-full py-3 font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 ${
+                    className={`w-full py-3.5 font-bold rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 ${
                         isLoading
                         ? 'bg-red-500 hover:bg-red-600 text-white hover:shadow-red-500/30'
                         : 'bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/30 disabled:bg-gray-400 disabled:cursor-not-allowed'

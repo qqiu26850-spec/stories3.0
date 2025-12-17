@@ -43,7 +43,7 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
 
     return createPortal(
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-3xl h-[80vh] flex flex-col animate-fade-in-up overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl h-[80vh] flex flex-col animate-fade-in-up overflow-hidden" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">选择关联素材</h3>
@@ -90,40 +90,40 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
 
                 {/* List */}
                 <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-black/20">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {filteredAssets.map(asset => {
                             const isSelected = selectedAssetIds.has(asset.id);
                             return (
                                 <div 
                                     key={asset.id} 
                                     onClick={() => onToggleAsset(asset.id)}
-                                    className={`p-4 rounded-xl border cursor-pointer transition-all group relative overflow-hidden ${
+                                    className={`p-4 rounded-xl border cursor-pointer transition-all group relative overflow-hidden flex flex-col ${
                                         isSelected 
                                         ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 shadow-sm ring-1 ring-sky-500' 
                                         : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-md'
                                     }`}
                                 >
                                     <div className="flex justify-between items-start mb-2">
-                                        <div>
-                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-md mr-2 ${
+                                        <div className="flex-1 min-w-0 pr-2">
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-md mr-2 align-middle ${
                                                 asset.type === 'character' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
                                                 asset.type === 'plot' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
                                                 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
                                             }`}>
                                                 {asset.type === 'character' ? '角色' : asset.type === 'plot' ? '剧情' : '灵光'}
                                             </span>
-                                            <h4 className="font-bold text-gray-900 dark:text-white inline align-middle">{asset.name}</h4>
+                                            <h4 className="font-bold text-gray-900 dark:text-white inline align-middle truncate">{asset.name}</h4>
                                         </div>
                                         {isSelected && (
-                                            <div className="w-5 h-5 bg-sky-500 rounded-full flex items-center justify-center text-white shadow-sm">
+                                            <div className="w-5 h-5 bg-sky-500 rounded-full flex items-center justify-center text-white shadow-sm flex-shrink-0">
                                                 <Check className="w-3 h-3" />
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed mb-3">
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed mb-3 flex-1">
                                         {asset.content}
                                     </p>
-                                    <div className="flex flex-wrap gap-1.5">
+                                    <div className="flex flex-wrap gap-1.5 mt-auto">
                                         {asset.tags.slice(0, 3).map((tag, i) => (
                                             <span key={i} className="text-xs px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded">
                                                 #{tag}

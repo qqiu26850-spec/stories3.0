@@ -19,6 +19,7 @@ const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'short-story', label: '短篇小说' },
   { id: 'long-story', label: '长篇小说' },
   { id: 'script', label: '剧本' },
+  { id: 'general', label: '通用' },
 ];
 
 const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onClose, onSelect, initialSubCategory }) => {
@@ -54,6 +55,7 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                     if(p.main_category === 'long') appCat = 'long-story';
                     else if(p.main_category === 'script') appCat = 'script';
                     else if(p.main_category === 'short') appCat = 'short-story';
+                    else if(p.main_category === 'general') appCat = 'general';
                     else appCat = p.main_category as PromptCategory;
                     
                     let parsedContent: any = {};

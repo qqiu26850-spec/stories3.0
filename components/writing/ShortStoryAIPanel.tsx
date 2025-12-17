@@ -251,14 +251,14 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             <select 
                                 value={model} 
                                 onChange={e => setModel(e.target.value)} 
-                                className="w-full p-2.5 pr-8 text-sm font-medium rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition shadow-sm appearance-none"
+                                className="w-full py-2 pl-3 pr-8 text-xs font-medium rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer"
                             >
                                 <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
                                 <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
                                 <option value="gemini-2.5-flash">谷歌极速 (Gemini Flash)</option>
                                 <option value="gemini-2.5-pro">谷歌深度 (Gemini Pro)</option>
                             </select>
-                            <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
+                            <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                         </div>
                         <button 
                             onClick={() => setShowConfig(!showConfig)}
@@ -334,14 +334,14 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 <select 
                                     value={selectedWorkflow} 
                                     onChange={e => setSelectedWorkflow(e.target.value)} 
-                                    className="w-full p-2.5 pl-9 pr-8 text-sm rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition shadow-sm appearance-none"
+                                    className="w-full py-2.5 pl-3 pr-8 text-xs rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer"
                                 >
                                     {MOCK_WORKFLOWS.map(wf => (
                                         <option key={wf.id} value={wf.id}>{wf.title}</option>
                                     ))}
                                 </select>
-                                <WorkflowIcon className="w-4 h-4 absolute left-3 top-3 text-gray-400 pointer-events-none" />
-                                <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
+                                <WorkflowIcon className="w-3 h-3 absolute left-3 top-3 text-gray-400 pointer-events-none" />
+                                <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
                         </div>
                     )}
