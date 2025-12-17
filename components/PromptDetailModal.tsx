@@ -106,7 +106,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                 className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col relative max-h-[90vh] animate-fade-in-up border border-gray-200 dark:border-gray-800" 
                 onClick={e => e.stopPropagation()}
             >
-                {/* Clean Compact Header */}
+                {/* Clean Compact Header (Removed Large Blank Banner) */}
                 <div className="flex items-start justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 z-20 relative">
                     <div className="flex items-start gap-5 pr-8">
                         <div className={`w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center flex-shrink-0 ${style.bg} text-white`}>

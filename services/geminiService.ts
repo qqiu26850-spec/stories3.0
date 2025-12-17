@@ -42,6 +42,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
     }
   } else if (options.model.startsWith('deepseek')) {
     try {
+        // DeepSeek API Endpoint
         const response = await fetch("https://api.deepseek.com/chat/completions", {
             method: "POST",
             headers: {
@@ -49,9 +50,9 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
                 "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
                 "Accept": "application/json"
             },
-            mode: 'cors',
+            mode: 'cors', // Ensure CORS is handled if supported by server
             body: JSON.stringify({
-                model: options.model,
+                model: options.model, // e.g., 'deepseek-chat' or 'deepseek-reasoner'
                 messages: [
                     { role: "user", content: finalPrompt }
                 ],
@@ -75,9 +76,9 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         }
         console.error("Error generating text with DeepSeek:", error);
         if (error instanceof Error) {
-            // Check for common fetch errors
+            // Check for common fetch errors related to network or CORS
             if (error.message === 'Failed to fetch') {
-                return "DeepSeek 连接失败。可能是网络问题或 API 跨域限制，请检查网络设置。";
+                return "DeepSeek 连接失败。这通常是因为浏览器跨域限制(CORS)或网络问题。建议切换至 Gemini 模型使用，或检查网络连接。";
             }
             return `DeepSeek 生成内容时出错：${error.message}`;
         }
@@ -147,7 +148,11 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                 signal: options.signal
             });
 
-            if (!response.ok) throw new Error(`DeepSeek API Error: ${response.status}`);
+            if (!response.ok) {
+                 const errorText = await response.text().catch(() => '');
+                 throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
+            }
+            
             if (!response.body) throw new Error("No response body");
 
             const reader = response.body.getReader();
@@ -185,7 +190,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             if (error.name === 'AbortError' || options.signal?.aborted) return;
             console.error("Error generating text stream with DeepSeek:", error);
             if (error.message === 'Failed to fetch') {
-                yield "DeepSeek 连接失败。请检查网络或稍后重试。";
+                yield "DeepSeek 连接失败 (CORS/Network)。请尝试切换模型。";
             } else {
                 yield `DeepSeek 生成内容时出错：${error.message}`;
             }
