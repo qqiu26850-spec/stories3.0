@@ -4,7 +4,7 @@ import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
-import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash } from '../Icon';
+import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -377,14 +377,18 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 )}
 
                 <button 
-                    onClick={handleGenerate}
-                    disabled={isLoading || !selectedPrompt}
-                    className="w-full py-3.5 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-sky-500/30 active:scale-[0.98]"
+                    onClick={isLoading ? handleStop : handleGenerate}
+                    disabled={!selectedPrompt && !isLoading}
+                    className={`w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] ${
+                        isLoading 
+                        ? 'bg-red-500 hover:bg-red-600 text-white hover:shadow-red-500/30' 
+                        : 'bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/30 disabled:bg-gray-400 disabled:cursor-not-allowed'
+                    }`}
                 >
                     {isLoading ? (
                         <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            AI 正在思考中...
+                            <Stop className="w-5 h-5" />
+                            停止生成
                         </>
                     ) : (
                         <>

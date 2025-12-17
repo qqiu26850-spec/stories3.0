@@ -556,7 +556,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                   <div className="flex-1 overflow-y-auto p-6 md:p-8">
                       {generatedText ? (
                           <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 min-h-full animate-fade-in">
-                              <pre className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-lg">
+                              <pre className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm md:text-base">
                                   {generatedText}
                               </pre>
                           </div>

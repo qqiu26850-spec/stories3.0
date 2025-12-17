@@ -23,6 +23,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [wordCount, setWordCount] = useState(0);
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null); // Added scroll container ref
     const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>('left');
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [tempTitle, setTempTitle] = useState(script.title);
@@ -164,13 +165,17 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 }
             }
             
-            // Sync word count & resize
+            // Sync word count & resize & scroll
             const count = nextContent.replace(/\s/g, '').length;
             setWordCount(count);
             setTimeout(() => {
                 if (textareaRef.current) {
                     textareaRef.current.style.height = 'auto';
                     textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+                }
+                // Auto-scroll
+                if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
                 }
             }, 0);
 
@@ -318,7 +323,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 </div>
                                 
                                 {/* Scrollable Area */}
-                                <div className="flex-1 overflow-y-auto px-8 pb-12">
+                                <div className="flex-1 overflow-y-auto px-8 pb-12" ref={scrollContainerRef}>
                                     <input
                                         type="text"
                                         value={sceneTitle}

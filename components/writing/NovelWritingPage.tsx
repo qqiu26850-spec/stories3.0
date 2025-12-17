@@ -27,6 +27,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const [wordCount, setWordCount] = useState(0);
     
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null); // Added scroll container ref
     const [selectionRange, setSelectionRange] = useState<{start: number, end: number}>({ start: 0, end: 0 });
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [tempTitle, setTempTitle] = useState(novel.title);
@@ -242,11 +243,16 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             // Update word count
             const count = nextContent.replace(/\s/g, '').length;
             setWordCount(count);
-            // Auto-resize
+            
+            // Auto-resize textarea
             setTimeout(() => {
                 if (textareaRef.current) {
                     textareaRef.current.style.height = 'auto';
                     textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+                }
+                // Auto-scroll to bottom of container
+                if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
                 }
             }, 0);
             return nextContent;
@@ -396,7 +402,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                 </div>
                                 
                                 {/* Scrollable Area */}
-                                <div className="flex-1 overflow-y-auto px-8 pb-12">
+                                <div className="flex-1 overflow-y-auto px-8 pb-12" ref={scrollContainerRef}>
                                     <input
                                         type="text"
                                         value={chapterTitle}

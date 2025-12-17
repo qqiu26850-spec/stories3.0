@@ -7,7 +7,6 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import AssetDetailModal from './AssetDetailModal';
 import { Pencil, Trash } from './Icon';
 import { saveMaterial, fetchMaterials, deleteMaterial } from '../services/supabaseService';
-import LoadingOverlay from './LoadingOverlay';
 
 type AssetLibraryView = 'character-library' | 'plot-library' | 'inspiration-library';
 
@@ -108,7 +107,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     const { title, assetType, description } = viewConfig[view];
     // Initialize with empty array, data will be fetched from Supabase
     const [assets, setAssets] = useState<Asset[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     
     // Modal States
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
@@ -244,7 +243,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in">
-            <LoadingOverlay isVisible={isLoading} onClose={() => {}} message={`正在加载${title}...`} />
             <CreateAssetModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setCreateModalOpen(false)}
@@ -295,48 +293,54 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredAssets.map(asset => (
-                    <div 
-                        key={asset.id} 
-                        className={`bg-white dark:bg-gray-900 p-6 rounded-xl border ${ASSET_STYLES[asset.type].border} hover:shadow-lg hover:border-sky-400 transition-all duration-300 group cursor-pointer flex flex-col h-full relative`}
-                        onClick={() => handleSelectAsset(asset)}
-                    >
-                        <div className="flex justify-between items-start mb-3">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate flex-1 pr-2">{asset.name}</h3>
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                                 <button 
-                                    onClick={(e) => { e.stopPropagation(); handleEdit(asset); }}
-                                    className="p-1 text-gray-400 hover:text-sky-500 transition-colors"
-                                >
-                                    <Pencil className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); handleOpenDeleteModal(asset.id); }}
-                                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                                >
-                                    <Trash className="w-4 h-4" />
-                                </button>
+            {isLoading ? (
+                <div className="flex items-center justify-center h-64">
+                    <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-800 border-t-sky-500 rounded-full animate-spin"></div>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredAssets.map(asset => (
+                        <div 
+                            key={asset.id} 
+                            className={`bg-white dark:bg-gray-900 p-6 rounded-xl border ${ASSET_STYLES[asset.type].border} hover:shadow-lg hover:border-sky-400 transition-all duration-300 group cursor-pointer flex flex-col h-full relative`}
+                            onClick={() => handleSelectAsset(asset)}
+                        >
+                            <div className="flex justify-between items-start mb-3">
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate flex-1 pr-2">{asset.name}</h3>
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                     <button 
+                                        onClick={(e) => { e.stopPropagation(); handleEdit(asset); }}
+                                        className="p-1 text-gray-400 hover:text-sky-500 transition-colors"
+                                    >
+                                        <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); handleOpenDeleteModal(asset.id); }}
+                                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                    >
+                                        <Trash className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm mb-4 line-clamp-3 leading-relaxed flex-grow whitespace-pre-wrap">
+                                {asset.content}
+                            </p>
+                            <div className="flex flex-wrap gap-2 mt-auto">
+                                {asset.tags.map((tag, index) => (
+                                    <span key={index} className={`text-xs px-2 py-1 rounded-md font-medium border ${getTagStyle(tag)}`}>
+                                        #{tag}
+                                    </span>
+                                ))}
                             </div>
                         </div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-4 line-clamp-3 leading-relaxed flex-grow whitespace-pre-wrap">
-                            {asset.content}
-                        </p>
-                        <div className="flex flex-wrap gap-2 mt-auto">
-                            {asset.tags.map((tag, index) => (
-                                <span key={index} className={`text-xs px-2 py-1 rounded-md font-medium border ${getTagStyle(tag)}`}>
-                                    #{tag}
-                                </span>
-                            ))}
+                    ))}
+                    {filteredAssets.length === 0 && (
+                        <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
+                            <p>暂无相关素材</p>
                         </div>
-                    </div>
-                ))}
-                {filteredAssets.length === 0 && (
-                    <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
-                        <p>暂无相关素材</p>
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

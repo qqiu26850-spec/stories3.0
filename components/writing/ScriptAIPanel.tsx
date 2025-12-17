@@ -4,7 +4,7 @@ import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
-import { Sparkles, Film, X, ChevronDown, BookOpen, Copy, Trash } from '../Icon';
+import { Sparkles, Film, X, ChevronDown, BookOpen, Copy, Trash, Stop } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -358,14 +358,18 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                 </div>
 
                 <button 
-                    onClick={handleGenerate}
-                    disabled={isLoading}
-                    className="w-full py-3 bg-sky-600 text-white font-bold text-lg rounded-xl hover:bg-sky-500 disabled:bg-gray-400 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                    onClick={isLoading ? handleStop : handleGenerate}
+                    disabled={false}
+                    className={`w-full py-3 font-bold text-lg rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
+                        isLoading
+                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                        : 'bg-sky-600 hover:bg-sky-500 text-white disabled:bg-gray-400'
+                    }`}
                 >
                      {isLoading ? (
                         <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            思考中...
+                            <Stop className="w-5 h-5" />
+                            停止生成
                         </>
                     ) : (
                         <>

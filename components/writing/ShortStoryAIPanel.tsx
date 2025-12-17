@@ -4,7 +4,7 @@ import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
-import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash } from '../Icon';
+import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -463,14 +463,18 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 </div>
 
                 <button 
-                    onClick={handleGenerate}
-                    disabled={isLoading || (activeTab === 'imitate' && !referenceText && !selectedPrompt)}
-                    className="w-full py-4 bg-sky-600 text-white font-bold text-lg rounded-xl hover:bg-sky-500 disabled:bg-gray-400 transition-all shadow-lg hover:shadow-sky-500/30 flex items-center justify-center gap-2"
+                    onClick={isLoading ? handleStop : handleGenerate}
+                    disabled={(!isLoading && activeTab === 'imitate' && !referenceText && !selectedPrompt)}
+                    className={`w-full py-4 font-bold text-lg rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] ${
+                        isLoading
+                        ? 'bg-red-500 hover:bg-red-600 text-white hover:shadow-red-500/30'
+                        : 'bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/30 disabled:bg-gray-400 disabled:cursor-not-allowed'
+                    }`}
                 >
                     {isLoading ? (
                         <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            创作中...
+                            <Stop className="w-5 h-5" />
+                            停止生成
                         </>
                     ) : (
                         <>

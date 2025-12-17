@@ -6,9 +6,8 @@ import CreatePromptModal from './CreatePromptModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import PromptDetailModal from './PromptDetailModal';
 import { Plus, Heart, UserCircle } from './Icon';
-import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt, incrementPromptHeat } from '../services/supabaseService';
+import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt } from '../services/supabaseService';
 import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
-import LoadingOverlay from './LoadingOverlay';
 
 interface PromptLibraryProps {
     onNavigateToGeneration?: (prompt: Prompt, values: Record<string, string>) => void;
@@ -40,7 +39,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     const [promptToEdit, setPromptToEdit] = useState<Prompt | null>(null);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Load User Prompts from Supabase
     useEffect(() => {
@@ -227,7 +226,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col">
-            <LoadingOverlay isVisible={isLoading} onClose={() => {}} message="正在加载提示词库..." />
             <CreatePromptModal
                 isOpen={isCreateModalOpen}
                 onClose={() => { setCreateModalOpen(false); setPromptToEdit(null); }}
@@ -326,26 +324,32 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             </div>
 
             <div className="flex-1 overflow-y-auto pr-2 -mr-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
-                    {filteredPrompts.map(prompt => (
-                        <div key={prompt.id} className="h-full">
-                            <PromptCard 
-                                prompt={prompt}
-                                onSelect={handleSelectPrompt}
-                                onDelete={handleOpenDeleteModal}
-                                onEdit={handleEditPrompt}
-                                isFavorited={favoritedIds.has(prompt.id)}
-                                onToggleFavorite={toggleFavorite}
-                                isOwner={prompt.userId === currentUserId}
-                            />
-                        </div>
-                    ))}
-                    {filteredPrompts.length === 0 && (
-                        <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
-                            <p>暂无相关提示词，快去创建一个吧！</p>
-                        </div>
-                    )}
-                </div>
+                {isLoading ? (
+                    <div className="flex items-center justify-center h-64">
+                        <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-800 border-t-sky-500 rounded-full animate-spin"></div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
+                        {filteredPrompts.map(prompt => (
+                            <div key={prompt.id} className="h-full">
+                                <PromptCard 
+                                    prompt={prompt}
+                                    onSelect={handleSelectPrompt}
+                                    onDelete={handleOpenDeleteModal}
+                                    onEdit={handleEditPrompt}
+                                    isFavorited={favoritedIds.has(prompt.id)}
+                                    onToggleFavorite={toggleFavorite}
+                                    isOwner={prompt.userId === currentUserId}
+                                />
+                            </div>
+                        ))}
+                        {filteredPrompts.length === 0 && (
+                            <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
+                                <p>暂无相关提示词，快去创建一个吧！</p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
