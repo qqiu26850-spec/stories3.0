@@ -8,9 +8,9 @@ interface PlaceholderProps {
 
 const viewToLabel: Record<View, string> = {
     'creative-generation': '创意生成',
-    'novel-management': '小说管理',
-    'script-management': '剧本管理',
-    'hit-copywriting': '短篇管理',
+    'novel-management': '长篇小说',
+    'script-management': '剧本生成',
+    'hit-copywriting': '短篇小说',
     'prompt-library': '提示词库',
     'workflow': '工作流',
     'character-library': '角色库',

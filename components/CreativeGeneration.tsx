@@ -560,7 +560,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                     value={freeInput}
                                     onChange={e => setFreeInput(e.target.value)}
                                     placeholder="请输入您的创作需求..."
-                                    className="w-full h-64 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition text-sm resize-none"
+                                    className="w-full h-40 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition text-sm resize-none"
                                 />
                             )}
                         </div>
@@ -587,8 +587,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                     </div>
                 </div>
 
-                <div className="flex-1 bg-gray-100 dark:bg-black/50 overflow-y-auto p-2 lg:p-4 flex flex-col items-center" ref={scrollContainerRef}>
-                    <div className="w-full max-w-4xl bg-white dark:bg-gray-900 min-h-full rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 relative flex flex-col">
+                <div className="flex-1 bg-gray-100 dark:bg-black/50 p-2 lg:p-4 flex flex-col items-center overflow-hidden">
+                    <div className="w-full max-w-4xl bg-white dark:bg-gray-900 h-full rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col relative overflow-hidden">
                         {!generatedText ? (
                             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 opacity-50 p-8">
                                 <Sparkles className="w-20 h-20 mb-6" />
@@ -596,7 +596,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                             </div>
                         ) : (
                             <>
-                                <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 px-8 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center rounded-t-2xl">
+                                <div className="flex-shrink-0 bg-white dark:bg-gray-900 px-8 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                                     <div className="flex items-center gap-2 text-gray-900 dark:text-white font-bold text-lg">
                                         <Sparkles className="w-5 h-5 text-sky-500" />
                                         <span>生成结果</span>
@@ -610,7 +610,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         </button>
                                     </div>
                                 </div>
-                                <div className="flex-1 px-8 py-6">
+                                <div className="flex-1 overflow-y-auto px-8 py-6 scroll-smooth" ref={scrollContainerRef}>
                                     <FormattedText text={generatedText} />
                                 </div>
                             </>

@@ -31,7 +31,7 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
     const [isProcessing, setIsProcessing] = useState(false); // For create/update loading
     const [successMessage, setSuccessMessage] = useState('');
 
-    const pageTitle = mode === 'long' ? '长篇小说' : '短篇管理';
+    const pageTitle = mode === 'long' ? '长篇小说' : '短篇小说';
     const description = mode === 'long' ? '在这里开始、管理和发展你的长篇故事。' : '快速捕捉灵感，创作精彩的短篇故事。';
     const createButtonLabel = mode === 'long' ? '新建长篇小说' : '新建短篇故事';
 
