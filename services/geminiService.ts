@@ -22,8 +22,6 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 
   if (options.model.startsWith('gemini')) {
     try {
-        // Note: Gemini SDK generateContent doesn't natively support signal in the simple signature yet,
-        // but we can check it before ensuring logic.
         if (options.signal?.aborted) throw new Error("Aborted");
         
         const response = await ai.models.generateContent({
@@ -48,8 +46,10 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+                "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+                "Accept": "application/json"
             },
+            mode: 'cors',
             body: JSON.stringify({
                 model: options.model,
                 messages: [
@@ -75,6 +75,10 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         }
         console.error("Error generating text with DeepSeek:", error);
         if (error instanceof Error) {
+            // Check for common fetch errors
+            if (error.message === 'Failed to fetch') {
+                return "DeepSeek 连接失败。可能是网络问题或 API 跨域限制，请检查网络设置。";
+            }
             return `DeepSeek 生成内容时出错：${error.message}`;
         }
         return "DeepSeek 生成内容时发生未知错误。";
@@ -116,8 +120,6 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             }
         } catch (error: any) {
             if (error.message === 'Aborted' || options.signal?.aborted) {
-                // Silent return or yield stop message? 
-                // Yielding nothing ends the stream.
                 return; 
             }
             console.error("Error generating text stream with Gemini:", error);
@@ -129,8 +131,10 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+                    "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+                    "Accept": "application/json"
                 },
+                mode: 'cors',
                 body: JSON.stringify({
                     model: options.model,
                     messages: [
@@ -180,7 +184,11 @@ export const generateTextStream = async function* (prompt: string, options: Gene
         } catch (error: any) {
             if (error.name === 'AbortError' || options.signal?.aborted) return;
             console.error("Error generating text stream with DeepSeek:", error);
-            yield `DeepSeek 生成内容时出错：${error.message}`;
+            if (error.message === 'Failed to fetch') {
+                yield "DeepSeek 连接失败。请检查网络或稍后重试。";
+            } else {
+                yield `DeepSeek 生成内容时出错：${error.message}`;
+            }
         }
     } else {
         // Simulate
