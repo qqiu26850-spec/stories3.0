@@ -172,7 +172,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const [successMessage, setSuccessMessage] = useState('');
     const [assets, setAssets] = useState<Asset[]>([]);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+    
     const abortControllerRef = useRef<AbortController | null>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const loadAssets = async () => {
@@ -231,6 +233,15 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             setFormState({});
         }
     }, [selectedPrompt]);
+
+    // Auto-scroll logic
+    useEffect(() => {
+        if (isGenerating && scrollContainerRef.current) {
+            const container = scrollContainerRef.current;
+            // Use scrollTo with 'auto' behavior for smoother performance during rapid updates
+            container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+        }
+    }, [generatedText, isGenerating]);
 
     const handleStop = () => {
         if (abortControllerRef.current) {
@@ -518,10 +529,10 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
 
                             {selectedPrompt ? (
                                 <div className="space-y-4 animate-fade-in">
-                                    {selectedPrompt.fields.map(field => (
+                                    {selectedPrompt.fields.map((field, index) => (
                                         <div key={field.id}>
                                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                                                {1}. {field.label}
+                                                {index + 1}. {field.label}
                                                 {field.required && <span className="text-red-500 ml-1">*</span>}
                                             </label>
                                             {field.type === 'textarea' ? (
@@ -576,8 +587,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                     </div>
                 </div>
 
-                <div className="flex-1 bg-gray-100 dark:bg-black/50 overflow-y-auto p-4 lg:p-8 flex flex-col items-center">
-                    <div className="w-full max-w-3xl bg-white dark:bg-gray-900 min-h-[calc(100vh-8rem)] rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 relative flex flex-col">
+                <div className="flex-1 bg-gray-100 dark:bg-black/50 overflow-y-auto p-4 lg:p-8 flex flex-col items-center" ref={scrollContainerRef}>
+                    <div className="w-full max-w-3xl bg-white dark:bg-gray-900 min-h-[calc(100vh-8rem)] h-fit rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 relative flex flex-col">
                         {!generatedText ? (
                             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 opacity-50">
                                 <Sparkles className="w-20 h-20 mb-6" />
@@ -585,13 +596,19 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                             </div>
                         ) : (
                             <>
-                                <div className="flex justify-end gap-3 mb-6 sticky top-0 bg-white dark:bg-gray-900 pb-4 border-b border-gray-100 dark:border-gray-800 z-10">
-                                    <button onClick={handleCopy} className="text-gray-500 hover:text-sky-600 flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Copy className="w-4 h-4" /> 复制
-                                    </button>
-                                    <button onClick={() => setImportModalOpen(true)} className="text-gray-500 hover:text-purple-600 flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                        <Database className="w-4 h-4" /> 存入素材
-                                    </button>
+                                <div className="flex justify-between items-center mb-6 sticky top-0 bg-white dark:bg-gray-900 pb-4 border-b border-gray-100 dark:border-gray-800 z-10">
+                                    <div className="flex items-center gap-2 text-gray-900 dark:text-white font-bold text-lg">
+                                        <Sparkles className="w-5 h-5 text-sky-500" />
+                                        <span>生成结果</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={handleCopy} className="text-gray-500 hover:text-sky-600 flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                            <Copy className="w-4 h-4" /> 复制
+                                        </button>
+                                        <button onClick={() => setImportModalOpen(true)} className="text-gray-500 hover:text-purple-600 flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                            <Database className="w-4 h-4" /> 存入素材
+                                        </button>
+                                    </div>
                                 </div>
                                 <FormattedText text={generatedText} />
                             </>

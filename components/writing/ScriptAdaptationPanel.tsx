@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Asset, Prompt, Workflow } from '../../types';
@@ -48,6 +49,7 @@ const WorkflowSelectionModal: React.FC<{
 };
 
 const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert, onStream }) => {
+    // ... state ...
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
@@ -210,10 +212,10 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
 
         return (
             <div className="space-y-4">
-                {fields.map(field => (
+                {fields.map((field, index) => (
                     <div key={field.id}>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                            {field.label}
+                            {index + 1}. {field.label}
                             {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
                         </label>
                          {field.type === 'textarea' ? (
@@ -241,6 +243,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full">
+            {/* ... overlay, header ... */}
             <LoadingOverlay 
                 isVisible={showLoadingOverlay} 
                 onClose={() => setShowLoadingOverlay(false)}

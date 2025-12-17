@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -21,6 +22,7 @@ interface AIFunctionPanelProps {
 }
 
 const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream }) => {
+    // ... state ...
     const [activeTab, setActiveTab] = useState<TabType>('plot');
     
     // Config State
@@ -197,6 +199,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800">
+            {/* ... Overlay & Modals ... */}
             <LoadingOverlay 
                 isVisible={showLoadingOverlay} 
                 onClose={() => setShowLoadingOverlay(false)} 
@@ -235,6 +238,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 
+                {/* Configuration Card */}
                 <div className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 space-y-5 shadow-sm">
                      <div className="flex flex-col gap-2">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型配置</label>
@@ -340,10 +344,10 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-800">
                             <span className="text-sm font-bold text-gray-900 dark:text-white">参数配置</span>
                         </div>
-                        {selectedPrompt.fields.map(field => (
+                        {selectedPrompt.fields.map((field, index) => (
                             <div key={field.id}>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 flex justify-between items-center">
-                                    {field.label}
+                                    {index + 1}. {field.label}
                                     {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
                                     {field.id === 'text' && selectedText && <span className="text-xs text-green-600 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded">已读取选中内容</span>}
                                 </label>
@@ -374,6 +378,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                      </div>
                 )}
 
+                {/* ... button and result ... */}
                 <button 
                     onClick={isLoading ? handleStop : handleGenerate}
                     disabled={!selectedPrompt && !isLoading}

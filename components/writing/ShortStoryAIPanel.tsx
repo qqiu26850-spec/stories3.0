@@ -22,6 +22,7 @@ interface ShortStoryAIPanelProps {
 }
 
 const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream }) => {
+    // ... state ...
     const [activeTab, setActiveTab] = useState<ShortStoryTab>('original');
     
     // Global Config for this Panel
@@ -205,6 +206,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800">
+            {/* ... Overlay & Modals ... */}
             <LoadingOverlay 
                 isVisible={showLoadingOverlay} 
                 onClose={() => setShowLoadingOverlay(false)} 
@@ -365,10 +367,10 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-800">
                                 <span className="text-sm font-bold text-gray-900 dark:text-white">参数配置</span>
                             </div>
-                            {selectedPrompt.fields.map(field => (
+                            {selectedPrompt.fields.map((field, index) => (
                                 <div key={field.id}>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                        {field.label}
+                                        {index + 1}. {field.label}
                                         {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
                                     </label>
                                     {field.type === 'textarea' ? (
@@ -469,16 +471,17 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     )}
                 </div>
 
+                {/* Action Button */}
                 <button 
                     onClick={isLoading ? handleStop : handleGenerate}
-                    disabled={(!isLoading && activeTab === 'imitate' && !referenceText && !selectedPrompt)}
-                    className={`w-full py-4 font-bold text-lg rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] ${
+                    disabled={false}
+                    className={`w-full py-3.5 font-bold rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 ${
                         isLoading
-                        ? 'bg-red-500 hover:bg-red-600 text-white hover:shadow-red-500/30'
-                        : 'bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/30 disabled:bg-gray-400 disabled:cursor-not-allowed'
+                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                        : 'bg-sky-600 hover:bg-sky-500 text-white disabled:bg-gray-400'
                     }`}
                 >
-                    {isLoading ? (
+                     {isLoading ? (
                         <>
                             <Stop className="w-5 h-5" />
                             停止生成
@@ -486,56 +489,26 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     ) : (
                         <>
                             <Sparkles className="w-5 h-5" />
-                            开始{activeTab === 'original' ? '创作' : activeTab === 'imitate' ? '仿写' : activeTab === 'polish' ? '润色' : '评审'}
+                            生成{activeTab === 'imitate' ? '仿写' : (activeTab === 'polish' ? '润色' : '内容')}
                         </>
                     )}
                 </button>
 
-                {error && (
-                    <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg">
-                        {error}
-                    </div>
-                )}
+                {error && <div className="text-red-500 text-sm bg-red-50 p-2 rounded">{error}</div>}
 
+                {/* Result */}
                 {resultText && (
-                    <div className="space-y-3 pt-6 border-t border-gray-200 dark:border-gray-800 animate-fade-in-up">
-                        <div className="flex justify-between items-center">
-                            <h4 className="text-base font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                                生成结果
-                                {((activeTab === 'original' || activeTab === 'imitate') && !selectedPrompt) && (
-                                    <span className="text-xs font-normal text-green-600 bg-green-100 px-2 py-0.5 rounded-full">已插入</span>
-                                )}
-                            </h4>
+                    <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm mt-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <h4 className="font-bold text-gray-700 dark:text-gray-300">生成结果</h4>
                             <div className="flex gap-2">
-                                <button 
-                                    onClick={() => navigator.clipboard.writeText(resultText)}
-                                    className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-sky-600 transition-colors"
-                                    title="复制"
-                                >
-                                    <Copy className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => setResultText('')}
-                                    className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-red-600 transition-colors"
-                                    title="清除"
-                                >
-                                    <Trash className="w-4 h-4" />
-                                </button>
+                                <button onClick={() => navigator.clipboard.writeText(resultText)} title="复制"><Copy className="w-4 h-4 text-gray-500 hover:text-sky-500" /></button>
+                                <button onClick={() => onInsert(resultText)} title="插入到编辑器" className="text-sky-600 text-xs font-bold hover:underline">插入正文</button>
                             </div>
                         </div>
-
-                        <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-80 overflow-y-auto shadow-inner">
+                        <div className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto font-mono">
                             {resultText}
                         </div>
-                        
-                        {activeTab === 'polish' && (
-                            <button 
-                                onClick={() => onReplace(resultText)}
-                                className="w-full py-3 bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 dark:hover:bg-sky-900/50 transition-colors text-sm"
-                            >
-                                替换选中文本
-                            </button>
-                        )}
                     </div>
                 )}
             </div>

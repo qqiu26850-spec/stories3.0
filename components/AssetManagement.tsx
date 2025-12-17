@@ -67,7 +67,7 @@ const TAG_COLORS = [
   'bg-rose-50 text-rose-700 border border-rose-100 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
 ];
 
-const getTagStyle = (tag: string) => {
+export const getTagStyle = (tag: string) => {
   let hash = 0;
   for (let i = 0; i < tag.length; i++) {
     hash = tag.charCodeAt(i) + ((hash << 5) - hash);
@@ -309,7 +309,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                     <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-800 border-t-sky-500 rounded-full animate-spin"></div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredAssets.map(asset => (
                         <div 
                             key={asset.id} 
@@ -333,13 +333,13 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                     </button>
                                 </div>
                             </div>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm mb-4 line-clamp-3 leading-relaxed flex-grow whitespace-pre-wrap">
+                            <p className="text-gray-500 dark:text-gray-400 text-sm mb-4 line-clamp-5 leading-relaxed flex-grow whitespace-pre-wrap">
                                 {asset.content}
                             </p>
                             <div className="flex flex-wrap gap-2 mt-auto">
                                 {asset.tags.map((tag, index) => (
                                     <span key={index} className={`text-xs px-2 py-1 rounded-md font-medium border ${getTagStyle(tag)}`}>
-                                        #{tag}
+                                        {tag}
                                     </span>
                                 ))}
                             </div>

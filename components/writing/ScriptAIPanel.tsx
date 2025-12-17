@@ -18,6 +18,7 @@ interface ScriptAIPanelProps {
 type ScriptTab = 'idea' | 'script';
 
 const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => {
+    // ... state and logic ...
     const [activeTab, setActiveTab] = useState<ScriptTab>('idea');
     
     // Common Config
@@ -198,6 +199,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full">
+            {/* ... overlay, modal, prompt selection modal ... */}
             <LoadingOverlay 
                 isVisible={showLoadingOverlay} 
                 onClose={() => setShowLoadingOverlay(false)}
@@ -345,10 +347,10 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                             <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-800">
                                 <span className="text-sm font-bold text-gray-900 dark:text-white">参数配置</span>
                             </div>
-                            {selectedPrompt.fields.map(field => (
+                            {selectedPrompt.fields.map((field, index) => (
                                 <div key={field.id}>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                        {field.label}
+                                        {index + 1}. {field.label}
                                         {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
                                     </label>
                                     {field.type === 'textarea' ? (
@@ -410,6 +412,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
 
                 {error && <div className="text-red-500 text-sm bg-red-50 p-2 rounded">{error}</div>}
 
+                {/* ... result display ... */}
                 {activeTab === 'idea' && generatedIdeas.length > 0 && (
                     <div className="space-y-4">
                         <h4 className="font-bold text-gray-700 dark:text-gray-300">生成结果 (可多选)</h4>
