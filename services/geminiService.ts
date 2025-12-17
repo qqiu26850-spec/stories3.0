@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 // Google Gemini API Key
 const GOOGLE_API_KEY = "AIzaSyB5gQjtLL4iIspEMzXwaYXNN3BMEZ4Zd1M";
 // DeepSeek API Key
-const DEEPSEEK_API_KEY = "sk-948c512b86c94ce8924462265c229017";
+const DEEPSEEK_API_KEY = "sk-ed8bb0fcecc8479890d2ac461d1a4fa5";
 
 const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
