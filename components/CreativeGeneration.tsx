@@ -122,18 +122,18 @@ const ImportAssetModal: React.FC<{
 
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     return (
-        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm md:text-base">
+        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-xs md:text-sm">
             {text.split('\n').map((line, index) => {
                 const isMarkdownHeader = line.trim().startsWith('#');
                 const isLikelyTitle = line.trim().length > 0 && line.trim().length < 40 && !line.includes('。') && !line.includes('，');
                 
                 if (isMarkdownHeader) {
                     const content = line.replace(/^#+\s*/, '');
-                    return <h3 key={index} className="text-xl font-extrabold text-gray-900 dark:text-white mt-5 mb-2.5">{content}</h3>;
+                    return <h3 key={index} className="text-lg font-extrabold text-gray-900 dark:text-white mt-5 mb-2.5">{content}</h3>;
                 }
                 
                 if (isLikelyTitle) {
-                     return <div key={index} className="text-lg font-bold text-gray-900 dark:text-white mt-4 mb-2">{line}</div>;
+                     return <div key={index} className="text-base font-bold text-gray-900 dark:text-white mt-4 mb-2">{line}</div>;
                 }
 
                 const parts = line.split(/(\*\*.*?\*\*)/g);
@@ -502,7 +502,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                     }`}
                                 >
                                     <Search className="w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold text-xs">{selectedPrompt ? '更换模板' : '选择提示词模板'}</span>
+                                    <span className="font-bold text-sm">选择提示词</span>
                                 </button>
 
                                 <button 
@@ -514,7 +514,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         }`}
                                 >
                                     <Database className="w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold text-xs">{selectedAssetIds.size > 0 ? `已选 ${selectedAssetIds.size}` : '关联素材'}</span>
+                                    <span className="font-bold text-sm">{selectedAssetIds.size > 0 ? `已选 ${selectedAssetIds.size}` : '关联素材'}</span>
                                 </button>
                             </div>
                         </div>
@@ -570,7 +570,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                         <button
                             onClick={handleGenerate}
                             disabled={isGenerating}
-                            className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg shadow-sky-500/30 flex items-center justify-center gap-2 transition-all ${isGenerating ? 'bg-gray-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-500 active:scale-[0.98]'}`}
+                            className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg shadow-sky-500/30 flex items-center justify-center gap-2 transition-all ${isGenerating ? 'bg-gray-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-50 active:scale-[0.98]'}`}
                         >
                             {isGenerating ? (
                                 <>
