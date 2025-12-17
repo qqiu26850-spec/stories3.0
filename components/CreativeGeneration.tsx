@@ -587,8 +587,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                     </div>
                 </div>
 
-                <div className="flex-1 bg-gray-100 dark:bg-black/50 p-2 lg:p-4 flex flex-col items-center overflow-hidden">
-                    <div className="w-full max-w-4xl bg-white dark:bg-gray-900 h-full rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col relative overflow-hidden">
+                <div className="flex-1 bg-gray-50 dark:bg-black/50 flex flex-col items-center overflow-hidden">
+                    <div className="w-full max-w-5xl bg-white dark:bg-gray-900 h-full shadow-sm border-x border-gray-200 dark:border-gray-800 flex flex-col relative overflow-hidden">
                         {!generatedText ? (
                             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 opacity-50 p-8">
                                 <Sparkles className="w-20 h-20 mb-6" />
@@ -602,11 +602,11 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         <span>生成结果</span>
                                     </div>
                                     <div className="flex gap-2">
-                                        <button onClick={handleCopy} className="text-gray-500 hover:text-sky-600 flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                        <button onClick={handleCopy} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-sky-100 text-sky-700 hover:bg-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:hover:bg-sky-900/50 transition-colors">
                                             <Copy className="w-4 h-4" /> 复制
                                         </button>
-                                        <button onClick={() => setImportModalOpen(true)} className="text-gray-500 hover:text-purple-600 flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                            <Database className="w-4 h-4" /> 存入素材
+                                        <button onClick={() => setImportModalOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50 transition-colors">
+                                            <Database className="w-4 h-4" /> 导入素材库
                                         </button>
                                     </div>
                                 </div>
