@@ -4,7 +4,7 @@ import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown, Check } from './Icon';
+import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown, Check, Stop } from './Icon';
 import PromptSelectionModal from './PromptSelectionModal';
 import AssetSelectionModal from './AssetSelectionModal'; 
 import { saveMaterial, incrementPromptHeat, fetchMaterials } from '../services/supabaseService';
@@ -21,7 +21,7 @@ interface CreativeGenerationProps {
 
 type PromptFormState = Record<string, string>;
 
-// ... (ImportAssetModal and FormattedText components remain unchanged) ...
+// ... (ImportAssetModal remains unchanged) ...
 const ImportAssetModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
@@ -122,14 +122,20 @@ const ImportAssetModal: React.FC<{
 
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     // Counters for levels H1 to H6
-    const counters = [0, 0, 0, 0, 0, 0];
+    const counters = useRef([0, 0, 0, 0, 0, 0]).current;
+    
+    // Reset counters on new text render (if text changes significantly, React re-renders)
+    // Note: For streaming, we might want to preserve state, but simple re-render is safer for consistency
+    // To handle streaming correctly without resetting numbers constantly, we rely on the fact that `text` prop updates.
+    // However, recreating counters every render means we re-calculate from top. This is fast enough for text.
+    counters.fill(0);
 
     return (
-        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-xs md:text-sm">
+        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
             {text.split('\n').map((line, index) => {
                 const trimmedLine = line.trim();
                 const isMarkdownHeader = trimmedLine.startsWith('#');
-                const isLikelyTitle = trimmedLine.length > 0 && trimmedLine.length < 40 && !trimmedLine.includes('。') && !trimmedLine.includes('，') && !trimmedLine.endsWith('？') && !trimmedLine.endsWith('!');
+                const isLikelyTitle = !isMarkdownHeader && trimmedLine.length > 0 && trimmedLine.length < 40 && !trimmedLine.includes('。') && !trimmedLine.includes('，') && !trimmedLine.endsWith('？') && !trimmedLine.endsWith('!');
                 
                 if (isMarkdownHeader) {
                     const match = trimmedLine.match(/^(#+)\s*(.*)/);
@@ -149,27 +155,29 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
                             let prefix = '';
                             if (!hasNumbering) {
                                 // Generate hierarchical prefix (e.g., 1. or 1.1.)
-                                // Filter out leading zeros if structure skipped levels? 
-                                // Simplest strict hierarchy:
                                 prefix = counters.slice(0, level).join('.') + (level === 1 ? '.' : '') + ' ';
+                                // Remove trailing .0s if any (simple logic: slice up to level)
                             }
                             
-                            const fontSize = level === 1 ? 'text-lg' : level === 2 ? 'text-base' : 'text-sm';
-                            return <h3 key={index} className={`${fontSize} font-extrabold text-gray-900 dark:text-white mt-5 mb-2.5`}>{prefix}{content}</h3>;
+                            // Size and spacing based on level
+                            let className = "font-bold text-gray-900 dark:text-white ";
+                            if (level === 1) className += "text-xl mt-6 mb-4";
+                            else if (level === 2) className += "text-lg mt-5 mb-3";
+                            else className += "text-base mt-4 mb-2";
+
+                            return <div key={index} className={className}>{prefix}{content}</div>;
                         }
-                        
-                        // Fallback if level > 6
-                        return <h3 key={index} className="text-sm font-bold text-gray-900 dark:text-white mt-4 mb-2">{content}</h3>;
                     }
                 }
                 
-                if (isLikelyTitle && !isMarkdownHeader) {
+                if (isLikelyTitle) {
+                     // Treat likely titles as roughly H3 visually but don't number them to avoid messing up manual structure
                      return <div key={index} className="text-base font-bold text-gray-900 dark:text-white mt-4 mb-2">{line}</div>;
                 }
 
                 const parts = line.split(/(\*\*.*?\*\*)/g);
                 return (
-                    <div key={index} className="min-h-[1.5em]">
+                    <div key={index} className="min-h-[1.5em] mb-1">
                         {parts.map((part, i) => {
                             if (part.startsWith('**') && part.endsWith('**')) {
                                 return <span key={i} className="font-bold text-gray-900 dark:text-white">{part.slice(2, -2)}</span>;
@@ -298,7 +306,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         }
 
         setIsGenerating(true);
-        setShowLoadingOverlay(true);
+        // setShowLoadingOverlay(true); // Don't show overlay for sidebar generation to allow reading while gen
         setGeneratedText('');
         
         let basePrompt = '';
@@ -454,7 +462,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             </div>
 
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-                <div className="w-full lg:w-[450px] xl:w-[500px] flex flex-col border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden z-10 shadow-lg lg:shadow-none">
+                {/* Modified Width: Reduced by ~20% (from 450/500 to 360/400) */}
+                <div className="w-full lg:w-[360px] xl:w-[400px] flex flex-col border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden z-10 shadow-lg lg:shadow-none">
                     <div className="flex-1 overflow-y-auto p-5 space-y-8">
                         {/* Model & Config Section */}
                         <div className="space-y-3">
@@ -539,9 +548,12 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         ? 'bg-sky-50 border-sky-300 text-sky-900 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-100' 
                                         : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-400 hover:text-sky-500'
                                     }`}
+                                    title={selectedPrompt?.title}
                                 >
                                     <Search className="w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold text-sm">选择提示词</span>
+                                    <span className={`font-bold text-sm ${selectedPrompt ? 'truncate max-w-[100px] block' : ''}`}>
+                                        {selectedPrompt ? selectedPrompt.title : '选择提示词'}
+                                    </span>
                                 </button>
 
                                 <button 
@@ -554,7 +566,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         title={selectedAssetNames}
                                 >
                                     <Database className="w-5 h-5 flex-shrink-0" />
-                                    <span className={`font-bold text-sm ${selectedAssetIds.size > 0 ? 'truncate max-w-[120px] block' : ''}`}>
+                                    <span className={`font-bold text-sm ${selectedAssetIds.size > 0 ? 'truncate max-w-[100px] block' : ''}`}>
                                         {selectedAssetIds.size > 0 ? selectedAssetNames : '关联素材'}
                                     </span>
                                 </button>
@@ -611,13 +623,16 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                     <div className="p-5 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
                         <button
                             onClick={handleGenerate}
-                            disabled={isGenerating}
-                            className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg shadow-sky-500/30 flex items-center justify-center gap-2 transition-all ${isGenerating ? 'bg-gray-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-50 active:scale-[0.98]'}`}
+                            className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 transition-all ${
+                                isGenerating 
+                                ? 'bg-red-500 hover:bg-red-600 hover:shadow-red-500/30' 
+                                : 'bg-sky-600 hover:bg-sky-500 active:scale-[0.98] shadow-sky-500/30'
+                            }`}
                         >
                             {isGenerating ? (
                                 <>
-                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    正在生成...
+                                    <Stop className="w-5 h-5" />
+                                    停止生成
                                 </>
                             ) : (
                                 <>
