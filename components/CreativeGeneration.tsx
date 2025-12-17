@@ -4,7 +4,7 @@ import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown } from './Icon';
+import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown, Check } from './Icon';
 import PromptSelectionModal from './PromptSelectionModal';
 import AssetSelectionModal from './AssetSelectionModal'; 
 import { saveMaterial, incrementPromptHeat, fetchMaterials } from '../services/supabaseService';
@@ -123,10 +123,12 @@ const ImportAssetModal: React.FC<{
 // ... (CreativeGeneration Component) ...
 const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, onClearInitialData }) => {
   const [selectedModule, setSelectedModule] = useState<CreativeModule | null>(null);
-  const [model, setModel] = useState('gemini-2.5-flash');
-  // ... other states ...
+  const [model, setModel] = useState('deepseek-chat'); // Default to DeepSeek
+  
   const [temperature, setTemperature] = useState(1);
   const [topP, setTopP] = useState(0.95);
+  const [showConfig, setShowConfig] = useState(false); // Toggle for advanced settings
+
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
   const [formState, setFormState] = useState<PromptFormState>({});
   const [freeInput, setFreeInput] = useState('');
@@ -266,6 +268,10 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
               }
               setGeneratedText(prev => prev + chunk);
           }
+          // Success Notification
+          setSuccessMessage('内容生成完毕');
+          setTimeout(() => setSuccessMessage(''), 2500);
+
       } catch (e: any) {
           if (e.message !== 'Aborted') {
              setGeneratedText(prev => prev + "\n\n[生成中断或出错，请重试]");
@@ -290,7 +296,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
 
       saveMaterial(data.name, data.content, dbType, data.tags);
 
-      setSuccessMessage('已成功导入素材库！');
+      setSuccessMessage('已成功导入素材库');
       setTimeout(() => setSuccessMessage(''), 2000);
   };
 
@@ -359,7 +365,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                   </div>
               </div>
               {successMessage && (
-                  <div className="px-4 py-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-lg text-sm font-bold animate-pulse shadow-sm">
+                  <div className="px-4 py-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-lg text-sm font-bold animate-pulse shadow-sm flex items-center gap-2">
+                      <Check className="w-4 h-4" />
                       {successMessage}
                   </div>
               )}
@@ -368,7 +375,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
               <div className="w-full lg:w-[450px] xl:w-[500px] flex flex-col border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden z-10 shadow-lg lg:shadow-none">
                   <div className="flex-1 overflow-y-auto p-5 space-y-8">
-                      <div className="space-y-4">
+                      {/* Model & Config Section */}
+                      <div className="space-y-3">
                           <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
                               <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded text-blue-600 dark:text-blue-400">
                                 <AdjustmentsHorizontal className="w-4 h-4" />
@@ -376,50 +384,61 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                               模型配置
                           </div>
                           
-                          <div className="bg-gray-50 dark:bg-gray-800/50 p-5 rounded-xl border border-gray-100 dark:border-gray-800 space-y-5">
-                              <div>
-                                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">模型</label>
-                                  <div className="relative">
+                          <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                              <div className="flex gap-2 mb-1">
+                                  <div className="relative flex-1">
                                       <select 
                                           value={model}
                                           onChange={(e) => setModel(e.target.value)}
-                                          className="w-full p-2.5 pr-8 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none appearance-none"
+                                          className="w-full p-2.5 pr-8 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none appearance-none font-medium"
                                       >
-                                          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                                          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                                          <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
-                                          <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
+                                          <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
+                                          <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
+                                          <option value="gemini-2.5-flash">谷歌极速 (Gemini Flash)</option>
+                                          <option value="gemini-2.5-pro">谷歌深度 (Gemini Pro)</option>
                                       </select>
                                       <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                                   </div>
+                                  <button 
+                                    onClick={() => setShowConfig(!showConfig)}
+                                    className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 ${showConfig ? 'bg-sky-100 text-sky-600 border-sky-200 dark:bg-sky-900/30 dark:border-sky-800' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                                  >
+                                      <AdjustmentsHorizontal className="w-4 h-4" />
+                                      参数调整
+                                  </button>
                               </div>
-                              
-                              <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 flex justify-between">
-                                          <span>温度 (Randomness)</span>
-                                          <span>{temperature}</span>
-                                      </label>
-                                      <input 
-                                          type="range" min="0" max="2" step="0.1" 
-                                          value={temperature}
-                                          onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                                          className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                                      />
-                                  </div>
-                                  <div>
-                                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 flex justify-between">
-                                          <span>核采样 (Top P)</span>
-                                          <span>{topP}</span>
-                                      </label>
-                                      <input 
-                                          type="range" min="0" max="1" step="0.05" 
-                                          value={topP}
-                                          onChange={(e) => setTopP(parseFloat(e.target.value))}
-                                          className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-                                      />
-                                  </div>
-                              </div>
+
+                              {showConfig && (
+                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-2 gap-4 animate-fade-in">
+                                    <div className="col-span-2 text-[10px] text-gray-400 bg-sky-50 dark:bg-sky-900/10 p-2 rounded mb-1">
+                                        💡 小说创作建议：温度 0.7-0.9 (更有创意)，核采样 0.9 (标准)
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 flex justify-between">
+                                            <span>温度 (Temp)</span>
+                                            <span className="text-sky-600">{temperature}</span>
+                                        </label>
+                                        <input 
+                                            type="range" min="0" max="1.5" step="0.1" 
+                                            value={temperature}
+                                            onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                                            className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 flex justify-between">
+                                            <span>核采样 (Top P)</span>
+                                            <span className="text-sky-600">{topP}</span>
+                                        </label>
+                                        <input 
+                                            type="range" min="0" max="1" step="0.05" 
+                                            value={topP}
+                                            onChange={(e) => setTopP(parseFloat(e.target.value))}
+                                            className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
+                                        />
+                                    </div>
+                                </div>
+                              )}
                           </div>
                       </div>
 

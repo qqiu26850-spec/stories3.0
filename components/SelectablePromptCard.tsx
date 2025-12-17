@@ -31,6 +31,7 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'proofread': '校对',
     'writing': '写稿',
     // Genres
+    'general': '通用',
     'modern-romance': '现言',
     'ancient-romance': '古言',
     'period': '年代',

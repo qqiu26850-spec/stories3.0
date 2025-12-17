@@ -163,13 +163,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, isCollapse
             >
                 {isCollapsed ? (
                     <>
-                        <FlyoutNavItem view="novel-management" icon={BookOpen} label="小说管理" onClick={() => setCreationCenterOpen(false)} />
+                        <FlyoutNavItem view="novel-management" icon={BookOpen} label="长篇小说" onClick={() => setCreationCenterOpen(false)} />
                         <FlyoutNavItem view="script-management" icon={Film} label="剧本管理" onClick={() => setCreationCenterOpen(false)} />
                         <FlyoutNavItem view="hit-copywriting" icon={Copy} label="短篇管理" onClick={() => setCreationCenterOpen(false)} />
                     </>
                 ) : (
                     <>
-                        <NavItem view="novel-management" icon={BookOpen} label="小说管理" />
+                        <NavItem view="novel-management" icon={BookOpen} label="长篇小说" />
                         <NavItem view="script-management" icon={Film} label="剧本管理" />
                         <NavItem view="hit-copywriting" icon={Copy} label="短篇管理" />
                     </>

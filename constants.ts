@@ -17,6 +17,7 @@ export const FUNCTIONAL_TAGS: { id: PromptSubCategory | 'all'; label: string }[]
 ];
 
 export const GENRE_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
+    { id: 'general', label: '通用' },
     { id: 'modern-romance', label: '现言' },
     { id: 'ancient-romance', label: '古言' },
     { id: 'period', label: '年代' },

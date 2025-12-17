@@ -243,10 +243,10 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 onChange={e => setModel(e.target.value)} 
                                 className="w-full p-2.5 pr-8 text-sm font-medium rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-all cursor-pointer appearance-none"
                             >
-                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (极速)</option>
-                                <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度推理)</option>
-                                <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
-                                <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
+                                <option value="gemini-2.5-flash">谷歌极速 (Gemini Flash)</option>
+                                <option value="gemini-2.5-pro">谷歌深度 (Gemini Pro)</option>
+                                <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
+                                <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
                             </select>
                             <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                         </div>

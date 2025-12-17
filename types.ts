@@ -48,7 +48,7 @@ export type PromptSubCategory =
   'style' | 'requirements' | 'continue' | 'polish' | 'proofread' | 
   'idea' | 'golden_finger' | 'character_design' | 'worldview' | 'outline' | 'detailed_outline' | 'synopsis' | 'writing' |
   // Genres
-  'modern-romance' | 'ancient-romance' | 'period' | 'apocalypse' | 
+  'general' | 'modern-romance' | 'ancient-romance' | 'period' | 'apocalypse' | 
   'urban' | 'fantasy' | 'history' | 'social' | 'suspense' | 'sci-fi';
 
 

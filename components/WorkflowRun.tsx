@@ -119,10 +119,10 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                 onChange={e => setModel(e.target.value)} 
                                 className="w-full p-3 text-sm rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
                             >
-                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                                <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
-                                <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
+                                <option value="gemini-2.5-flash">谷歌极速 (Gemini Flash)</option>
+                                <option value="gemini-2.5-pro">谷歌深度 (Gemini Pro)</option>
+                                <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
+                                <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
                             </select>
                         </div>
                         

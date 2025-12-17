@@ -242,10 +242,10 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                                 onChange={e => setModel(e.target.value)} 
                                 className="w-full p-2 text-sm rounded bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-sky-500 focus:outline-none appearance-none pr-8"
                             >
-                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                                <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
-                                <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
+                                <option value="gemini-2.5-flash">谷歌极速 (Gemini Flash)</option>
+                                <option value="gemini-2.5-pro">谷歌深度 (Gemini Pro)</option>
+                                <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
+                                <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
                             </select>
                             <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2 top-2.5 pointer-events-none" />
                         </div>

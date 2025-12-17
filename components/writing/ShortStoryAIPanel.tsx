@@ -5,7 +5,7 @@ import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
-import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop } from '../Icon';
+import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -25,9 +25,11 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const [activeTab, setActiveTab] = useState<ShortStoryTab>('original');
     
     // Global Config for this Panel
-    const [model, setModel] = useState('gemini-2.5-flash');
+    const [model, setModel] = useState('deepseek-chat'); // DeepSeek default
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
+    const [showConfig, setShowConfig] = useState(false); // New config toggle
+
     const [selectedWorkflow, setSelectedWorkflow] = useState(MOCK_WORKFLOWS[0]?.id || '');
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
@@ -241,53 +243,67 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
             <div className="flex-1 overflow-y-auto p-6 space-y-8">
                 
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">模型配置</label>
-                        <div className="relative">
+                {/* Updated Compact Model Config */}
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型配置</label>
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
                             <select 
                                 value={model} 
                                 onChange={e => setModel(e.target.value)} 
-                                className="w-full p-2.5 pr-8 text-sm rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition shadow-sm appearance-none"
+                                className="w-full p-2.5 pr-8 text-sm font-medium rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition shadow-sm appearance-none"
                             >
-                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (快速)</option>
-                                <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
-                                <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
-                                <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
+                                <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
+                                <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
+                                <option value="gemini-2.5-flash">谷歌极速 (Gemini Flash)</option>
+                                <option value="gemini-2.5-pro">谷歌深度 (Gemini Pro)</option>
                             </select>
                             <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                         </div>
-                    </div>
-                    
-                    {/* ... (rest of controls) ... */}
-                    <div className="col-span-2 grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex justify-between items-center">
-                                <span>随机度</span>
-                                <span className="text-gray-700 dark:text-gray-300 font-mono">{temperature}</span>
-                            </label>
-                            <input 
-                                type="range" min="0" max="2" step="0.1" 
-                                value={temperature} 
-                                onChange={e => setTemperature(parseFloat(e.target.value))}
-                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex justify-between items-center">
-                                <span>核采样</span>
-                                <span className="text-gray-700 dark:text-gray-300 font-mono">{topP}</span>
-                            </label>
-                            <input 
-                                type="range" min="0" max="1" step="0.05" 
-                                value={topP} 
-                                onChange={e => setTopP(parseFloat(e.target.value))}
-                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
-                            />
-                        </div>
+                        <button 
+                            onClick={() => setShowConfig(!showConfig)}
+                            className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 ${showConfig ? 'bg-sky-100 text-sky-600 border-sky-200 dark:bg-sky-900/30 dark:border-sky-800' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                        >
+                            <AdjustmentsHorizontal className="w-4 h-4" />
+                            参数
+                        </button>
                     </div>
 
-                    <div className="col-span-2">
+                    {showConfig && (
+                        <div className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-4 animate-fade-in text-sm">
+                            <div className="col-span-2 text-[10px] text-gray-400 bg-white dark:bg-black/20 p-2 rounded mb-1">
+                                💡 小说创作建议：温度 0.7-0.9 (更有创意)，核采样 0.9 (标准)
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex justify-between items-center">
+                                    <span>随机度</span>
+                                    <span className="text-gray-700 dark:text-gray-300 font-mono">{temperature}</span>
+                                </label>
+                                <input 
+                                    type="range" min="0" max="1.5" step="0.1" 
+                                    value={temperature} 
+                                    onChange={e => setTemperature(parseFloat(e.target.value))}
+                                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex justify-between items-center">
+                                    <span>核采样</span>
+                                    <span className="text-gray-700 dark:text-gray-300 font-mono">{topP}</span>
+                                </label>
+                                <input 
+                                    type="range" min="0" max="1" step="0.05" 
+                                    value={topP} 
+                                    onChange={e => setTopP(parseFloat(e.target.value))}
+                                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Rest of the UI */}
+                <div className="col-span-2">
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">提示词选择</label>
                         <button 
                             onClick={() => setPromptModalOpen(true)}
@@ -339,7 +355,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             <BookOpen className="w-4 h-4 flex-shrink-0" />
                         </button>
                     </div>
-                </div>
 
                 <hr className="border-gray-200 dark:border-gray-800" />
 

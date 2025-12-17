@@ -11,6 +11,41 @@ interface PromptDetailModalProps {
     onRun?: (filledValues: Record<string, string>) => void;
 }
 
+const SUB_CATEGORY_LABELS: Record<string, string> = {
+    // Functions
+    'idea': '创意',
+    'golden_finger': '金手指',
+    'character_design': '人设',
+    'worldview': '世界观',
+    'outline': '大纲',
+    'detailed_outline': '细纲',
+    'synopsis': '简介',
+    'requirements': '要求',
+    'style': '风格',
+    'continue': '续写',
+    'polish': '润色',
+    'proofread': '校对',
+    'writing': '写稿',
+    // Genres
+    'general': '通用',
+    'modern-romance': '现言',
+    'ancient-romance': '古言',
+    'period': '年代',
+    'apocalypse': '末世',
+    'urban': '都市',
+    'fantasy': '玄幻',
+    'history': '历史',
+    'social': '世情',
+    'suspense': '悬疑',
+    'sci-fi': '科幻'
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+    'long-story': '长篇',
+    'short-story': '短篇',
+    'script': '剧本',
+};
+
 const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, prompt, onRun }) => {
     const [formState, setFormState] = useState<Record<string, string>>({});
     const [copied, setCopied] = useState(false);
@@ -125,7 +160,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                             <span className={`px-2 py-0.5 rounded font-bold ${style.badge}`}>
-                                {style.label}
+                                {CATEGORY_LABELS[prompt.category] || style.label}
                             </span>
                             <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
                                 <UserCircle className="w-3.5 h-3.5" />
@@ -141,19 +176,19 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
 
                 {/* Main Content Area */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-gray-50/50 dark:bg-black/20">
-                    {/* Description */}
-                    <div className="bg-white dark:bg-gray-800/50 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
-                        <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 tracking-wider flex items-center gap-1">
-                            <span className="w-1 h-3 bg-gray-300 dark:bg-gray-600 rounded-full"></span> 简介
+                    {/* Description - Livelier Color */}
+                    <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30 shadow-sm">
+                        <h4 className="text-xs font-bold text-amber-500 dark:text-amber-400 uppercase mb-2 tracking-wider flex items-center gap-1">
+                            📝 简介
                         </h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-medium">
                             {prompt.description || "暂无简介"}
                         </p>
                         {prompt.subCategories && prompt.subCategories.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-amber-100 dark:border-amber-900/30">
                                 {prompt.subCategories.map(tag => (
-                                    <span key={tag} className="text-[10px] px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
-                                        #{tag}
+                                    <span key={tag} className="text-[10px] px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 bg-white dark:bg-gray-800">
+                                        #{SUB_CATEGORY_LABELS[tag] || tag}
                                     </span>
                                 ))}
                             </div>

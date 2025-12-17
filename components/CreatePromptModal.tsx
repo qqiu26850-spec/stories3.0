@@ -19,6 +19,7 @@ const CATEGORIES: { id: PromptCategory; label: string }[] = [
 ];
 
 const GENRE_TAGS: { id: PromptSubCategory; label: string }[] = [
+    { id: 'general', label: '通用' },
     { id: 'modern-romance', label: '现言' },
     { id: 'ancient-romance', label: '古言' },
     { id: 'period', label: '年代' },
@@ -243,7 +244,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             value={description} 
                             onChange={(e) => setDescription(e.target.value)} 
                             placeholder="简要描述这个提示词的作用、目的或适用场景。" 
-                            className="w-full h-20 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition resize-none"
+                            className="w-full h-20 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition resize-none text-xs"
                         />
                     </div>
 
@@ -274,6 +275,9 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
                         {fields.map((field, index) => (
                             <div key={index} className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-12 gap-3 relative shadow-sm">
+                                {/* Numbering */}
+                                <div className="absolute top-2 left-2 text-[10px] text-gray-300 font-bold select-none">{index + 1}.</div>
+                                
                                 {/* Row 1 */}
                                 <div className="md:col-span-5">
                                     <label className="block text-xs font-medium text-gray-500 mb-1">字段标题</label>
@@ -293,8 +297,8 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
                                 {/* Row 2 */}
                                 <div className="md:col-span-8">
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">填写说明 (选填)</label>
-                                    <input type="text" value={field.description || ''} onChange={(e) => updateField(index, 'description', e.target.value)} placeholder="如：请描述您希望的文章基调" className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none"/>
+                                    <label className="block text-xs font-medium text-blue-500 mb-1">填写说明 (选填)</label>
+                                    <input type="text" value={field.description || ''} onChange={(e) => updateField(index, 'description', e.target.value)} placeholder="如：请描述您希望的文章基调" className="w-full p-2 text-[10px] bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none text-gray-600 dark:text-gray-400"/>
                                 </div>
                                 <div className="md:col-span-3 flex items-end pb-2">
                                     <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-300">

@@ -30,7 +30,7 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
     
     const [isProcessing, setIsProcessing] = useState(false); // For create/update loading
 
-    const pageTitle = mode === 'long' ? '小说管理' : '短篇管理';
+    const pageTitle = mode === 'long' ? '长篇小说' : '短篇管理';
     const description = mode === 'long' ? '在这里开始、管理和发展你的长篇故事。' : '快速捕捉灵感，创作精彩的短篇故事。';
     const createButtonLabel = mode === 'long' ? '新建长篇小说' : '新建短篇故事';
 
@@ -96,7 +96,7 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                 wordCount: 0,
                 creationDate: new Date().toISOString(),
                 settings: { typeElements: '', theme: '', targetAudience: '', synopsis: '', worldview: '', characterSettings: '' },
-                chapters: [{id: 'ch-new', title: '正文', content: '', wordCount: 0, lastModified: new Date().toISOString()}]
+                chapters: [] // Initialize with empty chapters
             };
             setNovels(prev => [newNovel, ...prev]);
             setCreateModalOpen(false);
