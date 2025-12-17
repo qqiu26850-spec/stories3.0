@@ -481,7 +481,10 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                       </div>
                                       {selectedPrompt.fields.map(field => (
                                           <div key={field.id}>
-                                              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">{field.label}</label>
+                                              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">
+                                                  {field.label}
+                                                  {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
+                                              </label>
                                               {field.type === 'textarea' ? (
                                                   <textarea
                                                       value={formState[field.id] || ''}
@@ -498,6 +501,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                                       className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-shadow shadow-sm"
                                                   />
                                               )}
+                                              {field.description && <p className="text-[10px] text-gray-400 mt-1">{field.description}</p>}
                                           </div>
                                       ))}
                                   </div>

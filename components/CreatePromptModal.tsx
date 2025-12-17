@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Prompt, PromptCategory, PromptField, PromptSubCategory } from '../types';
-import { Trash, Sparkles } from './Icon';
+import { Trash, Sparkles, Check } from './Icon';
 
 type NewPromptData = Omit<Prompt, 'id' | 'heat' | 'content'>;
 
@@ -79,10 +79,17 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
     const addField = () => {
         const newId = `field_${Date.now()}`;
-        setFields([...fields, { id: newId, label: '', type: 'text', placeholder: '' }]);
+        setFields([...fields, { 
+            id: newId, 
+            label: '', 
+            type: 'text', 
+            placeholder: '',
+            required: true,
+            description: ''
+        }]);
     };
 
-    const updateField = (index: number, key: keyof PromptField, value: string) => {
+    const updateField = (index: number, key: keyof PromptField, value: any) => {
         const newFields = [...fields];
         const fieldToUpdate = { ...newFields[index] };
     
@@ -93,6 +100,10 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             fieldToUpdate.type = value as 'text' | 'textarea';
         } else if (key === 'id') {
             fieldToUpdate.id = value.replace(/\s+/g, '');
+        } else if (key === 'required') {
+            fieldToUpdate.required = value;
+        } else if (key === 'description') {
+            fieldToUpdate.description = value;
         }
     
         newFields[index] = fieldToUpdate;
@@ -262,7 +273,8 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                         )}
 
                         {fields.map((field, index) => (
-                            <div key={index} className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-12 gap-3 items-end relative shadow-sm">
+                            <div key={index} className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-12 gap-3 relative shadow-sm">
+                                {/* Row 1 */}
                                 <div className="md:col-span-5">
                                     <label className="block text-xs font-medium text-gray-500 mb-1">字段标题</label>
                                     <input type="text" value={field.label} onChange={(e) => updateField(index, 'label', e.target.value)} placeholder="如：写作风格" className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none"/>
@@ -271,15 +283,32 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                     <label className="block text-xs font-medium text-gray-500 mb-1">变量名 (English)</label>
                                     <input type="text" value={field.id} onChange={(e) => updateField(index, 'id', e.target.value)} placeholder="如：style" className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none font-mono"/>
                                 </div>
-                                <div className="md:col-span-2">
+                                <div className="md:col-span-3">
                                      <label className="block text-xs font-medium text-gray-500 mb-1">类型</label>
                                     <select value={field.type} onChange={(e) => updateField(index, 'type', e.target.value)} className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none">
                                         <option value="text">单行</option>
                                         <option value="textarea">多行</option>
                                     </select>
                                 </div>
-                                <div className="md:col-span-1 flex justify-center pb-1">
-                                    <button type="button" onClick={() => removeField(index)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors">
+
+                                {/* Row 2 */}
+                                <div className="md:col-span-8">
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">填写说明 (选填)</label>
+                                    <input type="text" value={field.description || ''} onChange={(e) => updateField(index, 'description', e.target.value)} placeholder="如：请描述您希望的文章基调" className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none"/>
+                                </div>
+                                <div className="md:col-span-3 flex items-end pb-2">
+                                    <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-300">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={field.required !== false} 
+                                            onChange={(e) => updateField(index, 'required', e.target.checked)}
+                                            className="w-4 h-4 text-sky-600 rounded border-gray-300 focus:ring-sky-500"
+                                        />
+                                        必填项
+                                    </label>
+                                </div>
+                                <div className="md:col-span-1 flex justify-center items-end pb-1">
+                                    <button type="button" onClick={() => removeField(index)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="删除字段">
                                         <Trash className="w-4 h-4" />
                                     </button>
                                 </div>

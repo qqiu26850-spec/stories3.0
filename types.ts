@@ -37,6 +37,8 @@ export interface PromptField {
   label: string;
   type: 'text' | 'textarea';
   placeholder: string;
+  required?: boolean;
+  description?: string;
 }
 
 export type PromptCategory = 'short-story' | 'long-story' | 'script';

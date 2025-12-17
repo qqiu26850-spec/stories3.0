@@ -364,6 +364,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 <div key={field.id}>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                                         {field.label}
+                                        {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
                                     </label>
                                     {field.type === 'textarea' ? (
                                         <textarea 
@@ -381,6 +382,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                             className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-shadow shadow-sm"
                                         />
                                     )}
+                                    {field.description && <p className="text-[10px] text-gray-400 mt-1">{field.description}</p>}
                                 </div>
                             ))}
                         </div>

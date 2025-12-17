@@ -348,6 +348,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             <div key={field.id}>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 flex justify-between items-center">
                                     {field.label}
+                                    {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
                                     {field.id === 'text' && selectedText && <span className="text-xs text-green-600 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded">已读取选中内容</span>}
                                 </label>
                                 {field.type === 'textarea' ? (
@@ -367,6 +368,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                         className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-shadow shadow-sm"
                                     />
                                 )}
+                                {field.description && <p className="text-[10px] text-gray-400 mt-1">{field.description}</p>}
                             </div>
                         ))}
                     </div>
