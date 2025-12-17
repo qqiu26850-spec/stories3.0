@@ -3,8 +3,9 @@ import { GoogleGenAI } from "@google/genai";
 
 // Google Gemini API Key
 const GOOGLE_API_KEY = "AIzaSyB5gQjtLL4iIspEMzXwaYXNN3BMEZ4Zd1M";
-// DeepSeek API Key
-const DEEPSEEK_API_KEY = "sk-ed8bb0fcecc8479890d2ac461d1a4fa5";
+
+// 注意：DeepSeek 的 Key 现在应该在 Vercel 环境变量中配置 (DEEPSEEK_API_KEY)，
+// 前端代码中不再需要硬编码 DeepSeek Key，也不需要直接请求 DeepSeek 域名。
 
 const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
@@ -42,15 +43,13 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
     }
   } else if (options.model.startsWith('deepseek')) {
     try {
-        // DeepSeek uses OpenAI-compatible endpoint
-        // Base URL: https://api.deepseek.com
-        const response = await fetch("https://api.deepseek.com/chat/completions", {
+        // 修改为请求 Vercel 内部 API 路由 /api/deepseek
+        const response = await fetch("/api/deepseek", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+                // 前端不需要 Authorization 头，Key 在服务端处理
             },
-            // Removed explicit 'mode: cors' to let browser handle default negotiation
             body: JSON.stringify({
                 model: options.model,
                 messages: [
@@ -66,7 +65,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error?.message || `DeepSeek API Error: ${response.status} ${response.statusText}`);
+            throw new Error(errorData.error || `Server Error: ${response.status}`);
         }
 
         const data = await response.json();
@@ -76,13 +75,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
             throw new Error('已停止生成');
         }
         console.error("Error generating text with DeepSeek:", error);
-        if (error instanceof Error) {
-            if (error.message === 'Failed to fetch') {
-                return "DeepSeek 连接失败 (Failed to fetch)。\n原因可能是：\n1. 网络连接不稳定。\n2. 浏览器跨域(CORS)限制（DeepSeek API 可能暂不支持直接从纯前端调用）。\n建议检查网络或使用 Gemini 模型。";
-            }
-            return `DeepSeek 生成内容时出错：${error.message}`;
-        }
-        return "DeepSeek 生成内容时发生未知错误。";
+        return `DeepSeek 生成出错: ${error.message}`;
     }
   } else {
     // Simulate
@@ -128,11 +121,11 @@ export const generateTextStream = async function* (prompt: string, options: Gene
         }
     } else if (options.model.startsWith('deepseek')) {
         try {
-            const response = await fetch("https://api.deepseek.com/chat/completions", {
+            // 修改为请求 Vercel 内部 API 路由 /api/deepseek
+            const response = await fetch("/api/deepseek", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
                 },
                 body: JSON.stringify({
                     model: options.model,
@@ -149,7 +142,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
 
             if (!response.ok) {
                  const errorText = await response.text().catch(() => '');
-                 throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
+                 throw new Error(`Server Error: ${response.status} ${errorText}`);
             }
             
             if (!response.body) throw new Error("No response body");
@@ -181,18 +174,14 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                         const content = json.choices?.[0]?.delta?.content;
                         if (content) yield content;
                     } catch (e) {
-                        console.error("Error parsing DeepSeek stream chunk", e);
+                        console.error("Error parsing stream chunk", e);
                     }
                 }
             }
         } catch (error: any) {
             if (error.name === 'AbortError' || options.signal?.aborted) return;
             console.error("Error generating text stream with DeepSeek:", error);
-            if (error.message === 'Failed to fetch') {
-                yield "DeepSeek 连接失败 (CORS/Network)。请尝试切换模型。";
-            } else {
-                yield `DeepSeek 生成内容时出错：${error.message}`;
-            }
+            yield `DeepSeek 连接出错：${error.message}`;
         }
     } else {
         // Simulate
