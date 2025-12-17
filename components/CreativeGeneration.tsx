@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt } from '../types';
@@ -121,18 +121,49 @@ const ImportAssetModal: React.FC<{
 };
 
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
+    // Counters for levels H1 to H6
+    const counters = [0, 0, 0, 0, 0, 0];
+
     return (
         <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-xs md:text-sm">
             {text.split('\n').map((line, index) => {
-                const isMarkdownHeader = line.trim().startsWith('#');
-                const isLikelyTitle = line.trim().length > 0 && line.trim().length < 40 && !line.includes('。') && !line.includes('，');
+                const trimmedLine = line.trim();
+                const isMarkdownHeader = trimmedLine.startsWith('#');
+                const isLikelyTitle = trimmedLine.length > 0 && trimmedLine.length < 40 && !trimmedLine.includes('。') && !trimmedLine.includes('，') && !trimmedLine.endsWith('？') && !trimmedLine.endsWith('!');
                 
                 if (isMarkdownHeader) {
-                    const content = line.replace(/^#+\s*/, '');
-                    return <h3 key={index} className="text-lg font-extrabold text-gray-900 dark:text-white mt-5 mb-2.5">{content}</h3>;
+                    const match = trimmedLine.match(/^(#+)\s*(.*)/);
+                    if (match) {
+                        const level = match[1].length;
+                        const content = match[2];
+                        
+                        // Increment counter for current level
+                        if (level >= 1 && level <= 6) {
+                            counters[level - 1]++;
+                            // Reset counters for deeper levels
+                            for (let i = level; i < 6; i++) counters[i] = 0;
+                            
+                            // Check if content already starts with a number
+                            const hasNumbering = /^\s*(\d+(\.\d+)*|[一二三四五六七八九十]+)[\.、\s]/.test(content) || /^第[0-9一二三四五六七八九十]+[章回节集]/.test(content);
+                            
+                            let prefix = '';
+                            if (!hasNumbering) {
+                                // Generate hierarchical prefix (e.g., 1. or 1.1.)
+                                // Filter out leading zeros if structure skipped levels? 
+                                // Simplest strict hierarchy:
+                                prefix = counters.slice(0, level).join('.') + (level === 1 ? '.' : '') + ' ';
+                            }
+                            
+                            const fontSize = level === 1 ? 'text-lg' : level === 2 ? 'text-base' : 'text-sm';
+                            return <h3 key={index} className={`${fontSize} font-extrabold text-gray-900 dark:text-white mt-5 mb-2.5`}>{prefix}{content}</h3>;
+                        }
+                        
+                        // Fallback if level > 6
+                        return <h3 key={index} className="text-sm font-bold text-gray-900 dark:text-white mt-4 mb-2">{content}</h3>;
+                    }
                 }
                 
-                if (isLikelyTitle) {
+                if (isLikelyTitle && !isMarkdownHeader) {
                      return <div key={index} className="text-base font-bold text-gray-900 dark:text-white mt-4 mb-2">{line}</div>;
                 }
 
@@ -191,6 +222,14 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         };
         loadAssets();
     }, []);
+
+    const selectedAssetNames = useMemo(() => {
+        if (selectedAssetIds.size === 0) return '';
+        return Array.from(selectedAssetIds)
+            .map(id => assets.find(a => a.id === id)?.name)
+            .filter(Boolean)
+            .join(', ');
+    }, [selectedAssetIds, assets]);
 
     useEffect(() => {
         if (initialData?.prompt) {
@@ -512,9 +551,12 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                             ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' 
                                             : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400 hover:text-purple-500'
                                         }`}
+                                        title={selectedAssetNames}
                                 >
                                     <Database className="w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold text-sm">{selectedAssetIds.size > 0 ? `已选 ${selectedAssetIds.size}` : '关联素材'}</span>
+                                    <span className={`font-bold text-sm ${selectedAssetIds.size > 0 ? 'truncate max-w-[120px] block' : ''}`}>
+                                        {selectedAssetIds.size > 0 ? selectedAssetNames : '关联素材'}
+                                    </span>
                                 </button>
                             </div>
                         </div>
