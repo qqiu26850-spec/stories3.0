@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { useState, useEffect, useRef } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -243,13 +244,14 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                             >
                                 <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                                <option value="deepseek-chat">DeepSeek V3</option>
-                                <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
+                                <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
+                                <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
                             </select>
                             <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2 top-2.5 pointer-events-none" />
                         </div>
                     </div>
 
+                    {/* ... (rest of configuration UI) ... */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex justify-between">

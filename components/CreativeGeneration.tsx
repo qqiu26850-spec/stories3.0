@@ -6,18 +6,22 @@ import { CreativeModule, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
 import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown } from './Icon';
 import PromptSelectionModal from './PromptSelectionModal';
-import AssetSelectionModal from './AssetSelectionModal'; // New Import
+import AssetSelectionModal from './AssetSelectionModal'; 
 import { saveMaterial, incrementPromptHeat, fetchMaterials } from '../services/supabaseService';
 import LoadingOverlay from './LoadingOverlay';
 import { createPortal } from 'react-dom';
 
-type PromptFormState = Record<string, string>;
-
 interface CreativeGenerationProps {
-    initialData?: { prompt?: Prompt; values?: Record<string, string> };
-    onClearInitialData?: () => void;
+  initialData?: {
+    prompt?: Prompt;
+    values?: Record<string, string>;
+  };
+  onClearInitialData?: () => void;
 }
 
+type PromptFormState = Record<string, string>;
+
+// ... (ImportAssetModal component remains the same) ...
 const ImportAssetModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
@@ -116,9 +120,11 @@ const ImportAssetModal: React.FC<{
     );
 };
 
+// ... (CreativeGeneration Component) ...
 const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, onClearInitialData }) => {
   const [selectedModule, setSelectedModule] = useState<CreativeModule | null>(null);
   const [model, setModel] = useState('gemini-2.5-flash');
+  // ... other states ...
   const [temperature, setTemperature] = useState(1);
   const [topP, setTopP] = useState(0.95);
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
@@ -127,20 +133,14 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
   const [generatedText, setGeneratedText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
-  
-  // Modal States
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
-  
   const [successMessage, setSuccessMessage] = useState('');
   const [assets, setAssets] = useState<Asset[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
-  
-  // Abort Controller
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Load Assets
   useEffect(() => {
       const loadAssets = async () => {
           const data = await fetchMaterials();
@@ -157,7 +157,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
       loadAssets();
   }, []);
 
-  // ... (rest of prompts/initial data logic)
   useEffect(() => {
     if (initialData?.prompt) {
         if (!selectedModule) {
@@ -219,7 +218,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
       setShowLoadingOverlay(true);
       setGeneratedText('');
       
-      // 1. Prepare Prompt
       let basePrompt = '';
       if (selectedPrompt) {
           incrementPromptHeat(selectedPrompt.id);
@@ -233,7 +231,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
           basePrompt = freeInput;
       }
 
-      // 2. Add Assets
       const assetContext = Array.from(selectedAssetIds)
           .map(id => assets.find(a => a.id === id))
           .filter(Boolean)
@@ -252,7 +249,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
           return;
       }
 
-      // 3. Init AbortController
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
@@ -318,7 +314,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
       );
   }
 
-  // Pass initial subCategory to modal based on selected module
   const moduleInitialTag = selectedModule?.subCategories?.[0];
 
   return (
@@ -348,7 +343,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             })}
           />
 
-          {/* Header */}
           <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm z-20">
               <div className="flex items-center gap-3">
                   <button 
@@ -371,14 +365,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
               )}
           </div>
 
-          {/* Split Content */}
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-              
-              {/* Left: Input Panel */}
               <div className="w-full lg:w-[450px] xl:w-[500px] flex flex-col border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden z-10 shadow-lg lg:shadow-none">
-                  {/* ... Model & Prompt sections ... */}
                   <div className="flex-1 overflow-y-auto p-5 space-y-8">
-                      {/* Section 1: Model Selection */}
                       <div className="space-y-4">
                           <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
                               <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded text-blue-600 dark:text-blue-400">
@@ -398,8 +387,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                       >
                                           <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                                           <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                                          <option value="deepseek-chat">DeepSeek V3</option>
-                                          <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
+                                          <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
+                                          <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
                                       </select>
                                       <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                                   </div>
@@ -434,7 +423,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                           </div>
                       </div>
 
-                      {/* Section 2: Prompt Config */}
                       <div className="space-y-4">
                           <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
@@ -452,7 +440,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                               </button>
                           </div>
 
-                          {/* Asset Selection Button */}
                           <button 
                                 onClick={() => setAssetModalOpen(true)}
                                 className={`w-full p-3 rounded-lg border text-left transition-all flex items-center justify-between group ${
@@ -549,7 +536,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
 
               {/* Right: Result Panel */}
               <div className="flex-1 flex flex-col bg-gray-50 dark:bg-black overflow-hidden relative">
-                  {/* Added Header for Output */}
                   {generatedText && (
                       <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center gap-2 text-gray-900 dark:text-white font-bold animate-fade-in">
                           <DocumentText className="w-5 h-5 text-purple-500" />

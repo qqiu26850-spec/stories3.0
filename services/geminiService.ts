@@ -42,18 +42,19 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
     }
   } else if (options.model.startsWith('deepseek')) {
     try {
-        // DeepSeek API Endpoint
+        // DeepSeek uses OpenAI-compatible endpoint
+        // Base URL: https://api.deepseek.com
         const response = await fetch("https://api.deepseek.com/chat/completions", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-                "Accept": "application/json"
+                "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
             },
-            mode: 'cors', // Ensure CORS is handled if supported by server
+            // Removed explicit 'mode: cors' to let browser handle default negotiation
             body: JSON.stringify({
-                model: options.model, // e.g., 'deepseek-chat' or 'deepseek-reasoner'
+                model: options.model,
                 messages: [
+                    { role: "system", content: "You are a helpful creative writing assistant." },
                     { role: "user", content: finalPrompt }
                 ],
                 temperature: options.temperature,
@@ -65,7 +66,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error?.message || `DeepSeek API Error: ${response.status}`);
+            throw new Error(errorData.error?.message || `DeepSeek API Error: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
@@ -76,9 +77,8 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         }
         console.error("Error generating text with DeepSeek:", error);
         if (error instanceof Error) {
-            // Check for common fetch errors related to network or CORS
             if (error.message === 'Failed to fetch') {
-                return "DeepSeek 连接失败。这通常是因为浏览器跨域限制(CORS)或网络问题。建议切换至 Gemini 模型使用，或检查网络连接。";
+                return "DeepSeek 连接失败 (Failed to fetch)。\n原因可能是：\n1. 网络连接不稳定。\n2. 浏览器跨域(CORS)限制（DeepSeek API 可能暂不支持直接从纯前端调用）。\n建议检查网络或使用 Gemini 模型。";
             }
             return `DeepSeek 生成内容时出错：${error.message}`;
         }
@@ -132,13 +132,12 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-                    "Accept": "application/json"
+                    "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
                 },
-                mode: 'cors',
                 body: JSON.stringify({
                     model: options.model,
                     messages: [
+                        { role: "system", content: "You are a helpful creative writing assistant." },
                         { role: "user", content: finalPrompt }
                     ],
                     temperature: options.temperature,

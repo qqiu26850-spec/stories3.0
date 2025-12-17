@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -9,6 +10,7 @@ import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
 
+// ... (ShortStoryAIPanelProps) ...
 type ShortStoryTab = 'original' | 'imitate' | 'polish' | 'review';
 
 interface ShortStoryAIPanelProps {
@@ -31,23 +33,18 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
 
-    // Modals
+    // ... (modal states, input states, result states) ...
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
     const [isPromptModalOpen, setPromptModalOpen] = useState(false);
-
-    // Input State
     const [promptInput, setPromptInput] = useState('');
-    const [referenceText, setReferenceText] = useState(''); // For imitate
-    const [formState, setFormState] = useState<Record<string, string>>({}); // For dynamic prompts
-    
-    // Result State
+    const [referenceText, setReferenceText] = useState('');
+    const [formState, setFormState] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [overlayStatus, setOverlayStatus] = useState<'loading' | 'success'>('loading');
     const [resultText, setResultText] = useState('');
     const [error, setError] = useState('');
     const [lastGeneratedTab, setLastGeneratedTab] = useState<ShortStoryTab | null>(null);
-    
     const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
@@ -66,16 +63,14 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         loadAssets();
     }, []);
 
-    // Reset inputs when tab changes
     useEffect(() => {
         setPromptInput('');
         setReferenceText('');
         setResultText('');
         setError('');
-        setSelectedPrompt(null); // Reset prompt when switching tabs
+        setSelectedPrompt(null);
     }, [activeTab]);
 
-    // Initialize form state when prompt changes
     useEffect(() => {
         if (selectedPrompt) {
             const newForm: Record<string, string> = {};
@@ -86,7 +81,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         }
     }, [selectedPrompt]);
 
-    // Auto-fill inputs based on tab and selection
     useEffect(() => {
         if (activeTab === 'polish' && selectedText) {
              // Polish tab works best with selected text
@@ -120,20 +114,17 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         abortControllerRef.current = controller;
 
         try {
-            // 1. Build Asset Context
             const assetContext = Array.from(selectedAssetIds)
                 .map(id => assets.find(a => a.id === id))
                 .filter(Boolean)
                 .map(a => `【参考素材：${a!.name}】\n${a!.content}`)
                 .join('\n\n');
 
-            // 2. Build Prompt
             let finalPrompt = '';
             
             if (selectedPrompt) {
-                incrementPromptHeat(selectedPrompt.id); // Increment usage if prompt selected
+                incrementPromptHeat(selectedPrompt.id);
                 
-                // If a prompt is selected, use its template and fields
                 let template = selectedPrompt.template || selectedPrompt.content;
                 for (const field of selectedPrompt.fields) {
                     const val = formState[field.id] || '';
@@ -141,8 +132,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 }
                 finalPrompt = `${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
             } else {
-                // Fallback to tab-specific logic
-                const currentContext = contextText.slice(-2000); // Context for continuity
+                const currentContext = contextText.slice(-2000);
 
                 if (activeTab === 'original') {
                     finalPrompt = `请根据以下要求写一段短篇小说的正文。\n\n【要求】：${promptInput}\n\n${assetContext ? `\n${assetContext}` : ''}`;
@@ -156,14 +146,12 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                      finalPrompt = `请作为一名专业的文学编辑，对以下文本进行评审，指出优缺点并给出修改建议。关注点：${promptInput || '情节逻辑、人物塑造'}。\n\n【待评审文本】：\n${textToReview}`;
                 }
 
-                // Workflow simulation (appending instruction)
                 const workflowName = MOCK_WORKFLOWS.find(w => w.id === selectedWorkflow)?.title;
                 if (workflowName) {
                     finalPrompt = `[工作流：${workflowName}]\n${finalPrompt}`;
                 }
             }
 
-            // Stream Handling
             if (onStream && (activeTab === 'original' || activeTab === 'imitate')) {
                 const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
                 let isFirst = true;
@@ -264,13 +252,14 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             >
                                 <option value="gemini-2.5-flash">Gemini 2.5 Flash (快速)</option>
                                 <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
-                                <option value="deepseek-chat">DeepSeek V3</option>
-                                <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
+                                <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
+                                <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
                             </select>
                             <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                         </div>
                     </div>
                     
+                    {/* ... (rest of controls) ... */}
                     <div className="col-span-2 grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex justify-between items-center">
@@ -354,6 +343,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
                 <hr className="border-gray-200 dark:border-gray-800" />
 
+                {/* ... (rest of prompts and results UI) ... */}
                 <div className="space-y-4">
                     {selectedPrompt ? (
                         <div className="space-y-4 animate-fade-in">

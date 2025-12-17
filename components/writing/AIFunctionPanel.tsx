@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -9,6 +10,7 @@ import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
 
+// ... (AIFunctionPanelProps and TabType) ...
 type TabType = 'plot' | 'continue' | 'polish' | 'review';
 
 interface AIFunctionPanelProps {
@@ -26,27 +28,22 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [model, setModel] = useState('gemini-2.5-flash');
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
+    // ... other states ...
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
-
-    // Modals
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
     const [isPromptModalOpen, setPromptModalOpen] = useState(false);
-
-    // Form State
     const [formState, setFormState] = useState<Record<string, string>>({});
-
-    // Result State
     const [isLoading, setIsLoading] = useState(false);
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [overlayStatus, setOverlayStatus] = useState<'loading' | 'success'>('loading');
     const [resultText, setResultText] = useState('');
     const [error, setError] = useState('');
     const [lastGeneratedTab, setLastGeneratedTab] = useState<TabType | null>(null);
-    
     const abortControllerRef = useRef<AbortController | null>(null);
 
+    // ... (rest of logic) ...
     useEffect(() => {
         const loadAssets = async () => {
             const data = await fetchMaterials();
@@ -63,7 +60,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         loadAssets();
     }, []);
 
-    // Filter prompts based on active tab (for finding defaults only)
     const defaultTabPrompts = useMemo(() => {
         return PROMPTS.filter(prompt => {
             const subCats = prompt.subCategories || [];
@@ -75,7 +71,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         });
     }, [activeTab]);
 
-    // Initialize default prompt when tab changes
     useEffect(() => {
         if (defaultTabPrompts.length > 0) {
             setSelectedPrompt(defaultTabPrompts[0]);
@@ -86,7 +81,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         setError('');
     }, [activeTab, defaultTabPrompts]);
 
-    // Auto-fill logic
     useEffect(() => {
         if (!selectedPrompt) return;
 
@@ -94,15 +88,11 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         let hasChange = false;
 
         selectedPrompt.fields.forEach(field => {
-            // Auto-fill context if field id is 'context'
             if (field.id === 'context' && !newFormState['context']) {
-                 // Take last 2000 chars for context
                 newFormState['context'] = contextText.slice(-2000);
                 hasChange = true;
             }
-            // Auto-fill text if field id is 'text' (for polish/review/proofread)
             if (field.id === 'text' && !newFormState['text']) {
-                // Prefer selected text, fallback to recent context for review if nothing selected
                 newFormState['text'] = selectedText || (activeTab === 'review' ? contextText.slice(-2000) : ''); 
                 hasChange = true;
             }
@@ -134,22 +124,18 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         setError('');
         setLastGeneratedTab(activeTab);
 
-        // Abort Control
         const controller = new AbortController();
         abortControllerRef.current = controller;
 
         try {
-            // Increment heat
             incrementPromptHeat(selectedPrompt.id);
 
-            // 1. Build Asset Context
             const assetContext = Array.from(selectedAssetIds)
                 .map(id => assets.find(a => a.id === id))
                 .filter(Boolean)
                 .map(a => `【参考素材：${a!.name}】\n${a!.content}`)
                 .join('\n\n');
 
-            // 2. Build Prompt
             let prompt = selectedPrompt.template;
             for (const field of selectedPrompt.fields) {
                 const val = formState[field.id] || '';
@@ -158,7 +144,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
             const finalPrompt = assetContext ? `${assetContext}\n\n---\n\n${prompt}` : prompt;
 
-            // Stream Handling
             if (onStream && (activeTab === 'plot' || activeTab === 'continue')) {
                 const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
                 let isFirst = true;
@@ -166,23 +151,19 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 
                 for await (const chunk of stream) {
                     if (isFirst) {
-                        // Keep overlay open but possibly minimized, we don't auto-close streaming overlay immediately
-                        // Actually for streaming into editor, we usually close overlay once first chunk arrives
                         setShowLoadingOverlay(false);
                     }
                     onStream(chunk, isFirst);
                     fullText += chunk;
-                    setResultText(fullText); // Update local display
+                    setResultText(fullText);
                     isFirst = false;
                 }
-                // Completed streaming
                 setOverlayStatus('success'); 
             } else {
-                // Fallback / Non-stream / Polish / Review
                 const text = await generateText(finalPrompt, { model, temperature, topP, signal: controller.signal });
                 
                 if (activeTab === 'plot' || activeTab === 'continue') {
-                    onInsert(text); // Insert final result if not streamed
+                    onInsert(text);
                 }
                 setResultText(text);
                 setOverlayStatus('success');
@@ -264,13 +245,14 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             >
                                 <option value="gemini-2.5-flash">Gemini 2.5 Flash (极速)</option>
                                 <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度推理)</option>
-                                <option value="deepseek-chat">DeepSeek V3</option>
-                                <option value="deepseek-reasoner">DeepSeek R1 (推理)</option>
+                                <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
+                                <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
                             </select>
                             <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                         </div>
                     </div>
 
+                    {/* ... (rest of the UI remains the same, sliders etc.) ... */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex justify-between items-center">
