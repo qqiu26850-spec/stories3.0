@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
@@ -60,15 +59,16 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
+// 保持素材导入成功的 Toast 仍为全局 Portal，但减小体积并修改定时
 const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
     if (!isVisible) return null;
     return createPortal(
         <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[200] animate-fade-in-up">
-            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-green-200 dark:border-green-900 px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
-                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                    <Check className="w-6 h-6" />
+            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-green-200 dark:border-green-900 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
+                <div className="w-6 h-6 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                    <Check className="w-4 h-4" />
                 </div>
-                <span className="text-lg font-bold text-gray-800 dark:text-gray-100">{message}</span>
+                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{message}</span>
             </div>
         </div>,
         document.body
@@ -161,6 +161,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const [assetModalOpen, setAssetModalOpen] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [showSuccessToast, setShowSuccessToast] = useState(false);
+    const [showInlineSuccess, setShowInlineSuccess] = useState(false); // 新增：行内成功提示状态
     const [assets, setAssets] = useState<Asset[]>([]);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     
@@ -216,17 +217,17 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                 }
                 setGeneratedText(prev => prev + chunk);
             }
-            setSuccessMessage('内容生成完毕');
-            setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 3000);
+            setSuccessMessage('生成完毕');
+            setShowInlineSuccess(true);
+            setTimeout(() => setShowInlineSuccess(false), 2000); // 2秒消失
         } catch (e) {} finally { setIsGenerating(false); setIsWaitingForFirstChunk(false); setShowLoadingOverlay(false); }
     };
 
     const handleImportAsset = (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => {
         saveMaterial(data.name, data.content, data.type === 'inspiration' ? 'idea' : data.type, data.tags);
-        setSuccessMessage('已成功导入素材库');
+        setSuccessMessage('已导入素材库');
         setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 3000);
+        setTimeout(() => setShowSuccessToast(false), 1000); // 素材导入成功的全局 Toast 设为1秒
     };
 
     if (!selectedModule) {
@@ -394,9 +395,17 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                         ) : (
                             <>
                                 <div className="flex-shrink-0 bg-white dark:bg-gray-900 px-8 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center z-10 font-sans">
-                                    <div className="flex items-center gap-2 text-gray-900 dark:text-white font-bold text-lg"><Sparkles className="w-5 h-5 text-sky-500" /><span>生成结果</span></div>
+                                    <div className="flex items-center gap-2 text-gray-900 dark:text-white font-bold text-lg">
+                                        <Sparkles className="w-5 h-5 text-sky-500" />
+                                        <span>生成结果</span>
+                                        {showInlineSuccess && (
+                                            <span className="ml-3 text-xs font-bold text-emerald-500 animate-fade-in flex items-center gap-1">
+                                                <Check className="w-3.5 h-3.5" /> {successMessage}
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { navigator.clipboard.writeText(generatedText); setSuccessMessage('已复制到剪贴板'); setShowSuccessToast(true); setTimeout(()=>setShowSuccessToast(false),2000); }} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-sky-100 text-sky-700 hover:bg-sky-200 transition-colors font-sans"><Copy className="w-4 h-4" /> 复制</button>
+                                        <button onClick={() => { navigator.clipboard.writeText(generatedText); setSuccessMessage('已复制'); setShowInlineSuccess(true); setTimeout(()=>setShowInlineSuccess(false),2000); }} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-sky-100 text-sky-700 hover:bg-sky-200 transition-colors font-sans"><Copy className="w-4 h-4" /> 复制</button>
                                         <button onClick={() => setImportModalOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors font-sans"><Database className="w-4 h-4" /> 导入素材库</button>
                                     </div>
                                 </div>

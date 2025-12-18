@@ -20,9 +20,9 @@ const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ messa
     if (!isVisible) return null;
     return createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
-            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-gray-100 dark:border-gray-700 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in">
-                <div className="w-8 h-8 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                    <Check className="w-5 h-5" />
+            <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border border-gray-100 dark:border-gray-700 px-5 py-2.5 rounded-xl shadow-xl flex items-center gap-2 animate-fade-in-up">
+                <div className="w-6 h-6 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                    <Check className="w-4 h-4" />
                 </div>
                 <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{message}</span>
             </div>
@@ -53,7 +53,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     const [isLoading, setIsLoading] = useState(true);
     const [successMessage, setSuccessMessage] = useState('');
 
-    // 加载持久化收藏数据
     useEffect(() => {
         const stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
         if (stored) {
@@ -64,7 +63,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         }
     }, []);
 
-    // 收藏状态变化同步到本地
     useEffect(() => {
         localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(Array.from(favoritedIds)));
     }, [favoritedIds]);
@@ -84,7 +82,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                     let parsedContent: any = {};
                     try { parsedContent = JSON.parse(p.content); } catch (e) { parsedContent = { template: p.content }; }
 
-                    // Map DB category string to UI category key
                     let appCat: PromptCategory = 'short-story';
                     if(p.main_category === 'long') appCat = 'long-story';
                     else if(p.main_category === 'script') appCat = 'script';
@@ -124,7 +121,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         });
     };
 
-    // 处理提示词选中预览
     const handleSelectPrompt = (prompt: Prompt) => {
         setSelectedPrompt(prompt);
         setDetailModalOpen(true);
@@ -147,9 +143,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             if (activeTab === 'favorites') return favoritedIds.has(p.id);
             if (activeTab === 'my-prompts') return p.userId === currentUserId;
             if (activeTab !== 'all' && p.category !== activeTab) return false;
-            
             if (activeSubCategory !== 'all' && !p.subCategories.includes(activeSubCategory as PromptSubCategory)) return false;
-            
             const term = searchTerm.toLowerCase();
             return p.title.toLowerCase().includes(term) || p.description.toLowerCase().includes(term);
         });
@@ -164,9 +158,9 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         if (promptToDelete) {
             try {
                 await deletePrompt(promptToDelete.id);
-                setSuccessMessage('提示词已成功删除');
+                setSuccessMessage('已删除');
                 setShowSuccessToast(true);
-                setTimeout(() => setShowSuccessToast(false), 3000);
+                setTimeout(() => setShowSuccessToast(false), 1000); // 改为1秒
                 loadData(true);
             } catch (e) {
                 console.error("删除失败", e);
@@ -184,9 +178,9 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 if (id) await updatePrompt(id, { title: data.title, content, main_category: data.category });
                 else await savePrompt(data.title, content, data.category, data.subCategories[0] as string);
                 setCreateModalOpen(false); loadData(true);
-                setSuccessMessage(id ? '提示词更新成功' : '提示词发布成功');
+                setSuccessMessage(id ? '已更新' : '已发布');
                 setShowSuccessToast(true);
-                setTimeout(() => setShowSuccessToast(false), 3000);
+                setTimeout(() => setShowSuccessToast(false), 1000); // 改为1秒
             }} promptToEdit={promptToEdit} />
             
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
