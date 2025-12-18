@@ -15,13 +15,7 @@ interface PromptLibraryProps {
     isActive: boolean;
 }
 
-const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
-  { id: 'all', label: '全部' },
-  { id: 'short-story', label: '短篇小说' },
-  { id: 'long-story', label: '长篇小说' },
-  { id: 'script', label: '剧本' },
-  { id: 'general', label: '全类型' },
-];
+const FAVORITES_STORAGE_KEY = 'qisimiaoxie_prompt_favorites';
 
 const PostCreationModal: React.FC<{
     isOpen: boolean;
@@ -108,6 +102,26 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     
     const [isLoading, setIsLoading] = useState(true);
     const [successMessage, setSuccessMessage] = useState('');
+
+    // Load favorites from LocalStorage
+    useEffect(() => {
+        const stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed)) {
+                    setFavoritedIds(new Set(parsed));
+                }
+            } catch (e) {
+                console.error("Failed to parse favorites", e);
+            }
+        }
+    }, []);
+
+    // Save favorites to LocalStorage
+    useEffect(() => {
+        localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(Array.from(favoritedIds)));
+    }, [favoritedIds]);
 
     const loadData = useCallback(async (forceRefresh = false) => {
         setIsLoading(true);
@@ -345,15 +359,36 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
                 <div className="flex justify-between items-center">
                     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1 mr-4">
-                        {CATEGORY_TABS.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
-                                className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
+                        <button
+                            onClick={() => setActiveTab('all')}
+                            className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                        >
+                            全部
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('short-story')}
+                            className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'short-story' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                        >
+                            短篇小说
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('long-story')}
+                            className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'long-story' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                        >
+                            长篇小说
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('script')}
+                            className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'script' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                        >
+                            剧本
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('general')}
+                            className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'general' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                        >
+                            全类型
+                        </button>
                     </div>
                     
                     <div className="flex gap-2 flex-shrink-0">
@@ -367,7 +402,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                         </button>
                          <button
                             onClick={() => setActiveTab('favorites')}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600 dark:bg-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600 dark:bg-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                             title="我的收藏"
                         >
                             <Heart className="w-4 h-4" />
