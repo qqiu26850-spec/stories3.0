@@ -56,7 +56,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
 
     return createPortal(
         <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col relative max-h-[90vh] animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col relative max-h-[90vh] animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
                 <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-start bg-white dark:bg-gray-900">
                     <div className="flex-1">
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{prompt.title}</h2>
@@ -74,7 +74,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                     <div className="space-y-4">
                         <div className="bg-sky-50 dark:bg-sky-900/10 p-4 rounded-xl space-y-2 border border-sky-100 dark:border-sky-800/50">
                             <h4 className="text-xs font-bold text-sky-600 flex items-center gap-1.5"><BookOpen className="w-3.5 h-3.5" /> 简介</h4>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{prompt.description}</p>
+                            <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{prompt.description}</p>
                         </div>
 
                         {prompt.example && (
