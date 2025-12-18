@@ -20,29 +20,67 @@ interface CreativeGenerationProps {
 
 type PromptFormState = Record<string, string>;
 
+// 辅助函数：阿拉伯数字转中文数字
+const toChineseNumeral = (num: number): string => {
+    const zh = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+    if (num <= 10) return zh[num];
+    if (num < 20) return '十' + (num % 10 === 0 ? '' : zh[num % 10]);
+    if (num < 100) {
+        const ten = Math.floor(num / 10);
+        const unit = num % 10;
+        return zh[ten] + '十' + (unit === 0 ? '' : zh[unit]);
+    }
+    return num.toString();
+};
+
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    const counters = [0, 0, 0, 0, 0, 0];
+    // 使用 useRef 的替代方案，在渲染周期内维护计数器
+    const counters = useRef([0, 0, 0, 0, 0, 0]);
+    
+    // 每次重渲染前重置计数器（仅针对当前 text 内容）
+    counters.current = [0, 0, 0, 0, 0, 0];
+
     return (
         <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
             {cleanedText.split('\n').map((line, index) => {
                 const trimmedLine = line.trim();
                 const isMarkdownHeader = trimmedLine.startsWith('#');
+                
                 if (isMarkdownHeader) {
                     const match = trimmedLine.match(/^(#+)\s*(.*)/);
                     if (match) {
                         const level = Math.min(match[1].length, 6);
                         const content = match[2];
-                        counters[level-1]++;
-                        for (let i = level; i < 6; i++) counters[i] = 0;
-                        const prefix = counters.slice(0, level).join('.') + (level === 1 ? '.' : '') + ' ';
+                        
+                        // 更新计数器：当前层级+1，下属所有层级归零
+                        counters.current[level-1]++;
+                        for (let i = level; i < 6; i++) counters.current[i] = 0;
+                        
+                        const count = counters.current[level-1];
+                        let prefix = "";
+                        
+                        // 根据层级应用不同的前缀格式
+                        if (level === 1) {
+                            prefix = `${toChineseNumeral(count)}、`;
+                        } else if (level === 2) {
+                            prefix = `${count}、`;
+                        } else if (level === 3) {
+                            prefix = `（${count}）`;
+                        } else {
+                            // 4级及以上使用标准数字点号
+                            prefix = `${count}. `;
+                        }
+
                         let className = "font-bold text-gray-900 dark:text-white ";
                         if (level === 1) className += "text-xl mt-6 mb-4";
                         else if (level === 2) className += "text-lg mt-5 mb-3";
                         else className += "text-base mt-4 mb-2";
+                        
                         return <div key={index} className={className}>{prefix}{content}</div>;
                     }
                 }
+                
                 const parts = line.split(/(\*\*.*?\*\*)/g);
                 return (
                     <div key={index} className="min-h-[1.5em] mb-1">
@@ -59,7 +97,6 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-// 保持素材导入成功的 Toast 仍为全局 Portal，但减小体积并修改定时
 const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
     if (!isVisible) return null;
     return createPortal(
@@ -161,7 +198,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const [assetModalOpen, setAssetModalOpen] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [showSuccessToast, setShowSuccessToast] = useState(false);
-    const [showInlineSuccess, setShowInlineSuccess] = useState(false); // 新增：行内成功提示状态
+    const [showInlineSuccess, setShowInlineSuccess] = useState(false);
     const [assets, setAssets] = useState<Asset[]>([]);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     
@@ -219,7 +256,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             }
             setSuccessMessage('生成完毕');
             setShowInlineSuccess(true);
-            setTimeout(() => setShowInlineSuccess(false), 2000); // 2秒消失
+            setTimeout(() => setShowInlineSuccess(false), 2000);
         } catch (e) {} finally { setIsGenerating(false); setIsWaitingForFirstChunk(false); setShowLoadingOverlay(false); }
     };
 
@@ -227,7 +264,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         saveMaterial(data.name, data.content, data.type === 'inspiration' ? 'idea' : data.type, data.tags);
         setSuccessMessage('已导入素材库');
         setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 1000); // 素材导入成功的全局 Toast 设为1秒
+        setTimeout(() => setShowSuccessToast(false), 1000);
     };
 
     if (!selectedModule) {
