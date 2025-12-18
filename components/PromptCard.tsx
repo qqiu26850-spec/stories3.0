@@ -15,10 +15,10 @@ interface PromptCardProps {
 }
 
 const SUB_CATEGORY_LABELS: Record<string, string> = {
-    'idea': '创意', 'golden_finger': '金手指', 'character_design': '人设', 'worldview': '世界观',
-    'outline': '大纲', 'detailed_outline': '细纲', 'synopsis': '简介', 'requirements': '要求',
-    'style': '风格', 'continue': '续写', 'polish': '润色', 'proofread': '校对', 'writing': '写稿',
-    'general': '全类型', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
+    'idea': '创意', 'golden_finger': '金手指', 'character_design': '人物设定', 'worldview': '世界观',
+    'outline': '大纲', 'detailed_outline': '细纲', 'synopsis': '简介', 'requirements': '写作要求',
+    'style': '写作风格', 'continue': '续写', 'polish': '润色', 'proofread': '校对', 'writing': '写稿',
+    'general': '通用', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
     'apocalypse': '末世', 'urban': '都市', 'fantasy': '玄幻', 'history': '历史', 'social': '世情',
     'suspense': '悬疑', 'sci-fi': '科幻'
 };
@@ -42,11 +42,11 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onE
         </div>
         <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-4 line-clamp-3 flex-grow">{prompt.description}</p>
         <div className="flex items-center justify-between pt-3 border-t mt-auto gap-2">
-            <div className="flex items-center gap-1.5 overflow-hidden">
+            <div className="flex items-center gap-1.5 overflow-hidden flex-wrap max-h-6">
                 <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-sky-50 text-sky-600 border-sky-100">{CATEGORY_LABELS[prompt.category] || '全类型'}</span>
-                {prompt.subCategories?.slice(0, 2).map((sub) => (
+                {prompt.subCategories?.slice(0, 3).map((sub) => (
                     <span key={sub} className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${isGenre(sub as string) ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                        {SUB_CATEGORY_LABELS[sub] || '标签'}
+                        {SUB_CATEGORY_LABELS[sub] || sub}
                     </span>
                 ))}
             </div>

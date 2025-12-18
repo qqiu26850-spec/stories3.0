@@ -138,13 +138,14 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
-                <div className="px-8 py-4 bg-gradient-to-r from-sky-600 to-blue-600 border-b border-sky-700/30 flex-shrink-0">
+                {/* 顶部置顶容器：降低了高度并改为浅蓝色渐变 */}
+                <div className="px-8 py-2.5 bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-900/20 dark:to-gray-900 border-b border-sky-100 dark:border-gray-800 flex-shrink-0">
                     <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                            <Sparkles className="w-5 h-5 text-sky-200" />
+                        <h3 className="text-base font-bold text-sky-900 dark:text-sky-100 flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-sky-500" />
                             {promptToEdit ? '编辑提示词' : '创建提示词模板'}
                         </h3>
-                        <button onClick={onClose} className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"><X className="w-6 h-6"/></button>
+                        <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 dark:hover:bg-white/10 rounded-full transition-all"><X className="w-5 h-5"/></button>
                     </div>
                 </div>
                 

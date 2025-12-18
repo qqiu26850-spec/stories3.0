@@ -20,13 +20,13 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     // Functions
     'idea': '创意',
     'golden_finger': '金手指',
-    'character_design': '人设',
+    'character_design': '人物设定',
     'worldview': '世界观',
     'outline': '大纲',
     'detailed_outline': '细纲',
     'synopsis': '简介',
-    'requirements': '要求',
-    'style': '风格',
+    'requirements': '写作要求',
+    'style': '写作风格',
     'continue': '续写',
     'polish': '润色',
     'proofread': '校对',
@@ -67,11 +67,11 @@ const SelectablePromptCard: React.FC<SelectablePromptCardProps> = ({ prompt, onS
       <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700 w-full mt-auto gap-2">
           
           {/* Left: Tags */}
-          <div className="flex items-center gap-1.5 overflow-hidden">
+          <div className="flex items-center gap-1.5 overflow-hidden flex-wrap max-h-6 flex-1">
              <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-900/20 dark:border-sky-800`}>
                 {CATEGORY_LABELS[prompt.category] || '全类型'}
             </span>
-            {prompt.subCategories && prompt.subCategories.slice(0, 2).map((sub) => (
+            {prompt.subCategories && prompt.subCategories.slice(0, 3).map((sub) => (
                 <span key={sub} className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap ${
                     isGenre(sub as string) 
                     ? 'bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-300' 
@@ -87,10 +87,6 @@ const SelectablePromptCard: React.FC<SelectablePromptCardProps> = ({ prompt, onS
              <div className="flex items-center gap-1 text-orange-400">
                 <Fire className="w-3 h-3" />
                 <span>{prompt.heat}</span>
-             </div>
-             <div className="flex items-center gap-1 hidden sm:flex">
-                <UserCircle className="w-3 h-3" />
-                <span className="truncate max-w-[50px]">{prompt.creator === 'system' ? '官方' : (prompt.authorName || '用户')}</span>
              </div>
              <span className="text-sky-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">选择</span>
           </div>
