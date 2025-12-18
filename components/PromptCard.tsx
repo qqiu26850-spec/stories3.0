@@ -23,8 +23,12 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'suspense': '悬疑', 'sci-fi': '科幻'
 };
 
+// 这里的映射名称与创建页面的 Label 保持一致
 const CATEGORY_LABELS: Record<string, string> = {
-    'long-story': '长篇', 'short-story': '短篇', 'script': '剧本', 'general': '全类型'
+    'long-story': '长篇小说', 
+    'short-story': '短篇小说', 
+    'script': '剧本', 
+    'general': '全类型'
 };
 
 const isGenre = (tag: string) => GENRE_TAGS.some(g => g.id === tag);
@@ -42,9 +46,14 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onE
         </div>
         <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-4 line-clamp-3 flex-grow">{prompt.description}</p>
         <div className="flex items-center justify-between pt-3 border-t mt-auto gap-2">
-            <div className="flex items-center gap-1.5 overflow-hidden flex-wrap max-h-6">
-                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-sky-50 text-sky-600 border-sky-100">{CATEGORY_LABELS[prompt.category] || '全类型'}</span>
-                {prompt.subCategories?.slice(0, 3).map((sub) => (
+            <div className="flex items-center gap-1.5 overflow-hidden flex-wrap max-h-12">
+                {/* 主分类标签：琥珀色高亮显示，与子标签区分 */}
+                <span className="flex-shrink-0 px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white shadow-sm ring-1 ring-amber-400/30">
+                    {CATEGORY_LABELS[prompt.category] || '全类型'}
+                </span>
+                
+                {/* 子标签：显示创建者选择的前2个关联标签 */}
+                {prompt.subCategories?.slice(0, 2).map((sub) => (
                     <span key={sub} className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${isGenre(sub as string) ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
                         {SUB_CATEGORY_LABELS[sub] || sub}
                     </span>
@@ -52,7 +61,6 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onE
             </div>
             <div className="flex items-center gap-3 flex-shrink-0 text-xs text-gray-400">
                 <div className="flex items-center gap-1 text-orange-400"><Fire className="w-3 h-3" /><span>{prompt.heat}</span></div>
-                <div className="flex items-center gap-1 hidden sm:flex"><UserCircle className="w-3 h-3" /><span>{prompt.authorName || '用户'}</span></div>
                 {isOwner && (
                     <div className="flex gap-1 pl-2 border-l">
                         <button onClick={(e) => { e.stopPropagation(); onEdit?.(prompt); }} className="hover:text-sky-500"><Pencil className="w-3 h-3" /></button>
