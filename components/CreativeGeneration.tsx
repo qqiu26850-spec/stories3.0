@@ -20,26 +20,8 @@ interface CreativeGenerationProps {
 
 type PromptFormState = Record<string, string>;
 
-// 辅助函数：阿拉伯数字转中文数字
-const toChineseNumeral = (num: number): string => {
-    const zh = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
-    if (num <= 10) return zh[num];
-    if (num < 20) return '十' + (num % 10 === 0 ? '' : zh[num % 10]);
-    if (num < 100) {
-        const ten = Math.floor(num / 10);
-        const unit = num % 10;
-        return zh[ten] + '十' + (unit === 0 ? '' : zh[unit]);
-    }
-    return num.toString();
-};
-
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    // 使用 useRef 的替代方案，在渲染周期内维护计数器
-    const counters = useRef([0, 0, 0, 0, 0, 0]);
-    
-    // 每次重渲染前重置计数器（仅针对当前 text 内容）
-    counters.current = [0, 0, 0, 0, 0, 0];
 
     return (
         <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
@@ -53,31 +35,13 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
                         const level = Math.min(match[1].length, 6);
                         const content = match[2];
                         
-                        // 更新计数器：当前层级+1，下属所有层级归零
-                        counters.current[level-1]++;
-                        for (let i = level; i < 6; i++) counters.current[i] = 0;
-                        
-                        const count = counters.current[level-1];
-                        let prefix = "";
-                        
-                        // 根据层级应用不同的前缀格式
-                        if (level === 1) {
-                            prefix = `${toChineseNumeral(count)}、`;
-                        } else if (level === 2) {
-                            prefix = `${count}、`;
-                        } else if (level === 3) {
-                            prefix = `（${count}）`;
-                        } else {
-                            // 4级及以上使用标准数字点号
-                            prefix = `${count}. `;
-                        }
-
+                        // 直接使用 AI 输出的内容，不再额外添加序号前缀
                         let className = "font-bold text-gray-900 dark:text-white ";
                         if (level === 1) className += "text-xl mt-6 mb-4";
                         else if (level === 2) className += "text-lg mt-5 mb-3";
                         else className += "text-base mt-4 mb-2";
                         
-                        return <div key={index} className={className}>{prefix}{content}</div>;
+                        return <div key={index} className={className}>{content}</div>;
                     }
                 }
                 
