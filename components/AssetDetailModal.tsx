@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Asset } from '../types';
 import { X, Trash, Pencil, Check, ArrowPath } from './Icon';
@@ -62,12 +63,13 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, as
                      <div className="flex flex-wrap gap-2">{localAsset.tags.map((tag, i) => <span key={i} className={`text-xs px-3 py-1 rounded-full font-bold border ${getTagStyle(tag)}`}>{tag}</span>)}</div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-800/30 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 group relative shadow-inner">
+                {/* Initial height increased, enabled vertical resize (resize-y) */}
+                <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-800/30 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 group relative shadow-inner min-h-[400px]">
                     <textarea 
                         value={editedContent} 
                         onChange={e => setEditedContent(e.target.value)} 
                         autoFocus 
-                        className="w-full h-full bg-transparent outline-none text-base leading-loose resize-none font-serif text-gray-700 dark:text-gray-300 custom-scrollbar p-2"
+                        className="w-full h-full bg-transparent outline-none text-base leading-loose resize-y font-serif text-gray-700 dark:text-gray-300 custom-scrollbar p-2"
                         placeholder="在此输入或修改素材内容..."
                     />
                 </div>
@@ -76,7 +78,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, as
                     <button onClick={() => onDelete?.(localAsset.id)} className="flex items-center gap-2 px-6 py-3 text-red-500 font-bold hover:bg-red-50 dark:hover:bg-red-900/20 rounded-2xl transition-all"><Trash className="w-6 h-6" /> 彻底删除</button>
                     <div className="flex gap-4">
                         <button onClick={onClose} className="px-8 py-3 text-base text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-colors">取消</button>
-                        <button onClick={handleSave} disabled={isSaving} className="px-10 py-3 text-base bg-sky-600 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-sky-500 shadow-xl shadow-sky-500/20 transition-all active:scale-95">
+                        <button onClick={handleSave} disabled={isSaving} className="px-10 py-3 text-base bg-blue-600 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-500 shadow-xl shadow-blue-500/20 transition-all active:scale-95">
                             {isSaving ? <ArrowPath className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
                             确认并保存修改
                         </button>

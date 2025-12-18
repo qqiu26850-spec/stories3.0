@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
-import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, Search } from '../Icon';
+import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -244,7 +245,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 >
                                     <option value="deepseek-chat">DeepSeek V3 (通用对话)</option>
                                     <option value="deepseek-reasoner">DeepSeek R1 (深度推理)</option>
-                                    {/* Fix: Updated Gemini model names for better text task results */}
                                     <option value="gemini-3-flash-preview">Gemini 3 Flash (极速)</option>
                                     <option value="gemini-3-pro-preview">Gemini 3 Pro (深度)</option>
                                 </select>
@@ -261,38 +261,27 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     </div>
 
                     {showConfig && (
-                        <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-4 animate-fade-in text-sm">
-                            <div className="col-span-2 text-[10px] text-gray-400 bg-white dark:bg-black/20 p-2 rounded mb-1">
-                                💡 小说创作建议：温度 0.7-0.9 (更有创意)，核采样 0.9 (标准)
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex justify-between items-center">
-                                    <span>随机度</span>
-                                    <span className="text-gray-700 dark:text-gray-300 font-mono">{temperature}</span>
-                                </label>
-                                <input 
-                                    type="range" min="0" max="1.5" step="0.1" 
-                                    value={temperature} 
-                                    onChange={e => setTemperature(parseFloat(e.target.value))}
-                                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 flex justify-between items-center">
-                                    <span>核采样</span>
-                                    <span className="text-gray-700 dark:text-gray-300 font-mono">{topP}</span>
-                                </label>
-                                <input 
-                                    type="range" min="0" max="1" step="0.05" 
-                                    value={topP} 
-                                    onChange={e => setTopP(parseFloat(e.target.value))}
-                                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
-                                />
+                        <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-4 animate-fade-in text-[10px]">
+                            <div className="col-span-2 space-y-2">
+                                <div className="space-y-1">
+                                    <label className="block font-black text-sky-500 flex justify-between uppercase">
+                                        <span>随机度 (Temperature): {temperature}</span>
+                                    </label>
+                                    <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                    <p className="text-gray-400 leading-tight italic">控制回复的确定性。高值更具创意，低值更稳定且严谨。</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="block font-black text-sky-500 flex justify-between uppercase">
+                                        <span>核采样 (Top P): {topP}</span>
+                                    </label>
+                                    <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                    <p className="text-gray-400 leading-tight italic">通过限制选词范围控制多样性。值越高选词越自由、跨度越大。</p>
+                                </div>
                             </div>
                         </div>
                     )}
-
-                     <div className="flex flex-col gap-2">
+                    {/* ... rest of the panel ... */}
+                    <div className="flex flex-col gap-2">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">提示词选择</label>
                         <button 
                             onClick={() => setPromptModalOpen(true)}
@@ -318,7 +307,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             onClick={() => setAssetModalOpen(true)}
                             className={`w-full p-3 rounded-lg border text-left transition-all ${
                                 selectedAssetIds.size > 0 
-                                ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' 
+                                ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-sky-100' 
                                 : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'
                             }`}
                         >
@@ -438,12 +427,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             >
                                 替换选中文本
                             </button>
-                        )}
-                        
-                        {(lastGeneratedTab === 'plot' || lastGeneratedTab === 'continue') && (
-                            <p className="text-xs text-gray-400 text-center">
-                                内容已直接添加到正文中，您可以直接在左侧编辑器进行修改或撤销。
-                            </p>
                         )}
                     </div>
                 )}

@@ -162,17 +162,16 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     return (
         <div className="fixed inset-0 bg-black/70 dark:bg-black/90 flex items-center justify-center z-[100] p-4 backdrop-blur-md" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-fade-in-up border border-white/20" onClick={e => e.stopPropagation()}>
-                <div className="px-8 py-4 bg-gradient-to-r from-sky-600/10 via-purple-600/5 to-transparent border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+                {/* Header: Reduced height (py-3), changed sky-600/10 to blue-600/10, removed subtitle */}
+                <div className="px-8 py-3 bg-gradient-to-r from-blue-600/10 via-indigo-600/5 to-transparent border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
                     <div className="flex justify-between items-center">
                         <div>
-                            {/* Updated title size to text-lg (smaller) */}
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                <div className="p-1.5 bg-sky-500 rounded-lg shadow-md shadow-sky-500/20">
+                                <div className="p-1.5 bg-blue-600 rounded-lg shadow-md shadow-blue-600/20">
                                     <Sparkles className="w-4 h-4 text-white" />
                                 </div>
-                                {promptToEdit ? '编辑提示词' : '创建灵感提示词'}
+                                {promptToEdit ? '编辑提示词' : '创建提示词'}
                             </h3>
-                            <p className="text-gray-500 dark:text-gray-400 mt-1 text-[11px]">构建属于你的 AI 创作模板。</p>
                         </div>
                         <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"><X className="w-6 h-6"/></button>
                     </div>
@@ -180,21 +179,19 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 
                 <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
                     <div className="flex-1 overflow-y-auto px-10 py-6 space-y-8 [scrollbar-gutter:stable]">
-                        {/* Section Header Font: text-base (slightly larger) */}
                         <div className="space-y-5">
-                            <h4 className="flex items-center gap-2 text-base font-black text-sky-600 dark:text-sky-400 tracking-wide">
+                            <h4 className="flex items-center gap-2 text-base font-black text-blue-600 dark:text-blue-400 tracking-wide">
                                 <InformationCircle className="w-5 h-5" /> 基本信息
                             </h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="space-y-2">
-                                    {/* Labels: text-sm (slightly larger) */}
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">提示词标题</label>
                                     <input 
                                         type="text" 
                                         value={title} 
                                         onChange={(e) => setTitle(e.target.value)} 
                                         placeholder="例如：赛博朋克城市描写" 
-                                        className="w-full p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all shadow-sm"
+                                        className="w-full p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -203,11 +200,11 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                         <select 
                                             value={category} 
                                             onChange={(e) => setCategory(e.target.value as PromptCategory)} 
-                                            className="w-full p-4 pr-10 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none appearance-none cursor-pointer transition-all shadow-sm"
+                                            className="w-full p-4 pr-10 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none cursor-pointer transition-all shadow-sm"
                                         >
                                             {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                                         </select>
-                                        <ChevronDown className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-sky-500 pointer-events-none transition-colors" />
+                                        <ChevronDown className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 pointer-events-none transition-colors" />
                                     </div>
                                 </div>
                             </div>
@@ -220,17 +217,19 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             <div className="p-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-6">
                                 <div>
                                     <span className="text-xs font-black text-gray-400 mb-3 block uppercase tracking-widest">题材 / 类型</span>
-                                    <div className="flex flex-wrap gap-2.5">
+                                    {/* Reduced gap to 1.5, increased font size to text-sm */}
+                                    <div className="flex flex-wrap gap-1.5">
                                         {GENRE_TAGS.map(tag => (
-                                            <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id)} className={`px-4 py-2 text-xs font-bold rounded-full border transition-all ${subCategories.includes(tag.id) ? 'bg-purple-600 border-purple-600 text-white shadow-md scale-105' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-purple-400 hover:text-purple-600'}`}>{tag.label}</button>
+                                            <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id)} className={`px-4 py-2 text-sm font-bold rounded-full border transition-all ${subCategories.includes(tag.id) ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-purple-400 hover:text-purple-600'}`}>{tag.label}</button>
                                         ))}
                                     </div>
                                 </div>
                                 <div className="pt-5 border-t border-gray-200/50 dark:border-gray-700/50">
                                     <span className="text-xs font-black text-gray-400 mb-3 block uppercase tracking-widest">功能 / 用途</span>
-                                    <div className="flex flex-wrap gap-2.5">
+                                    {/* Reduced gap to 1.5, increased font size to text-sm */}
+                                    <div className="flex flex-wrap gap-1.5">
                                         {FUNCTION_TAGS.map(tag => (
-                                            <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id)} className={`px-4 py-2 text-xs font-bold rounded-full border transition-all ${subCategories.includes(tag.id) ? 'bg-sky-600 border-sky-600 text-white shadow-md scale-105' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-sky-400 hover:text-sky-600'}`}>{tag.label}</button>
+                                            <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id)} className={`px-4 py-2 text-sm font-bold rounded-full border transition-all ${subCategories.includes(tag.id) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600'}`}>{tag.label}</button>
                                         ))}
                                     </div>
                                 </div>
@@ -248,7 +247,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                         value={description} 
                                         onChange={(e) => setDescription(e.target.value)} 
                                         placeholder="描述这个提示词的用途及适用场景。" 
-                                        className="w-full h-40 p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition-all resize-none shadow-sm"
+                                        className="w-full min-h-[160px] p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-y shadow-sm"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -259,7 +258,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                         value={example} 
                                         onChange={(e) => setExample(e.target.value)} 
                                         placeholder="输入一段 AI 生成的参考效果，帮助其他用户快速理解。" 
-                                        className="w-full h-40 p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition-all resize-none font-serif shadow-sm"
+                                        className="w-full min-h-[160px] p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition-all resize-y font-serif shadow-sm"
                                     />
                                 </div>
                             </div>
@@ -274,18 +273,18 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                     value={template} 
                                     onChange={(e) => setTemplate(e.target.value)} 
                                     placeholder="输入完整的提示词指令。使用 ${变量名} 引用下方定义的字段。例如：请根据风格 ${style} 描写一段..." 
-                                    className="w-full h-48 p-5 bg-white text-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-sky-500/20 outline-none transition-all resize-none font-mono text-sm shadow-lg"
+                                    className="w-full min-h-[200px] p-5 bg-white text-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-4 focus:ring-blue-500/20 outline-none transition-all resize-y font-mono text-sm shadow-lg"
                                 />
                             </div>
                         </div>
 
-                        <div className="space-y-6 p-8 bg-sky-50/30 dark:bg-sky-900/5 border-2 border-dashed border-sky-200/50 dark:border-sky-800/50 rounded-3xl">
+                        <div className="space-y-6 p-8 bg-blue-50/30 dark:bg-blue-900/5 border-2 border-dashed border-blue-200/50 dark:border-blue-800/50 rounded-3xl">
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <h4 className="text-lg font-black text-sky-700 dark:text-sky-300">自定义动态字段</h4>
+                                    <h4 className="text-lg font-black text-blue-700 dark:text-blue-300">自定义动态字段</h4>
                                     <p className="text-xs text-gray-500 mt-1.5">字段将自动转化为输入表单供使用者填写。</p>
                                 </div>
-                                <button type="button" onClick={addField} className="px-6 py-2.5 bg-sky-600 text-white text-sm font-bold rounded-xl hover:bg-sky-500 shadow-xl shadow-sky-500/20 transition-all active:scale-95">+ 添加新字段</button>
+                                <button type="button" onClick={addField} className="px-6 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-500 shadow-xl shadow-blue-500/20 transition-all active:scale-95">+ 添加新字段</button>
                             </div>
                             
                             {fields.length === 0 ? (
@@ -293,14 +292,14 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             ) : (
                                 <div className="space-y-5">
                                     {fields.map((field, index) => (
-                                        <div key={field.id} className="p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-12 gap-6 relative shadow-md hover:shadow-xl transition-all" draggable onDragStart={() => handleDragStart(index)} onDragOver={(e) => handleDragOver(e, index)} onDrop={() => handleDrop(index)}>
-                                            <div className="absolute top-1/2 -translate-y-1/2 -left-4 flex items-center p-2 cursor-grab text-gray-300 hover:text-sky-500 transition-colors"><Bars2 className="w-5 h-5" /></div>
+                                        <div key={field.id} className="p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-800 grid grid-cols-1 md:grid-cols-12 gap-6 relative shadow-md hover:shadow-xl transition-all" draggable onDragStart={() => handleDragStart(index)} onDragOver={(e) => handleDragOver(e, index)} onDrop={() => handleDrop(index)}>
+                                            <div className="absolute top-1/2 -translate-y-1/2 -left-4 flex items-center p-2 cursor-grab text-gray-300 hover:text-blue-500 transition-colors"><Bars2 className="w-5 h-5" /></div>
                                             
                                             <div className="md:col-span-4">
                                                 <label className="text-xs font-black text-gray-400 mb-2 block uppercase tracking-widest">显示名称 / 变量名</label>
                                                 <div className="flex gap-2">
-                                                    <input type="text" value={field.label} onChange={(e) => updateField(index, 'label', e.target.value)} placeholder="名称" className="w-1/2 p-3 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-1 focus:ring-sky-500 outline-none transition-all" />
-                                                    <input type="text" value={field.id} onChange={(e) => updateField(index, 'id', e.target.value)} placeholder="变量" className="w-1/2 p-3 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-1 focus:ring-sky-500 outline-none font-mono transition-all" />
+                                                    <input type="text" value={field.label} onChange={(e) => updateField(index, 'label', e.target.value)} placeholder="名称" className="w-1/2 p-3 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-1 focus:ring-blue-500 outline-none transition-all" />
+                                                    <input type="text" value={field.id} onChange={(e) => updateField(index, 'id', e.target.value)} placeholder="变量" className="w-1/2 p-3 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-1 focus:ring-blue-500 outline-none font-mono transition-all" />
                                                 </div>
                                             </div>
 
@@ -320,7 +319,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
                                             <div className="md:col-span-4">
                                                 <label className="text-xs font-black text-gray-400 mb-2 block uppercase tracking-widest">字段说明 (用户可见)</label>
-                                                <input type="text" value={field.description || ''} onChange={(e) => updateField(index, 'description', e.target.value)} placeholder="例如：输入人物的隐藏性格..." className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-1 focus:ring-sky-500 outline-none transition-all" />
+                                                <input type="text" value={field.description || ''} onChange={(e) => updateField(index, 'description', e.target.value)} placeholder="例如：输入人物的隐藏性格..." className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-1 focus:ring-blue-500 outline-none transition-all" />
                                             </div>
 
                                             <div className="md:col-span-1 flex justify-center items-center">
@@ -339,7 +338,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                         </div>
                         <div className="flex gap-4">
                             <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold text-sm rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">取消</button>
-                            <button type="submit" className="px-12 py-3 bg-sky-600 text-white font-black text-sm rounded-xl hover:bg-sky-500 shadow-xl shadow-sky-500/20 transition-all active:scale-95 tracking-widest">{promptToEdit ? '保存修改' : '立即发布'}</button>
+                            <button type="submit" className="px-12 py-3 bg-blue-600 text-white font-black text-sm rounded-xl hover:bg-blue-500 shadow-xl shadow-blue-500/20 transition-all active:scale-95 tracking-widest">{promptToEdit ? '保存修改' : '立即发布'}</button>
                         </div>
                     </div>
                 </form>

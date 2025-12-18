@@ -93,11 +93,6 @@ const App: React.FC = () => {
                 theme={theme}
                 toggleTheme={toggleTheme}
             />
-            {/* 
-              We use `display: none` (via 'hidden' class) instead of conditional rendering.
-              This keeps all components mounted, allowing them to fetch data once on load
-              and retain their state when switching tabs.
-            */}
             <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-black relative">
                 
                 <div className={activeView === 'creative-generation' ? 'block h-full' : 'hidden h-full'}>
@@ -118,7 +113,6 @@ const App: React.FC = () => {
                     <WorkflowManagement />
                 </div>
 
-                {/* Asset Management - Multiple Views, same component instance logic per type */}
                 <div className={activeView === 'character-library' ? 'block h-full' : 'hidden h-full'}>
                     <AssetManagement view="character-library" setActiveView={setActiveView} isActive={activeView === 'character-library'} />
                 </div>
@@ -146,7 +140,7 @@ const App: React.FC = () => {
                 </div>
 
                 <div className={activeView === 'help' ? 'block h-full' : 'hidden h-full'}>
-                    <HelpCenter />
+                    <HelpCenter onNavigate={setActiveView} />
                 </div>
 
             </main>

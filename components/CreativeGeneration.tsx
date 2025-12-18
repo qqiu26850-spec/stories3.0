@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown, Check, Stop } from './Icon';
+import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown, Check, Stop, InformationCircle } from './Icon';
 import PromptSelectionModal from './PromptSelectionModal';
 import AssetSelectionModal from './AssetSelectionModal'; 
 import { saveMaterial, incrementPromptHeat, fetchMaterials } from '../services/supabaseService';
@@ -245,7 +246,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             <SuccessToast message={successMessage} isVisible={showSuccessToast} />
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={generatedText} onSave={handleImportAsset} />
             <PromptSelectionModal isOpen={promptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={setSelectedPrompt} initialSubCategory={selectedModule.subCategories[0]} />
-            <AssetSelectionModal isOpen={assetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={id => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
+            <AssetSelectionModal isOpen={assetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
 
             <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white dark:bg-gray-900 z-20 shadow-sm">
                 <div className="flex items-center gap-3">
@@ -255,8 +256,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             </div>
 
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-                {/* Sidebar */}
-                <div className="w-full lg:w-[360px] xl:w-[400px] flex flex-col border-r border-gray-200 bg-white dark:bg-gray-900 overflow-hidden z-10 [scrollbar-gutter:stable]">
+                {/* Sidebar - Widened by 1/5 from [360px]/[400px] to [432px]/[480px] */}
+                <div className="w-full lg:w-[432px] xl:w-[480px] flex flex-col border-r border-gray-200 bg-white dark:bg-gray-900 overflow-hidden z-10 [scrollbar-gutter:stable]">
                     <div className="flex-1 overflow-y-auto px-5 py-6 space-y-8">
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400 font-bold text-sm uppercase tracking-wider">
@@ -279,9 +280,27 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                     <button onClick={() => setShowConfig(!showConfig)} className="px-3 py-2 text-xs font-bold rounded-lg border border-sky-100 bg-white dark:bg-gray-800 text-sky-600 flex items-center gap-1 hover:bg-sky-50"><AdjustmentsHorizontal className="w-4 h-4" />参数</button>
                                 </div>
                                 {showConfig && (
-                                    <div className="mt-4 pt-4 border-t border-sky-100/50 grid grid-cols-2 gap-4 animate-fade-in">
-                                        <div><label className="block text-[10px] font-black text-sky-400 mb-1.5 flex justify-between uppercase"><span>温度</span><span>{temperature}</span></label><input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-100 rounded-lg appearance-none cursor-pointer accent-sky-500" /></div>
-                                        <div><label className="block text-[10px] font-black text-sky-400 mb-1.5 flex justify-between uppercase"><span>核采样</span><span>{topP}</span></label><input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-100 rounded-lg appearance-none cursor-pointer accent-sky-500" /></div>
+                                    <div className="mt-4 pt-4 border-t border-sky-100/50 space-y-6 animate-fade-in">
+                                        <div className="space-y-2">
+                                            <label className="block text-[10px] font-black text-sky-400 flex justify-between uppercase">
+                                                <span>温度 (Temperature): {temperature}</span>
+                                            </label>
+                                            <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-100 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <p className="text-[10px] text-gray-400 leading-relaxed italic">
+                                                <InformationCircle className="w-3 h-3 inline mr-1" />
+                                                控制创作随机性。值越高越有“创意”，值越低越严谨、稳定。
+                                            </p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="block text-[10px] font-black text-sky-400 flex justify-between uppercase">
+                                                <span>核采样 (Top P): {topP}</span>
+                                            </label>
+                                            <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-100 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <p className="text-[10px] text-gray-400 leading-relaxed italic">
+                                                <InformationCircle className="w-3 h-3 inline mr-1" />
+                                                控制词汇多样性。值越高选词越丰富，值越低则更倾向于常用、稳妥的词汇。
+                                            </p>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -335,8 +354,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                         </div>
                     </div>
 
-                    <div className="p-6 border-t bg-white dark:bg-gray-900">
-                        <button onClick={handleGenerate} className={`w-full py-4 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-rose-500 shadow-rose-500/20' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-500/20'}`}>
+                    {/* Button area height reduced by 1/2 (p-6 to p-3, button py-4 to py-2) */}
+                    <div className="p-3 border-t bg-white dark:bg-gray-900">
+                        <button onClick={handleGenerate} className={`w-full py-2 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-rose-500 shadow-rose-500/20' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-500/20'}`}>
                             {isGenerating ? <><Stop className="w-5 h-5" />停止生成</> : <><Sparkles className="w-5 h-5" />开始创作</>}
                         </button>
                     </div>
