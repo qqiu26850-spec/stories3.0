@@ -20,7 +20,7 @@ const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'short-story', label: '短篇小说' },
   { id: 'long-story', label: '长篇小说' },
   { id: 'script', label: '剧本' },
-  { id: 'general', label: '通用' },
+  { id: 'general', label: '全类型' },
 ];
 
 const PostCreationModal: React.FC<{
@@ -73,12 +73,12 @@ const PostCreationModal: React.FC<{
 const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
     if (!isVisible) return null;
     return createPortal(
-        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[200] animate-fade-in-up">
-            <div className="bg-white dark:bg-gray-800 border border-green-200 dark:border-green-900 px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
-                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                    <Check className="w-6 h-6" />
+        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
+            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-gray-100 dark:border-gray-700 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in">
+                <div className="w-8 h-8 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                    <Check className="w-5 h-5" />
                 </div>
-                <span className="text-lg font-bold text-gray-800 dark:text-gray-100">{message}</span>
+                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{message}</span>
             </div>
         </div>,
         document.body
@@ -150,6 +150,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                         id: p.id,
                         title: p.title,
                         description: p.description || parsedContent.description || '用户自定义提示词',
+                        example: parsedContent.example || '',
                         content: parsedContent.template || p.content,
                         category: appCat,
                         subCategories: tags,
@@ -181,13 +182,13 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             template: data.template,
             fields: data.fields,
             description: data.description,
+            example: data.example,
             authorName: userNickname,
             subCategories: data.subCategories 
         };
         const contentString = JSON.stringify(contentObject);
         const subCat = data.subCategories && data.subCategories.length > 0 ? data.subCategories[0] : 'idea';
 
-        // Close modal first
         setCreateModalOpen(false);
 
         if (promptId) {
@@ -200,7 +201,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             if (!success) { alert(`更新失败: ${error?.message || '未知错误'}`); return; }
             setSuccessMessage('提示词已成功更新');
             setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 3000);
+            setTimeout(() => setShowSuccessToast(false), 2000);
         } else {
             const { success, error } = await savePrompt(data.title, contentString, data.category, subCat);
             if (!success) { alert(`保存失败: ${error?.message || '未知错误'}`); return; }
@@ -209,6 +210,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 id: 'temp-new',
                 title: data.title,
                 description: data.description,
+                example: data.example,
                 content: data.template,
                 template: data.template,
                 fields: data.fields,
@@ -245,7 +247,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             setPromptToDelete(null);
             setSuccessMessage('提示词已成功删除');
             setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 3000);
+            setTimeout(() => setShowSuccessToast(false), 2000);
         }
     };
 
@@ -340,7 +342,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             
             <SuccessToast message={successMessage} isVisible={showSuccessToast} />
             
-            {/* Top Navigation Bar */}
             <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
                 <div className="flex justify-between items-center">
                     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1 mr-4">
@@ -366,7 +367,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                         </button>
                          <button
                             onClick={() => setActiveTab('favorites')}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600 dark:bg-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600 dark:bg-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                             title="我的收藏"
                         >
                             <Heart className="w-4 h-4" />

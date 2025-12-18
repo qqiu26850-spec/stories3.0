@@ -43,7 +43,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     const [assetToDeleteId, setAssetToDeleteId] = useState<string | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
-    const [successMessage, setSuccessMessage] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
 
     const loadAssets = async () => {
@@ -85,7 +84,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
             <div className="mb-6"><input type="text" placeholder="搜索素材..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full max-w-md px-4 py-2.5 bg-white dark:bg-gray-900 border rounded-xl focus:ring-2 focus:ring-sky-500 outline-none shadow-sm" /></div>
 
             {isLoading ? <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-t-sky-500 rounded-full animate-spin"></div></div> : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-10">
                     {filteredAssets.map(asset => (
                         <div key={asset.id} onClick={() => { setSelectedAsset(asset); setDetailModalOpen(true); }} className="bg-white dark:bg-gray-900 p-8 rounded-2xl border border-gray-100 dark:border-gray-800 hover:shadow-2xl hover:border-sky-400 transition-all group cursor-pointer flex flex-col h-full relative">
                             <div className="flex justify-between items-start mb-4">
