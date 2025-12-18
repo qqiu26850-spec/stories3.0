@@ -117,10 +117,22 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         });
     };
 
-    // Fix: Defined handleEditPrompt to resolve the "Cannot find name 'handleEditPrompt'" error
+    // 处理提示词选中预览
+    const handleSelectPrompt = (prompt: Prompt) => {
+        setSelectedPrompt(prompt);
+        setDetailModalOpen(true);
+    };
+
     const handleEditPrompt = (prompt: Prompt) => {
         setPromptToEdit(prompt);
         setCreateModalOpen(true);
+    };
+
+    const handleRunPrompt = (filledValues: Record<string, string>) => {
+        if (selectedPrompt && onNavigateToGeneration) {
+            onNavigateToGeneration(selectedPrompt, filledValues);
+            setDetailModalOpen(false);
+        }
     };
 
     const filteredPrompts = useMemo(() => {
@@ -149,7 +161,12 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 if (promptToDelete) { await deletePrompt(promptToDelete.id); loadData(true); setDeleteModalOpen(false); }
             }} />
             
-            <PromptDetailModal isOpen={isDetailModalOpen} onClose={() => setDetailModalOpen(false)} prompt={selectedPrompt} />
+            <PromptDetailModal 
+                isOpen={isDetailModalOpen} 
+                onClose={() => setDetailModalOpen(false)} 
+                prompt={selectedPrompt} 
+                onRun={handleRunPrompt}
+            />
             <SuccessToast message={successMessage} isVisible={showSuccessToast} />
             
             <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
@@ -196,7 +213,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
                         {filteredPrompts.map(prompt => (
-                            <PromptCard key={prompt.id} prompt={prompt} onSelect={setSelectedPrompt} onDelete={setPromptToDelete} onEdit={handleEditPrompt} isFavorited={favoritedIds.has(prompt.id)} onToggleFavorite={toggleFavorite} isOwner={prompt.userId === currentUserId} />
+                            <PromptCard key={prompt.id} prompt={prompt} onSelect={handleSelectPrompt} onDelete={setPromptToDelete} onEdit={handleEditPrompt} isFavorited={favoritedIds.has(prompt.id)} onToggleFavorite={toggleFavorite} isOwner={prompt.userId === currentUserId} />
                         ))}
                         {filteredPrompts.length === 0 && (
                             <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
