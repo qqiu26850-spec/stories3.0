@@ -155,6 +155,28 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         });
     }, [activeTab, activeSubCategory, searchTerm, prompts, favoritedIds, currentUserId]);
 
+    const handleOpenDelete = (prompt: Prompt) => {
+        setPromptToDelete(prompt);
+        setDeleteModalOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (promptToDelete) {
+            try {
+                await deletePrompt(promptToDelete.id);
+                setSuccessMessage('提示词已成功删除');
+                setShowSuccessToast(true);
+                setTimeout(() => setShowSuccessToast(false), 3000);
+                loadData(true);
+            } catch (e) {
+                console.error("删除失败", e);
+            } finally {
+                setDeleteModalOpen(false);
+                setPromptToDelete(null);
+            }
+        }
+    };
+
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col relative font-sans">
             <CreatePromptModal isOpen={isCreateModalOpen} onClose={() => { setCreateModalOpen(false); setPromptToEdit(null); }} onSave={async (data, id) => {
@@ -162,11 +184,12 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 if (id) await updatePrompt(id, { title: data.title, content, main_category: data.category });
                 else await savePrompt(data.title, content, data.category, data.subCategories[0] as string);
                 setCreateModalOpen(false); loadData(true);
+                setSuccessMessage(id ? '提示词更新成功' : '提示词发布成功');
+                setShowSuccessToast(true);
+                setTimeout(() => setShowSuccessToast(false), 3000);
             }} promptToEdit={promptToEdit} />
             
-            <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={async () => {
-                if (promptToDelete) { await deletePrompt(promptToDelete.id); loadData(true); setDeleteModalOpen(false); }
-            }} />
+            <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
             
             <PromptDetailModal 
                 isOpen={isDetailModalOpen} 
@@ -220,7 +243,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
                         {filteredPrompts.map(prompt => (
-                            <PromptCard key={prompt.id} prompt={prompt} onSelect={handleSelectPrompt} onDelete={setPromptToDelete} onEdit={handleEditPrompt} isFavorited={favoritedIds.has(prompt.id)} onToggleFavorite={toggleFavorite} isOwner={prompt.userId === currentUserId} />
+                            <PromptCard key={prompt.id} prompt={prompt} onSelect={handleSelectPrompt} onDelete={handleOpenDelete} onEdit={handleEditPrompt} isFavorited={favoritedIds.has(prompt.id)} onToggleFavorite={toggleFavorite} isOwner={prompt.userId === currentUserId} />
                         ))}
                         {filteredPrompts.length === 0 && (
                             <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
