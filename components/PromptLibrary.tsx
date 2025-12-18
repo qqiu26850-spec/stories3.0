@@ -16,21 +16,6 @@ interface PromptLibraryProps {
 
 const FAVORITES_STORAGE_KEY = 'qisimiaoxie_prompt_favorites_v2';
 
-const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
-    if (!isVisible) return null;
-    return createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
-            <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border border-gray-100 dark:border-gray-700 px-5 py-2.5 rounded-xl shadow-xl flex items-center gap-2 animate-fade-in-up">
-                <div className="w-6 h-6 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                    <Check className="w-4 h-4" />
-                </div>
-                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{message}</span>
-            </div>
-        </div>,
-        document.body
-    );
-};
-
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('all');
@@ -160,7 +145,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 await deletePrompt(promptToDelete.id);
                 setSuccessMessage('已删除');
                 setShowSuccessToast(true);
-                setTimeout(() => setShowSuccessToast(false), 1000); // 改为1秒
+                setTimeout(() => setShowSuccessToast(false), 2000); // 改为2秒
                 loadData(true);
             } catch (e) {
                 console.error("删除失败", e);
@@ -180,7 +165,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 setCreateModalOpen(false); loadData(true);
                 setSuccessMessage(id ? '已更新' : '已发布');
                 setShowSuccessToast(true);
-                setTimeout(() => setShowSuccessToast(false), 1000); // 改为1秒
+                setTimeout(() => setShowSuccessToast(false), 2000); // 改自用户要求：2秒
             }} promptToEdit={promptToEdit} />
             
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
@@ -191,7 +176,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 prompt={selectedPrompt} 
                 onRun={handleRunPrompt}
             />
-            <SuccessToast message={successMessage} isVisible={showSuccessToast} />
             
             <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
                 <div className="flex justify-between items-center">
@@ -201,10 +185,21 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                         ))}
                     </div>
                     
-                    <div className="flex gap-2 flex-shrink-0 ml-4">
-                         <button onClick={() => setActiveTab('my-prompts')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'my-prompts' ? 'bg-sky-100 text-sky-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><UserCircle className="w-4 h-4" />我的提示词</button>
-                         <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><Heart className="w-4 h-4" />我的收藏</button>
-                        <button onClick={() => { setPromptToEdit(null); setCreateModalOpen(true); }} className="px-4 py-2 rounded-xl font-bold bg-sky-600 text-white hover:bg-sky-500 shadow-lg shadow-sky-500/20 text-sm flex items-center gap-1"><Plus className="w-4 h-4" />创建</button>
+                    <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                        {/* 文字提醒位置：位于“我的提示词”左侧 */}
+                        {showSuccessToast && (
+                            <span className="text-xs font-bold text-emerald-500 animate-fade-in-up flex items-center gap-1.5 whitespace-nowrap">
+                                <div className="w-5 h-5 bg-emerald-50 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
+                                    <Check className="w-3 h-3" />
+                                </div>
+                                {successMessage}
+                            </span>
+                        )}
+                        <div className="flex gap-2">
+                             <button onClick={() => setActiveTab('my-prompts')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'my-prompts' ? 'bg-sky-100 text-sky-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><UserCircle className="w-4 h-4" />我的提示词</button>
+                             <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><Heart className="w-4 h-4" />我的收藏</button>
+                            <button onClick={() => { setPromptToEdit(null); setCreateModalOpen(true); }} className="px-4 py-2 rounded-xl font-bold bg-sky-600 text-white hover:bg-sky-500 shadow-lg shadow-sky-500/20 text-sm flex items-center gap-1"><Plus className="w-4 h-4" />创建</button>
+                        </div>
                     </div>
                 </div>
 

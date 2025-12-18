@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { View } from '../types';
 import { Sparkles, BookOpen, Box, Workflow, Database, UserCircle, QuestionMarkCircle, ChevronRight, InformationCircle, Check } from './Icon';
@@ -26,7 +25,7 @@ const HelpSection: React.FC<{
                 </div>
                 <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight group-hover:text-sky-600 transition-colors">{title}</h2>
             </div>
-            <div className="flex items-center gap-2 text-sky-500 font-bold text-sm opacity-0 group-hover:opacity-100 transition-all transform translate-x-4 group-hover:translate-x-0">
+            <div className="flex items-center gap-2 text-sky-500 font-bold text-sm transition-all">
                 立即前往 <ChevronRight className="w-4 h-4" />
             </div>
         </div>
@@ -69,10 +68,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
     return (
         <div className="p-8 h-full max-w-6xl mx-auto animate-fade-in overflow-y-auto custom-scrollbar font-sans">
             <header className="mb-16 text-center">
-                <h1 className="text-5xl font-black text-gray-900 dark:text-white mb-6 tracking-tighter italic">奇思妙写 <span className="text-sky-500 text-3xl not-italic">·</span> 创作宝典</h1>
-                <p className="text-gray-500 dark:text-gray-400 text-xl leading-relaxed max-w-2xl mx-auto">
-                    我们致力于将 AI 的智慧转化为您的笔尖灵感。无论您是网文大神还是写作萌新，这份指南都将助您快速上手。
-                </p>
+                <h1 className="text-5xl font-black text-gray-900 dark:text-white mb-6 tracking-tighter">奇思妙写 <span className="text-sky-500 text-3xl">·</span> 创作宝典</h1>
             </header>
 
             <div className="grid grid-cols-1 gap-12 pb-32">
