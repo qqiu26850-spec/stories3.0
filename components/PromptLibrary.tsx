@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Prompt, PromptCategory, PromptSubCategory } from '../types';
@@ -85,13 +84,21 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                     let parsedContent: any = {};
                     try { parsedContent = JSON.parse(p.content); } catch (e) { parsedContent = { template: p.content }; }
 
+                    // Map DB category string to UI category key
+                    let appCat: PromptCategory = 'short-story';
+                    if(p.main_category === 'long') appCat = 'long-story';
+                    else if(p.main_category === 'script') appCat = 'script';
+                    else if(p.main_category === 'short') appCat = 'short-story';
+                    else if(p.main_category === 'general') appCat = 'general';
+                    else appCat = p.main_category as PromptCategory;
+
                     return {
                         id: p.id,
                         title: p.title,
                         description: p.description || parsedContent.description || '用户自定义提示词',
                         example: parsedContent.example || '',
                         content: parsedContent.template || p.content,
-                        category: p.main_category as PromptCategory,
+                        category: appCat,
                         subCategories: parsedContent.subCategories || [p.sub_category],
                         fields: parsedContent.fields || [], 
                         template: parsedContent.template || p.content,

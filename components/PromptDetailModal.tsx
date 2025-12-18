@@ -22,10 +22,7 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
-    'long-story': '长篇小说', 
-    'short-story': '短篇小说', 
-    'script': '剧本', 
-    'general': '全类型',
+    'long-story': '长篇', 'short-story': '短篇', 'script': '剧本', 'general': '全类型',
 };
 
 const isGenre = (tag: string) => GENRE_TAGS.some(g => g.id === tag);
@@ -64,10 +61,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                     <div className="flex-1">
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{prompt.title}</h2>
                         <div className="flex flex-wrap gap-2 text-[10px]">
-                            {/* 主分类标签：浅绿色显著区分 */}
-                            <span className="px-2 py-0.5 rounded font-black bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400">
-                                {CATEGORY_LABELS[prompt.category] || '全类型'}
-                            </span>
+                            <span className="px-2 py-0.5 rounded font-bold bg-sky-50 text-sky-600 border border-sky-100">{CATEGORY_LABELS[prompt.category] || '全类型'}</span>
                             {prompt.subCategories?.map(tag => (
                                 <span key={tag} className={`px-2 py-0.5 rounded font-bold border ${isGenre(tag as string) ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{SUB_CATEGORY_LABELS[tag] || tag}</span>
                             ))}

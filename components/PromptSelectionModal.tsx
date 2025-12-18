@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Prompt, PromptCategory, PromptSubCategory } from '../types';
@@ -19,14 +18,13 @@ const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'short-story', label: '短篇小说' },
   { id: 'long-story', label: '长篇小说' },
   { id: 'script', label: '剧本' },
-  { id: 'general', label: '全类型' }, // Updated from 通用 to 全类型
+  { id: 'general', label: '全类型' },
 ];
 
 const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onClose, onSelect, initialSubCategory }) => {
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all'>('all');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
-    // Initial state is empty to match PromptLibrary behavior
     const [allPrompts, setAllPrompts] = useState<Prompt[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -71,7 +69,7 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                         id: p.id,
                         title: p.title,
                         description: parsedContent.description || '用户自定义提示词',
-                        example: parsedContent.example || '', // Load example
+                        example: parsedContent.example || '',
                         content: parsedContent.template || p.content,
                         category: appCat,
                         subCategories: tags,
@@ -82,7 +80,6 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                         authorName: p.profiles?.username || parsedContent.authorName || '用户'
                     };
                 });
-                // Only use DB prompts to ensure consistency with Prompt Library
                 setAllPrompts(mapped);
             } else {
                 setAllPrompts([]);

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Prompt, PromptSubCategory } from '../types';
 import { Heart, Fire, UserCircle, Trash, Pencil } from './Icon';
@@ -45,14 +44,11 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onE
         </div>
         <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-4 line-clamp-3 flex-grow">{prompt.description}</p>
         <div className="flex items-center justify-between pt-3 border-t mt-auto gap-2">
-            <div className="flex items-center gap-1.5 overflow-hidden flex-wrap max-h-12">
-                {/* 主分类标签：浅绿色高亮显示 */}
-                <span className="flex-shrink-0 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400">
+            <div className="flex items-center gap-1.5 overflow-hidden flex-wrap max-h-6">
+                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-green-50 text-green-600 border-green-100 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
                     {CATEGORY_LABELS[prompt.category] || '全类型'}
                 </span>
-                
-                {/* 子标签：显示前2个 */}
-                {prompt.subCategories?.slice(0, 2).map((sub) => (
+                {prompt.subCategories?.slice(0, 3).map((sub) => (
                     <span key={sub} className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${isGenre(sub as string) ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
                         {SUB_CATEGORY_LABELS[sub] || sub}
                     </span>
@@ -60,6 +56,7 @@ const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onE
             </div>
             <div className="flex items-center gap-3 flex-shrink-0 text-xs text-gray-400">
                 <div className="flex items-center gap-1 text-orange-400"><Fire className="w-3 h-3" /><span>{prompt.heat}</span></div>
+                <div className="flex items-center gap-1 hidden sm:flex"><UserCircle className="w-3 h-3" /><span>{prompt.authorName || '用户'}</span></div>
                 {isOwner && (
                     <div className="flex gap-1 pl-2 border-l">
                         <button onClick={(e) => { e.stopPropagation(); onEdit?.(prompt); }} className="hover:text-sky-500"><Pencil className="w-3 h-3" /></button>
