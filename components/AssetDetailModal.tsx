@@ -50,45 +50,45 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, as
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] animate-fade-in-up flex flex-col relative overflow-hidden" onClick={e => e.stopPropagation()}>
-                {/* Header: Reduced height and font size */}
-                <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-between items-center">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] animate-fade-in-up flex flex-col relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                {/* 顶部标题栏：保持简洁 */}
+                <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-between items-center">
                     <div className="flex items-center gap-3 overflow-hidden">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate">{localAsset.name}</h3>
-                        <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 flex-shrink-0">
-                            {localAsset.type === 'character' ? '角色' : localAsset.type === 'plot' ? '剧情' : '灵光'}
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white truncate">{localAsset.name}</h3>
+                        <span className="px-3 py-1 rounded-lg text-xs font-bold bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 flex-shrink-0">
+                            {localAsset.type === 'character' ? '角色设定' : localAsset.type === 'plot' ? '剧情线索' : '灵感随笔'}
                         </span>
                     </div>
                     <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                        <X className="w-5 h-5" />
+                        <X className="w-6 h-6" />
                     </button>
                 </div>
 
-                {/* Tags Area */}
-                <div className="px-6 py-2 flex flex-wrap gap-2 bg-gray-50/30 dark:bg-black/10">
-                    {localAsset.tags.map((tag, i) => (
-                        <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${getTagStyle(tag)}`}>{tag}</span>
-                    ))}
-                </div>
-
-                {/* Content Area: Single Scrollable View */}
-                <div className="flex-1 overflow-y-auto p-6 bg-white dark:bg-gray-900">
+                {/* 正文编辑区：视野更大 */}
+                <div className="flex-1 overflow-y-auto p-8 bg-white dark:bg-gray-900">
                     <textarea 
                         value={editedContent} 
                         onChange={e => setEditedContent(e.target.value)} 
                         autoFocus 
-                        className="w-full min-h-[300px] h-full bg-transparent outline-none text-base leading-loose font-serif text-gray-700 dark:text-gray-300 resize-none"
-                        placeholder="在此输入或修改素材内容..."
+                        className="w-full h-full min-h-[400px] bg-transparent outline-none text-lg leading-relaxed font-serif text-gray-800 dark:text-gray-200 resize-none placeholder:text-gray-300"
+                        placeholder="在此展开描写素材的细节内容..."
                     />
                 </div>
                
-                {/* Footer: Simplified and ensures buttons stay in view */}
-                <div className="flex-shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-6 py-2 text-sm text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors">取消</button>
-                    <button onClick={handleSave} disabled={isSaving} className="px-8 py-2 text-sm bg-sky-600 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-sky-500 shadow-lg shadow-sky-500/20 transition-all active:scale-95">
-                        {isSaving ? <ArrowPath className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                        保存修改
-                    </button>
+                {/* 底部固定页：标签移至此处，高度更小 */}
+                <div className="flex-shrink-0 py-2.5 px-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap gap-2 max-w-[60%]">
+                        {localAsset.tags.map((tag, i) => (
+                            <span key={i} className={`text-[10px] px-2 py-0.5 rounded-md font-medium border ${getTagStyle(tag)}`}>{tag}</span>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-3 ml-auto">
+                        <button onClick={onClose} className="px-5 py-1.5 text-sm text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">取消</button>
+                        <button onClick={handleSave} disabled={isSaving} className="px-6 py-1.5 text-sm bg-sky-600 text-white rounded-lg font-bold flex items-center gap-2 hover:bg-sky-500 shadow-md shadow-sky-500/20 transition-all active:scale-95 disabled:bg-gray-400">
+                            {isSaving ? <ArrowPath className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            更新素材
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

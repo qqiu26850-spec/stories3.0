@@ -336,18 +336,38 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                     <div className="space-y-5 animate-fade-in">
                                         {selectedPrompt.fields.map((f, i) => (
                                             <div key={f.id} className="space-y-2">
-                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">
-                                                    {i+1}. {f.label}
-                                                    {f.required !== false ? (
-                                                        <span className="ml-1 text-red-500 font-bold">* (必填)</span>
-                                                    ) : (
-                                                        <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
+                                                <div className="flex justify-between items-center mr-1">
+                                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">
+                                                        {i+1}. {f.label}
+                                                        {f.required !== false ? (
+                                                            <span className="ml-1 text-red-500 font-normal">* (必填)</span>
+                                                        ) : (
+                                                            <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
+                                                        )}
+                                                    </label>
+                                                    {f.maxLength && (
+                                                        <span className={`text-[10px] ${(formState[f.id]?.length || 0) >= f.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
+                                                            {formState[f.id]?.length || 0} / {f.maxLength}
+                                                        </span>
                                                     )}
-                                                </label>
+                                                </div>
                                                 {f.type === 'textarea' ? (
-                                                    <textarea value={formState[f.id] || ''} onChange={e => setFormState({...formState, [f.id]: e.target.value})} placeholder={f.placeholder} className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm min-h-[100px] shadow-sm transition-all font-sans" />
+                                                    <textarea 
+                                                        value={formState[f.id] || ''} 
+                                                        onChange={e => setFormState({...formState, [f.id]: e.target.value})} 
+                                                        placeholder={f.placeholder} 
+                                                        maxLength={f.maxLength}
+                                                        className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm min-h-[100px] shadow-sm transition-all font-sans" 
+                                                    />
                                                 ) : (
-                                                    <input type="text" value={formState[f.id] || ''} onChange={e => setFormState({...formState, [f.id]: e.target.value})} placeholder={f.placeholder} className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm shadow-sm transition-all font-sans" />
+                                                    <input 
+                                                        type="text" 
+                                                        value={formState[f.id] || ''} 
+                                                        onChange={e => setFormState({...formState, [f.id]: e.target.value})} 
+                                                        placeholder={f.placeholder} 
+                                                        maxLength={f.maxLength}
+                                                        className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm shadow-sm transition-all font-sans" 
+                                                    />
                                                 )}
                                                 {f.description && <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1.5 ml-1 leading-relaxed">💡 {f.description}</p>}
                                             </div>

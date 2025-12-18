@@ -29,7 +29,7 @@ const HelpSection: React.FC<{
                 立即前往 <ChevronRight className="w-4 h-4" />
             </div>
         </div>
-        <div className="space-y-6 text-gray-600 dark:text-gray-400 leading-loose">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {children}
         </div>
     </section>
@@ -41,14 +41,14 @@ const SubModule: React.FC<{ name: string; children: React.ReactNode }> = ({ name
             <div className="w-1.5 h-4 bg-sky-500 rounded-full"></div>
             {name}
         </h4>
-        <div className="text-sm space-y-2 opacity-90">
+        <div className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed space-y-2">
             {children}
         </div>
     </div>
 );
 
 const PromptExample: React.FC<{ title: string; template: string; result: string }> = ({ title, template, result }) => (
-    <div className="mt-6 bg-gray-50 dark:bg-black/30 rounded-2xl p-6 border border-sky-100 dark:border-sky-900/30 overflow-hidden">
+    <div className="col-span-full mt-6 bg-gray-50 dark:bg-black/30 rounded-2xl p-6 border border-sky-100 dark:border-sky-900/30 overflow-hidden">
         <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400 font-black text-xs uppercase tracking-widest mb-4">
             <InformationCircle className="w-4 h-4" />
             演示示例：{title}
@@ -72,64 +72,46 @@ const PromptExample: React.FC<{ title: string; template: string; result: string 
 
 const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
     return (
-        <div className="p-8 h-full max-w-6xl mx-auto animate-fade-in overflow-y-auto custom-scrollbar">
+        <div className="p-8 h-full max-w-6xl mx-auto animate-fade-in overflow-y-auto custom-scrollbar font-sans">
             <header className="mb-16 text-center">
-                <h1 className="text-5xl font-black text-gray-900 dark:text-white mb-6 tracking-tighter">奇思妙写 · 使用指南</h1>
+                <h1 className="text-5xl font-black text-gray-900 dark:text-white mb-6 tracking-tighter">奇思妙写 · 快速上手</h1>
                 <p className="text-gray-500 dark:text-gray-400 text-xl leading-relaxed">
-                    点击各模块标题可直接跳转至对应功能。
+                    在这里，AI 不是替你写，而是陪你写。点击下方板块了解如何玩转。
                 </p>
             </header>
 
             <div className="grid grid-cols-1 gap-12 pb-32">
                 <HelpSection title="创意生成" target="creative-generation" icon={Sparkles} onNavigate={onNavigate}>
-                    <p className="text-lg font-medium text-gray-700 dark:text-gray-300">
-                        旨在解决“起步难”，通过多维度逻辑推演为您的故事奠基。
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <SubModule name="创意脑洞">输入关键词生成故事核心矛盾与反转走向。</SubModule>
-                        <SubModule name="金手指设定">生成成长体系平衡且具卖点的超凡设定。</SubModule>
-                        <SubModule name="重要细节提示"><strong>技巧：</strong>加入“侧重于悬疑感”等指令可大幅提升初稿满意度。</SubModule>
-                    </div>
+                    <SubModule name="想不出好点子？">点击“创意脑洞”，输入一两个模糊的关键词（如“失忆、月球”），AI 会为你编织出好几个截然不同的故事开篇，帮你打破起步难。</SubModule>
+                    <SubModule name="人设太单薄？">点击“人物设定”，填入主角性格，AI 会生成具体的爆款标签和复杂的人物关系网，让角色瞬间立起来。</SubModule>
+                    <SubModule name="怎么让剧情更爽？">试试“金手指”功能，AI 会根据你的题材，设计一套既有新意又不会写崩的特殊能力或系统。 </SubModule>
+                    <SubModule name="小技巧：多点耐心">如果生成的内容不合心意，可以试着增加一句“要有意想不到的反转”，AI 的表现会有质的飞跃。</SubModule>
                 </HelpSection>
 
                 <HelpSection title="创作中心" target="novel-management" icon={BookOpen} onNavigate={onNavigate}>
-                    <p className="text-lg font-medium text-gray-700 dark:text-gray-300">
-                        核心写作阵地，集成智能续写与实时润色助手。
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <SubModule name="长篇/短篇模式">长篇支持卷章结构，短篇侧重单章爆发。</SubModule>
-                        <SubModule name="智能侧边栏">提供剧情推演、文笔质感提升及逻辑自查。</SubModule>
-                    </div>
+                    <SubModule name="智能续写（拒绝卡文）">写到关键处卡住了？在编辑器里敲几个字，点击右侧“续写”，AI 会顺着你的思路往下编。你可以指定它是“侧重心理描写”还是“让反派突然出现”。</SubModule>
+                    <SubModule name="选中文本润色">觉得某一段写得太干巴？鼠标选中它，点“润色”，AI 能帮你扩写环境氛围，或者把平铺直叙变得更有文学美感。</SubModule>
+                    <SubModule name="逻辑自查">写了上万字怕前后矛盾？使用“智能评审”，让 AI 像编辑一样帮你挑挑刺，看看反派的行为逻辑是不是符合他的人设。</SubModule>
+                    <SubModule name="多端同步">你的草稿会实时保存。无论是换台电脑还是刷新页面，你的故事都在云端等着你。</SubModule>
                 </HelpSection>
 
                 <HelpSection title="素材管理" target="character-library" icon={Database} onNavigate={onNavigate}>
-                    <p className="text-lg font-medium text-gray-700 dark:text-gray-300">
-                        实现人设与伏笔的数字化管理，全站联动引用。
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <SubModule name="全站联动">AI 在续写时会自动参考库中的设定保持一致性。</SubModule>
-                        <SubModule name="重要细节提示"><strong>技巧：</strong>录入角色的“执念”和“弱点”，让对白更具深度。</SubModule>
-                    </div>
+                    <SubModule name="让AI记住设定">把主角的名字、外貌、隐藏秘密记在“角色库”。AI 写作时会自动参考这些笔记，再也不用担心写着写着主角的眼睛从黑色变成蓝色了。</SubModule>
+                    <SubModule name="随时捕捉灵感">半夜想到的好点子，随手记在“灵光库”。这些灵感碎片在以后写大纲、写正文时，都可以一键调取给 AI 当参考。</SubModule>
                 </HelpSection>
 
                 <HelpSection title="提示词库" target="prompt-library" icon={Box} onNavigate={onNavigate}>
-                    <p className="text-lg font-medium text-gray-700 dark:text-gray-300">
-                        自定义生成引擎，通过变量嵌入实现参数化创作。
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <SubModule name="模板构建">支持变量嵌入，一键转化为带输入框的便捷表单。</SubModule>
-                    </div>
+                    <SubModule name="定制你的写作表单">你可以把常用的写作要求存成“模版”。比如“描写战斗场面”，设置几个变量：主角、对手、招式名。下次只需填这几个空，AI 就懂怎么写了。</SubModule>
+                    <SubModule name="社区共享">去提示词库看看大家是怎么写书的，好的模版可以直接收藏到自己的库里，一键复用。</SubModule>
                     <PromptExample 
-                        title="真实创作案例：场景描写续写"
-                        template="请作为一名资深网文主编，根据以下大纲：${outline}，续写角色 ${character} 在 ${location} 的具体行为，要求风格细腻。 "
-                        result="输入：大纲(寻找秘籍)、角色(林动)、地点(藏经阁)。AI 即可按固定格式稳定输出高度一致的描写内容。"
+                        title="自定义战斗场景描述"
+                        template="请作为一名格斗专家，描写角色 ${character} 使用 ${move} 击败 ${enemy} 的过程，要求画面感极强。"
+                        result="你只需填入：(萧炎、八极崩、纳兰嫣然)，AI 就会输出一段行云流水的打斗细节。"
                     />
                 </HelpSection>
 
                 <HelpSection title="工作流" target="workflow" icon={Workflow} onNavigate={onNavigate}>
-                    <p className="text-lg font-medium text-gray-700 dark:text-gray-300">
-                        自动化引擎，将复杂的创作链路拆解为标准化步骤。
-                    </p>
+                    <SubModule name="剧情生产流水线">把复杂的创作拆解成标准化步骤。比如：先根据点子生成大纲，再细化到每一章的剧情，最后生成正文。跟着工作流走，写书就像工厂组装一样高效。</SubModule>
                 </HelpSection>
             </div>
         </div>

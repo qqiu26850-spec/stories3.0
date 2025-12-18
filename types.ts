@@ -40,6 +40,7 @@ export interface PromptField {
   placeholder: string;
   required?: boolean;
   description?: string;
+  maxLength?: number;
 }
 
 export type PromptCategory = 'general' | 'short-story' | 'long-story' | 'script';

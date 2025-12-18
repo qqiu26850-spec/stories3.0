@@ -15,54 +15,7 @@ interface PromptLibraryProps {
     isActive: boolean;
 }
 
-const FAVORITES_STORAGE_KEY = 'qisimiaoxie_prompt_favorites';
-
-const PostCreationModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onCreateAnother: () => void;
-    onTestPrompt: () => void;
-}> = ({ isOpen, onClose, onCreateAnother, onTestPrompt }) => {
-    if (!isOpen) return null;
-    return createPortal(
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-fade-in-up border border-gray-100 dark:border-gray-800">
-                <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl text-green-500">
-                        <Check className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">提示词创建成功！</h3>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                        您的提示词已保存到库中，接下来您想做什么？
-                    </p>
-                </div>
-                <div className="flex flex-col gap-3">
-                    <button 
-                        onClick={onTestPrompt}
-                        className="w-full py-3 rounded-xl bg-sky-600 text-white font-bold hover:bg-sky-500 transition-colors shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2"
-                    >
-                        <Sparkles className="w-5 h-5" />
-                        测试提示词
-                    </button>
-                    <button 
-                        onClick={onCreateAnother}
-                        className="w-full py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-                    >
-                        <Plus className="w-5 h-5" />
-                        再创建一个
-                    </button>
-                    <button 
-                        onClick={onClose}
-                        className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-                    >
-                        关闭
-                    </button>
-                </div>
-            </div>
-        </div>,
-        document.body
-    );
-};
+const FAVORITES_STORAGE_KEY = 'qisimiaoxie_prompt_favorites_v2';
 
 const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
     if (!isVisible) return null;
@@ -92,33 +45,27 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
-    const [isSuccessModalOpen, setSuccessModalOpen] = useState(false);
     const [showSuccessToast, setShowSuccessToast] = useState(false);
     
     const [promptToDelete, setPromptToDelete] = useState<Prompt | null>(null);
     const [promptToEdit, setPromptToEdit] = useState<Prompt | null>(null);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
-    const [lastCreatedPrompt, setLastCreatedPrompt] = useState<Prompt | null>(null);
     
     const [isLoading, setIsLoading] = useState(true);
     const [successMessage, setSuccessMessage] = useState('');
 
-    // Load favorites from LocalStorage
+    // 加载持久化收藏数据
     useEffect(() => {
         const stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
         if (stored) {
             try {
                 const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed)) {
-                    setFavoritedIds(new Set(parsed));
-                }
-            } catch (e) {
-                console.error("Failed to parse favorites", e);
-            }
+                if (Array.isArray(parsed)) setFavoritedIds(new Set(parsed));
+            } catch (e) { console.error("收藏加载失败", e); }
         }
     }, []);
 
-    // Save favorites to LocalStorage
+    // 收藏状态变化同步到本地
     useEffect(() => {
         localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(Array.from(favoritedIds)));
     }, [favoritedIds]);
@@ -129,36 +76,14 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             const userId = await getCurrentUserId();
             setCurrentUserId(userId);
             
-            let currentNickname = '社区用户';
             const profile = await fetchUserProfile();
-            if(profile && profile.nickname) {
-                setUserNickname(profile.nickname);
-                currentNickname = profile.nickname;
-            }
+            if(profile && profile.nickname) setUserNickname(profile.nickname);
 
             const fetchedData = await fetchPrompts('all', forceRefresh); 
             if (fetchedData) {
                 const mappedPrompts: Prompt[] = fetchedData.map((p: any) => {
-                    let appCat: PromptCategory = 'short-story';
-                    if(p.main_category === 'long') appCat = 'long-story';
-                    else if(p.main_category === 'script') appCat = 'script';
-                    else if(p.main_category === 'short') appCat = 'short-story';
-                    else if(p.main_category === 'general') appCat = 'general';
-                    else appCat = p.main_category as PromptCategory;
-                    
                     let parsedContent: any = {};
-                    try {
-                        parsedContent = JSON.parse(p.content);
-                    } catch (e) {
-                        parsedContent = { template: p.content, description: p.description };
-                    }
-
-                    let authorName = p.profiles?.username || parsedContent.authorName || '社区用户';
-                    if (p.user_id === userId) {
-                        authorName = currentNickname;
-                    }
-
-                    const tags = parsedContent.subCategories || (p.sub_category ? [p.sub_category as any] : []);
+                    try { parsedContent = JSON.parse(p.content); } catch (e) { parsedContent = { template: p.content }; }
 
                     return {
                         id: p.id,
@@ -166,109 +91,22 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                         description: p.description || parsedContent.description || '用户自定义提示词',
                         example: parsedContent.example || '',
                         content: parsedContent.template || p.content,
-                        category: appCat,
-                        subCategories: tags,
+                        category: p.main_category as PromptCategory,
+                        subCategories: parsedContent.subCategories || [p.sub_category],
                         fields: parsedContent.fields || [], 
                         template: parsedContent.template || p.content,
                         heat: p.usage_count || 0,
-                        creator: 'user',
+                        creator: p.user_id === userId ? 'user' : 'system',
                         userId: p.user_id,
-                        authorName: authorName
+                        authorName: p.profiles?.username || parsedContent.authorName || '匿名用户'
                     };
                 });
                 setPrompts(mappedPrompts);
             }
-        } catch (error) {
-            console.error("Failed to load prompts", error);
-        } finally {
-            setIsLoading(false);
-        }
+        } catch (error) { console.error("加载数据失败", error); } finally { setIsLoading(false); }
     }, []);
 
-    useEffect(() => {
-        if (isActive) {
-            loadData();
-        }
-    }, [isActive, loadData]);
-
-    const handleSavePrompt = async (data: Omit<Prompt, 'id' | 'heat' | 'content'>, promptId?: string) => {
-        const contentObject = {
-            template: data.template,
-            fields: data.fields,
-            description: data.description,
-            example: data.example,
-            authorName: userNickname,
-            subCategories: data.subCategories 
-        };
-        const contentString = JSON.stringify(contentObject);
-        const subCat = data.subCategories && data.subCategories.length > 0 ? data.subCategories[0] : 'idea';
-
-        setCreateModalOpen(false);
-
-        if (promptId) {
-            const { success, error } = await updatePrompt(promptId, {
-                title: data.title,
-                content: contentString,
-                main_category: data.category,
-                sub_category: subCat
-            });
-            if (!success) { alert(`更新失败: ${error?.message || '未知错误'}`); return; }
-            setSuccessMessage('提示词已成功更新');
-            setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 2000);
-        } else {
-            const { success, error } = await savePrompt(data.title, contentString, data.category, subCat);
-            if (!success) { alert(`保存失败: ${error?.message || '未知错误'}`); return; }
-            
-            const tempNewPrompt: Prompt = {
-                id: 'temp-new',
-                title: data.title,
-                description: data.description,
-                example: data.example,
-                content: data.template,
-                template: data.template,
-                fields: data.fields,
-                category: data.category,
-                subCategories: data.subCategories,
-                heat: 0,
-                creator: 'user',
-                authorName: userNickname,
-                userId: currentUserId || ''
-            };
-            setLastCreatedPrompt(tempNewPrompt);
-            setSuccessModalOpen(true);
-        }
-        
-        await loadData(true);
-        setPromptToEdit(null);
-    };
-
-    const handleEditPrompt = (prompt: Prompt) => {
-        setPromptToEdit(prompt);
-        setCreateModalOpen(true);
-    };
-    
-    const handleOpenDeleteModal = (prompt: Prompt) => {
-        setPromptToDelete(prompt);
-        setDeleteModalOpen(true);
-    };
-
-    const handleConfirmDelete = async () => {
-        if (promptToDelete) {
-            await deletePrompt(promptToDelete.id);
-            setPrompts(prev => prev.filter(p => p.id !== promptToDelete.id));
-            setDeleteModalOpen(false);
-            setPromptToDelete(null);
-            setSuccessMessage('提示词已成功删除');
-            setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 2000);
-        }
-    };
-
-    const handleSelectPrompt = (prompt: Prompt) => {
-        setSelectedPrompt(prompt);
-        setDetailModalOpen(true);
-    };
+    useEffect(() => { if (isActive) loadData(); }, [isActive, loadData]);
 
     const toggleFavorite = (id: string) => {
         setFavoritedIds(prev => {
@@ -279,202 +117,90 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         });
     };
 
+    // Fix: Defined handleEditPrompt to resolve the "Cannot find name 'handleEditPrompt'" error
+    const handleEditPrompt = (prompt: Prompt) => {
+        setPromptToEdit(prompt);
+        setCreateModalOpen(true);
+    };
+
     const filteredPrompts = useMemo(() => {
-        const term = searchTerm.toLowerCase();
-        
-        return prompts.filter(prompt => {
-            let categoryMatch = false;
-            if (activeTab === 'favorites') {
-                categoryMatch = favoritedIds.has(prompt.id);
-            } else if (activeTab === 'my-prompts') {
-                categoryMatch = prompt.creator === 'user' && prompt.userId === currentUserId;
-            } else if (activeTab === 'all') {
-                categoryMatch = true;
-            } else {
-                categoryMatch = prompt.category === activeTab;
-            }
-
-            if (!categoryMatch) return false;
+        return prompts.filter(p => {
+            if (activeTab === 'favorites') return favoritedIds.has(p.id);
+            if (activeTab === 'my-prompts') return p.userId === currentUserId;
+            if (activeTab !== 'all' && p.category !== activeTab) return false;
             
-            const subCategoryMatch = activeSubCategory === 'all' || (prompt.subCategories && prompt.subCategories.includes(activeSubCategory as PromptSubCategory));
-            if (!subCategoryMatch) return false;
-
-            if (!term) return true;
-
-            const titleMatch = prompt.title.toLowerCase().includes(term);
-            const descriptionMatch = prompt.description.toLowerCase().includes(term);
-
-            return titleMatch || descriptionMatch;
+            if (activeSubCategory !== 'all' && !p.subCategories.includes(activeSubCategory as PromptSubCategory)) return false;
+            
+            const term = searchTerm.toLowerCase();
+            return p.title.toLowerCase().includes(term) || p.description.toLowerCase().includes(term);
         });
     }, [activeTab, activeSubCategory, searchTerm, prompts, favoritedIds, currentUserId]);
 
-    const renderTagButton = (cat: { id: PromptSubCategory | 'all'; label: string }, isGenre: boolean) => (
-        <button 
-            key={cat.id}
-            onClick={() => setActiveSubCategory(cat.id as PromptSubCategory)}
-            className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
-                activeSubCategory === cat.id 
-                ? (isGenre ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 ring-1 ring-purple-500/50' : 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-1 ring-sky-500/50')
-                : 'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}>
-            {cat.label}
-        </button>
-    );
-
     return (
-        <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col relative">
-            <CreatePromptModal
-                isOpen={isCreateModalOpen}
-                onClose={() => { setCreateModalOpen(false); setPromptToEdit(null); }}
-                onSave={handleSavePrompt}
-                promptToEdit={promptToEdit}
-            />
-             <DeleteConfirmationModal
-                isOpen={isDeleteModalOpen}
-                onClose={() => setDeleteModalOpen(false)}
-                onConfirm={handleConfirmDelete}
-            />
-            <PromptDetailModal
-                isOpen={isDetailModalOpen}
-                onClose={() => setDetailModalOpen(false)}
-                prompt={selectedPrompt}
-            />
-            <PostCreationModal 
-                isOpen={isSuccessModalOpen}
-                onClose={() => setSuccessModalOpen(false)}
-                onCreateAnother={() => {
-                    setSuccessModalOpen(false);
-                    setCreateModalOpen(true);
-                }}
-                onTestPrompt={() => {
-                    setSuccessModalOpen(false);
-                    if (onNavigateToGeneration && lastCreatedPrompt) {
-                        onNavigateToGeneration(lastCreatedPrompt, {});
-                    }
-                }}
-            />
+        <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col relative font-sans">
+            <CreatePromptModal isOpen={isCreateModalOpen} onClose={() => { setCreateModalOpen(false); setPromptToEdit(null); }} onSave={async (data, id) => {
+                const content = JSON.stringify({ ...data, authorName: userNickname });
+                if (id) await updatePrompt(id, { title: data.title, content, main_category: data.category });
+                else await savePrompt(data.title, content, data.category, data.subCategories[0] as string);
+                setCreateModalOpen(false); loadData(true);
+            }} promptToEdit={promptToEdit} />
             
+            <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={async () => {
+                if (promptToDelete) { await deletePrompt(promptToDelete.id); loadData(true); setDeleteModalOpen(false); }
+            }} />
+            
+            <PromptDetailModal isOpen={isDetailModalOpen} onClose={() => setDetailModalOpen(false)} prompt={selectedPrompt} />
             <SuccessToast message={successMessage} isVisible={showSuccessToast} />
             
             <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
                 <div className="flex justify-between items-center">
-                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1 mr-4">
-                        <button
-                            onClick={() => setActiveTab('all')}
-                            className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                        >
-                            全部
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('short-story')}
-                            className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'short-story' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                        >
-                            短篇小说
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('long-story')}
-                            className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'long-story' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                        >
-                            长篇小说
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('script')}
-                            className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'script' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                        >
-                            剧本
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('general')}
-                            className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'general' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                        >
-                            全类型
-                        </button>
+                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1">
+                        {CATEGORY_TABS.map(tab => (
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}>{tab.label}</button>
+                        ))}
                     </div>
                     
-                    <div className="flex gap-2 flex-shrink-0">
-                         <button
-                            onClick={() => setActiveTab('my-prompts')}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'my-prompts' ? 'bg-sky-100 text-sky-600 dark:bg-sky-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                            title="我的提示词"
-                        >
-                            <UserCircle className="w-4 h-4" />
-                            我的提示词
-                        </button>
-                         <button
-                            onClick={() => setActiveTab('favorites')}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600 dark:bg-red-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                            title="我的收藏"
-                        >
-                            <Heart className="w-4 h-4" />
-                            我的收藏
-                        </button>
-                        <button
-                            onClick={() => { setPromptToEdit(null); setCreateModalOpen(true); }}
-                            className="px-4 py-2 rounded-xl font-bold bg-sky-600 text-white hover:bg-sky-500 transition-all flex items-center gap-1 shadow-lg shadow-sky-500/30 text-sm"
-                        >
-                            <Plus className="w-4 h-4" />
-                            创建
-                        </button>
+                    <div className="flex gap-2 flex-shrink-0 ml-4">
+                         <button onClick={() => setActiveTab('my-prompts')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'my-prompts' ? 'bg-sky-100 text-sky-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><UserCircle className="w-4 h-4" />我的提示词</button>
+                         <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><Heart className="w-4 h-4" />我的收藏</button>
+                        <button onClick={() => { setPromptToEdit(null); setCreateModalOpen(true); }} className="px-4 py-2 rounded-xl font-bold bg-sky-600 text-white hover:bg-sky-500 shadow-lg shadow-sky-500/20 text-sm flex items-center gap-1"><Plus className="w-4 h-4" />创建</button>
                     </div>
                 </div>
 
                 <div className="flex flex-col lg:flex-row gap-4 justify-between items-start bg-gray-100 dark:bg-gray-900/50 p-3 rounded-xl">
                     <div className="flex-1 w-full space-y-2">
-                        <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide items-center">
+                        <div className="flex flex-wrap gap-2 items-center">
                             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">功能:</span>
-                            <button 
-                                onClick={() => setActiveSubCategory('all')}
-                                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}>
-                                全部
-                            </button>
-                            {FUNCTIONAL_TAGS.map(cat => renderTagButton(cat, false))}
+                            <button onClick={() => setActiveSubCategory('all')} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === 'all' ? 'bg-sky-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>全部</button>
+                            {FUNCTIONAL_TAGS.map(cat => (
+                                <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-sky-100 text-sky-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
+                            ))}
                         </div>
-                        
-                        <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide items-center border-t border-gray-200 dark:border-gray-700 pt-2">
+                        <div className="flex flex-wrap gap-2 items-center border-t border-gray-200 dark:border-gray-700 pt-2">
                             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">题材:</span>
-                            {GENRE_TAGS.map(cat => renderTagButton(cat, true))}
+                            {GENRE_TAGS.map(cat => (
+                                <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-purple-100 text-purple-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
+                            ))}
                         </div>
                     </div>
-
-                    <div className="relative w-full lg:w-64 flex-shrink-0 self-center">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Search className="w-4 h-4 text-gray-400" />
-                        </span>
-                        <input
-                            type="text"
-                            placeholder="搜索..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
-                        />
+                    <div className="relative w-full lg:w-64 self-center">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
+                        <input type="text" placeholder="搜索..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 text-sm rounded-lg border border-gray-200 focus:ring-2 focus:ring-sky-500 outline-none" />
                     </div>
                 </div>
             </div>
 
             <div className="flex-1 overflow-y-auto pr-2 -mr-2">
                 {isLoading ? (
-                    <div className="flex items-center justify-center h-64">
-                        <div className="w-10 h-10 border-4 border-gray-200 dark:border-gray-800 border-t-sky-500 rounded-full animate-spin"></div>
-                    </div>
+                    <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-t-sky-500 rounded-full animate-spin"></div></div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
                         {filteredPrompts.map(prompt => (
-                            <div key={prompt.id} className="h-full">
-                                <PromptCard 
-                                    prompt={prompt}
-                                    onSelect={handleSelectPrompt}
-                                    onDelete={handleOpenDeleteModal}
-                                    onEdit={handleEditPrompt}
-                                    isFavorited={favoritedIds.has(prompt.id)}
-                                    onToggleFavorite={toggleFavorite}
-                                    isOwner={prompt.userId === currentUserId}
-                                />
-                            </div>
+                            <PromptCard key={prompt.id} prompt={prompt} onSelect={setSelectedPrompt} onDelete={setPromptToDelete} onEdit={handleEditPrompt} isFavorited={favoritedIds.has(prompt.id)} onToggleFavorite={toggleFavorite} isOwner={prompt.userId === currentUserId} />
                         ))}
                         {filteredPrompts.length === 0 && (
                             <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
-                                <Box className="w-16 h-16 mb-4 opacity-20" />
-                                <p>暂无相关提示词，快去创建一个吧！</p>
+                                <Box className="w-16 h-16 mb-4 opacity-20" /><p>暂无相关提示词，换个筛选条件试试吧！</p>
                             </div>
                         )}
                     </div>
@@ -483,5 +209,13 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         </div>
     );
 };
+
+const CATEGORY_TABS = [
+  { id: 'all', label: '全部' },
+  { id: 'short-story', label: '短篇小说' },
+  { id: 'long-story', label: '长篇小说' },
+  { id: 'script', label: '剧本' },
+  { id: 'general', label: '全类型' },
+];
 
 export default PromptLibrary;

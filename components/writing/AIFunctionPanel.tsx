@@ -245,21 +245,41 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         </div>
                         {selectedPrompt.fields.map((field, index) => (
                             <div key={field.id} className="font-sans">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 flex justify-between items-center font-sans">
-                                    <span className="font-sans">
-                                        {index + 1}. {field.label}
-                                        {field.required !== false ? (
-                                            <span className="ml-1 text-red-500 font-bold">* (必填)</span>
-                                        ) : (
-                                            <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
-                                        )}
-                                    </span>
-                                    {field.id === 'text' && selectedText && <span className="text-xs text-green-600 bg-green-100 dark:bg-green-900/50 px-2 py-0.5 rounded font-sans">已读取选中内容</span>}
-                                </label>
+                                <div className="flex justify-between items-center mb-1.5">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 font-sans">
+                                        <span className="font-sans">
+                                            {index + 1}. {field.label}
+                                            {field.required !== false ? (
+                                                <span className="ml-1 text-red-500 font-normal">* (必填)</span>
+                                            ) : (
+                                                <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
+                                            )}
+                                        </span>
+                                    </label>
+                                    {field.maxLength && (
+                                        <span className={`text-[10px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
+                                            {formState[field.id]?.length || 0} / {field.maxLength}
+                                        </span>
+                                    )}
+                                </div>
                                 {field.type === 'textarea' ? (
-                                    <textarea rows={field.id === 'context' || field.id === 'text' ? 5 : 3} value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder} className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm font-sans" />
+                                    <textarea 
+                                        rows={field.id === 'context' || field.id === 'text' ? 5 : 3} 
+                                        value={formState[field.id] || ''} 
+                                        onChange={e => handleInputChange(field.id, e.target.value)} 
+                                        placeholder={field.placeholder} 
+                                        maxLength={field.maxLength}
+                                        className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm font-sans" 
+                                    />
                                 ) : (
-                                    <input type="text" value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder} className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" />
+                                    <input 
+                                        type="text" 
+                                        value={formState[field.id] || ''} 
+                                        onChange={e => handleInputChange(field.id, e.target.value)} 
+                                        placeholder={field.placeholder} 
+                                        maxLength={field.maxLength}
+                                        className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" 
+                                    />
                                 )}
                                 {field.description && <p className="text-[10px] text-gray-400 mt-1 font-sans">{field.description}</p>}
                             </div>

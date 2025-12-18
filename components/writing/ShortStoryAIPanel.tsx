@@ -252,18 +252,38 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             </div>
                             {selectedPrompt.fields.map((field, index) => (
                                 <div key={field.id} className="font-sans">
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 font-sans">
-                                        {index + 1}. {field.label}
-                                        {field.required !== false ? (
-                                            <span className="ml-1 text-red-500 font-bold">* (必填)</span>
-                                        ) : (
-                                            <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
+                                    <div className="flex justify-between items-center mb-1.5">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 font-sans">
+                                            {index + 1}. {field.label}
+                                            {field.required !== false ? (
+                                                <span className="ml-1 text-red-500 font-normal">* (必填)</span>
+                                            ) : (
+                                                <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
+                                            )}
+                                        </label>
+                                        {field.maxLength && (
+                                            <span className={`text-[10px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
+                                                {formState[field.id]?.length || 0} / {field.maxLength}
+                                            </span>
                                         )}
-                                    </label>
+                                    </div>
                                     {field.type === 'textarea' ? (
-                                        <textarea value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder} className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm h-24 font-sans" />
+                                        <textarea 
+                                            value={formState[field.id] || ''} 
+                                            onChange={e => handleInputChange(field.id, e.target.value)} 
+                                            placeholder={field.placeholder} 
+                                            maxLength={field.maxLength}
+                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm h-24 font-sans" 
+                                        />
                                     ) : (
-                                        <input type="text" value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder} className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" />
+                                        <input 
+                                            type="text" 
+                                            value={formState[field.id] || ''} 
+                                            onChange={e => handleInputChange(field.id, e.target.value)} 
+                                            placeholder={field.placeholder} 
+                                            maxLength={field.maxLength}
+                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" 
+                                        />
                                     )}
                                 </div>
                             ))}
