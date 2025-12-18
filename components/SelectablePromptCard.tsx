@@ -67,7 +67,7 @@ const SelectablePromptCard: React.FC<SelectablePromptCardProps> = ({ prompt, onS
           
           {/* Left: Tags */}
           <div className="flex items-center gap-1.5 overflow-hidden flex-wrap max-h-6 flex-1">
-             <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border bg-green-50 text-green-600 border-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300`}>
+             <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-900/20 dark:border-sky-800 dark:text-sky-300`}>
                 {CATEGORY_LABELS[prompt.category] || '全类型'}
             </span>
             {prompt.subCategories && prompt.subCategories.slice(0, 3).map((sub) => (
