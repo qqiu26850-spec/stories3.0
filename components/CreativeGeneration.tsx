@@ -271,7 +271,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-bold bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 rounded-lg text-gray-700 dark:text-gray-200 outline-none appearance-none cursor-pointer">
                                             <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
                                             <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
-                                            {/* Fix: Updated Gemini model names to the recommended versions */}
                                             <option value="gemini-3-flash-preview">谷歌极速 (Gemini 3 Flash)</option>
                                             <option value="gemini-3-pro-preview">谷歌深度 (Gemini 3 Pro)</option>
                                         </select>
@@ -319,11 +318,10 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                     <div className="space-y-5 animate-fade-in">
                                         {selectedPrompt.fields.map((f, i) => (
                                             <div key={f.id} className="space-y-2">
-                                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 ml-1">{i+1}. {f.label}</label>
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">{i+1}. {f.label}</label>
                                                 {f.type === 'textarea' ? (
                                                     <textarea value={formState[f.id] || ''} onChange={e => setFormState({...formState, [f.id]: e.target.value})} placeholder={f.placeholder} className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm min-h-[100px] shadow-sm transition-all" />
                                                 ) : (
-                                                    // Fix: Corrected variable name from 'field.id' to 'f.id'
                                                     <input type="text" value={formState[f.id] || ''} onChange={e => setFormState({...formState, [f.id]: e.target.value})} placeholder={f.placeholder} className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm shadow-sm transition-all" />
                                                 )}
                                                 {f.description && <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1.5 ml-1 leading-relaxed">💡 {f.description}</p>}

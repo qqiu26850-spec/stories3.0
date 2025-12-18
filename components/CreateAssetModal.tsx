@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Asset, AssetFormData } from '../types';
 import { DocumentText, Sparkles, ChevronLeft, X } from './Icon';
@@ -58,7 +57,7 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
     useEffect(() => {
         if (isOpen) {
             if (assetToEdit) {
-                setCreationMode('template'); // Default to template when editing structured data
+                setCreationMode('template'); 
                 if (assetToEdit.data) {
                     setFormData({ ...initialFormState, ...assetToEdit.data });
                 } else {
@@ -87,11 +86,10 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
 
     if (!isOpen) return null;
 
-    // --- Render Choice Screen ---
     if (creationMode === 'choice') {
         return (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-                <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
                     <div className="p-8 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
                         <div>
                             <h3 className="text-2xl font-bold text-gray-900 dark:text-white">新建{config.title}</h3>
@@ -111,7 +109,7 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
                                 <Sparkles className="w-8 h-8 text-sky-500" />
                             </div>
                             <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">系统模板</h4>
-                            <p className="text-sm text-gray-500 leading-relaxed">使用精心设计的结构化字段，让您的设定更清晰、更完整。</p>
+                            <p className="text-sm text-gray-500 leading-relaxed">使用结构化字段，让您的设定更清晰、更完整。</p>
                         </button>
 
                         <button 
@@ -122,7 +120,7 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
                                 <DocumentText className="w-8 h-8 text-emerald-500" />
                             </div>
                             <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">自定义输入</h4>
-                            <p className="text-sm text-gray-500 leading-relaxed">跳过繁琐步骤，直接输入标题与正文，自由记录任何内容。</p>
+                            <p className="text-sm text-gray-500 leading-relaxed">直接输入标题与正文，自由记录灵感。</p>
                         </button>
                     </div>
                 </div>
@@ -130,9 +128,7 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
         );
     }
 
-    // --- Render Form Screen ---
     const isCustom = creationMode === 'custom';
-    // Fix: Explicitly type fieldsToRender to avoid ID inference as string
     const fieldsToRender: { id: keyof AssetFormData; label: string; placeholder: string; type: 'text' | 'textarea' }[] = isCustom 
         ? [{ id: 'name' as const, label: '素材标题', placeholder: '请输入一个响亮的标题...', type: 'text' as const },
            { id: 'notes' as const, label: '正文内容', placeholder: '在此记录您的灵感或设定...', type: 'textarea' as const }]
@@ -140,9 +136,8 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
-                {/* Header */}
-                <div className="flex-shrink-0 p-6 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-between">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden animate-fade-in-up max-h-[85vh]" onClick={e => e.stopPropagation()}>
+                <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         {!assetToEdit && (
                             <button 
@@ -152,7 +147,7 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
                                 <ChevronLeft className="w-5 h-5" />
                             </button>
                         )}
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                             {assetToEdit ? `编辑${config.title}` : `新建${config.title} (${isCustom ? '自定义' : '模板'})`}
                         </h3>
                     </div>
@@ -161,8 +156,7 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
                     </button>
                 </div>
 
-                {/* Form Body */}
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6 [scrollbar-gutter:stable]">
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 [scrollbar-gutter:stable]">
                     {fieldsToRender.map(field => (
                         <div key={field.id} className="space-y-2">
                             <label htmlFor={field.id} className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">
@@ -172,26 +166,24 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
                                 <textarea
                                     id={field.id}
                                     value={formData[field.id] as string || ''}
-                                    // Fix: Explicitly cast field.id to keyof AssetFormData
                                     onChange={(e) => handleChange(field.id as keyof AssetFormData, e.target.value)}
                                     placeholder={field.placeholder}
-                                    className={`w-full p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-900 dark:text-white focus:ring-2 outline-none transition-all resize-y shadow-sm ${isCustom ? 'h-64 focus:ring-emerald-500' : 'h-32 focus:ring-sky-500'}`}
+                                    className={`w-full p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 outline-none transition-all resize-none shadow-sm ${isCustom ? 'h-48 focus:ring-emerald-500' : 'h-24 focus:ring-sky-500'}`}
                                 />
                             ) : (
                                 <input
                                     type="text"
                                     id={field.id}
                                     value={formData[field.id] as string || ''}
-                                    // Fix: Explicitly cast field.id to keyof AssetFormData
                                     onChange={(e) => handleChange(field.id as keyof AssetFormData, e.target.value)}
                                     placeholder={field.placeholder}
-                                    className={`w-full p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-900 dark:text-white focus:ring-2 outline-none transition-all shadow-sm ${isCustom ? 'focus:ring-emerald-500' : 'focus:ring-sky-500'}`}
+                                    className={`w-full p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 outline-none transition-all shadow-sm ${isCustom ? 'focus:ring-emerald-500' : 'focus:ring-sky-500'}`}
                                 />
                             )}
                         </div>
                     ))}
 
-                    <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                    <div className="pt-3 border-t border-gray-100 dark:border-gray-800 space-y-2">
                         <label htmlFor="tags" className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">
                             属性标签
                         </label>
@@ -200,29 +192,18 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
                             id="tags"
                             value={formData.tags || ''}
                             onChange={(e) => handleChange('tags', e.target.value)}
-                            placeholder="用逗号或空格分隔标签，例如：主角 重要 伏笔"
-                            className="w-full p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition-all shadow-sm"
+                            placeholder="逗号或空格分隔，例如：主角 重要 伏笔"
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition-all shadow-sm"
                         />
                     </div>
 
-                    {error && <p className="text-red-500 font-bold text-sm px-2 animate-pulse">⚠️ {error}</p>}
+                    {error && <p className="text-red-500 font-bold text-sm px-2">⚠️ {error}</p>}
                 </form>
 
-                {/* Footer Actions */}
-                <div className="flex-shrink-0 p-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex justify-end gap-4">
-                    <button 
-                        type="button" 
-                        onClick={onClose} 
-                        className="px-6 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-bold rounded-2xl hover:bg-gray-50 transition-colors"
-                    >
-                        取消
-                    </button>
-                    <button 
-                        type="submit" 
-                        onClick={handleSubmit}
-                        className={`px-10 py-3 text-white font-bold rounded-2xl shadow-xl transition-all active:scale-95 ${isCustom ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/20' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-500/20'}`}
-                    >
-                        {assetToEdit ? '保存所有修改' : '确认并创建素材'}
+                <div className="flex-shrink-0 p-5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex justify-end gap-4">
+                    <button type="button" onClick={onClose} className="px-6 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-50 transition-colors text-sm">取消</button>
+                    <button type="submit" onClick={handleSubmit} className={`px-8 py-2 text-white font-bold rounded-xl shadow-xl transition-all active:scale-95 text-sm ${isCustom ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/20' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-500/20'}`}>
+                        {assetToEdit ? '保存修改' : '确认创建'}
                     </button>
                 </div>
             </div>
