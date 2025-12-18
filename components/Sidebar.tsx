@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View } from '../types';
-import { Icon, BookOpen, Film, Copy, Box, Database, UserCircle, ChevronDown, Sparkles, BookSolid, ChevronDoubleLeft, ChevronDoubleRight, Workflow, Sun, Moon } from './Icon';
+import { Icon, BookOpen, Film, Copy, Box, Database, UserCircle, ChevronDown, Sparkles, BookSolid, ChevronDoubleLeft, ChevronDoubleRight, Workflow, Sun, Moon, QuestionMarkCircle } from './Icon';
 
 interface SidebarProps {
   activeView: View;
@@ -202,6 +202,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, isCollapse
             </GroupItem>
             
              <div><NavItem view="personal-center" icon={UserCircle} label="个人中心" /></div>
+             <div><NavItem view="help" icon={QuestionMarkCircle} label="使用帮助" /></div>
 
       </div>
       

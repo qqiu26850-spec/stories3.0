@@ -9,7 +9,8 @@ export type View =
   'character-library' |
   'plot-library' |
   'inspiration-library' |
-  'personal-center';
+  'personal-center' |
+  'help';
 
 export interface ModulePromptTemplate {
   id: string;

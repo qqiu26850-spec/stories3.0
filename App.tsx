@@ -13,6 +13,7 @@ import NovelManagement from './components/NovelManagement';
 import ScriptManagement from './components/ScriptManagement';
 import PersonalCenter from './components/PersonalCenter';
 import WorkflowManagement from './components/WorkflowManagement';
+import HelpCenter from './components/HelpCenter';
 
 export type Theme = 'light' | 'dark';
 
@@ -142,6 +143,10 @@ const App: React.FC = () => {
 
                 <div className={activeView === 'personal-center' ? 'block h-full' : 'hidden h-full'}>
                     <PersonalCenter onLogout={handleLogout} />
+                </div>
+
+                <div className={activeView === 'help' ? 'block h-full' : 'hidden h-full'}>
+                    <HelpCenter />
                 </div>
 
             </main>
