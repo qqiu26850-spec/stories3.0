@@ -64,8 +64,8 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                     <div className="flex-1">
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{prompt.title}</h2>
                         <div className="flex flex-wrap gap-2 text-[10px]">
-                            {/* 主分类标签：琥珀色显著区分 */}
-                            <span className="px-2 py-0.5 rounded font-black bg-amber-500 text-white shadow-sm ring-1 ring-amber-400/30">
+                            {/* 主分类标签：浅绿色显著区分 */}
+                            <span className="px-2 py-0.5 rounded font-black bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400">
                                 {CATEGORY_LABELS[prompt.category] || '全类型'}
                             </span>
                             {prompt.subCategories?.map(tag => (
@@ -80,7 +80,6 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                     <div className="space-y-4">
                         <div className="bg-sky-50 dark:bg-sky-900/10 p-4 rounded-xl space-y-2 border border-sky-100 dark:border-sky-800/50">
                             <h4 className="text-xs font-bold text-sky-600 flex items-center gap-1.5"><BookOpen className="w-3.5 h-3.5" /> 简介</h4>
-                            {/* 简介字号保持 text-xs，确保视觉留白更舒适 */}
                             <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{prompt.description}</p>
                         </div>
 
