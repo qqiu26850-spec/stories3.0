@@ -21,29 +21,150 @@ interface CreativeGenerationProps {
 
 type PromptFormState = Record<string, string>;
 
+const ImportAssetModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    content: string;
+    onSave: (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => void;
+}> = ({ isOpen, onClose, content, onSave }) => {
+    const [name, setName] = useState('');
+    const [assetContent, setAssetContent] = useState('');
+    const [type, setType] = useState<Asset['type']>('inspiration');
+    const [tags, setTags] = useState('');
+
+    useEffect(() => {
+        if (isOpen && content) {
+            setName(content.slice(0, 15).replace(/\n/g, ' ').trim() + (content.length > 15 ? '...' : ''));
+            setAssetContent(content);
+        }
+    }, [isOpen, content]);
+
+    const handleSave = () => {
+        const tagList = tags.split(/[,，]/).map(t => t.trim()).filter(Boolean);
+        onSave({ name, type, tags: tagList, content: assetContent });
+        onClose();
+    };
+
+    if (!isOpen) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
+            {/* Width increased to max-w-3xl (+50% roughly from max-w-lg) */}
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl p-8 animate-fade-in-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6 flex-shrink-0">
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">导入素材库</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <X className="w-6 h-6" />
+                    </button>
+                </div>
+                
+                <div className="space-y-5 overflow-y-auto pr-2">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">素材名称</label>
+                        <input 
+                            type="text" 
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-gray-900 dark:text-white"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">分类</label>
+                        <div className="grid grid-cols-3 gap-3">
+                            {(['character', 'plot', 'inspiration'] as const).map(t => (
+                                <button
+                                    key={t}
+                                    onClick={() => setType(t)}
+                                    className={`py-3 px-2 text-sm rounded-lg border transition-all font-medium ${
+                                        type === t 
+                                        ? 'bg-sky-50 dark:bg-sky-900/30 border-sky-500 text-sky-700 dark:text-sky-400 shadow-sm' 
+                                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                                    }`}
+                                >
+                                    {t === 'character' ? '角色' : t === 'plot' ? '剧情' : '灵感'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">内容预览</label>
+                        <textarea
+                            value={assetContent}
+                            onChange={e => setAssetContent(e.target.value)}
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-gray-900 dark:text-white min-h-[200px] resize-y text-xs"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">标签</label>
+                        <input 
+                            type="text" 
+                            value={tags}
+                            onChange={e => setTags(e.target.value)}
+                            placeholder="例如：科幻, 反转 (逗号分隔)"
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-gray-900 dark:text-white"
+                        />
+                    </div>
+                </div>
+
+                <div className="mt-8 flex gap-3 flex-shrink-0">
+                    <button onClick={onClose} className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                        取消
+                    </button>
+                    <button onClick={handleSave} className="flex-1 py-3 bg-sky-600 text-white font-bold rounded-lg hover:bg-sky-500 shadow-lg hover:shadow-sky-500/30 transition-all">
+                        保存素材
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
+    // Logic to strip reasoning blocks if they exist (DeepSeek R1 specifically)
     const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    const counters = [0, 0, 0, 0, 0, 0];
+    
+    const counters = useRef([0, 0, 0, 0, 0, 0]).current;
+    counters.fill(0);
+
     return (
         <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
             {cleanedText.split('\n').map((line, index) => {
                 const trimmedLine = line.trim();
                 const isMarkdownHeader = trimmedLine.startsWith('#');
+                const isLikelyTitle = !isMarkdownHeader && trimmedLine.length > 0 && trimmedLine.length < 40 && !trimmedLine.includes('。') && !trimmedLine.includes('，') && !trimmedLine.endsWith('？') && !trimmedLine.endsWith('!');
+                
                 if (isMarkdownHeader) {
                     const match = trimmedLine.match(/^(#+)\s*(.*)/);
                     if (match) {
-                        const level = Math.min(match[1].length, 6);
+                        const level = match[1].length;
                         const content = match[2];
-                        counters[level-1]++;
-                        for (let i = level; i < 6; i++) counters[i] = 0;
-                        const prefix = counters.slice(0, level).join('.') + (level === 1 ? '.' : '') + ' ';
-                        let className = "font-bold text-gray-900 dark:text-white ";
-                        if (level === 1) className += "text-xl mt-6 mb-4";
-                        else if (level === 2) className += "text-lg mt-5 mb-3";
-                        else className += "text-base mt-4 mb-2";
-                        return <div key={index} className={className}>{prefix}{content}</div>;
+                        
+                        if (level >= 1 && level <= 6) {
+                            counters[level - 1]++;
+                            for (let i = level; i < 6; i++) counters[i] = 0;
+                            
+                            const hasNumbering = /^\s*(\d+(\.\d+)*|[一二三四五六七八九十]+)[\.、\s]/.test(content) || /^第[0-9一二三四五六七八九十]+[章回节集]/.test(content);
+                            
+                            let prefix = '';
+                            if (!hasNumbering) {
+                                prefix = counters.slice(0, level).join('.') + (level === 1 ? '.' : '') + ' ';
+                            }
+                            
+                            let className = "font-bold text-gray-900 dark:text-white ";
+                            if (level === 1) className += "text-xl mt-6 mb-4";
+                            else if (level === 2) className += "text-lg mt-5 mb-3";
+                            else className += "text-base mt-4 mb-2";
+
+                            return <div key={index} className={className}>{prefix}{content}</div>;
+                        }
                     }
                 }
+                
+                if (isLikelyTitle) {
+                     return <div key={index} className="text-base font-bold text-gray-900 dark:text-white mt-4 mb-2">{line}</div>;
+                }
+
                 const parts = line.split(/(\*\*.*?\*\*)/g);
                 return (
                     <div key={index} className="min-h-[1.5em] mb-1">
@@ -60,95 +181,14 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
-    if (!isVisible) return null;
-    return createPortal(
-        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[200] animate-fade-in-up">
-            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-green-200 dark:border-green-900 px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
-                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                    <Check className="w-6 h-6" />
-                </div>
-                <span className="text-lg font-bold text-gray-800 dark:text-gray-100">{message}</span>
-            </div>
-        </div>,
-        document.body
-    );
-};
-
-const ImportAssetModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    content: string;
-    onSave: (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => void;
-}> = ({ isOpen, onClose, content, onSave }) => {
-    const [name, setName] = useState('');
-    const [assetContent, setAssetContent] = useState('');
-    const [type, setType] = useState<Asset['type']>('inspiration');
-    const [tags, setTags] = useState('');
-
-    useEffect(() => {
-        if (isOpen && content) {
-            setName(content.slice(0, 15).replace(/[#\n\*]/g, ' ').trim() + (content.length > 15 ? '...' : ''));
-            setAssetContent(content);
-        }
-    }, [isOpen, content]);
-
-    if (!isOpen) return null;
-
-    return createPortal(
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 backdrop-blur-md" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-5xl h-[85vh] flex overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
-                <div className="w-1/2 flex flex-col p-8 border-r border-gray-100 dark:border-gray-800">
-                    <div className="flex justify-between items-center mb-8">
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">导入素材库</h3>
-                    </div>
-                    <div className="space-y-6 overflow-y-auto flex-1 pr-2">
-                        <div>
-                            <label className="block text-sm font-bold text-gray-500 mb-2 uppercase">素材名称</label>
-                            <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-gray-900 dark:text-white" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-500 mb-3 uppercase">分类</label>
-                            <div className="grid grid-cols-3 gap-3">
-                                {(['character', 'plot', 'inspiration'] as const).map(t => (
-                                    <button key={t} onClick={() => setType(t)} className={`py-3 rounded-xl border transition-all font-bold ${type === t ? 'bg-sky-500 border-sky-500 text-white shadow-lg' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
-                                        {t === 'character' ? '角色' : t === 'plot' ? '剧情' : '灵感'}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-500 mb-2 uppercase">文本修改</label>
-                            <textarea value={assetContent} onChange={e => setAssetContent(e.target.value)} className="w-full h-48 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-xs font-mono resize-none" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-500 mb-2 uppercase">标签</label>
-                            <input type="text" value={tags} onChange={e => setTags(e.target.value)} placeholder="逗号分隔标签..." className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none" />
-                        </div>
-                    </div>
-                    <div className="mt-8 flex gap-4">
-                        <button onClick={onClose} className="flex-1 py-4 bg-gray-100 text-gray-600 font-bold rounded-2xl hover:bg-gray-200 transition-colors">取消</button>
-                        <button onClick={() => { onSave({ name, type, tags: tags.split(/[,，]/).map(t => t.trim()).filter(Boolean), content: assetContent }); onClose(); }} className="flex-1 py-4 bg-sky-600 text-white font-bold rounded-2xl hover:bg-sky-500 shadow-xl shadow-sky-500/30">确认保存</button>
-                    </div>
-                </div>
-                <div className="w-1/2 bg-gray-50 dark:bg-black/40 flex flex-col p-8">
-                    <h4 className="text-sm font-bold text-gray-500 mb-4 uppercase tracking-widest">格式预览 (Markdown)</h4>
-                    <div className="flex-1 bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 overflow-y-auto shadow-inner">
-                        <FormattedText text={assetContent} />
-                    </div>
-                </div>
-            </div>
-        </div>,
-        document.body
-    );
-};
-
 const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, onClearInitialData }) => {
     const [selectedModule, setSelectedModule] = useState<CreativeModule | null>(null);
     const [model, setModel] = useState('deepseek-chat');
+    
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
     const [showConfig, setShowConfig] = useState(false);
+
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [formState, setFormState] = useState<PromptFormState>({});
     const [freeInput, setFreeInput] = useState('');
@@ -159,7 +199,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const [promptModalOpen, setPromptModalOpen] = useState(false);
     const [assetModalOpen, setAssetModalOpen] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
-    const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [assets, setAssets] = useState<Asset[]>([]);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     
@@ -169,94 +208,264 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     useEffect(() => {
         const loadAssets = async () => {
             const data = await fetchMaterials();
-            setAssets(data.map((item: any) => ({
-                id: item.id, name: item.name, type: item.type === 'idea' ? 'inspiration' : item.type, content: item.content, tags: item.tags || []
-            })));
+            const mappedAssets: Asset[] = data.map((item: any) => ({
+                id: item.id,
+                name: item.name || item.title,
+                type: item.type === 'idea' ? 'inspiration' : item.type,
+                content: item.content,
+                tags: item.tags || [],
+                data: { name: item.name }
+            }));
+            setAssets(mappedAssets);
         };
         loadAssets();
     }, []);
 
-    const selectedAssetNames = useMemo(() => Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)?.name).filter(Boolean).join(', '), [selectedAssetIds, assets]);
+    const selectedAssetNames = useMemo(() => {
+        if (selectedAssetIds.size === 0) return '';
+        return Array.from(selectedAssetIds)
+            .map(id => assets.find(a => a.id === id)?.name)
+            .filter(Boolean)
+            .join(', ');
+    }, [selectedAssetIds, assets]);
+
+    useEffect(() => {
+        if (initialData?.prompt) {
+            if (!selectedModule) {
+                setSelectedModule(CREATIVE_MODULES[0]); 
+            }
+            setSelectedPrompt(initialData.prompt);
+            if (initialData.values) {
+                setFormState(initialData.values);
+            }
+            if (onClearInitialData) {
+                onClearInitialData();
+            }
+        }
+    }, [initialData, selectedModule, onClearInitialData]);
+
+    useEffect(() => {
+        if (selectedModule && !initialData?.prompt) {
+            setFreeInput('');
+            setSelectedPrompt(null);
+            setFormState({});
+            setGeneratedText('');
+            setSuccessMessage('');
+            setSelectedAssetIds(new Set());
+        }
+    }, [selectedModule]);
+
+    useEffect(() => {
+        if (selectedPrompt) {
+            setFormState(prev => {
+                const next = { ...prev };
+                selectedPrompt.fields.forEach(field => {
+                    if (next[field.id] === undefined) {
+                        next[field.id] = '';
+                    }
+                });
+                return next;
+            });
+        } else {
+            setFormState({});
+        }
+    }, [selectedPrompt]);
 
     useEffect(() => {
         if (isGenerating && scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: 'auto' });
+            const container = scrollContainerRef.current;
+            container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
         }
     }, [generatedText, isGenerating]);
 
     const handleStop = () => {
-        if (abortControllerRef.current) abortControllerRef.current.abort();
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
         setIsGenerating(false);
         setShowLoadingOverlay(false);
     };
 
     const handleGenerate = async () => {
-        if (isGenerating) { handleStop(); return; }
+        if (isGenerating) {
+            handleStop();
+            return;
+        }
+
         setIsGenerating(true);
         setGeneratedText('');
-        let basePrompt = selectedPrompt ? selectedPrompt.template : freeInput;
+        
+        let basePrompt = '';
         if (selectedPrompt) {
             incrementPromptHeat(selectedPrompt.id);
-            selectedPrompt.fields.forEach(f => basePrompt = basePrompt.replace(new RegExp(`\\$\\{${f.id}\\}`, 'g'), formState[f.id] || ''));
+            let template = selectedPrompt.template || selectedPrompt.content; 
+            for (const field of selectedPrompt.fields) {
+                const val = formState[field.id] || '';
+                template = template.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
+            }
+            basePrompt = template;
+        } else {
+            basePrompt = freeInput;
         }
-        const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考：${a!.name}】\n${a!.content}`).join('\n\n');
-        const finalPrompt = assetContext ? `${assetContext}\n\n---\n\n${basePrompt}` : basePrompt;
-        const controller = new AbortController(); abortControllerRef.current = controller;
+
+        const assetContext = Array.from(selectedAssetIds)
+            .map(id => assets.find(a => a.id === id))
+            .filter(Boolean)
+            .map(a => `【关联素材：${a!.name}】\n${a!.content}`)
+            .join('\n\n');
+        
+        let finalPrompt = assetContext ? `${assetContext}\n\n---\n\n${basePrompt}` : basePrompt;
+
+        if (selectedModule) {
+            finalPrompt = `[当前创作任务：${selectedModule.title} - ${selectedModule.description}]\n\n${finalPrompt}`;
+        }
+        
+        if (!finalPrompt.trim()) {
+            setIsGenerating(false);
+            setShowLoadingOverlay(false);
+            return;
+        }
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
         try {
-            const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
-            let first = true;
+            const stream = generateTextStream(
+                finalPrompt, 
+                { model, temperature, topP, signal: controller.signal }
+            );
+
+            let firstChunk = true;
             for await (const chunk of stream) {
-                if (first) { setShowLoadingOverlay(false); first = false; }
+                if (firstChunk) {
+                    setShowLoadingOverlay(false); 
+                    firstChunk = false;
+                }
                 setGeneratedText(prev => prev + chunk);
             }
             setSuccessMessage('内容生成完毕');
-            setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 3000);
-        } catch (e) {} finally { setIsGenerating(false); setShowLoadingOverlay(false); }
+            setTimeout(() => setSuccessMessage(''), 2500);
+
+        } catch (e: any) {
+            if (e.message !== 'Aborted') {
+                setGeneratedText(prev => prev + "\n\n[生成中断或出错，请重试]");
+            }
+        } finally {
+            setIsGenerating(false);
+            setShowLoadingOverlay(false);
+            abortControllerRef.current = null;
+        }
+    };
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(generatedText);
+        setSuccessMessage('内容已复制！');
+        setTimeout(() => setSuccessMessage(''), 2000);
     };
 
     const handleImportAsset = (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => {
-        saveMaterial(data.name, data.content, data.type === 'inspiration' ? 'idea' : data.type, data.tags);
+        let dbType: 'character' | 'plot' | 'idea' = 'idea';
+        if (data.type === 'character') dbType = 'character';
+        if (data.type === 'plot') dbType = 'plot';
+
+        saveMaterial(data.name, data.content, dbType, data.tags);
+
         setSuccessMessage('已成功导入素材库');
-        setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 3000);
+        setTimeout(() => setSuccessMessage(''), 2000);
     };
 
     if (!selectedModule) {
         return (
-            <div className="p-8 h-full animate-fade-in">
-                <div className="mb-8"><h1 className="text-3xl font-bold text-gray-900 dark:text-white">创意生成</h1></div>
+            <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in">
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">创意生成</h1>
+                    <p className="text-gray-500 dark:text-gray-400 mt-1">选择一个创作模块，开始你的灵感之旅。</p>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {CREATIVE_MODULES.map(m => <CreativeCard key={m.id} module={m} onSelect={() => setSelectedModule(m)} />)}
+                    {CREATIVE_MODULES.map((module) => (
+                        <CreativeCard 
+                            key={module.id} 
+                            module={module} 
+                            onSelect={() => setSelectedModule(module)}
+                        />
+                    ))}
                 </div>
             </div>
         );
     }
 
-    return (
-        <div className="h-full flex flex-col bg-gray-50 dark:bg-black overflow-hidden relative">
-            <LoadingOverlay isVisible={showLoadingOverlay} onClose={handleStop} />
-            <SuccessToast message={successMessage} isVisible={showSuccessToast} />
-            <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={generatedText} onSave={handleImportAsset} />
-            <PromptSelectionModal isOpen={promptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={setSelectedPrompt} initialSubCategory={selectedModule.subCategories[0]} />
-            <AssetSelectionModal isOpen={assetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={id => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
+    const moduleInitialTag = selectedModule?.subCategories?.[0];
 
-            <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white dark:bg-gray-900 z-20 shadow-sm">
+    return (
+        <div className="h-full flex flex-col bg-gray-50 dark:bg-black animate-fade-in overflow-hidden relative">
+            <LoadingOverlay isVisible={showLoadingOverlay} onClose={handleStop} />
+            <ImportAssetModal 
+                isOpen={importModalOpen} 
+                onClose={() => setImportModalOpen(false)} 
+                content={generatedText}
+                onSave={handleImportAsset}
+            />
+            <PromptSelectionModal
+                isOpen={promptModalOpen}
+                onClose={() => setPromptModalOpen(false)}
+                onSelect={setSelectedPrompt}
+                initialSubCategory={moduleInitialTag} 
+            />
+            <AssetSelectionModal 
+                isOpen={assetModalOpen} 
+                onClose={() => setAssetModalOpen(false)}
+                assets={assets}
+                selectedAssetIds={selectedAssetIds}
+                onToggleAsset={(id) => setSelectedAssetIds(prev => {
+                    const next = new Set(prev);
+                    if(next.has(id)) next.delete(id); else next.add(id);
+                    return next;
+                })}
+            />
+
+            <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm z-20">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => setSelectedModule(null)} className="p-2 rounded-full hover:bg-gray-100 text-gray-500"><ChevronDoubleLeft className="w-5 h-5" /></button>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">{selectedModule.title}</h2>
+                    <button 
+                        onClick={() => setSelectedModule(null)}
+                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors"
+                    >
+                        <ChevronDoubleLeft className="w-5 h-5" />
+                    </button>
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            {selectedModule.title}
+                            <span className="text-xs font-normal text-gray-500 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full bg-gray-50 dark:bg-gray-800">创作模式</span>
+                        </h2>
+                    </div>
                 </div>
+                {successMessage && (
+                    <div className="px-4 py-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-lg text-sm font-bold animate-pulse shadow-sm flex items-center gap-2">
+                        <Check className="w-4 h-4" />
+                        {successMessage}
+                    </div>
+                )}
             </div>
 
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-                <div className="w-full lg:w-[360px] xl:w-[400px] flex flex-col border-r border-gray-200 bg-white dark:bg-gray-900 overflow-hidden z-10">
+                <div className="w-full lg:w-[360px] xl:w-[400px] flex flex-col border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden z-10 shadow-lg lg:shadow-none">
                     <div className="flex-1 overflow-y-auto p-5 space-y-8">
                         <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase"><AdjustmentsHorizontal className="w-4 h-4" />模型配置</div>
-                            <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100">
-                                <div className="flex gap-2">
+                            <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
+                                <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded text-blue-600 dark:text-blue-400">
+                                    <AdjustmentsHorizontal className="w-4 h-4" />
+                                </div>
+                                模型配置
+                            </div>
+                            
+                            <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                                <div className="flex gap-2 mb-1">
                                     <div className="relative flex-1">
-                                        <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-medium bg-gray-50 dark:bg-gray-800 border rounded-lg text-gray-700 outline-none appearance-none cursor-pointer">
+                                        <select 
+                                            value={model}
+                                            onChange={(e) => setModel(e.target.value)}
+                                            className="w-full py-2 pl-3 pr-8 text-xs font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer"
+                                        >
                                             <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
                                             <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
                                             <option value="gemini-2.5-flash">谷歌极速 (Gemini Flash)</option>
@@ -264,65 +473,187 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         </select>
                                         <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                                     </div>
-                                    <button onClick={() => setShowConfig(!showConfig)} className="px-3 py-2 text-xs font-bold rounded-lg border flex items-center gap-1 hover:bg-gray-100"><AdjustmentsHorizontal className="w-4 h-4" />参数</button>
+                                    <button 
+                                        onClick={() => setShowConfig(!showConfig)}
+                                        className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 ${showConfig ? 'bg-sky-100 text-sky-600 border-sky-200 dark:bg-sky-900/30 dark:border-sky-800' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                                    >
+                                        <AdjustmentsHorizontal className="w-4 h-4" />
+                                        参数调整
+                                    </button>
                                 </div>
+
                                 {showConfig && (
-                                    <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-4 animate-fade-in">
-                                        <div><label className="block text-xs font-bold text-gray-400 mb-1.5 flex justify-between"><span>温度</span><span className="text-sky-600">{temperature}</span></label><input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-sky-500" /></div>
-                                        <div><label className="block text-xs font-bold text-gray-400 mb-1.5 flex justify-between"><span>核采样</span><span className="text-sky-600">{topP}</span></label><input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-sky-500" /></div>
+                                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-2 gap-4 animate-fade-in">
+                                        <div className="col-span-2 text-[10px] text-gray-400 bg-sky-50 dark:bg-sky-900/10 p-2 rounded mb-1">
+                                            💡 小说创作建议：温度 0.7-0.9 (更有创意)，核采样 0.9 (标准)
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 flex justify-between">
+                                                <span>温度 (Temp)</span>
+                                                <span className="text-sky-600">{temperature}</span>
+                                            </label>
+                                            <input 
+                                                type="range" min="0" max="1.5" step="0.1" 
+                                                value={temperature}
+                                                onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 flex justify-between">
+                                                <span>核采样 (Top P)</span>
+                                                <span className="text-sky-600">{topP}</span>
+                                            </label>
+                                            <input 
+                                                type="range" min="0" max="1" step="0.05" 
+                                                value={topP}
+                                                onChange={(e) => setTopP(parseFloat(e.target.value))}
+                                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-sky-500"
+                                            />
+                                        </div>
                                     </div>
                                 )}
                             </div>
                         </div>
 
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase"><Sparkles className="w-4 h-4" />提示词与素材</div>
+                            <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
+                                <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded text-purple-600 dark:text-purple-400">
+                                    <Sparkles className="w-4 h-4" />
+                                </div>
+                                提示词与素材
+                            </div>
+
                             <div className="grid grid-cols-2 gap-3">
-                                <button onClick={() => setPromptModalOpen(true)} className={`p-3 rounded-lg border transition-all flex flex-row justify-center items-center gap-2 ${selectedPrompt ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white border-gray-200 text-gray-500 hover:border-sky-400'}`}>
+                                <button 
+                                    onClick={() => setPromptModalOpen(true)}
+                                    className={`p-3 rounded-lg border text-left transition-all flex flex-row justify-center items-center gap-2 group ${
+                                        selectedPrompt 
+                                        ? 'bg-sky-50 border-sky-300 text-sky-900 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-100' 
+                                        : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-400 hover:text-sky-500'
+                                    }`}
+                                    title={selectedPrompt?.title}
+                                >
                                     <Search className="w-5 h-5 flex-shrink-0" />
-                                    <span className={`font-bold text-sm ${selectedPrompt ? 'truncate' : ''}`}>{selectedPrompt ? selectedPrompt.title : '选择提示词'}</span>
+                                    <span className={`font-bold text-sm ${selectedPrompt ? 'truncate max-w-[100px] block' : ''}`}>
+                                        {selectedPrompt ? selectedPrompt.title : '选择提示词'}
+                                    </span>
                                 </button>
-                                <button onClick={() => setAssetModalOpen(true)} className={`p-3 rounded-lg border transition-all flex flex-row justify-center items-center gap-2 ${selectedAssetIds.size > 0 ? 'bg-purple-50 border-purple-300 text-purple-900' : 'bg-white border-gray-200 text-gray-500 hover:border-purple-400'}`}>
+
+                                <button 
+                                        onClick={() => setAssetModalOpen(true)}
+                                        className={`p-3 rounded-lg border text-left transition-all flex flex-row justify-center items-center gap-2 group ${
+                                            selectedAssetIds.size > 0
+                                            ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' 
+                                            : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400 hover:text-purple-500'
+                                        }`}
+                                        title={selectedAssetNames}
+                                >
                                     <Database className="w-5 h-5 flex-shrink-0" />
-                                    <span className={`font-bold text-sm ${selectedAssetIds.size > 0 ? 'truncate' : ''}`}>{selectedAssetIds.size > 0 ? selectedAssetNames : '关联素材'}</span>
+                                    <span className={`font-bold text-sm ${selectedAssetIds.size > 0 ? 'truncate max-w-[100px] block' : ''}`}>
+                                        {selectedAssetIds.size > 0 ? selectedAssetNames : '关联素材'}
+                                    </span>
                                 </button>
                             </div>
                         </div>
 
                         <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase"><Sparkles className="w-4 h-4" />创作内容</div>
+                            <div className="flex items-center gap-2 text-gray-800 dark:text-gray-200 font-bold text-sm uppercase tracking-wide">
+                                <div className="p-1.5 bg-green-100 dark:bg-green-900/30 rounded text-green-600 dark:text-green-400">
+                                    <Sparkles className="w-4 h-4" />
+                                </div>
+                                创作内容
+                            </div>
+
                             {selectedPrompt ? (
                                 <div className="space-y-4 animate-fade-in">
-                                    {selectedPrompt.fields.map((f, i) => (
-                                        <div key={f.id}>
-                                            <label className="block text-sm font-bold text-gray-700 mb-1.5">{i+1}. {f.label}</label>
-                                            {f.type === 'textarea' ? <textarea value={formState[f.id] || ''} onChange={e => setFormState({...formState, [f.id]: e.target.value})} placeholder={f.placeholder} className="w-full p-3 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-sm min-h-[100px]" /> : <input type="text" value={formState[f.id] || ''} onChange={e => setFormState({...formState, [f.id]: e.target.value})} placeholder={f.placeholder} className="w-full p-3 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-sm" />}
+                                    {selectedPrompt.fields.map((field, index) => (
+                                        <div key={field.id}>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                                                {index + 1}. {field.label}
+                                                {field.required && <span className="text-red-500 ml-1">*</span>}
+                                            </label>
+                                            {field.type === 'textarea' ? (
+                                                <textarea
+                                                    value={formState[field.id] || ''}
+                                                    onChange={e => setFormState(prev => ({ ...prev, [field.id]: e.target.value }))}
+                                                    placeholder={field.placeholder}
+                                                    className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition text-sm min-h-[100px]"
+                                                />
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={formState[field.id] || ''}
+                                                    onChange={e => setFormState(prev => ({ ...prev, [field.id]: e.target.value }))}
+                                                    placeholder={field.placeholder}
+                                                    className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition text-sm"
+                                                />
+                                            )}
+                                            {field.description && <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-medium">{field.description}</p>}
                                         </div>
                                     ))}
                                 </div>
-                            ) : <textarea value={freeInput} onChange={e => setFreeInput(e.target.value)} placeholder="请输入创作需求..." className="w-full h-40 p-3 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-sm resize-none" />}
+                            ) : (
+                                <textarea 
+                                    value={freeInput}
+                                    onChange={e => setFreeInput(e.target.value)}
+                                    placeholder="请输入您的创作需求..."
+                                    className="w-full h-40 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition text-sm resize-none"
+                                />
+                            )}
                         </div>
                     </div>
 
-                    <div className="p-5 border-t bg-white dark:bg-gray-900">
-                        <button onClick={handleGenerate} className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 transition-all ${isGenerating ? 'bg-red-500' : 'bg-sky-600 hover:bg-sky-500 active:scale-[0.98]'}`}>{isGenerating ? <><Stop className="w-5 h-5" />停止生成</> : <><Sparkles className="w-5 h-5" />开始生成</>}</button>
+                    <div className="p-5 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
+                        <button
+                            onClick={handleGenerate}
+                            className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 transition-all ${
+                                isGenerating 
+                                ? 'bg-red-500 hover:bg-red-600 hover:shadow-red-500/30' 
+                                : 'bg-sky-600 hover:bg-sky-500 active:scale-[0.98] shadow-sky-500/30'
+                            }`}
+                        >
+                            {isGenerating ? (
+                                <>
+                                    <Stop className="w-5 h-5" />
+                                    停止生成
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="w-5 h-5" />
+                                    开始生成
+                                </>
+                            )}
+                        </button>
                     </div>
                 </div>
 
                 <div className="flex-1 bg-gray-50 dark:bg-black/50 flex flex-col items-center overflow-hidden">
-                    <div className="w-full max-w-5xl bg-white dark:bg-gray-900 h-full shadow-sm border-x flex flex-col relative overflow-hidden">
+                    <div className="w-full max-w-5xl bg-white dark:bg-gray-900 h-full shadow-sm border-x border-gray-200 dark:border-gray-800 flex flex-col relative overflow-hidden">
                         {!generatedText ? (
-                            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 opacity-50 p-8"><Sparkles className="w-20 h-20 mb-6" /><p className="text-lg font-medium">配置左侧参数，开始创作</p></div>
+                            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 opacity-50 p-8">
+                                <Sparkles className="w-20 h-20 mb-6" />
+                                <p className="text-lg font-medium">配置左侧参数，开始创作</p>
+                            </div>
                         ) : (
                             <>
-                                <div className="flex-shrink-0 bg-white dark:bg-gray-900 px-8 py-4 border-b flex justify-between items-center">
-                                    <div className="flex items-center gap-2 text-gray-900 dark:text-white font-bold text-lg"><Sparkles className="w-5 h-5 text-sky-500" /><span>生成结果</span></div>
+                                <div className="flex-shrink-0 bg-white dark:bg-gray-900 px-8 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                                    <div className="flex items-center gap-2 text-gray-900 dark:text-white font-bold text-lg">
+                                        <Sparkles className="w-5 h-5 text-sky-500" />
+                                        <span>生成结果</span>
+                                    </div>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { navigator.clipboard.writeText(generatedText); setSuccessMessage('已复制到剪贴板'); setShowSuccessToast(true); setTimeout(()=>setShowSuccessToast(false),2000); }} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-sky-100 text-sky-700 hover:bg-sky-200 transition-colors"><Copy className="w-4 h-4" /> 复制</button>
-                                        <button onClick={() => setImportModalOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"><Database className="w-4 h-4" /> 导入素材库</button>
+                                        <button onClick={handleCopy} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-sky-100 text-sky-700 hover:bg-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:hover:bg-sky-900/50 transition-colors">
+                                            <Copy className="w-4 h-4" /> 复制
+                                        </button>
+                                        <button onClick={() => setImportModalOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50 transition-colors">
+                                            <Database className="w-4 h-4" /> 导入素材库
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="flex-1 overflow-y-auto px-8 py-6" ref={scrollContainerRef}><FormattedText text={generatedText} /></div>
+                                <div className="flex-1 overflow-y-auto px-8 py-6 scroll-smooth" ref={scrollContainerRef}>
+                                    <FormattedText text={generatedText} />
+                                </div>
                             </>
                         )}
                     </div>

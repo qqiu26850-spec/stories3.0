@@ -19,7 +19,7 @@ const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
   { id: 'short-story', label: '短篇小说' },
   { id: 'long-story', label: '长篇小说' },
   { id: 'script', label: '剧本' },
-  { id: 'general', label: '通用' },
+  { id: 'general', label: '全类型' }, // Updated from 通用 to 全类型
 ];
 
 const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onClose, onSelect, initialSubCategory }) => {
@@ -71,6 +71,7 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                         id: p.id,
                         title: p.title,
                         description: parsedContent.description || '用户自定义提示词',
+                        example: parsedContent.example || '', // Load example
                         content: parsedContent.template || p.content,
                         category: appCat,
                         subCategories: tags,

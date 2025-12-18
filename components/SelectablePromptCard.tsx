@@ -13,6 +13,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     'long-story': '长篇',
     'short-story': '短篇',
     'script': '剧本',
+    'general': '全类型'
 };
 
 const SUB_CATEGORY_LABELS: Record<string, string> = {
@@ -68,7 +69,7 @@ const SelectablePromptCard: React.FC<SelectablePromptCardProps> = ({ prompt, onS
           {/* Left: Tags */}
           <div className="flex items-center gap-1.5 overflow-hidden">
              <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-900/20 dark:border-sky-800`}>
-                {CATEGORY_LABELS[prompt.category] || prompt.category}
+                {CATEGORY_LABELS[prompt.category] || '全类型'}
             </span>
             {prompt.subCategories && prompt.subCategories.slice(0, 2).map((sub) => (
                 <span key={sub} className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap ${
