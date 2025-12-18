@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Prompt } from '../types';
-import { X, Sparkles, Copy, BookOpen, Film, Fire, UserCircle, Eye, EyeSlash, Check } from './Icon';
+import { X, Sparkles, Copy, BookOpen, Film, Fire, UserCircle, Eye, EyeSlash, Check, Bolt } from './Icon';
 import { GENRE_TAGS } from '../constants';
 
 interface PromptDetailModalProps {
@@ -16,7 +16,7 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'idea': '创意', 'golden_finger': '金手指', 'character_design': '人设', 'worldview': '世界观',
     'outline': '大纲', 'detailed_outline': '细纲', 'synopsis': '简介', 'requirements': '要求',
     'style': '风格', 'continue': '续写', 'polish': '润色', 'proofread': '校对', 'writing': '写稿',
-    'general': '通用', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
+    'general': '全类型', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
     'apocalypse': '末世', 'urban': '都市', 'fantasy': '玄幻', 'history': '历史', 'social': '世情',
     'suspense': '悬疑', 'sci-fi': '科幻'
 };
@@ -71,17 +71,28 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 font-sans">
-                    <div className="bg-sky-50 dark:bg-sky-900/10 p-4 rounded-xl space-y-2">
-                        <h4 className="text-xs font-bold text-sky-600">📝 简介</h4>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{prompt.description}</p>
+                    <div className="space-y-4">
+                        <div className="bg-sky-50 dark:bg-sky-900/10 p-4 rounded-xl space-y-2 border border-sky-100 dark:border-sky-800/50">
+                            <h4 className="text-xs font-bold text-sky-600 flex items-center gap-1.5"><BookOpen className="w-3.5 h-3.5" /> 简介</h4>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{prompt.description}</p>
+                        </div>
+
+                        {prompt.example && (
+                            <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl space-y-2 border border-orange-100 dark:border-orange-800/50">
+                                <h4 className="text-xs font-bold text-orange-600 flex items-center gap-1.5"><Bolt className="w-3.5 h-3.5" /> 效果示例</h4>
+                                <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap italic opacity-80">
+                                    {prompt.example}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 pt-2">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2"><Sparkles className="w-4 h-4 text-sky-500" />参数设置</h3>
                             <button onClick={() => setShowRawTemplate(!showRawTemplate)} className="text-[10px] text-gray-400 hover:text-sky-500 flex items-center gap-1">{showRawTemplate ? <EyeSlash className="w-3 h-3"/> : <Eye className="w-3 h-3"/>}查看模板</button>
                         </div>
-                        {showRawTemplate && <div className="p-3 bg-gray-900 rounded-lg text-gray-300 font-mono text-[10px] whitespace-pre-wrap">{prompt.template}</div>}
+                        {showRawTemplate && <div className="p-3 bg-gray-900 rounded-lg text-gray-300 font-mono text-[10px] whitespace-pre-wrap border border-gray-800">{prompt.template}</div>}
                         <div className="space-y-5">
                             {prompt.fields?.map((field, index) => (
                                 <div key={field.id} className="space-y-2">
@@ -106,7 +117,8 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                                             value={formState[field.id] || ''} 
                                             onChange={e => setFormState({...formState, [field.id]: e.target.value})} 
                                             maxLength={field.maxLength}
-                                            className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" 
+                                            placeholder={field.placeholder}
+                                            className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all shadow-sm" 
                                         />
                                     ) : (
                                         <input 
@@ -114,22 +126,23 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                                             value={formState[field.id] || ''} 
                                             onChange={e => setFormState({...formState, [field.id]: e.target.value})} 
                                             maxLength={field.maxLength}
-                                            className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" 
+                                            placeholder={field.placeholder}
+                                            className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all shadow-sm" 
                                         />
                                     )}
-                                    {field.description && <p className="text-[10px] text-blue-600 mt-1">💡 {field.description}</p>}
+                                    {field.description && <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1 opacity-80 font-medium">💡 {field.description}</p>}
                                 </div>
                             ))}
                         </div>
                     </div>
                 </div>
                
-                <div className="p-5 border-t border-gray-100 dark:border-gray-800 flex gap-3">
-                    <button onClick={handleCopy} className="flex-1 py-3 rounded-xl border border-gray-200 font-bold hover:bg-gray-50 flex items-center justify-center gap-2 transition-all">
+                <div className="p-5 border-t border-gray-100 dark:border-gray-800 flex gap-3 bg-white dark:bg-gray-900">
+                    <button onClick={handleCopy} className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-700 font-bold hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center gap-2 transition-all">
                         {copied ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
                         {copied ? '已复制' : '复制全文'}
                     </button>
-                    {onRun && <button onClick={() => onRun(formState)} className="flex-[1.5] py-3 rounded-xl bg-sky-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95"><Sparkles className="w-5 h-5" />立即生成</button>}
+                    {onRun && <button onClick={() => onRun(formState)} className="flex-[1.5] py-3 rounded-xl bg-sky-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95 transition-all hover:bg-sky-500"><Sparkles className="w-5 h-5" />立即生成</button>}
                 </div>
             </div>
         </div>,
