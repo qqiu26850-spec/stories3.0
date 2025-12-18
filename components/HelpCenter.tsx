@@ -149,7 +149,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                     ]}
                 >
                     <SubModule name="结构化模板">将复杂的提示词转化为简单的表单。例如：“场景描写”模板只需您填入地点、氛围和主要物品。</SubModule>
-                    <SubModule name="自定义变量">使用 ${`{变量名}`} 语法创建字段。这让您可以轻松复用任何特定的写作指令。</SubModule>
+                    <SubModule name="自定义变量">使用 {"${变量名}"} 语法创建字段。这让您可以轻松复用任何特定的写作指令。</SubModule>
                 </HelpSection>
 
                 {/* Section: Workflow */}
@@ -165,7 +165,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                         "自定义工作流，将您的个人成功经验转化为自动化生产线"
                     ]}
                 >
-                    <SubModule name="标准化生产">工作流将“想点子->写大纲->出正文”这一复杂过程标准化，适合批量产出或逻辑严密的创作任务。</SubModule>
+                    <SubModule name="标准化生产">工作流将“想点子 &rarr; 写大纲 &rarr; 出正文”这一复杂过程标准化，适合批量产出或逻辑严密的创作任务。</SubModule>
                 </HelpSection>
             </div>
             
