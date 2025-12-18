@@ -1,11 +1,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-// Google Gemini API Key
 const GOOGLE_API_KEY = "AIzaSyB5gQjtLL4iIspEMzXwaYXNN3BMEZ4Zd1M";
-
-// 注意：DeepSeek 的 Key 现在应该在 Vercel 环境变量中配置 (DEEPSEEK_API_KEY)，
-// 前端代码中不再需要硬编码 DeepSeek Key，也不需要直接请求 DeepSeek 域名。
 
 const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
@@ -16,18 +12,16 @@ interface GenerationOptions {
     signal?: AbortSignal;
 }
 
-const PLAIN_TEXT_INSTRUCTION = "\n\n(IMPORTANT: Please output the result in strictly plain text format. Do NOT use Markdown syntax such as **bold**, *italics*, # headers, or bullet points. Use standard spacing for paragraphs.)";
+// Removed PLAIN_TEXT_INSTRUCTION to allow Markdown headers (#) for hierarchical numbering in UI
 
 export const generateText = async (prompt: string, options: GenerationOptions): Promise<string> => {
-  const finalPrompt = prompt + PLAIN_TEXT_INSTRUCTION;
-
   if (options.model.startsWith('gemini')) {
     try {
         if (options.signal?.aborted) throw new Error("Aborted");
         
         const response = await ai.models.generateContent({
             model: options.model,
-            contents: finalPrompt,
+            contents: prompt,
             config: {
                 temperature: options.temperature,
                 topP: options.topP,
@@ -43,18 +37,16 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
     }
   } else if (options.model.startsWith('deepseek')) {
     try {
-        // 修改为请求 Vercel 内部 API 路由 /api/deepseek
         const response = await fetch("/api/deepseek", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                // 前端不需要 Authorization 头，Key 在服务端处理
             },
             body: JSON.stringify({
                 model: options.model,
                 messages: [
-                    { role: "system", content: "You are a helpful creative writing assistant." },
-                    { role: "user", content: finalPrompt }
+                    { role: "system", content: "You are a helpful creative writing assistant. Use Markdown headers (# ## ###) for structure when appropriate." },
+                    { role: "user", content: prompt }
                 ],
                 temperature: options.temperature,
                 top_p: options.topP,
@@ -69,7 +61,10 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         }
 
         const data = await response.json();
-        return data.choices?.[0]?.message?.content || "";
+        let content = data.choices?.[0]?.message?.content || "";
+        // Clean deepseek-reasoner thinking tags if any
+        content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        return content;
     } catch (error: any) {
         if (error.name === 'AbortError') {
             throw new Error('已停止生成');
@@ -78,7 +73,6 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         return `DeepSeek 生成出错: ${error.message}`;
     }
   } else {
-    // Simulate
     if (options.signal?.aborted) throw new Error("Aborted");
     await new Promise((resolve, reject) => {
         const timer = setTimeout(resolve, 1500);
@@ -92,13 +86,11 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 };
 
 export const generateTextStream = async function* (prompt: string, options: GenerationOptions): AsyncGenerator<string, void, unknown> {
-    const finalPrompt = prompt + PLAIN_TEXT_INSTRUCTION;
-
     if (options.model.startsWith('gemini')) {
         try {
             const responseStream = await ai.models.generateContentStream({
                 model: options.model,
-                contents: finalPrompt,
+                contents: prompt,
                 config: {
                     temperature: options.temperature,
                     topP: options.topP,
@@ -121,7 +113,6 @@ export const generateTextStream = async function* (prompt: string, options: Gene
         }
     } else if (options.model.startsWith('deepseek')) {
         try {
-            // 修改为请求 Vercel 内部 API 路由 /api/deepseek
             const response = await fetch("/api/deepseek", {
                 method: "POST",
                 headers: {
@@ -130,8 +121,8 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                 body: JSON.stringify({
                     model: options.model,
                     messages: [
-                        { role: "system", content: "You are a helpful creative writing assistant." },
-                        { role: "user", content: finalPrompt }
+                        { role: "system", content: "You are a helpful creative writing assistant. Use Markdown headers (# ## ###) for structure." },
+                        { role: "user", content: prompt }
                     ],
                     temperature: options.temperature,
                     top_p: options.topP,
@@ -150,6 +141,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
             let buffer = "";
+            let inThinkingBlock = false;
 
             while (true) {
                 if (options.signal?.aborted) {
@@ -171,8 +163,31 @@ export const generateTextStream = async function* (prompt: string, options: Gene
 
                     try {
                         const json = JSON.parse(jsonStr);
-                        const content = json.choices?.[0]?.delta?.content;
-                        if (content) yield content;
+                        const delta = json.choices?.[0]?.delta;
+                        if (!delta) continue;
+
+                        const content = delta.content;
+                        if (content) {
+                            // Filter logic for <think> blocks in R1
+                            if (content.includes('<think>')) {
+                                inThinkingBlock = true;
+                                const afterThink = content.split('<think>')[1];
+                                if (afterThink && afterThink.includes('</think>')) {
+                                    inThinkingBlock = false;
+                                    yield afterThink.split('</think>')[1];
+                                }
+                                continue;
+                            }
+                            if (content.includes('</think>')) {
+                                inThinkingBlock = false;
+                                yield content.split('</think>')[1];
+                                continue;
+                            }
+                            
+                            if (!inThinkingBlock) {
+                                yield content;
+                            }
+                        }
                     } catch (e) {
                         console.error("Error parsing stream chunk", e);
                     }
@@ -184,7 +199,6 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             yield `DeepSeek 连接出错：${error.message}`;
         }
     } else {
-        // Simulate
         const simulatedResponse = `[来自 ${options.model.toUpperCase()} 的模拟流式响应]\n\n${prompt.substring(0, 50)}...`;
         const chunks = simulatedResponse.split('');
         for (const char of chunks) {

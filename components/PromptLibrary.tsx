@@ -70,6 +70,21 @@ const PostCreationModal: React.FC<{
     );
 };
 
+const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
+    if (!isVisible) return null;
+    return createPortal(
+        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[200] animate-fade-in-up">
+            <div className="bg-white dark:bg-gray-800 border border-green-200 dark:border-green-900 px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
+                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                    <Check className="w-6 h-6" />
+                </div>
+                <span className="text-lg font-bold text-gray-800 dark:text-gray-100">{message}</span>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('all');
@@ -84,6 +99,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
     const [isSuccessModalOpen, setSuccessModalOpen] = useState(false);
+    const [showSuccessToast, setShowSuccessToast] = useState(false);
     
     const [promptToDelete, setPromptToDelete] = useState<Prompt | null>(null);
     const [promptToEdit, setPromptToEdit] = useState<Prompt | null>(null);
@@ -106,7 +122,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 currentNickname = profile.nickname;
             }
 
-            // Utilize cache via service unless forceRefresh is true
             const fetchedData = await fetchPrompts('all', forceRefresh); 
             if (fetchedData) {
                 const mappedPrompts: Prompt[] = fetchedData.map((p: any) => {
@@ -155,7 +170,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         }
     }, []);
 
-    // Load User Prompts from Supabase
     useEffect(() => {
         if (isActive) {
             loadData();
@@ -173,6 +187,9 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         const contentString = JSON.stringify(contentObject);
         const subCat = data.subCategories && data.subCategories.length > 0 ? data.subCategories[0] : 'idea';
 
+        // Close modal first
+        setCreateModalOpen(false);
+
         if (promptId) {
             const { success, error } = await updatePrompt(promptId, {
                 title: data.title,
@@ -181,15 +198,15 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 sub_category: subCat
             });
             if (!success) { alert(`更新失败: ${error?.message || '未知错误'}`); return; }
-            setSuccessMessage('提示词更新成功');
-            setTimeout(() => setSuccessMessage(''), 2500);
+            setSuccessMessage('提示词已成功更新');
+            setShowSuccessToast(true);
+            setTimeout(() => setShowSuccessToast(false), 3000);
         } else {
             const { success, error } = await savePrompt(data.title, contentString, data.category, subCat);
             if (!success) { alert(`保存失败: ${error?.message || '未知错误'}`); return; }
             
-            // For new prompt, we construct a temp object for the success modal action
             const tempNewPrompt: Prompt = {
-                id: 'temp-new', // Will be refreshed on loadData
+                id: 'temp-new',
                 title: data.title,
                 description: data.description,
                 content: data.template,
@@ -206,10 +223,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             setSuccessModalOpen(true);
         }
         
-        // Refresh list without full page reload
         await loadData(true);
-        
-        setCreateModalOpen(false);
         setPromptToEdit(null);
     };
 
@@ -229,8 +243,9 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             setPrompts(prev => prev.filter(p => p.id !== promptToDelete.id));
             setDeleteModalOpen(false);
             setPromptToDelete(null);
-            setSuccessMessage('提示词删除成功');
-            setTimeout(() => setSuccessMessage(''), 2500);
+            setSuccessMessage('提示词已成功删除');
+            setShowSuccessToast(true);
+            setTimeout(() => setShowSuccessToast(false), 3000);
         }
     };
 
@@ -323,6 +338,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 }}
             />
             
+            <SuccessToast message={successMessage} isVisible={showSuccessToast} />
+            
             {/* Top Navigation Bar */}
             <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
                 <div className="flex justify-between items-center">
@@ -339,12 +356,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                     </div>
                     
                     <div className="flex gap-2 flex-shrink-0">
-                         {successMessage && (
-                            <div className="px-4 py-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-lg text-sm font-bold animate-pulse shadow-sm flex items-center gap-2 mr-2">
-                                <Check className="w-4 h-4" />
-                                {successMessage}
-                            </div>
-                        )}
                          <button
                             onClick={() => setActiveTab('my-prompts')}
                             className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'my-prompts' ? 'bg-sky-100 text-sky-600 dark:bg-sky-900/50' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
@@ -371,10 +382,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                     </div>
                 </div>
 
-                {/* Filters & Search - Updated to 2 Lines */}
                 <div className="flex flex-col lg:flex-row gap-4 justify-between items-start bg-gray-100 dark:bg-gray-900/50 p-3 rounded-xl">
                     <div className="flex-1 w-full space-y-2">
-                        {/* Row 1: Functional Tags */}
                         <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide items-center">
                             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">功能:</span>
                             <button 
@@ -385,7 +394,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                             {FUNCTIONAL_TAGS.map(cat => renderTagButton(cat, false))}
                         </div>
                         
-                        {/* Row 2: Genre Tags */}
                         <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide items-center border-t border-gray-200 dark:border-gray-700 pt-2">
                             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">题材:</span>
                             {GENRE_TAGS.map(cat => renderTagButton(cat, true))}

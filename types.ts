@@ -26,8 +26,8 @@ export interface CreativeModule {
   content: string;
   category: PromptCategory;
   subCategories: PromptSubCategory[];
-  fields: PromptField[]; // Kept for backwards compatibility with Creative Generation
-  template: string; // Kept for backwards compatibility with Creative Generation
+  fields: PromptField[];
+  template: string;
   heat: number;
   creator: 'system' | 'user';
 }
@@ -56,11 +56,12 @@ export interface Prompt {
   id: string;
   title: string;
   description: string;
+  example?: string; // New field for effect preview
   content: string;
   category: PromptCategory;
   subCategories: PromptSubCategory[];
-  fields: PromptField[]; // Kept for backwards compatibility with Creative Generation
-  template: string; // Kept for backwards compatibility with Creative Generation
+  fields: PromptField[];
+  template: string;
   heat: number;
   creator: 'system' | 'user';
   userId?: string;
@@ -87,22 +88,16 @@ export interface Workflow {
 }
 
 export type AssetFormData = {
-  // Common field
   name: string;
-  // Character fields
   personality?: string;
   relationships?: string;
-  // Plot fields
   plotPoints?: string;
   scene?: string;
-  // Inspiration fields
   genre?: string;
   elements?: string;
   coreTrope?: string;
-  // Shared fields
-  goldenFinger?: string; // For Character & Inspiration
-  notes?: string; // For Character '补充内容' & Inspiration '补充内容'
-  // New field for input
+  goldenFinger?: string;
+  notes?: string;
   tags?: string;
 };
 
@@ -112,7 +107,7 @@ export interface Asset {
   type: 'character' | 'inspiration' | 'plot';
   content: string;
   tags: string[];
-  data?: AssetFormData; // Store structured data for editing
+  data?: AssetFormData;
 }
 
 export interface Chapter {
@@ -163,7 +158,7 @@ export type Project = Novel | Script;
 export interface UserProfile {
   id: string;
   nickname: string;
-  email?: string; // Added email field
+  email?: string;
   avatarUrl: string | null;
 }
 
