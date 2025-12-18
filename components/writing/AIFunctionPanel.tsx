@@ -1,5 +1,3 @@
-
-// ... existing imports ...
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -10,7 +8,6 @@ import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
 
-// ... (AIFunctionPanelProps and TabType) ...
 type TabType = 'plot' | 'continue' | 'polish' | 'review';
 
 interface AIFunctionPanelProps {
@@ -22,7 +19,6 @@ interface AIFunctionPanelProps {
 }
 
 const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream }) => {
-    // ... state ...
     const [activeTab, setActiveTab] = useState<TabType>('plot');
     
     // Config State
@@ -31,7 +27,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [topP, setTopP] = useState(0.95);
     const [showConfig, setShowConfig] = useState(false);
 
-    // ... other states ...
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
@@ -46,7 +41,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [lastGeneratedTab, setLastGeneratedTab] = useState<TabType | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
 
-    // ... (rest of logic) ...
     useEffect(() => {
         const loadAssets = async () => {
             const data = await fetchMaterials();
@@ -199,7 +193,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800">
-            {/* ... Overlay & Modals ... */}
             <LoadingOverlay 
                 isVisible={showLoadingOverlay} 
                 onClose={() => setShowLoadingOverlay(false)} 
@@ -251,8 +244,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 >
                                     <option value="deepseek-chat">DeepSeek V3 (通用对话)</option>
                                     <option value="deepseek-reasoner">DeepSeek R1 (深度推理)</option>
-                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (极速)</option>
-                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
+                                    {/* Fix: Updated Gemini model names for better text task results */}
+                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (极速)</option>
+                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (深度)</option>
                                 </select>
                                 <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
@@ -378,7 +372,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                      </div>
                 )}
 
-                {/* ... button and result ... */}
                 <button 
                     onClick={isLoading ? handleStop : handleGenerate}
                     disabled={!selectedPrompt && !isLoading}

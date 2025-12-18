@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useEffect } from 'react';
 import { ASSETS } from '../constants';
 import { View, Asset, AssetFormData } from '../types';
@@ -42,7 +41,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
     const [assetToDeleteId, setAssetToDeleteId] = useState<string | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-    const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     const loadAssets = async () => {
@@ -61,24 +59,29 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
 
     const handleSaveAsset = async (formData: AssetFormData) => {
         const tags = formData.tags ? formData.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) : [];
-        const content = formData.notes || formData.personality || formData.plotPoints || editingAsset?.content || '';
+        const content = formData.notes || formData.personality || formData.plotPoints || '';
         await saveMaterial(formData.name, content, assetType === 'inspiration' ? 'idea' : assetType, tags);
-        setCreateModalOpen(false); setEditingAsset(null); loadAssets();
+        setCreateModalOpen(false); loadAssets();
     };
 
     const handleConfirmDelete = async () => {
         if (assetToDeleteId) { await deleteMaterial(assetToDeleteId); setAssets(prev => prev.filter(a => a.id !== assetToDeleteId)); setDeleteModalOpen(false); if (selectedAsset?.id === assetToDeleteId) setDetailModalOpen(false); }
     };
 
+    const handleOpenEdit = (asset: Asset) => {
+        setSelectedAsset(asset);
+        setDetailModalOpen(true);
+    };
+
     return (
         <div className="p-8 h-full animate-fade-in flex flex-col">
-            <CreateAssetModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} onSave={handleSaveAsset} assetType={assetType} assetToEdit={editingAsset} />
+            <CreateAssetModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} onSave={handleSaveAsset} assetType={assetType} />
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
-            <AssetDetailModal isOpen={isDetailModalOpen} onClose={() => setDetailModalOpen(false)} asset={selectedAsset} onDelete={setAssetToDeleteId} onEdit={setEditingAsset} />
+            <AssetDetailModal isOpen={isDetailModalOpen} onClose={() => setDetailModalOpen(false)} asset={selectedAsset} onDelete={setAssetToDeleteId} />
 
             <div className="mb-8 flex justify-between items-center">
                 <div><h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1><p className="text-gray-500 mt-1">{description}</p></div>
-                <button onClick={() => setCreateModalOpen(true)} className="px-6 py-3 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/20">+ 新建素材</button>
+                <button onClick={() => setCreateModalOpen(true)} className="px-6 py-3 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/30">+ 新建素材</button>
             </div>
 
             <div className="mb-6"><input type="text" placeholder="搜索素材..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full max-w-md px-4 py-2.5 bg-white dark:bg-gray-900 border rounded-xl focus:ring-2 focus:ring-sky-500 outline-none shadow-sm" /></div>
@@ -86,10 +89,13 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
             {isLoading ? <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-t-sky-500 rounded-full animate-spin"></div></div> : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-10">
                     {filteredAssets.map(asset => (
-                        <div key={asset.id} onClick={() => { setSelectedAsset(asset); setDetailModalOpen(true); }} className="bg-white dark:bg-gray-900 p-8 rounded-2xl border border-gray-100 dark:border-gray-800 hover:shadow-2xl hover:border-sky-400 transition-all group cursor-pointer flex flex-col h-full relative">
+                        <div key={asset.id} onClick={() => handleOpenEdit(asset)} className="bg-white dark:bg-gray-900 p-8 rounded-2xl border border-gray-100 dark:border-gray-800 hover:shadow-2xl hover:border-sky-400 transition-all group cursor-pointer flex flex-col h-full relative">
                             <div className="flex justify-between items-start mb-4">
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate pr-2">{asset.name}</h3>
-                                <div className="opacity-0 group-hover:opacity-100 flex gap-2"><button onClick={e => { e.stopPropagation(); setEditingAsset(asset); setCreateModalOpen(true); }} className="p-1.5 text-gray-400 hover:text-sky-500 transition-colors"><Pencil className="w-5 h-5" /></button><button onClick={e => { e.stopPropagation(); setAssetToDeleteId(asset.id); setDeleteModalOpen(true); }} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash className="w-5 h-5" /></button></div>
+                                <div className="opacity-0 group-hover:opacity-100 flex gap-2">
+                                    <button onClick={e => { e.stopPropagation(); handleOpenEdit(asset); }} className="p-1.5 text-gray-400 hover:text-sky-500 transition-colors" title="修改"><Pencil className="w-5 h-5" /></button>
+                                    <button onClick={e => { e.stopPropagation(); setAssetToDeleteId(asset.id); setDeleteModalOpen(true); }} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="删除"><Trash className="w-5 h-5" /></button>
+                                </div>
                             </div>
                             <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 line-clamp-6 leading-loose whitespace-pre-wrap flex-grow">{asset.content}</p>
                             <div className="flex flex-wrap gap-2">{asset.tags.map((tag, i) => <span key={i} className={`text-xs px-2 py-1 rounded font-bold border ${getTagStyle(tag)}`}>{tag}</span>)}</div>

@@ -1,4 +1,3 @@
-
 // ... existing imports ...
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -223,7 +222,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                                 value={formState[field.id] || ''}
                                 onChange={e => handleInputChange(field.id, e.target.value)}
                                 placeholder={field.placeholder}
-                                className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none resize-none shadow-sm h-32"
+                                className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 focus:outline-none resize-none shadow-sm h-32"
                             />
                         ) : (
                             <input 
@@ -231,7 +230,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                                 value={formState[field.id] || ''}
                                 onChange={e => handleInputChange(field.id, e.target.value)}
                                 placeholder={field.placeholder}
-                                className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none shadow-sm"
+                                className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 focus:outline-none shadow-sm"
                             />
                         )}
                         {field.description && <p className="text-[10px] text-gray-400 mt-1">{field.description}</p>}
@@ -298,8 +297,9 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                                 >
                                     <option value="deepseek-chat">DeepSeek V3 (通用对话)</option>
                                     <option value="deepseek-reasoner">DeepSeek R1 (深度推理)</option>
-                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (极速)</option>
-                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
+                                    {/* Fix: Updated Gemini model names to the recommended versions */}
+                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (极速)</option>
+                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (深度)</option>
                                 </select>
                                 <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>

@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Prompt, PromptCategory, PromptField, PromptSubCategory } from '../types';
-import { Trash, Sparkles, Check, Bars2 } from './Icon';
+// Fix: Added missing 'X' icon to the imports from Icon component
+import { Trash, Sparkles, Check, Bars2, DocumentText, ChevronDown, X } from './Icon';
 
 type NewPromptData = Omit<Prompt, 'id' | 'heat' | 'content'>;
 
@@ -16,7 +16,7 @@ const CATEGORIES: { id: PromptCategory; label: string }[] = [
     { id: 'short-story', label: '短篇小说' },
     { id: 'long-story', label: '长篇小说' },
     { id: 'script', label: '剧本' },
-    { id: 'general', label: '通用' },
+    { id: 'general', label: '全类型' }, // Updated from 通用 to 全类型
 ];
 
 const GENRE_TAGS: { id: PromptSubCategory; label: string }[] = [
@@ -52,6 +52,7 @@ const FUNCTION_TAGS: { id: PromptSubCategory; label: string }[] = [
 const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, onSave, promptToEdit }) => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
+    const [example, setExample] = useState('');
     const [template, setTemplate] = useState('');
     const [category, setCategory] = useState<PromptCategory>('short-story');
     const [subCategories, setSubCategories] = useState<PromptSubCategory[]>(['idea']);
@@ -64,6 +65,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             if (promptToEdit) {
                 setTitle(promptToEdit.title);
                 setDescription(promptToEdit.description);
+                setExample(promptToEdit.example || '');
                 setTemplate(promptToEdit.template || promptToEdit.content);
                 setCategory(promptToEdit.category);
                 setSubCategories(promptToEdit.subCategories && promptToEdit.subCategories.length > 0 ? promptToEdit.subCategories : ['idea']);
@@ -71,6 +73,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             } else {
                 setTitle('');
                 setDescription('');
+                setExample('');
                 setTemplate('');
                 setCategory('short-story');
                 setSubCategories(['idea']);
@@ -96,7 +99,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     const updateField = (index: number, key: keyof PromptField, value: any) => {
         const newFields = [...fields];
         const fieldToUpdate = { ...newFields[index] };
-    
         if (key === 'label') {
             fieldToUpdate.label = value;
             fieldToUpdate.placeholder = `请输入${value}...`;
@@ -109,7 +111,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
         } else if (key === 'description') {
             fieldToUpdate.description = value;
         }
-    
         newFields[index] = fieldToUpdate;
         setFields(newFields);
     };
@@ -130,17 +131,10 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
         });
     };
 
-    const handleDragStart = (index: number) => {
-        setDraggedIndex(index);
-    };
-
-    const handleDragOver = (e: React.DragEvent, index: number) => {
-        e.preventDefault();
-    };
-
+    const handleDragStart = (index: number) => setDraggedIndex(index);
+    const handleDragOver = (e: React.DragEvent, index: number) => e.preventDefault();
     const handleDrop = (targetIndex: number) => {
         if (draggedIndex === null || draggedIndex === targetIndex) return;
-        
         const newFields = [...fields];
         const draggedItem = newFields[draggedIndex];
         newFields.splice(draggedIndex, 1);
@@ -158,14 +152,10 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             setError('所有自定义字段都必须有标题和变量名。');
             return;
         }
-        if (subCategories.length === 0) {
-            setError('请至少选择一个标签。');
-            return;
-        }
-        
         onSave({
             title,
             description,
+            example,
             template,
             category,
             subCategories: subCategories,
@@ -177,216 +167,143 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={onClose}>
-            {/* Modal width increased to max-w-5xl */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-5xl p-8 animate-fade-in-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <Sparkles className="w-6 h-6 text-sky-500" />
-                        {promptToEdit ? '编辑提示词' : '创建新提示词'}
-                    </h3>
+        <div className="fixed inset-0 bg-black/70 dark:bg-black/90 flex items-center justify-center z-[100] p-4 backdrop-blur-md" onClick={onClose}>
+            <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-fade-in-up border border-white/20" onClick={e => e.stopPropagation()}>
+                {/* Header with Gradient Background */}
+                <div className="px-10 py-8 bg-gradient-to-r from-sky-600/10 via-purple-600/5 to-transparent border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h3 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                                <div className="p-2 bg-sky-500 rounded-xl shadow-lg shadow-sky-500/20">
+                                    <Sparkles className="w-6 h-6 text-white" />
+                                </div>
+                                {promptToEdit ? '编辑提示词' : '创建灵感提示词'}
+                            </h3>
+                            <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">构建属于你的 AI 创作模板，实现标准化的高质量输出。</p>
+                        </div>
+                    </div>
                 </div>
                 
-                <form onSubmit={handleSubmit} className="space-y-6 overflow-y-auto pr-2 -mr-2 flex-1">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">提示词标题</label>
-                            <input 
-                                type="text" 
-                                value={title} 
-                                onChange={(e) => setTitle(e.target.value)} 
-                                placeholder="例如：赛博朋克城市氛围描写" 
-                                className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition"
+                {/* Form area with custom scroll spacing to prevent border overlap */}
+                <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+                    <div className="flex-1 overflow-y-auto px-10 py-8 space-y-10 [scrollbar-gutter:stable]">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="space-y-2">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">提示词标题</label>
+                                <input 
+                                    type="text" 
+                                    value={title} 
+                                    onChange={(e) => setTitle(e.target.value)} 
+                                    placeholder="例如：赛博朋克城市描写" 
+                                    className="w-full p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all shadow-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">主要创作类目</label>
+                                <div className="relative group">
+                                    <select 
+                                        value={category} 
+                                        onChange={(e) => setCategory(e.target.value as PromptCategory)} 
+                                        className="w-full p-4 pr-10 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none appearance-none cursor-pointer transition-all shadow-sm"
+                                    >
+                                        {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                    </select>
+                                    <ChevronDown className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-sky-500 pointer-events-none transition-colors" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">属性标签 (最多选5个)</label>
+                            <div className="p-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-3xl border border-gray-100 dark:border-gray-800 space-y-4">
+                                <div>
+                                    <span className="text-[10px] font-black text-gray-400 mb-3 block uppercase tracking-[0.2em]">题材 / 类型</span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {GENRE_TAGS.map(tag => (
+                                            <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id)} className={`px-4 py-2 text-xs font-bold rounded-full border transition-all ${subCategories.includes(tag.id) ? 'bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-500/20' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-purple-400 hover:text-purple-600'}`}>{tag.label}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="pt-2 border-t border-gray-200/50 dark:border-gray-700/50">
+                                    <span className="text-[10px] font-black text-gray-400 mb-3 block uppercase tracking-[0.2em]">功能 / 用途</span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {FUNCTION_TAGS.map(tag => (
+                                            <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id)} className={`px-4 py-2 text-xs font-bold rounded-full border transition-all ${subCategories.includes(tag.id) ? 'bg-sky-600 border-sky-600 text-white shadow-md shadow-sky-500/20' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-sky-400 hover:text-sky-600'}`}>{tag.label}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="space-y-2">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">简介说明</label>
+                                <textarea 
+                                    value={description} 
+                                    onChange={(e) => setDescription(e.target.value)} 
+                                    placeholder="描述这个提示词的用途、核心特色及适用场景。" 
+                                    className="w-full h-40 p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition-all resize-y text-sm shadow-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1 flex items-center gap-1.5">
+                                    <Sparkles className="w-4 h-4 text-orange-400" />
+                                    效果预览 (AI 生成范例)
+                                </label>
+                                <textarea 
+                                    value={example} 
+                                    onChange={(e) => setExample(e.target.value)} 
+                                    placeholder="输入一段 AI 生成的参考效果，帮助其他用户快速理解该提示词的威力。" 
+                                    className="w-full h-40 p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition-all resize-y text-sm font-serif shadow-sm"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">AI 提示词模板 (核心)</label>
+                            <textarea 
+                                value={template} 
+                                onChange={(e) => setTemplate(e.target.value)} 
+                                placeholder="输入完整的提示词指令。使用 ${变量名} 引用下方定义的字段。例如：请根据风格 ${style} 描写一段..." 
+                                className="w-full h-48 p-5 bg-gray-900 text-gray-100 border-none rounded-3xl focus:ring-4 focus:ring-sky-500/20 outline-none transition-all resize-y font-mono text-sm shadow-xl"
                             />
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">主分类</label>
-                            <div className="relative">
-                                <select 
-                                    value={category} 
-                                    onChange={(e) => setCategory(e.target.value as PromptCategory)} 
-                                    className="w-full py-3 pl-3 pr-8 text-sm font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition appearance-none cursor-pointer"
-                                >
-                                    {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                </select>
-                                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-gray-500">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">标签选择 (多选)</label>
-                        <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-800">
-                            <div>
-                                <span className="text-xs font-bold text-gray-400 mb-2 block uppercase">题材标签</span>
-                                <div className="flex flex-wrap gap-2">
-                                    {GENRE_TAGS.map(tag => (
-                                        <button
-                                            key={tag.id}
-                                            type="button"
-                                            onClick={() => toggleSubCategory(tag.id)}
-                                            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
-                                                subCategories.includes(tag.id)
-                                                ? 'bg-purple-100 border-purple-500 text-purple-700 dark:bg-purple-900/50 dark:border-purple-400 dark:text-purple-300 shadow-sm'
-                                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                            }`}
-                                        >
-                                            {tag.label}
-                                        </button>
-                                    ))}
+                        <div className="space-y-6 p-8 bg-sky-50/30 dark:bg-sky-900/5 border-2 border-dashed border-sky-200/50 dark:border-sky-800/5 rounded-[2.5rem]">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h4 className="text-lg font-bold text-gray-900 dark:text-white">自定义动态字段</h4>
+                                    <p className="text-xs text-gray-500 mt-1">字段将自动转化为输入表单供使用者填写。</p>
                                 </div>
+                                <button type="button" onClick={addField} className="px-5 py-2.5 bg-sky-600 text-white text-sm font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/20 transition-all active:scale-95">+ 添加新字段</button>
                             </div>
                             
-                            <div>
-                                <span className="text-xs font-bold text-gray-400 mb-2 block uppercase">功能标签</span>
-                                <div className="flex flex-wrap gap-2">
-                                    {FUNCTION_TAGS.map(tag => (
-                                        <button
-                                            key={tag.id}
-                                            type="button"
-                                            onClick={() => toggleSubCategory(tag.id)}
-                                            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
-                                                subCategories.includes(tag.id)
-                                                ? 'bg-sky-100 border-sky-500 text-sky-700 dark:bg-sky-900/50 dark:border-sky-400 dark:text-sky-300 shadow-sm'
-                                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                            }`}
-                                        >
-                                            {tag.label}
-                                        </button>
+                            {fields.length === 0 ? (
+                                <div className="text-center py-10 text-gray-400 text-sm italic">点击上方按钮，开启动态创作体验</div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {fields.map((field, index) => (
+                                        <div key={field.id} className="p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-12 gap-5 relative shadow-sm hover:shadow-md transition-shadow" draggable onDragStart={() => handleDragStart(index)} onDragOver={(e) => handleDragOver(e, index)} onDrop={() => handleDrop(index)}>
+                                            <div className="absolute top-1/2 -translate-y-1/2 -left-3 flex items-center p-2 cursor-grab text-gray-300 hover:text-sky-500"><Bars2 className="w-4 h-4" /></div>
+                                            <div className="md:col-span-5"><label className="text-[10px] font-bold text-gray-400 mb-1 block">字段显示名称</label><input type="text" value={field.label} onChange={(e) => updateField(index, 'label', e.target.value)} placeholder="例如：人物性格" className="w-full p-2.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none" /></div>
+                                            <div className="md:col-span-4"><label className="text-[10px] font-bold text-gray-400 mb-1 block">引用变量名 (英文)</label><input type="text" value={field.id} onChange={(e) => updateField(index, 'id', e.target.value)} placeholder="例如：character_personality" className="w-full p-2.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none font-mono" /></div>
+                                            <div className="md:col-span-2"><label className="text-[10px] font-bold text-gray-400 mb-1 block">表单类型</label><select value={field.type} onChange={(e) => updateField(index, 'type', e.target.value)} className="w-full p-2.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none appearance-none"><option value="text">单行文本</option><option value="textarea">多行文本</option></select></div>
+                                            <div className="md:col-span-1 flex justify-center items-center pt-5"><button type="button" onClick={() => removeField(index)} className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"><Trash className="w-5 h-5" /></button></div>
+                                        </div>
                                     ))}
                                 </div>
-                            </div>
+                            )}
                         </div>
-                        <p className="text-xs text-gray-400 mt-1.5 ml-1">可组合选择题材与功能</p>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">简介</label>
-                        <textarea 
-                            value={description} 
-                            onChange={(e) => setDescription(e.target.value)} 
-                            placeholder="简要描述这个提示词的作用、目的或适用场景。" 
-                            className="w-full h-24 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition resize-y text-xs"
-                        />
-                    </div>
-
-                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">提示词模板</label>
-                        <textarea 
-                            value={template} 
-                            onChange={(e) => setTemplate(e.target.value)} 
-                            placeholder="输入你的提示词模板。使用 ${变量名} 来引用下方自定义的字段。例如：请描写一个${天气}的场景..." 
-                            className="w-full h-32 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition resize-y font-mono text-sm"
-                        />
-                    </div>
-
-                    <div className="space-y-4 p-5 bg-sky-50/50 dark:bg-sky-900/10 border border-sky-100 dark:border-sky-900/30 rounded-xl">
-                        <div className="flex justify-between items-center">
-                            <h4 className="font-bold text-gray-800 dark:text-gray-200">自定义表单字段</h4>
-                            <button type="button" onClick={addField} className="text-xs px-3 py-1.5 bg-sky-100 text-sky-700 dark:bg-sky-800 dark:text-sky-300 rounded-md font-bold hover:bg-sky-200 dark:hover:bg-sky-700 transition-colors">
-                                + 添加字段
-                            </button>
+                    <div className="px-10 py-6 border-t border-gray-100 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4 flex-shrink-0">
+                        <div className="flex-1">
+                            {error && <p className="text-red-500 text-sm font-bold animate-pulse flex items-center gap-1.5"><X className="w-4 h-4"/> {error}</p>}
                         </div>
-                        
-                        {fields.length === 0 && (
-                            <div className="text-center py-4 text-gray-400 text-sm">
-                                暂无字段，点击上方添加以创建动态模板
-                            </div>
-                        )}
-
-                        {fields.map((field, index) => (
-                            <div 
-                                key={field.id} 
-                                className={`p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-12 gap-3 relative shadow-sm transition-all duration-200 ${draggedIndex === index ? 'opacity-50 scale-[0.98] border-sky-300 ring-2 ring-sky-100' : ''}`}
-                                draggable
-                                onDragStart={() => handleDragStart(index)}
-                                onDragOver={(e) => handleDragOver(e, index)}
-                                onDrop={() => handleDrop(index)}
-                            >
-                                <div className="absolute top-2 left-2 flex items-center gap-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-sky-500" title="拖拽排序">
-                                    <Bars2 className="w-3 h-3" />
-                                    <span className="text-[10px] font-bold select-none">{index + 1}.</span>
-                                </div>
-                                
-                                <div className="md:col-span-5 pl-4">
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">字段标题</label>
-                                    <input 
-                                        type="text" 
-                                        value={field.label} 
-                                        onChange={(e) => updateField(index, 'label', e.target.value)} 
-                                        placeholder="如：写作风格" 
-                                        className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none"
-                                        onMouseDown={(e) => e.stopPropagation()} 
-                                    />
-                                </div>
-                                <div className="md:col-span-4">
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">变量名 (English)</label>
-                                    <input 
-                                        type="text" 
-                                        value={field.id} 
-                                        onChange={(e) => updateField(index, 'id', e.target.value)} 
-                                        placeholder="如：style" 
-                                        className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none font-mono"
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                    />
-                                </div>
-                                <div className="md:col-span-3">
-                                     <label className="block text-xs font-medium text-gray-500 mb-1">类型</label>
-                                    <select 
-                                        value={field.type} 
-                                        onChange={(e) => updateField(index, 'type', e.target.value)} 
-                                        className="w-full p-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none"
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                    >
-                                        <option value="text">单行</option>
-                                        <option value="textarea">多行</option>
-                                    </select>
-                                </div>
-
-                                <div className="md:col-span-8 pl-4">
-                                    <label className="block text-xs font-medium text-blue-500 mb-1">填写说明 (选填)</label>
-                                    <input 
-                                        type="text" 
-                                        value={field.description || ''} 
-                                        onChange={(e) => updateField(index, 'description', e.target.value)} 
-                                        placeholder="如：请描述您希望的文章基调" 
-                                        className="w-full p-2 text-[10px] bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded focus:ring-1 focus:ring-sky-500 outline-none text-gray-600 dark:text-gray-400"
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                    />
-                                </div>
-                                <div className="md:col-span-3 flex items-end pb-2">
-                                    <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-300" onMouseDown={(e) => e.stopPropagation()}>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={field.required !== false} 
-                                            onChange={(e) => updateField(index, 'required', e.target.checked)}
-                                            className="w-4 h-4 text-sky-600 rounded border-gray-300 focus:ring-sky-500"
-                                        />
-                                        必填项
-                                    </label>
-                                </div>
-                                <div className="md:col-span-1 flex justify-center items-end pb-1">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => removeField(index)} 
-                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" 
-                                        title="删除字段"
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                    >
-                                        <Trash className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    {error && <p className="text-red-500 dark:text-red-400 text-sm font-medium text-center">{error}</p>}
-                    
-                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
-                        <button type="button" onClick={onClose} className="px-5 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">取消</button>
-                        <button type="submit" className="px-6 py-2.5 bg-sky-600 text-white font-bold rounded-lg hover:bg-sky-500 shadow-lg shadow-sky-500/30 transition-all">{promptToEdit ? '保存修改' : '立即创建'}</button>
+                        <div className="flex gap-4">
+                            <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold rounded-2xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">取消</button>
+                            <button type="submit" className="px-10 py-3 bg-sky-600 text-white font-bold rounded-2xl hover:bg-sky-500 shadow-xl shadow-sky-500/30 transition-all active:scale-95">{promptToEdit ? '保存所有修改' : '立即发布提示词'}</button>
+                        </div>
                     </div>
                 </form>
             </div>

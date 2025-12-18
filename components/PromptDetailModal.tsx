@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Prompt } from '../types';
@@ -55,14 +54,16 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'idea': '创意', 'golden_finger': '金手指', 'character_design': '人设', 'worldview': '世界观',
     'outline': '大纲', 'detailed_outline': '细纲', 'synopsis': '简介', 'requirements': '要求',
     'style': '风格', 'continue': '续写', 'polish': '润色', 'proofread': '校对', 'writing': '写稿',
-    'general': '通用', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
+    'general': '全类型', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
     'apocalypse': '末世', 'urban': '都市', 'fantasy': '玄幻', 'history': '历史', 'social': '世情',
     'suspense': '悬疑', 'sci-fi': '科幻'
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
-    'long-story': '长篇', 'short-story': '短篇', 'script': '剧本', 'general': '通用',
+    'long-story': '长篇', 'short-story': '短篇', 'script': '剧本', 'general': '全类型',
 };
+
+const isGenre = (tag: string) => GENRE_TAGS.some(g => g.id === tag);
 
 const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, prompt, onRun }) => {
     const [formState, setFormState] = useState<Record<string, string>>({});
@@ -95,10 +96,10 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
 
     const getCategoryStyle = (cat: string) => {
         switch(cat) {
-            case 'long-story': return { bg: 'bg-gradient-to-br from-violet-500 to-indigo-600', icon: BookOpen, accent: 'text-purple-600', ring: 'focus:ring-purple-500', badge: 'bg-purple-100 text-purple-700' };
-            case 'short-story': return { bg: 'bg-gradient-to-br from-sky-400 to-blue-600', icon: Sparkles, accent: 'text-sky-600', ring: 'focus:ring-sky-500', badge: 'bg-sky-100 text-sky-700' };
-            case 'script': return { bg: 'bg-gradient-to-br from-rose-400 to-red-500', icon: Film, accent: 'text-rose-600', ring: 'focus:ring-rose-500', badge: 'bg-rose-100 text-rose-700' };
-            default: return { bg: 'bg-gradient-to-br from-gray-500 to-zinc-600', icon: Sparkles, accent: 'text-gray-600', ring: 'focus:ring-gray-500', badge: 'bg-gray-100 text-gray-700' };
+            case 'long-story': return { bg: 'bg-gradient-to-br from-violet-500 to-indigo-600', icon: BookOpen, accent: 'text-purple-600', ring: 'focus:ring-purple-500', badge: 'bg-purple-100 text-purple-700 border-purple-100' };
+            case 'short-story': return { bg: 'bg-gradient-to-br from-sky-400 to-blue-600', icon: Sparkles, accent: 'text-sky-600', ring: 'focus:ring-sky-500', badge: 'bg-sky-50 text-sky-600 border-sky-100' };
+            case 'script': return { bg: 'bg-gradient-to-br from-rose-400 to-red-500', icon: Film, accent: 'text-rose-600', ring: 'focus:ring-rose-500', badge: 'bg-rose-100 text-rose-700 border-rose-100' };
+            default: return { bg: 'bg-gradient-to-br from-gray-500 to-zinc-600', icon: Sparkles, accent: 'text-gray-600', ring: 'focus:ring-gray-500', badge: 'bg-gray-50 text-gray-600 border-gray-100' };
         }
     };
 
@@ -115,10 +116,14 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white leading-tight mb-1">{prompt.title}</h2>
                             <button onClick={onClose} className="p-1.5 -mr-2 -mt-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"><X className="w-5 h-5" /></button>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
-                            <span className={`px-2 py-0.5 rounded font-bold ${style.badge}`}>{CATEGORY_LABELS[prompt.category] || '通用'}</span>
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] mt-1">
+                            <span className={`px-1.5 py-0.5 rounded font-bold border ${style.badge}`}>{CATEGORY_LABELS[prompt.category] || '全类型'}</span>
                             {prompt.subCategories?.map(tag => (
-                                <span key={tag} className="px-2 py-0.5 rounded border bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300">{SUB_CATEGORY_LABELS[tag] || tag}</span>
+                                <span key={tag} className={`px-1.5 py-0.5 rounded font-bold border ${
+                                    isGenre(tag as string) 
+                                    ? 'bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-300' 
+                                    : 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+                                }`}>{SUB_CATEGORY_LABELS[tag] || tag}</span>
                             ))}
                             <div className="w-px h-3 bg-gray-300 dark:bg-gray-700 mx-1"></div>
                             <span className="flex items-center gap-1 text-gray-500"><UserCircle className="w-3.5 h-3.5" />{prompt.authorName || '用户'}</span>
@@ -159,6 +164,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                                     ) : (
                                         <input type="text" value={formState[field.id] || ''} onChange={(e) => setFormState(prev => ({...prev, [field.id]: e.target.value}))} className={`w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 rounded-xl text-gray-900 dark:text-white outline-none shadow-sm ${style.ring} focus:ring-2 focus:border-transparent transition-all`} />
                                     )}
+                                    {field.description && <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1.5 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded inline-block">💡 {field.description}</p>}
                                 </div>
                             ))}
                         </div>

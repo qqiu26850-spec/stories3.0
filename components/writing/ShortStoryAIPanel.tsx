@@ -1,5 +1,3 @@
-
-// ... existing imports ...
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -10,7 +8,6 @@ import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
 
-// ... (ShortStoryAIPanelProps) ...
 type ShortStoryTab = 'original' | 'imitate' | 'polish' | 'review';
 
 interface ShortStoryAIPanelProps {
@@ -22,21 +19,19 @@ interface ShortStoryAIPanelProps {
 }
 
 const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream }) => {
-    // ... state ...
     const [activeTab, setActiveTab] = useState<ShortStoryTab>('original');
     
     // Global Config for this Panel
     const [model, setModel] = useState('deepseek-chat'); // DeepSeek default
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
-    const [showConfig, setShowConfig] = useState(false); // New config toggle
+    const [showConfig, setShowConfig] = useState(false);
 
     const [selectedWorkflow, setSelectedWorkflow] = useState(MOCK_WORKFLOWS[0]?.id || '');
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
 
-    // ... (modal states, input states, result states) ...
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
     const [isPromptModalOpen, setPromptModalOpen] = useState(false);
     const [promptInput, setPromptInput] = useState('');
@@ -206,7 +201,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800">
-            {/* ... Overlay & Modals ... */}
             <LoadingOverlay 
                 isVisible={showLoadingOverlay} 
                 onClose={() => setShowLoadingOverlay(false)} 
@@ -245,7 +239,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
             <div className="flex-1 overflow-y-auto p-6 space-y-8">
                 
-                {/* Updated Compact Model Config */}
+                {/* Compact Model Config */}
                 <div className="flex flex-col gap-2">
                     <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型配置</label>
                     <div className="flex gap-2">
@@ -257,8 +251,9 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             >
                                 <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
                                 <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
-                                <option value="gemini-2.5-flash">谷歌极速 (Gemini Flash)</option>
-                                <option value="gemini-2.5-pro">谷歌深度 (Gemini Pro)</option>
+                                {/* Fix: Updated Gemini model names to previews for short story tasks */}
+                                <option value="gemini-3-flash-preview">谷歌极速 (Gemini 3 Flash)</option>
+                                <option value="gemini-3-pro-preview">谷歌深度 (Gemini 3 Pro)</option>
                             </select>
                             <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                         </div>
@@ -304,7 +299,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     )}
                 </div>
 
-                {/* Rest of the UI */}
                 <div className="col-span-2">
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">提示词选择</label>
                         <button 
@@ -360,7 +354,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
                 <hr className="border-gray-200 dark:border-gray-800" />
 
-                {/* ... (rest of prompts and results UI) ... */}
                 <div className="space-y-4">
                     {selectedPrompt ? (
                         <div className="space-y-4 animate-fade-in">
@@ -451,7 +444,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
                              {activeTab === 'review' && (
                                 <div>
-                                     <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg mb-4 text-sm text-purple-800 dark:text-purple-300 flex items-start gap-2">
+                                     <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg mb-4 text-sm text-purple-800 dark:text-blue-300 flex items-start gap-2">
                                         <div className="mt-0.5">ℹ️</div>
                                         <div>
                                             AI将对你的文本进行专业分析并给出建议。

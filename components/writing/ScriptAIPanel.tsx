@@ -1,5 +1,3 @@
-
-// ... existing imports ...
 import React, { useState, useEffect, useRef } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -18,7 +16,6 @@ interface ScriptAIPanelProps {
 type ScriptTab = 'idea' | 'script';
 
 const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => {
-    // ... state and logic ...
     const [activeTab, setActiveTab] = useState<ScriptTab>('idea');
     
     // Common Config
@@ -199,7 +196,6 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full">
-            {/* ... overlay, modal, prompt selection modal ... */}
             <LoadingOverlay 
                 isVisible={showLoadingOverlay} 
                 onClose={() => setShowLoadingOverlay(false)}
@@ -236,7 +232,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
 
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 
-                {/* Configuration Card - Aligned with Long Novel Panel */}
+                {/* Configuration Card */}
                 <div className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 space-y-5 shadow-sm">
                     {/* Model Selection */}
                     <div className="flex flex-col gap-2">
@@ -250,8 +246,9 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
                                 >
                                     <option value="deepseek-chat">DeepSeek V3 (通用对话)</option>
                                     <option value="deepseek-reasoner">DeepSeek R1 (深度推理)</option>
-                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (极速)</option>
-                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (深度)</option>
+                                    {/* Fix: Updated Gemini model names for better screenplay task results */}
+                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (极速)</option>
+                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (深度)</option>
                                 </select>
                                 <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
@@ -412,7 +409,7 @@ ${assetContext ? `关联素材：\n${assetContext}\n` : ''}
 
                 {error && <div className="text-red-500 text-sm bg-red-50 p-2 rounded">{error}</div>}
 
-                {/* ... result display ... */}
+                {/* result display */}
                 {activeTab === 'idea' && generatedIdeas.length > 0 && (
                     <div className="space-y-4">
                         <h4 className="font-bold text-gray-700 dark:text-gray-300">生成结果 (可多选)</h4>

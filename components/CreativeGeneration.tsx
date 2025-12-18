@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
@@ -63,12 +62,12 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
 const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
     if (!isVisible) return null;
     return createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
-            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-gray-100 dark:border-gray-700 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in">
-                <div className="w-8 h-8 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                    <Check className="w-5 h-5" />
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[200] animate-fade-in-up">
+            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-green-200 dark:border-green-900 px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
+                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                    <Check className="w-6 h-6" />
                 </div>
-                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{message}</span>
+                <span className="text-lg font-bold text-gray-800 dark:text-gray-100">{message}</span>
             </div>
         </div>,
         document.body
@@ -154,6 +153,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const [freeInput, setFreeInput] = useState('');
     const [generatedText, setGeneratedText] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isWaitingForFirstChunk, setIsWaitingForFirstChunk] = useState(false);
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [promptModalOpen, setPromptModalOpen] = useState(false);
@@ -187,12 +187,14 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const handleStop = () => {
         if (abortControllerRef.current) abortControllerRef.current.abort();
         setIsGenerating(false);
+        setIsWaitingForFirstChunk(false);
         setShowLoadingOverlay(false);
     };
 
     const handleGenerate = async () => {
         if (isGenerating) { handleStop(); return; }
         setIsGenerating(true);
+        setIsWaitingForFirstChunk(true);
         setGeneratedText('');
         let basePrompt = selectedPrompt ? selectedPrompt.template : freeInput;
         if (selectedPrompt) {
@@ -206,20 +208,24 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
             let first = true;
             for await (const chunk of stream) {
-                if (first) { setShowLoadingOverlay(false); first = false; }
+                if (first) { 
+                    setShowLoadingOverlay(false); 
+                    setIsWaitingForFirstChunk(false);
+                    first = false; 
+                }
                 setGeneratedText(prev => prev + chunk);
             }
             setSuccessMessage('内容生成完毕');
             setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 2000);
-        } catch (e) {} finally { setIsGenerating(false); setShowLoadingOverlay(false); }
+            setTimeout(() => setShowSuccessToast(false), 3000);
+        } catch (e) {} finally { setIsGenerating(false); setIsWaitingForFirstChunk(false); setShowLoadingOverlay(false); }
     };
 
     const handleImportAsset = (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => {
         saveMaterial(data.name, data.content, data.type === 'inspiration' ? 'idea' : data.type, data.tags);
         setSuccessMessage('已成功导入素材库');
         setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 2000);
+        setTimeout(() => setShowSuccessToast(false), 3000);
     };
 
     if (!selectedModule) {
@@ -249,10 +255,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             </div>
 
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-                {/* Sidebar with scrollbar fix */}
+                {/* Sidebar */}
                 <div className="w-full lg:w-[360px] xl:w-[400px] flex flex-col border-r border-gray-200 bg-white dark:bg-gray-900 overflow-hidden z-10 [scrollbar-gutter:stable]">
                     <div className="flex-1 overflow-y-auto px-5 py-6 space-y-8">
-                        {/* Section 1: Blue */}
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400 font-bold text-sm uppercase tracking-wider">
                                 <div className="p-1.5 bg-sky-100 dark:bg-sky-900/30 rounded-lg">
@@ -266,8 +271,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-bold bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 rounded-lg text-gray-700 dark:text-gray-200 outline-none appearance-none cursor-pointer">
                                             <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
                                             <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
-                                            <option value="gemini-2.5-flash">谷歌极速 (Gemini Flash)</option>
-                                            <option value="gemini-2.5-pro">谷歌深度 (Gemini Pro)</option>
+                                            {/* Fix: Updated Gemini model names to the recommended versions */}
+                                            <option value="gemini-3-flash-preview">谷歌极速 (Gemini 3 Flash)</option>
+                                            <option value="gemini-3-pro-preview">谷歌深度 (Gemini 3 Pro)</option>
                                         </select>
                                         <ChevronDown className="w-3 h-3 text-sky-400 absolute right-2.5 top-3 pointer-events-none" />
                                     </div>
@@ -282,7 +288,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                             </div>
                         </div>
 
-                        {/* Section 2: Purple */}
                         <div className="space-y-4">
                             <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold text-sm uppercase tracking-wider">
                                 <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
@@ -302,7 +307,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                             </div>
                         </div>
 
-                        {/* Section 3: Green */}
                         <div className="space-y-4">
                             <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm uppercase tracking-wider">
                                 <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
@@ -319,9 +323,10 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                                 {f.type === 'textarea' ? (
                                                     <textarea value={formState[f.id] || ''} onChange={e => setFormState({...formState, [f.id]: e.target.value})} placeholder={f.placeholder} className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm min-h-[100px] shadow-sm transition-all" />
                                                 ) : (
+                                                    // Fix: Corrected variable name from 'field.id' to 'f.id'
                                                     <input type="text" value={formState[f.id] || ''} onChange={e => setFormState({...formState, [f.id]: e.target.value})} placeholder={f.placeholder} className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm shadow-sm transition-all" />
                                                 )}
-                                                {f.description && <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1 ml-1 leading-relaxed">💡 {f.description}</p>}
+                                                {f.description && <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1.5 ml-1 leading-relaxed">💡 {f.description}</p>}
                                             </div>
                                         ))}
                                     </div>
@@ -339,9 +344,10 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                     </div>
                 </div>
 
+                {/* Result Area */}
                 <div className="flex-1 bg-gray-50 dark:bg-black/50 flex flex-col items-center overflow-hidden">
                     <div className="w-full max-w-5xl bg-white dark:bg-gray-900 h-full shadow-sm border-x border-gray-100 dark:border-gray-800 flex flex-col relative overflow-hidden">
-                        {!generatedText ? (
+                        {!generatedText && !isWaitingForFirstChunk ? (
                             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 opacity-50 p-8"><Sparkles className="w-20 h-20 mb-6" /><p className="text-lg font-medium">在左侧输入灵感，开启 AI 创作之旅</p></div>
                         ) : (
                             <>
@@ -352,7 +358,15 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         <button onClick={() => setImportModalOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"><Database className="w-4 h-4" /> 导入素材库</button>
                                     </div>
                                 </div>
-                                <div className="flex-1 overflow-y-auto px-10 py-8" ref={scrollContainerRef}><FormattedText text={generatedText} /></div>
+                                <div className="flex-1 overflow-y-auto px-10 py-8 relative" ref={scrollContainerRef}>
+                                    {isWaitingForFirstChunk && (
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 animate-fade-in">
+                                            <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
+                                            <p className="text-sky-600 font-bold text-sm animate-pulse tracking-widest">AI 思考中...</p>
+                                        </div>
+                                    )}
+                                    <FormattedText text={generatedText} />
+                                </div>
                             </>
                         )}
                     </div>

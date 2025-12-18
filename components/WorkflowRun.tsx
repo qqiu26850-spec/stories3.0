@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Workflow } from '../types';
 import { generateTextStream } from '../services/geminiService';
@@ -57,7 +56,8 @@ const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({
 };
 
 const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
-    const [model, setModel] = useState('gemini-2.5-flash');
+    // Fix: Updated default model to recommended gemini-3-flash-preview
+    const [model, setModel] = useState('gemini-3-flash-preview');
     const [formState, setFormState] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [showOverlay, setShowOverlay] = useState(false);
@@ -119,8 +119,9 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                 onChange={e => setModel(e.target.value)} 
                                 className="w-full p-3 text-sm rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
                             >
-                                <option value="gemini-2.5-flash">谷歌极速 (Gemini Flash)</option>
-                                <option value="gemini-2.5-pro">谷歌深度 (Gemini Pro)</option>
+                                {/* Fix: Updated model selection options to match latest GenAI naming recommendations */}
+                                <option value="gemini-3-flash-preview">谷歌极速 (Gemini 3 Flash)</option>
+                                <option value="gemini-3-pro-preview">谷歌深度 (Gemini 3 Pro)</option>
                                 <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
                                 <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
                             </select>

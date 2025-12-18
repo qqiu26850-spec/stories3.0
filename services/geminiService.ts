@@ -1,9 +1,4 @@
-
 import { GoogleGenAI } from "@google/genai";
-
-const GOOGLE_API_KEY = "AIzaSyB5gQjtLL4iIspEMzXwaYXNN3BMEZ4Zd1M";
-
-const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
 interface GenerationOptions {
     model: string;
@@ -16,6 +11,9 @@ interface GenerationOptions {
 
 export const generateText = async (prompt: string, options: GenerationOptions): Promise<string> => {
   if (options.model.startsWith('gemini')) {
+    // Fix: Always use named parameter for apiKey and obtain it exclusively from process.env.API_KEY.
+    // Create the instance inside the function to ensure it uses the most up-to-date environment variable.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
         if (options.signal?.aborted) throw new Error("Aborted");
         
@@ -27,6 +25,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
                 topP: options.topP,
             }
         });
+        // Fix: Use the .text property directly as per latest SDK guidelines
         return response.text || "";
     } catch (error) {
         console.error("Error generating text with Gemini:", error);
@@ -87,6 +86,8 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 
 export const generateTextStream = async function* (prompt: string, options: GenerationOptions): AsyncGenerator<string, void, unknown> {
     if (options.model.startsWith('gemini')) {
+        // Fix: Use process.env.API_KEY and create instance locally to follow GenAI guidelines.
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         try {
             const responseStream = await ai.models.generateContentStream({
                 model: options.model,
@@ -99,6 +100,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
 
             for await (const chunk of responseStream) {
                 if (options.signal?.aborted) throw new Error("Aborted");
+                // Fix: Access .text property directly instead of calling .text()
                 const text = chunk.text;
                 if (text) {
                     yield text;
