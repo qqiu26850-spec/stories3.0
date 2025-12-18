@@ -51,11 +51,11 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, as
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] animate-fade-in-up flex flex-col relative overflow-hidden" onClick={e => e.stopPropagation()}>
-                {/* 顶部标题栏：保持简洁 */}
-                <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-between items-center">
+                {/* 顶部标题栏：改为淡蓝色背景与正文区分，字号缩小 */}
+                <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-gray-800 bg-sky-50/50 dark:bg-sky-900/10 flex justify-between items-center">
                     <div className="flex items-center gap-3 overflow-hidden">
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white truncate">{localAsset.name}</h3>
-                        <span className="px-3 py-1 rounded-lg text-xs font-bold bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 flex-shrink-0">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate">{localAsset.name}</h3>
+                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 flex-shrink-0">
                             {localAsset.type === 'character' ? '角色设定' : localAsset.type === 'plot' ? '剧情线索' : '灵感随笔'}
                         </span>
                     </div>
@@ -64,18 +64,18 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, as
                     </button>
                 </div>
 
-                {/* 正文编辑区：视野更大 */}
+                {/* 正文编辑区：正文字号由 text-lg 缩小为 text-base */}
                 <div className="flex-1 overflow-y-auto p-8 bg-white dark:bg-gray-900">
                     <textarea 
                         value={editedContent} 
                         onChange={e => setEditedContent(e.target.value)} 
                         autoFocus 
-                        className="w-full h-full min-h-[400px] bg-transparent outline-none text-lg leading-relaxed font-serif text-gray-800 dark:text-gray-200 resize-none placeholder:text-gray-300"
+                        className="w-full h-full min-h-[400px] bg-transparent outline-none text-base leading-relaxed font-serif text-gray-800 dark:text-gray-200 resize-none placeholder:text-gray-300"
                         placeholder="在此展开描写素材的细节内容..."
                     />
                 </div>
                
-                {/* 底部固定页：标签移至此处，高度更小 */}
+                {/* 底部固定页 */}
                 <div className="flex-shrink-0 py-2.5 px-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap gap-2 max-w-[60%]">
                         {localAsset.tags.map((tag, i) => (

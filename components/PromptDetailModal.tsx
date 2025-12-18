@@ -80,7 +80,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                         {prompt.example && (
                             <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl space-y-2 border border-orange-100 dark:border-orange-800/50">
                                 <h4 className="text-xs font-bold text-orange-600 flex items-center gap-1.5"><Bolt className="w-3.5 h-3.5" /> 效果示例</h4>
-                                <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap italic opacity-80">
+                                <div className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap opacity-90">
                                     {prompt.example}
                                 </div>
                             </div>

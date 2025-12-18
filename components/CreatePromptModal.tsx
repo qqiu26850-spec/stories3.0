@@ -138,13 +138,13 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
-                <div className="px-8 py-3 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+                <div className="px-8 py-4 bg-gradient-to-r from-sky-600 to-blue-600 border-b border-sky-700/30 flex-shrink-0">
                     <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <Sparkles className="w-5 h-5 text-blue-600" />
-                            {promptToEdit ? '编辑提示词' : '创建提示词'}
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            <Sparkles className="w-5 h-5 text-sky-200" />
+                            {promptToEdit ? '编辑提示词' : '创建提示词模板'}
                         </h3>
-                        <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
+                        <button onClick={onClose} className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"><X className="w-6 h-6"/></button>
                     </div>
                 </div>
                 
