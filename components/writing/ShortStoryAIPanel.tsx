@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
-import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, InformationCircle } from '../Icon';
+import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -31,6 +30,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
     const [isPromptModalOpen, setPromptModalOpen] = useState(false);
+    const [promptFilterType, setPromptFilterType] = useState<'requirements' | 'style'>('requirements');
     const [promptInput, setPromptInput] = useState('');
     const [referenceText, setReferenceText] = useState('');
     const [formState, setFormState] = useState<Record<string, string>>({});
@@ -87,6 +87,11 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         }
         setIsLoading(false);
         setShowLoadingOverlay(false);
+    };
+
+    const handleOpenPromptModal = (filter: 'requirements' | 'style') => {
+        setPromptFilterType(filter);
+        setPromptModalOpen(true);
     };
 
     const handleGenerate = async () => {
@@ -170,7 +175,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 font-sans">
             <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} onStop={handleStop} status={overlayStatus} />
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
-            <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} />
+            <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
 
             <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans">
                 {renderTabButton('original', '原创', Sparkles)}
@@ -209,34 +214,41 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 font-sans">
-                    <div className="col-span-2 font-sans">
-                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">提示词选择</label>
-                        <button onClick={() => setPromptModalOpen(true)} className={`w-full p-3 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt ? 'bg-sky-50 border-sky-300 text-sky-900 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-100' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-400'}`}>
+                    <div className="col-span-1 font-sans">
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">写作要求选择</label>
+                        <button onClick={() => handleOpenPromptModal('requirements')} className={`w-full p-3 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? 'bg-sky-50 border-sky-300 text-sky-900 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-100' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-400'}`}>
                             <div className="flex items-center justify-between relative z-10 font-sans">
-                                <div className="flex items-center gap-2 overflow-hidden font-sans">
-                                    <Sparkles className={`w-4 h-4 flex-shrink-0 ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-400'}`} />
-                                    <span className="font-semibold truncate text-xs">{selectedPrompt ? selectedPrompt.title : '点击选择提示词模板...'}</span>
-                                </div>
-                                {selectedPrompt ? <X className="w-4 h-4 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); setSelectedPrompt(null); }} /> : <ChevronDown className="w-4 h-4 opacity-50" />}
+                                <span className="font-semibold truncate text-[11px]">{selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? selectedPrompt.title : '选择要求...'}</span>
+                                <ChevronDown className="w-3 h-3 opacity-50" />
                             </div>
                         </button>
                     </div>
+                    <div className="col-span-1 font-sans">
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">写作风格选择</label>
+                        <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-3 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-sky-100' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
+                            <div className="flex items-center justify-between relative z-10 font-sans">
+                                <span className="font-semibold truncate text-[11px]">{selectedPrompt && selectedPrompt.subCategories.includes('style') ? selectedPrompt.title : '选择风格...'}</span>
+                                <ChevronDown className="w-3 h-3 opacity-50" />
+                            </div>
+                        </button>
+                    </div>
+
                     {!selectedPrompt && (
                         <div className="col-span-1 font-sans">
-                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">选择工作流</label>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">工作流选择 <span className="text-[10px] font-normal opacity-50">(可选)</span></label>
                             <div className="relative font-sans">
                                 <select value={selectedWorkflow} onChange={e => setSelectedWorkflow(e.target.value)} className="w-full py-2.5 pl-3 pr-8 text-xs rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer font-sans">
+                                    <option value="">不使用工作流</option>
                                     {MOCK_WORKFLOWS.map(wf => <option key={wf.id} value={wf.id}>{wf.title}</option>)}
                                 </select>
-                                <WorkflowIcon className="w-3 h-3 absolute left-3 top-3 text-gray-400 pointer-events-none" />
-                                <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
+                                <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3.5 pointer-events-none" />
                             </div>
                         </div>
                     )}
                     <div className={`${selectedPrompt ? "col-span-2" : "col-span-1"} font-sans`}>
-                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">关联素材</label>
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">关联素材 <span className="text-[10px] font-normal opacity-50">(可选)</span></label>
                         <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 text-sm rounded-lg border focus:ring-2 focus:ring-sky-500 outline-none transition shadow-sm flex items-center justify-between font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-900/30 dark:border-sky-800 dark:text-sky-400' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}>
-                            <span className="truncate text-xs">{selectedAssetIds.size > 0 ? `已选 ${selectedAssetIds.size} 项` : '选择素材'}</span>
+                            <span className="truncate text-[11px]">{selectedAssetIds.size > 0 ? `已选 ${selectedAssetIds.size} 项` : '点击关联设定...'}</span>
                             <BookOpen className="w-4 h-4 flex-shrink-0" />
                         </button>
                     </div>
@@ -249,6 +261,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                         <div className="space-y-4 animate-fade-in font-sans">
                             <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-800">
                                 <span className="text-sm font-bold text-gray-900 dark:text-white">参数配置</span>
+                                <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500">重置</button>
                             </div>
                             {selectedPrompt.fields.map((field, index) => (
                                 <div key={field.id} className="font-sans">
@@ -317,7 +330,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                              {activeTab === 'review' && (
                                 <div className="font-sans">
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">关注重点 (可选)</label>
-                                    <input type="text" value={promptInput} onChange={e => setPromptInput(e.target.value)} placeholder="例如：逻辑漏洞、人物性格一致性..." className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" />
+                                    <input type="text" value={promptInput} onChange={e => setPromptInput(e.target.value)} placeholder="例如：逻辑漏洞、人设性格一致性..." className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" />
                                 </div>
                             )}
                         </>
@@ -325,7 +338,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 </div>
 
                 <button onClick={isLoading ? handleStop : handleGenerate} className={`w-full py-3.5 font-bold rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 font-sans ${isLoading ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-sky-600 hover:bg-sky-500 text-white disabled:bg-gray-400'}`}>
-                     {isLoading ? <><Stop className="w-5 h-5" />停止生成</> : <><Sparkles className="w-5 h-5" />生成内容</>}
+                     {isLoading ? <><Stop className="w-5 h-5" />停止生成</> : <><Sparkles className="w-5 h-5" />开始生成</>}
                 </button>
 
                 {error && <div className="text-red-500 text-sm bg-red-50 p-2 rounded font-sans">{error}</div>}

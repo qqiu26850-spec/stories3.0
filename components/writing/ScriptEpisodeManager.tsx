@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Scene } from '../../types';
-import { Trash } from '../Icon';
+import { Trash, ChevronUp, ChevronDown } from '../Icon';
 import DeleteConfirmationModal from '../DeleteConfirmationModal';
 
 interface ScriptEpisodeManagerProps {
@@ -10,6 +10,7 @@ interface ScriptEpisodeManagerProps {
     onSelectEpisode: (episode: Scene) => void;
     onDeleteEpisode: (episodeId: string) => void;
     onCreateEpisode: () => void;
+    onReorderEpisodes?: (episodes: Scene[]) => void;
 }
 
 type SortOrder = 'asc' | 'desc';
@@ -19,7 +20,8 @@ const ScriptEpisodeManager: React.FC<ScriptEpisodeManagerProps> = ({
     activeEpisodeId, 
     onSelectEpisode, 
     onDeleteEpisode,
-    onCreateEpisode
+    onCreateEpisode,
+    onReorderEpisodes
 }) => {
     const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
     const [episodeToDelete, setEpisodeToDelete] = useState<string | null>(null);
@@ -31,6 +33,19 @@ const ScriptEpisodeManager: React.FC<ScriptEpisodeManagerProps> = ({
         }
         return sorted;
     }, [episodes, sortOrder]);
+
+    const moveEpisode = (index: number, direction: 'up' | 'down') => {
+        if (!onReorderEpisodes) return;
+        const newEpisodes = [...episodes];
+        const realIndex = sortOrder === 'asc' ? index : episodes.length - 1 - index;
+        const targetIndex = direction === 'up' ? realIndex - 1 : realIndex + 1;
+
+        if (targetIndex >= 0 && targetIndex < newEpisodes.length) {
+            const [moved] = newEpisodes.splice(realIndex, 1);
+            newEpisodes.splice(targetIndex, 0, moved);
+            onReorderEpisodes(newEpisodes);
+        }
+    };
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 w-full">
@@ -64,39 +79,62 @@ const ScriptEpisodeManager: React.FC<ScriptEpisodeManagerProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                {sortedEpisodes.map((episode, index) => (
-                    <div 
-                        key={episode.id}
-                        className={`group flex items-center justify-between w-full p-3 rounded-md transition-colors cursor-pointer ${
-                            activeEpisodeId === episode.id
-                                ? 'bg-sky-500 text-white font-semibold shadow-md'
-                                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                        }`}
-                        onClick={() => onSelectEpisode(episode)}
-                    >
-                        <div className="truncate flex-1 mr-2 flex items-center">
-                            <span className={`mr-2 opacity-70 text-xs font-mono w-6 ${activeEpisodeId === episode.id ? 'text-sky-100' : 'text-gray-400'}`}>
-                                {sortOrder === 'asc' ? index + 1 : episodes.length - index}
-                            </span>
-                            <span className="truncate">{episode.title || `第 ${index + 1} 集`}</span>
-                        </div>
-                        
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setEpisodeToDelete(episode.id);
-                            }}
-                            className={`p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${
-                                activeEpisodeId === episode.id 
-                                    ? 'hover:bg-sky-600 text-sky-100' 
-                                    : 'hover:bg-red-100 text-gray-400 hover:text-red-500 dark:hover:bg-red-900/30'
+                {sortedEpisodes.map((episode, index) => {
+                    const isFirst = index === 0;
+                    const isLast = index === sortedEpisodes.length - 1;
+
+                    return (
+                        <div 
+                            key={episode.id}
+                            className={`group flex items-center justify-between w-full p-3 rounded-md transition-colors cursor-pointer ${
+                                activeEpisodeId === episode.id
+                                    ? 'bg-sky-500 text-white font-semibold shadow-md'
+                                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                             }`}
-                            title="删除"
+                            onClick={() => onSelectEpisode(episode)}
                         >
-                            <Trash className="w-4 h-4" />
-                        </button>
-                    </div>
-                ))}
+                            <div className="truncate flex-1 mr-2 flex items-center">
+                                <span className={`mr-2 opacity-70 text-xs font-mono w-6 ${activeEpisodeId === episode.id ? 'text-sky-100' : 'text-gray-400'}`}>
+                                    {sortOrder === 'asc' ? index + 1 : episodes.length - index}
+                                </span>
+                                <span className="truncate">{episode.title || `第 ${index + 1} 集`}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-1">
+                                <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button 
+                                        disabled={(sortOrder === 'asc' && isFirst) || (sortOrder === 'desc' && isLast)}
+                                        onClick={(e) => { e.stopPropagation(); moveEpisode(index, sortOrder === 'asc' ? 'up' : 'down'); }}
+                                        className={`p-0.5 hover:text-sky-600 dark:hover:text-sky-400 disabled:opacity-20`}
+                                    >
+                                        <ChevronUp className="w-3 h-3" />
+                                    </button>
+                                    <button 
+                                        disabled={(sortOrder === 'asc' && isLast) || (sortOrder === 'desc' && isFirst)}
+                                        onClick={(e) => { e.stopPropagation(); moveEpisode(index, sortOrder === 'asc' ? 'down' : 'up'); }}
+                                        className={`p-0.5 hover:text-sky-600 dark:hover:text-sky-400 disabled:opacity-20`}
+                                    >
+                                        <ChevronDown className="w-3 h-3" />
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEpisodeToDelete(episode.id);
+                                    }}
+                                    className={`p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${
+                                        activeEpisodeId === episode.id 
+                                            ? 'hover:bg-sky-600 text-sky-100' 
+                                            : 'hover:bg-red-100 text-gray-400 hover:text-red-500 dark:hover:bg-red-900/30'
+                                    }`}
+                                    title="删除"
+                                >
+                                    <Trash className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
                 {episodes.length === 0 && (
                     <div className="text-center py-8 text-gray-400 text-sm">
                         暂无集数，请新建

@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // Fix: Extremely safe access to import.meta.env
@@ -202,6 +203,24 @@ export async function saveChapterToDB(projectId: string, chapterId: string, titl
         }
     } catch (e) {
         return null;
+    }
+}
+
+export async function updateChapterOrder(updates: { id: string, order_index: number }[]) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        
+        // Supabase upsert/bulk update can be complex for individual column updates on specific rows
+        // A common pattern is using a RPC or just looping for small sets like novel chapters
+        // Given we typically have < 100 chapters in a view, individual updates are acceptable
+        const promises = updates.map(update => 
+            supabase.from('chapters').update({ order_index: update.order_index }).eq('id', update.id)
+        );
+        await Promise.all(promises);
+    } catch (e) {
+        console.error("Failed to update order", e);
+        throw e;
     }
 }
 

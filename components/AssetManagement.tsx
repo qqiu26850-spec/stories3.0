@@ -3,7 +3,7 @@ import { View, Asset, AssetFormData } from '../types';
 import CreateAssetModal from './CreateAssetModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import AssetDetailModal from './AssetDetailModal';
-import { Pencil, Trash, Check, Tag, Search, UserCircle, BookOpen, Sparkles, Plus, X, Bars2 } from './Icon';
+import { Pencil, Trash, Check, Tag, Search, UserCircle, BookOpen, Sparkles, Plus, X, Bars2, AdjustmentsHorizontal } from './Icon';
 import { saveMaterial, fetchMaterials, deleteMaterial } from '../services/supabaseService';
 import { createPortal } from 'react-dom';
 
@@ -204,10 +204,10 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
             {/* 标签管理栏 */}
             <div className="flex flex-col gap-3 mb-8 flex-shrink-0">
                 <div className="flex items-center justify-between px-1">
-                    <div className="flex flex-wrap gap-2 items-center flex-1 pr-4">
+                    <div className="flex flex-wrap gap-2.5 items-center flex-1 pr-4">
                         <button 
                             onClick={() => setSelectedTag('all')} 
-                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${selectedTag === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-100'}`}
+                            className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${selectedTag === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-100'}`}
                         >
                             全部
                         </button>
@@ -223,13 +223,13 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                             >
                                 <button 
                                     onClick={() => !isTagEditing && setSelectedTag(tag)} 
-                                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${selectedTag === tag ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-2 ring-sky-500/30' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-50'}`}
+                                    className={`px-5 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 ${selectedTag === tag ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-2 ring-sky-500/30' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-50'}`}
                                 >
-                                    {isTagEditing && <Bars2 className="w-3 h-3 opacity-40" />}
+                                    {isTagEditing && <Bars2 className="w-3.5 h-3.5 opacity-50" />}
                                     {tag}
                                     {isTagEditing && (
                                         <X 
-                                            className="w-3 h-3 hover:text-rose-500 transition-colors cursor-pointer" 
+                                            className="w-3.5 h-3.5 hover:text-rose-500 transition-colors cursor-pointer ml-0.5" 
                                             onClick={(e) => { e.stopPropagation(); handleRemoveTag(tag); }}
                                         />
                                     )}
@@ -245,18 +245,19 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                     onChange={e => setNewTagInput(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && handleAddTag()}
                                     placeholder="新标签..."
-                                    className="px-3 py-1 text-xs border border-sky-200 dark:border-sky-800 bg-white dark:bg-gray-800 rounded-lg outline-none focus:ring-1 focus:ring-sky-500 w-24 transition-all"
+                                    className="px-4 py-2 text-sm border border-sky-200 dark:border-sky-800 bg-white dark:bg-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-sky-500 w-32 transition-all shadow-sm"
                                 />
-                                <button onClick={handleAddTag} className="p-1.5 bg-sky-100 text-sky-600 rounded-lg hover:bg-sky-200 transition-colors"><Plus className="w-3 h-3" /></button>
+                                <button onClick={handleAddTag} className="p-2 bg-sky-600 text-white rounded-xl hover:bg-sky-500 transition-colors shadow-md"><Plus className="w-4 h-4" /></button>
                             </div>
                         )}
                     </div>
                     
                     <button 
                         onClick={() => setIsTagEditing(!isTagEditing)} 
-                        className={`text-xs font-black px-3 py-1.5 rounded-lg transition-all ${isTagEditing ? 'bg-sky-100 text-sky-600 ring-1 ring-sky-500/50' : 'text-gray-400 hover:text-sky-500 hover:bg-sky-50'}`}
+                        className={`flex items-center gap-2 text-base font-bold px-5 py-2 rounded-xl transition-all shadow-sm ${isTagEditing ? 'bg-sky-600 text-white ring-2 ring-sky-500/50' : 'bg-white dark:bg-gray-800 text-gray-600 border border-gray-100 dark:border-gray-800 hover:text-sky-600 hover:border-sky-200'}`}
                     >
-                        {isTagEditing ? '完成编辑' : '管理分类'}
+                        <AdjustmentsHorizontal className="w-5 h-5" />
+                        {isTagEditing ? '完成管理' : '管理标签'}
                     </button>
                 </div>
             </div>
@@ -268,7 +269,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                             <div 
                                 key={asset.id} 
                                 onClick={() => handleOpenEdit(asset)} 
-                                className={`group relative bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-square overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 ${getAccentBorderClass()}`}
+                                className={`group relative bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-[4/3] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 ${getAccentBorderClass()}`}
                             >
                                 <div className="p-7 flex flex-col h-full">
                                     <div className="mb-4">
@@ -279,24 +280,24 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                     </div>
                                     
                                     <div className="relative flex-grow overflow-hidden">
-                                        {/* 确保没有空白内容展示，使用 line-clamp 保持排版，配合 line-clamp-6 */}
-                                        <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap font-medium line-clamp-6">
+                                        {/* 展示文本内容，使用 line-clamp 限制行数以适配更短的卡片高度 */}
+                                        <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap font-medium line-clamp-4">
                                             {asset.content.trim() || "暂无描述内容..."}
                                         </p>
-                                        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />
+                                        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />
                                     </div>
 
-                                    {/* 底部操作区：标签与按钮同一水平 */}
+                                    {/* 底部操作区：标签（显示3-4个）与按钮同一水平 */}
                                     <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between gap-4">
                                         <div className="flex flex-wrap gap-2 flex-1 min-w-0">
-                                            {asset.tags.length > 0 ? asset.tags.slice(0, 2).map((tag, i) => (
-                                                <span key={i} className={`text-[10px] px-2.5 py-0.5 rounded-lg font-black tracking-wider border uppercase truncate max-w-[80px] ${getTagStyle(tag)}`}>
+                                            {asset.tags.length > 0 ? asset.tags.slice(0, 4).map((tag, i) => (
+                                                <span key={i} className={`text-[10px] px-2.5 py-0.5 rounded-lg font-medium tracking-wider border uppercase truncate max-w-[70px] ${getTagStyle(tag)}`}>
                                                     {tag}
                                                 </span>
                                             )) : (
                                                 <span className="text-[10px] text-gray-300 dark:text-gray-600 font-bold italic">未分类</span>
                                             )}
-                                            {asset.tags.length > 2 && <span className="text-[10px] text-gray-400 shrink-0">+{asset.tags.length - 2}</span>}
+                                            {asset.tags.length > 4 && <span className="text-[10px] text-gray-400 shrink-0">+{asset.tags.length - 4}</span>}
                                         </div>
 
                                         <div className="flex gap-1 shrink-0">

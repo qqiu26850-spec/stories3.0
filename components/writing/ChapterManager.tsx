@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo } from 'react';
 import { Chapter } from '../../types';
-import { Trash } from '../Icon';
+import { Trash, ChevronUp, ChevronDown } from '../Icon';
 import DeleteConfirmationModal from '../DeleteConfirmationModal';
 
 interface ChapterManagerProps {
@@ -9,6 +10,7 @@ interface ChapterManagerProps {
     onSelectChapter: (chapter: Chapter) => void;
     onDeleteChapter: (chapterId: string) => void;
     onCreateChapter: () => void;
+    onReorderChapters?: (chapters: Chapter[]) => void;
 }
 
 type SortOrder = 'asc' | 'desc';
@@ -18,19 +20,33 @@ const ChapterManager: React.FC<ChapterManagerProps> = ({
     activeChapterId, 
     onSelectChapter, 
     onDeleteChapter,
-    onCreateChapter
+    onCreateChapter,
+    onReorderChapters
 }) => {
     const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
     const [chapterToDelete, setChapterToDelete] = useState<string | null>(null);
 
     const sortedChapters = useMemo(() => {
-        // Create a shallow copy to avoid mutating props
         const sorted = [...chapters];
         if (sortOrder === 'desc') {
             sorted.reverse();
         }
         return sorted;
     }, [chapters, sortOrder]);
+
+    const moveChapter = (index: number, direction: 'up' | 'down') => {
+        if (!onReorderChapters) return;
+        const newChapters = [...chapters];
+        // Calculate real index based on sortOrder
+        const realIndex = sortOrder === 'asc' ? index : chapters.length - 1 - index;
+        const targetIndex = direction === 'up' ? realIndex - 1 : realIndex + 1;
+
+        if (targetIndex >= 0 && targetIndex < newChapters.length) {
+            const [moved] = newChapters.splice(realIndex, 1);
+            newChapters.splice(targetIndex, 0, moved);
+            onReorderChapters(newChapters);
+        }
+    };
 
     return (
         <div className="flex-1 flex flex-col animate-fade-in">
@@ -68,39 +84,64 @@ const ChapterManager: React.FC<ChapterManagerProps> = ({
 
             {/* List */}
             <div className="p-2 space-y-1 overflow-y-auto flex-1 max-h-[60vh]">
-                {sortedChapters.map((chapter, index) => (
-                    <div 
-                        key={chapter.id}
-                        className={`group flex items-center justify-between w-full p-2 rounded-md transition-colors text-sm cursor-pointer ${
-                            activeChapterId === chapter.id
-                                ? 'bg-sky-500 text-white font-semibold shadow-md'
-                                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                        }`}
-                        onClick={() => onSelectChapter(chapter)}
-                    >
-                        <div className="truncate flex-1 mr-2">
-                            <span className={`mr-2 opacity-70 text-xs ${activeChapterId === chapter.id ? 'text-sky-100' : 'text-gray-400'}`}>
-                                {sortOrder === 'asc' ? index + 1 : chapters.length - index}.
-                            </span>
-                            {chapter.title || '未命名章节'}
-                        </div>
-                        
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setChapterToDelete(chapter.id);
-                            }}
-                            className={`p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${
-                                activeChapterId === chapter.id 
-                                    ? 'hover:bg-sky-600 text-sky-100' 
-                                    : 'hover:bg-red-100 text-gray-400 hover:text-red-500 dark:hover:bg-red-900/30'
+                {sortedChapters.map((chapter, index) => {
+                    const isFirst = index === 0;
+                    const isLast = index === sortedChapters.length - 1;
+                    
+                    return (
+                        <div 
+                            key={chapter.id}
+                            className={`group flex items-center justify-between w-full p-2 rounded-md transition-colors text-sm cursor-pointer ${
+                                activeChapterId === chapter.id
+                                    ? 'bg-sky-500 text-white font-semibold shadow-md'
+                                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                             }`}
-                            title="删除章节"
+                            onClick={() => onSelectChapter(chapter)}
                         >
-                            <Trash className="w-4 h-4" />
-                        </button>
-                    </div>
-                ))}
+                            <div className="truncate flex-1 mr-2">
+                                <span className={`mr-2 opacity-70 text-xs ${activeChapterId === chapter.id ? 'text-sky-100' : 'text-gray-400'}`}>
+                                    {sortOrder === 'asc' ? index + 1 : chapters.length - index}.
+                                </span>
+                                {chapter.title || '未命名章节'}
+                            </div>
+                            
+                            <div className="flex items-center gap-1">
+                                {/* Order Controls */}
+                                <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button 
+                                        disabled={(sortOrder === 'asc' && isFirst) || (sortOrder === 'desc' && isLast)}
+                                        onClick={(e) => { e.stopPropagation(); moveChapter(index, sortOrder === 'asc' ? 'up' : 'down'); }}
+                                        className={`p-0.5 hover:text-sky-600 dark:hover:text-sky-400 disabled:opacity-20`}
+                                    >
+                                        <ChevronUp className="w-3 h-3" />
+                                    </button>
+                                    <button 
+                                        disabled={(sortOrder === 'asc' && isLast) || (sortOrder === 'desc' && isFirst)}
+                                        onClick={(e) => { e.stopPropagation(); moveChapter(index, sortOrder === 'asc' ? 'down' : 'up'); }}
+                                        className={`p-0.5 hover:text-sky-600 dark:hover:text-sky-400 disabled:opacity-20`}
+                                    >
+                                        <ChevronDown className="w-3 h-3" />
+                                    </button>
+                                </div>
+
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setChapterToDelete(chapter.id);
+                                    }}
+                                    className={`p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${
+                                        activeChapterId === chapter.id 
+                                            ? 'hover:bg-sky-600 text-sky-100' 
+                                            : 'hover:bg-red-100 text-gray-400 hover:text-red-500 dark:hover:bg-red-900/30'
+                                    }`}
+                                    title="删除章节"
+                                >
+                                    <Trash className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
                 
                 {chapters.length === 0 && (
                     <div className="text-center py-8 text-gray-400 text-xs">
