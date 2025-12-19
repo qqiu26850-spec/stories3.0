@@ -189,6 +189,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             document.execCommand('formatBlock', false, 'p');
             const selection = window.getSelection();
             if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
                 const paragraphs = editorRef.current.querySelectorAll('p');
                 paragraphs.forEach(p => {
                     if (selection.containsNode(p, true)) {
@@ -251,22 +252,37 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     </div>
                 </div>
                 
-                {/* Header Center - Empty or can be used for extra info */}
+                {/* Header Center - 作品标题放置于此 */}
                 <div className="flex-1 flex items-center justify-center p-2">
+                    {isEditingTitle ? (
+                        <input 
+                            value={tempTitle} 
+                            onChange={(e) => setTempTitle(e.target.value)} 
+                            onBlur={() => { setNovel(p=>({...p, title: tempTitle})); updateProject(novel.id, {title: tempTitle}); setIsEditingTitle(false); }} 
+                            autoFocus 
+                            maxLength={15}
+                            className="text-center text-lg font-bold bg-sky-50 dark:bg-gray-800 border border-sky-300 rounded px-4 py-1.5 focus:outline-none min-w-[200px]" 
+                        />
+                    ) : (
+                        <div className="flex items-center gap-2 group cursor-pointer px-6 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-all" onClick={() => setIsEditingTitle(true)}>
+                            <h1 className="text-lg font-bold text-gray-700 dark:text-gray-200 tracking-wide">{novel.title}</h1>
+                            <Pencil className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100" />
+                        </div>
+                    )}
                 </div>
                 
-                {/* Right Header Section - Width matched to right panel (29%) */}
+                {/* Right Header Section */}
                 <div className="w-[29%] flex-shrink-0 flex items-center justify-end px-4 border-l border-gray-200 dark:border-gray-800 gap-3">
                     <div className="flex items-center gap-2 mr-2">
                         {saveStatus === 'saving' && (
-                            <div className="flex items-center gap-1.5 text-sky-500 animate-pulse">
-                                <ArrowPath className="w-4 h-4 animate-spin" />
+                            <div className="flex items-center gap-1.5 text-sky-500 animate-pulse whitespace-nowrap">
+                                <ArrowPath className="w-4.5 h-4.5 animate-spin" />
                                 <span className="text-sm font-bold">保存中...</span>
                             </div>
                         )}
                         {saveStatus === 'saved' && (
-                            <div className="flex items-center gap-1.5 text-green-500">
-                                <Check className="w-4.5 h-4.5" />
+                            <div className="flex flex-row items-center gap-1.5 text-green-500 whitespace-nowrap">
+                                <Check className="w-5 h-5" />
                                 <span className="text-sm font-bold">已保存</span>
                             </div>
                         )}
@@ -311,25 +327,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                             <>
                                 <div className="pt-4 px-8 pb-1 flex-shrink-0 bg-white dark:bg-gray-900 z-10 flex flex-col gap-2">
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
-                                     
-                                     {/* 作品名称 - 正文正上方 */}
-                                     <div className="flex justify-center py-1">
-                                        {isEditingTitle ? (
-                                            <input 
-                                                value={tempTitle} 
-                                                onChange={(e) => setTempTitle(e.target.value)} 
-                                                onBlur={() => { setNovel(p=>({...p, title: tempTitle})); updateProject(novel.id, {title: tempTitle}); setIsEditingTitle(false); }} 
-                                                autoFocus 
-                                                maxLength={15}
-                                                className="text-center text-sm font-bold bg-sky-50 dark:bg-gray-800 border border-sky-300 rounded px-3 py-1 focus:outline-none min-w-[150px]" 
-                                            />
-                                        ) : (
-                                            <div className="flex items-center gap-2 group cursor-pointer px-4 py-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-all" onClick={() => setIsEditingTitle(true)}>
-                                                <span className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">{novel.title}</span>
-                                                <Pencil className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100" />
-                                            </div>
-                                        )}
-                                     </div>
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto dynamic-scrollbar px-12 pb-12 pt-4" ref={scrollContainerRef}>
@@ -340,7 +337,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                         maxLength={15}
                                         className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-2" 
                                     />
-                                    {/* 标题与正文分割线 */}
                                     <div className="border-b border-gray-100 dark:border-gray-800 mb-8" />
                                     
                                     <div 
