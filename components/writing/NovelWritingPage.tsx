@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Novel, Chapter, NovelSettings } from '../../types';
 import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight, PanelLeft, PanelRight } from '../Icon';
@@ -106,7 +105,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleCreateChapter = async () => {
         const newOrder = novel.chapters.length + 1;
         const tempId = `new-${Date.now()}`;
-        // 修改点：标题后缀留空，仅保留序号部分
         const newTitle = `第${newOrder}章：`;
         const newId = await saveChapterToDB(novel.id, tempId, newTitle, '', newOrder);
         
@@ -191,7 +189,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             document.execCommand('formatBlock', false, 'p');
             const selection = window.getSelection();
             if (selection && selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
                 const paragraphs = editorRef.current.querySelectorAll('p');
                 paragraphs.forEach(p => {
                     if (selection.containsNode(p, true)) {
@@ -254,31 +251,37 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     </div>
                 </div>
                 
+                {/* Header Center - Empty or can be used for extra info */}
                 <div className="flex-1 flex items-center justify-center p-2">
-                    {isEditingTitle ? (
-                        <input 
-                            value={tempTitle} 
-                            onChange={(e) => setTempTitle(e.target.value)} 
-                            onBlur={() => { setNovel(p=>({...p, title: tempTitle})); updateProject(novel.id, {title: tempTitle}); setIsEditingTitle(false); }} 
-                            autoFocus 
-                            maxLength={15}
-                            className="text-center text-lg font-bold bg-gray-50 dark:bg-gray-800 border border-sky-500 rounded px-4 py-2 focus:outline-none min-w-[200px]" 
-                        />
-                    ) : (
-                        <div className="flex items-center gap-2 group cursor-pointer px-6 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-all" onClick={() => setIsEditingTitle(true)}>
-                            <h1 className="font-bold text-lg text-gray-900 dark:text-white">{novel.title}</h1>
-                            <Pencil className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100" />
-                        </div>
-                    )}
                 </div>
                 
-                <div className="w-64 flex-shrink-0 flex items-center justify-end px-4 border-l border-gray-200 dark:border-gray-800 gap-3">
+                {/* Right Header Section - Width matched to right panel (29%) */}
+                <div className="w-[29%] flex-shrink-0 flex items-center justify-end px-4 border-l border-gray-200 dark:border-gray-800 gap-3">
                     <div className="flex items-center gap-2 mr-2">
-                        {saveStatus === 'saving' && <span className="text-xs text-sky-500 font-medium animate-pulse">保存中...</span>}
-                        {saveStatus === 'saved' && <span className="text-xs text-green-500 font-medium flex items-center gap-1"><Check className="w-3 h-3" /> 已保存</span>}
+                        {saveStatus === 'saving' && (
+                            <div className="flex items-center gap-1.5 text-sky-500 animate-pulse">
+                                <ArrowPath className="w-4 h-4 animate-spin" />
+                                <span className="text-sm font-bold">保存中...</span>
+                            </div>
+                        )}
+                        {saveStatus === 'saved' && (
+                            <div className="flex items-center gap-1.5 text-green-500">
+                                <Check className="w-4.5 h-4.5" />
+                                <span className="text-sm font-bold">已保存</span>
+                            </div>
+                        )}
                     </div>
-                    <button onClick={handleSaveToCloud} className="p-2 text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 rounded-lg transition-colors" title="同步数据"><ArrowPath className="w-5 h-5" /></button>
-                    <button onClick={onBack} className="px-4 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-sm">返回</button>
+                    
+                    <button 
+                        onClick={handleSaveToCloud} 
+                        className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all shadow-sm"
+                        title="同步数据"
+                    >
+                        <ArrowPath className="w-4 h-4" />
+                        <span>同步</span>
+                    </button>
+                    
+                    <button onClick={onBack} className="px-5 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-sm">返回</button>
                 </div>
             </header>
 
@@ -302,14 +305,34 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     </div>
                 </aside>
 
-                <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden px-2 py-0">
-                     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 shadow-sm border-x border-gray-200 dark:border-gray-800 w-full h-full overflow-hidden relative">
+                <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden px-1.5 py-0">
+                     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 shadow-sm border-x border-gray-100 dark:border-gray-800 w-full h-full overflow-hidden relative">
                         {activeChapter ? (
                             <>
-                                <div className="pt-4 px-8 pb-2 flex-shrink-0 bg-white dark:bg-gray-900 z-10">
+                                <div className="pt-4 px-8 pb-1 flex-shrink-0 bg-white dark:bg-gray-900 z-10 flex flex-col gap-2">
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
+                                     
+                                     {/* 作品名称 - 正文正上方 */}
+                                     <div className="flex justify-center py-1">
+                                        {isEditingTitle ? (
+                                            <input 
+                                                value={tempTitle} 
+                                                onChange={(e) => setTempTitle(e.target.value)} 
+                                                onBlur={() => { setNovel(p=>({...p, title: tempTitle})); updateProject(novel.id, {title: tempTitle}); setIsEditingTitle(false); }} 
+                                                autoFocus 
+                                                maxLength={15}
+                                                className="text-center text-sm font-bold bg-sky-50 dark:bg-gray-800 border border-sky-300 rounded px-3 py-1 focus:outline-none min-w-[150px]" 
+                                            />
+                                        ) : (
+                                            <div className="flex items-center gap-2 group cursor-pointer px-4 py-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-all" onClick={() => setIsEditingTitle(true)}>
+                                                <span className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">{novel.title}</span>
+                                                <Pencil className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100" />
+                                            </div>
+                                        )}
+                                     </div>
                                 </div>
-                                <div className="flex-1 overflow-y-auto px-12 pb-12 pt-6" ref={scrollContainerRef}>
+
+                                <div className="flex-1 overflow-y-auto dynamic-scrollbar px-12 pb-12 pt-4" ref={scrollContainerRef}>
                                     <input 
                                         value={chapterTitle} 
                                         onChange={(e) => setChapterTitle(e.target.value)} 
@@ -324,12 +347,13 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                         ref={editorRef}
                                         contentEditable 
                                         onInput={handleContentInput}
-                                        className="w-full bg-transparent focus:outline-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[70vh] outline-none pb-20"
+                                        className="w-full bg-transparent focus:outline-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[75vh] outline-none pb-32"
                                         style={{ textAlign: alignment }}
                                     ></div>
                                 </div>
-                                <div className="absolute bottom-4 right-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-gray-400 font-mono border border-gray-100 dark:border-gray-800 shadow-sm">
-                                    <span className="text-sky-500 font-semibold">{wordCount}</span> 字
+                                
+                                <div className="absolute bottom-6 right-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-4 py-1.5 rounded-full text-xs text-gray-400 font-mono border border-gray-100 dark:border-gray-800 shadow-sm z-20">
+                                    <span className="text-sky-500 font-black">{wordCount}</span> 字
                                 </div>
                             </>
                         ) : (

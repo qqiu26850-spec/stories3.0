@@ -31,6 +31,30 @@
         }
       }
     </script>
+    <style>
+      /* 动态隐藏滚动条样式 */
+      .dynamic-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .dynamic-scrollbar::-webkit-scrollbar-thumb {
+        background-color: transparent;
+        border-radius: 10px;
+        transition: background-color 0.3s;
+      }
+      .dynamic-scrollbar:hover::-webkit-scrollbar-thumb,
+      .dynamic-scrollbar:active::-webkit-scrollbar-thumb {
+        background-color: rgba(0, 0, 0, 0.08);
+      }
+      .dark .dynamic-scrollbar:hover::-webkit-scrollbar-thumb,
+      .dark .dynamic-scrollbar:active::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.08);
+      }
+      
+      /* 隐藏默认滚动条按钮 */
+      .dynamic-scrollbar::-webkit-scrollbar-button {
+        display: none;
+      }
+    </style>
 <script type="importmap">
 {
   "imports": {
