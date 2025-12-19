@@ -178,7 +178,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                             <div 
                                 key={asset.id} 
                                 onClick={() => handleOpenEdit(asset)} 
-                                className={`group relative bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-[3/4] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 ${getAccentBorderClass()}`}
+                                className={`group relative bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-square overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 ${getAccentBorderClass()}`}
                             >
                                 <div className="p-7 flex flex-col h-full">
                                     <div className="flex justify-between items-start mb-4">
@@ -190,21 +190,21 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                     </div>
                                     
                                     <div className="relative flex-grow overflow-hidden">
-                                        <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap font-medium">
+                                        <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap font-medium line-clamp-6">
                                             {asset.content}
                                         </p>
                                         <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />
                                     </div>
 
                                     <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex flex-wrap gap-2">
-                                        {asset.tags.length > 0 ? asset.tags.slice(0, 5).map((tag, i) => (
+                                        {asset.tags.length > 0 ? asset.tags.slice(0, 3).map((tag, i) => (
                                             <span key={i} className={`text-[10px] px-2.5 py-0.5 rounded-lg font-black tracking-wider border uppercase ${getTagStyle(tag)}`}>
                                                 {tag}
                                             </span>
                                         )) : (
                                             <span className="text-[10px] text-gray-300 dark:text-gray-600 font-bold italic">未分类</span>
                                         )}
-                                        {asset.tags.length > 5 && <span className="text-[10px] text-gray-400">+{asset.tags.length - 5}</span>}
+                                        {asset.tags.length > 3 && <span className="text-[10px] text-gray-400">+{asset.tags.length - 3}</span>}
                                     </div>
                                 </div>
                             </div>

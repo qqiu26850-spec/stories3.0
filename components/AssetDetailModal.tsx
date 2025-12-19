@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Asset } from '../types';
-import { X, Check, ArrowPath } from './Icon';
+import { X, Check, ArrowPath, Plus } from './Icon';
 import { updateMaterial } from '../services/supabaseService';
 
 interface AssetDetailModalProps {
@@ -31,6 +31,8 @@ const getTagStyle = (tag: string) => {
 
 const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, asset: initialAsset, onSaveSuccess }) => {
     const [editedContent, setEditedContent] = useState('');
+    const [tags, setTags] = useState<string[]>([]);
+    const [newTag, setNewTag] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [localAsset, setLocalAsset] = useState<Asset | null>(initialAsset);
 
@@ -38,15 +40,32 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, as
         if (isOpen && initialAsset) {
             setLocalAsset(initialAsset);
             setEditedContent(initialAsset.content);
+            setTags(initialAsset.tags || []);
         }
     }, [isOpen, initialAsset]);
+
+    const handleAddTag = (e?: React.FormEvent) => {
+        e?.preventDefault();
+        const trimmed = newTag.trim();
+        if (trimmed && !tags.includes(trimmed)) {
+            setTags(prev => [...prev, trimmed]);
+            setNewTag('');
+        }
+    };
+
+    const handleRemoveTag = (tagToRemove: string) => {
+        setTags(prev => prev.filter(t => t !== tagToRemove));
+    };
 
     const handleSave = async () => {
         if (!localAsset) return;
         setIsSaving(true);
         try {
-            await updateMaterial(localAsset.id, { content: editedContent });
-            setLocalAsset({...localAsset, content: editedContent});
+            await updateMaterial(localAsset.id, { 
+                content: editedContent,
+                tags: tags
+            });
+            setLocalAsset({...localAsset, content: editedContent, tags: tags});
             if (onSaveSuccess) onSaveSuccess();
             onClose();
         } catch (e) {
@@ -81,13 +100,43 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, as
                     />
                 </div>
                
-                <div className="flex-shrink-0 py-2.5 px-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap gap-2 max-w-[60%] overflow-x-auto no-scrollbar">
-                        {localAsset.tags.map((tag, i) => (
-                            <span key={i} className={`text-[10px] px-2 py-0.5 rounded-md font-medium border whitespace-nowrap ${getTagStyle(tag)}`}>{tag}</span>
-                        ))}
+                <div className="flex-shrink-0 py-4 px-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-md flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            素材标签管理
+                        </label>
+                        <div className="flex flex-wrap gap-2 items-center">
+                            {tags.map((tag, i) => (
+                                <span key={i} className={`group flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-md font-bold border ${getTagStyle(tag)}`}>
+                                    {tag}
+                                    <button 
+                                        onClick={() => handleRemoveTag(tag)}
+                                        className="hover:text-red-600 transition-colors opacity-60 group-hover:opacity-100"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </span>
+                            ))}
+                            <div className="flex items-center gap-2 ml-1">
+                                <input 
+                                    type="text"
+                                    value={newTag}
+                                    onChange={e => setNewTag(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleAddTag()}
+                                    placeholder="添加标签..."
+                                    className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1 text-[10px] outline-none focus:ring-1 focus:ring-sky-500 w-24"
+                                />
+                                <button 
+                                    onClick={() => handleAddTag()}
+                                    className="p-1.5 bg-sky-100 text-sky-600 rounded-md hover:bg-sky-200 transition-colors"
+                                >
+                                    <Plus className="w-3 h-3" />
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-3 ml-auto">
+
+                    <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
                         <button onClick={onClose} className="px-5 py-1.5 text-sm text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">取消</button>
                         <button onClick={handleSave} disabled={isSaving} className="px-6 py-1.5 text-sm bg-sky-600 text-white rounded-lg font-bold flex items-center gap-2 hover:bg-sky-500 shadow-md shadow-sky-500/20 transition-all active:scale-95 disabled:bg-gray-400">
                             {isSaving ? <ArrowPath className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
