@@ -15,10 +15,10 @@ interface AssetManagementProps {
   isActive: boolean;
 }
 
-const viewConfig: Record<AssetLibraryView, { title: string; assetType: Asset['type']; description: string; icon: any; color: string; }> = {
-    'character-library': { title: '角色库', assetType: 'character', description: '管理角色设定与人际关系', icon: UserCircle, color: 'sky' },
-    'plot-library': { title: '剧情库', assetType: 'plot', description: '整理核心情节与故事线索', icon: BookOpen, color: 'purple' },
-    'inspiration-library': { title: '灵光库', assetType: 'inspiration', description: '记录随笔、灵感与独特设定', icon: Sparkles, color: 'amber' }
+const viewConfig: Record<AssetLibraryView, { title: string; assetType: Asset['type']; icon: any; color: string; }> = {
+    'character-library': { title: '角色库', assetType: 'character', icon: UserCircle, color: 'sky' },
+    'plot-library': { title: '剧情库', assetType: 'plot', icon: BookOpen, color: 'purple' },
+    'inspiration-library': { title: '灵光库', assetType: 'inspiration', icon: Sparkles, color: 'amber' }
 };
 
 const TAG_COLORS = [
@@ -48,7 +48,7 @@ const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ messa
 };
 
 const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, isActive }) => {
-    const { title, assetType, description, color, icon: ViewIcon } = viewConfig[view];
+    const { title, assetType, color, icon: ViewIcon } = viewConfig[view];
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
@@ -84,7 +84,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
             }));
             setAssets(mappedAssets);
             
-            // 从素材中提取初始标签并与现有排序后的标签合并
             const tagsFromData = new Set<string>();
             mappedAssets.forEach(a => a.tags.forEach(t => tagsFromData.add(t)));
             const savedTags = JSON.parse(localStorage.getItem(`tags_${assetType}`) || '[]');
@@ -131,7 +130,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
         setDetailModalOpen(true);
     };
 
-    // 标签编辑方法
     const handleAddTag = () => {
         if (newTagInput.trim() && !customTags.includes(newTagInput.trim())) {
             setCustomTags(prev => [...prev, newTagInput.trim()]);
@@ -144,7 +142,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
         if (selectedTag === tag) setSelectedTag('all');
     };
 
-    // 拖拽排序逻辑
     const onDragStart = (index: number) => setDraggingTagIndex(index);
     const onDragOver = (e: React.DragEvent) => e.preventDefault();
     const onDrop = (index: number) => {
@@ -163,51 +160,47 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     };
 
     return (
-        <div className="p-8 h-full animate-fade-in flex flex-col font-sans bg-gray-50/50 dark:bg-black/20 overflow-hidden">
+        <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col font-sans bg-gray-50/50 dark:bg-black/20 overflow-hidden">
             <SuccessToast message={successMessage} isVisible={showToast} />
             <CreateAssetModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} onSave={handleSaveAsset} assetType={assetType} />
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
             <AssetDetailModal isOpen={isDetailModalOpen} onClose={() => setDetailModalOpen(false)} asset={selectedAsset} onSaveSuccess={() => { loadAssets(); triggerToast('内容已更新'); }} />
 
-            <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 flex-shrink-0">
-                <div>
-                    <div className="flex items-center gap-3 mb-1">
-                        <div className={`p-2 rounded-xl bg-${color}-100 dark:bg-${color}-900/30 text-${color}-600 dark:text-${color}-400 shadow-sm`}>
-                            <ViewIcon className="w-6 h-6" />
-                        </div>
-                        <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{title}</h1>
+            <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl bg-${color}-100 dark:bg-${color}-900/30 text-${color}-600 dark:text-${color}-400 shadow-sm flex-shrink-0`}>
+                        <ViewIcon className="w-5 h-5" />
                     </div>
-                    <p className="text-gray-500 dark:text-gray-400 font-medium ml-11">{description}</p>
+                    <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{title}</h1>
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     <div className="relative group">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-sky-500 transition-colors" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 group-focus-within:text-sky-500 transition-colors" />
                         <input 
                             type="text" 
                             placeholder="搜索素材..." 
                             value={searchTerm} 
                             onChange={e => setSearchTerm(e.target.value)} 
-                            className="w-48 lg:w-64 pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500/50 outline-none transition-all shadow-sm text-sm"
+                            className="w-40 lg:w-56 pl-9 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500/50 outline-none transition-all shadow-sm text-xs"
                         />
                     </div>
                     <button 
                         onClick={() => setCreateModalOpen(true)} 
-                        className={`px-6 py-2.5 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/30 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap`}
+                        className={`px-5 py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/30 transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap text-xs`}
                     >
-                        <Sparkles className="w-4 h-4" />
+                        <Sparkles className="w-3.5 h-3.5" />
                         新建素材
                     </button>
                 </div>
             </div>
 
-            {/* 标签管理栏 */}
-            <div className="flex flex-col gap-3 mb-8 flex-shrink-0">
+            <div className="flex flex-col gap-2 mb-4 flex-shrink-0">
                 <div className="flex items-center justify-between px-1">
-                    <div className="flex flex-wrap gap-2.5 items-center flex-1 pr-4">
+                    <div className="flex flex-wrap gap-1.5 items-center flex-1 pr-4">
                         <button 
                             onClick={() => setSelectedTag('all')} 
-                            className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${selectedTag === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-100'}`}
+                            className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${selectedTag === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-100'}`}
                         >
                             全部
                         </button>
@@ -223,13 +216,13 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                             >
                                 <button 
                                     onClick={() => !isTagEditing && setSelectedTag(tag)} 
-                                    className={`px-5 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 ${selectedTag === tag ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-2 ring-sky-500/30' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-50'}`}
+                                    className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-all whitespace-nowrap flex items-center gap-1 ${selectedTag === tag ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-1 ring-sky-500/30' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-50'}`}
                                 >
-                                    {isTagEditing && <Bars2 className="w-3.5 h-3.5 opacity-50" />}
+                                    {isTagEditing && <Bars2 className="w-3 h-3 opacity-50" />}
                                     {tag}
                                     {isTagEditing && (
                                         <X 
-                                            className="w-3.5 h-3.5 hover:text-rose-500 transition-colors cursor-pointer ml-0.5" 
+                                            className="w-3 h-3 hover:text-rose-500 transition-colors cursor-pointer" 
                                             onClick={(e) => { e.stopPropagation(); handleRemoveTag(tag); }}
                                         />
                                     )}
@@ -238,82 +231,79 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                         ))}
 
                         {isTagEditing && (
-                            <div className="flex items-center gap-2 animate-fade-in">
+                            <div className="flex items-center gap-1.5 animate-fade-in">
                                 <input 
                                     type="text" 
                                     value={newTagInput}
                                     onChange={e => setNewTagInput(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && handleAddTag()}
                                     placeholder="新标签..."
-                                    className="px-4 py-2 text-sm border border-sky-200 dark:border-sky-800 bg-white dark:bg-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-sky-500 w-32 transition-all shadow-sm"
+                                    className="px-3 py-1.5 text-[11px] border border-sky-200 dark:border-sky-800 bg-white dark:bg-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-sky-500 w-24 transition-all shadow-sm"
                                 />
-                                <button onClick={handleAddTag} className="p-2 bg-sky-600 text-white rounded-xl hover:bg-sky-500 transition-colors shadow-md"><Plus className="w-4 h-4" /></button>
+                                <button onClick={handleAddTag} className="p-1.5 bg-sky-600 text-white rounded-xl hover:bg-sky-500 transition-colors shadow-md flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
                             </div>
                         )}
                     </div>
                     
                     <button 
                         onClick={() => setIsTagEditing(!isTagEditing)} 
-                        className={`flex items-center gap-2 text-base font-bold px-5 py-2 rounded-xl transition-all shadow-sm ${isTagEditing ? 'bg-sky-600 text-white ring-2 ring-sky-500/50' : 'bg-white dark:bg-gray-800 text-gray-600 border border-gray-100 dark:border-gray-800 hover:text-sky-600 hover:border-sky-200'}`}
+                        className={`flex items-center gap-1.5 text-xs font-bold px-4 py-1.5 rounded-xl transition-all shadow-sm ${isTagEditing ? 'bg-sky-600 text-white ring-1 ring-sky-500/50' : 'bg-white dark:bg-gray-800 text-gray-600 border border-gray-100 dark:border-gray-800 hover:text-sky-600 hover:border-sky-200'}`}
                     >
-                        <AdjustmentsHorizontal className="w-5 h-5" />
-                        {isTagEditing ? '完成管理' : '管理标签'}
+                        <AdjustmentsHorizontal className="w-4 h-4" />
+                        {isTagEditing ? '完成' : '管理标签'}
                     </button>
                 </div>
             </div>
 
             {isLoading ? <div className="flex-1 flex items-center justify-center"><div className="w-10 h-10 border-4 border-t-sky-500 border-gray-200 rounded-full animate-spin"></div></div> : (
-                <div className="flex-1 overflow-y-auto px-1 -mx-1 pb-12 custom-scrollbar">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 content-start">
+                <div className="flex-1 overflow-y-auto px-1 -mx-1 pb-8 custom-scrollbar">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 content-start">
                         {filteredAssets.map(asset => (
                             <div 
                                 key={asset.id} 
                                 onClick={() => handleOpenEdit(asset)} 
-                                className={`group relative bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-[4/3] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 ${getAccentBorderClass()}`}
+                                className={`group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-[4/3] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${getAccentBorderClass()}`}
                             >
-                                <div className="p-7 flex flex-col h-full">
-                                    <div className="mb-4">
-                                        {/* 标题限制20字 */}
-                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" title={asset.name}>
+                                <div className="p-5 flex flex-col h-full">
+                                    <div className="mb-3">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" title={asset.name}>
                                             {asset.name.length > 20 ? asset.name.substring(0, 20) + '...' : asset.name}
                                         </h3>
                                     </div>
                                     
                                     <div className="relative flex-grow overflow-hidden">
-                                        {/* 展示文本内容，使用 line-clamp 限制行数以适配更短的卡片高度 */}
-                                        <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap font-medium line-clamp-4">
-                                            {asset.content.trim() || "暂无描述内容..."}
+                                        <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed whitespace-pre-wrap line-clamp-6">
+                                            {asset.content.trim() || "暂无内容..."}
                                         </p>
-                                        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />
+                                        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />
                                     </div>
 
-                                    {/* 底部操作区：标签（显示3-4个）与按钮同一水平 */}
-                                    <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between gap-4">
-                                        <div className="flex flex-wrap gap-2 flex-1 min-w-0">
+                                    <div className="mt-3 pt-3 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between gap-3">
+                                        <div className="flex flex-wrap gap-1 flex-1 min-w-0">
                                             {asset.tags.length > 0 ? asset.tags.slice(0, 4).map((tag, i) => (
-                                                <span key={i} className={`text-[10px] px-2.5 py-0.5 rounded-lg font-medium tracking-wider border uppercase truncate max-w-[70px] ${getTagStyle(tag)}`}>
+                                                <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded-md border truncate max-w-[60px] ${getTagStyle(tag)} font-normal`}>
                                                     {tag}
                                                 </span>
                                             )) : (
-                                                <span className="text-[10px] text-gray-300 dark:text-gray-600 font-bold italic">未分类</span>
+                                                <span className="text-[10px] text-gray-300 dark:text-gray-600 font-normal italic">未分类</span>
                                             )}
-                                            {asset.tags.length > 4 && <span className="text-[10px] text-gray-400 shrink-0">+{asset.tags.length - 4}</span>}
+                                            {asset.tags.length > 4 && <span className="text-[10px] text-gray-400 shrink-0 font-normal">+{asset.tags.length - 4}</span>}
                                         </div>
 
                                         <div className="flex gap-1 shrink-0">
                                             <button 
                                                 onClick={e => { e.stopPropagation(); handleOpenEdit(asset); }} 
-                                                className="p-2 text-gray-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all" 
+                                                className="p-1.5 text-gray-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all" 
                                                 title="修改"
                                             >
-                                                <Pencil className="w-4 h-4" />
+                                                <Pencil className="w-3.5 h-3.5" />
                                             </button>
                                             <button 
                                                 onClick={e => { e.stopPropagation(); setAssetToDeleteId(asset.id); setDeleteModalOpen(true); }} 
-                                                className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all" 
+                                                className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all" 
                                                 title="删除"
                                             >
-                                                <Trash className="w-4 h-4" />
+                                                <Trash className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
                                     </div>
@@ -321,12 +311,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                             </div>
                         ))}
                         {filteredAssets.length === 0 && (
-                            <div className="col-span-full py-32 text-center flex flex-col items-center bg-white/50 dark:bg-gray-900/30 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
-                                <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                                    <Search className="w-10 h-10 text-gray-300" />
+                            <div className="col-span-full py-20 text-center flex flex-col items-center bg-white/50 dark:bg-gray-900/30 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+                                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
+                                    <Search className="w-8 h-8 text-gray-300" />
                                 </div>
-                                <h3 className="text-xl font-bold text-gray-400">未找到相关素材</h3>
-                                <p className="text-gray-400 text-sm mt-1">换个关键词试试，或者新建一个素材</p>
+                                <h3 className="text-lg font-bold text-gray-400">未找到相关素材</h3>
+                                <p className="text-gray-400 text-xs mt-1">尝试其他关键词或新建一个</p>
                             </div>
                         )}
                     </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -22,11 +21,14 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
     const [showConfig, setShowConfig] = useState(false);
+    
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
     const [isPromptModalOpen, setPromptModalOpen] = useState(false);
+    const [promptFilterType, setPromptFilterType] = useState<'requirements' | 'style'>('requirements');
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
+    
     const [customInput, setCustomInput] = useState('');
     const [formState, setFormState] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(false);
@@ -67,6 +69,11 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
         setFormState(prev => ({ ...prev, [id]: val }));
     };
 
+    const handleOpenPromptModal = (filter: 'requirements' | 'style') => {
+        setPromptFilterType(filter);
+        setPromptModalOpen(true);
+    };
+
     const handleStop = () => {
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -97,8 +104,10 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                     promptContent = promptContent.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
                 }
             } else promptContent = customInput;
+            
             if (activeTab === 'idea') finalPrompt = `请根据以下信息，生成3个剧本创意方案。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
             else finalPrompt = `请写一段影视剧本正文。包含场景标题、场景描述、动作、对白。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
+            
             if (activeTab === 'idea') {
                 const result = await generateText(finalPrompt, { model, temperature, topP, signal: controller.signal });
                 setOverlayStatus('success');
@@ -137,6 +146,9 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full font-sans">
             <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} onStop={handleStop} status={overlayStatus} />
+            <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
+            <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
+            
             <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans">
                 <button onClick={() => setActiveTab('idea')} className={`flex-1 py-2 flex items-center justify-center gap-2 border-b-2 transition-all font-sans ${activeTab === 'idea' ? 'border-sky-500 text-sky-600 bg-sky-50 dark:bg-sky-900/20' : 'border-transparent text-gray-500'}`}>创意</button>
                 <button onClick={() => setActiveTab('script')} className={`flex-1 py-2 flex items-center justify-center gap-2 border-b-2 transition-all font-sans ${activeTab === 'script' ? 'border-sky-500 text-sky-600 bg-sky-50 dark:bg-sky-900/20' : 'border-transparent text-gray-500'}`}>剧本</button>
@@ -169,30 +181,53 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                             </div>
                         </div>
                     )}
+
+                    <div className="grid grid-cols-2 gap-3 font-sans">
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">写作要求</label>
+                            <button onClick={() => handleOpenPromptModal('requirements')} className={`w-full p-2.5 rounded-lg border text-left transition-all relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 text-gray-500 hover:border-sky-400'}`}>
+                                <div className="flex items-center justify-between text-[11px] font-semibold truncate">
+                                    <span>{selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? selectedPrompt.title : '选择要求...'}</span>
+                                    <ChevronDown className="w-3 h-3 opacity-50" />
+                                </div>
+                            </button>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">写作风格</label>
+                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2.5 rounded-lg border text-left transition-all relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-purple-50 border-purple-300 text-purple-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 text-gray-500 hover:border-purple-400'}`}>
+                                <div className="flex items-center justify-between text-[11px] font-semibold truncate">
+                                    <span>{selectedPrompt && selectedPrompt.subCategories.includes('style') ? selectedPrompt.title : '选择风格...'}</span>
+                                    <ChevronDown className="w-3 h-3 opacity-50" />
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">关联素材 (可选)</label>
+                        <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 text-gray-500 hover:border-sky-400'}`}>
+                            <div className="flex items-center justify-between text-[11px] font-semibold truncate">
+                                <div className="flex items-center gap-1.5">
+                                    <Database className={`w-3.5 h-3.5 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
+                                    <span>{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 项素材` : '点击关联设定...'}</span>
+                                </div>
+                                <ChevronDown className="w-3 h-3 opacity-50" />
+                            </div>
+                        </button>
+                    </div>
                 </div>
 
-                {selectedPrompt && (
-                    <div className="space-y-4 font-sans">
+                {selectedPrompt ? (
+                    <div className="space-y-4 font-sans animate-fade-in">
                         <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-800">
-                            <span className="text-sm font-bold text-gray-900 dark:text-white">参数配置</span>
+                            <span className="text-sm font-bold text-gray-900 dark:text-white">配置参数</span>
+                            <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500">清除</button>
                         </div>
                         {selectedPrompt.fields.map((field, index) => (
                             <div key={field.id} className="font-sans">
-                                <div className="flex justify-between items-center mb-1.5">
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 font-sans">
-                                        {index + 1}. {field.label}
-                                        {field.required !== false ? (
-                                            <span className="ml-1 text-red-500 font-normal">* (必填)</span>
-                                        ) : (
-                                            <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
-                                        )}
-                                    </label>
-                                    {field.maxLength && (
-                                        <span className={`text-[10px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
-                                            {formState[field.id]?.length || 0} / {field.maxLength}
-                                        </span>
-                                    )}
-                                </div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    {index + 1}. {field.label} {field.required !== false && <span className="text-red-500">*</span>}
+                                </label>
                                 {field.type === 'textarea' ? (
                                     <textarea 
                                         value={formState[field.id] || ''} 
@@ -214,9 +249,14 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                             </div>
                         ))}
                     </div>
+                ) : (
+                    <div className="font-sans">
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">需求描述</label>
+                        <textarea value={customInput} onChange={e => setCustomInput(e.target.value)} placeholder="请输入您的剧本构思、场景需求或具体要求..." className="w-full h-40 p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm font-sans" />
+                    </div>
                 )}
 
-                <button onClick={isLoading ? handleStop : handleGenerate} className="w-full py-3.5 font-bold rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 bg-sky-600 text-white font-sans">
+                <button onClick={isLoading ? handleStop : handleGenerate} className="w-full py-3.5 font-bold rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 bg-sky-600 text-white font-sans disabled:bg-gray-400">
                      {isLoading ? <><Stop className="w-5 h-5" />停止</> : <><Sparkles className="w-5 h-5" />生成内容</>}
                 </button>
             </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Novel, Chapter, NovelSettings } from '../../types';
 import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight } from '../Icon';
@@ -50,6 +49,9 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     lastModified: c.updated_at
                 }));
                 setNovel(prev => ({ ...prev, chapters: mapped }));
+                if (mapped.length > 0 && !activeChapter) {
+                    setActiveChapter(mapped[0]);
+                }
              }
         };
         loadInitialChapters();
@@ -100,11 +102,33 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }
     };
 
+    const handleCreateChapter = async () => {
+        const newOrder = novel.chapters.length + 1;
+        const tempId = `new-${Date.now()}`;
+        const newTitle = `新章节 ${newOrder}`;
+        const newId = await saveChapterToDB(novel.id, tempId, newTitle, '', newOrder);
+        
+        if (newId) {
+            const newChapter: Chapter = {
+                id: newId,
+                title: newTitle,
+                content: '',
+                wordCount: 0,
+                lastModified: new Date().toISOString()
+            };
+            setNovel(prev => ({
+                ...prev,
+                chapters: [...prev.chapters, newChapter]
+            }));
+            setActiveChapter(newChapter);
+            setSaveStatus('saved');
+        }
+    };
+
     const handleReorderChapters = async (newChapters: Chapter[]) => {
         setNovel(prev => ({ ...prev, chapters: newChapters }));
         setSaveStatus('saving');
         try {
-            // Map chapters to their new order_index
             const updates = newChapters.map((c, i) => ({ id: c.id, order_index: i + 1 }));
             await updateChapterOrder(updates);
             setSaveStatus('saved');
@@ -237,7 +261,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                         <button className={`flex-1 py-3 text-sm font-medium ${openModule === 'settings' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50' : 'text-gray-500'}`} onClick={() => setOpenModule('settings')}>设定</button>
                     </div>
                     <div className="flex-1 overflow-y-auto">
-                        {openModule === 'chapters' ? <ChapterManager chapters={novel.chapters} activeChapterId={activeChapter?.id || null} onSelectChapter={setActiveChapter} onDeleteChapter={deleteChapterFromDB} onCreateChapter={() => {}} onReorderChapters={handleReorderChapters} /> : <NovelSettingsPanel settings={novel.settings} onUpdate={() => {}} />}
+                        {openModule === 'chapters' ? <ChapterManager chapters={novel.chapters} activeChapterId={activeChapter?.id || null} onSelectChapter={setActiveChapter} onDeleteChapter={deleteChapterFromDB} onCreateChapter={handleCreateChapter} onReorderChapters={handleReorderChapters} /> : <NovelSettingsPanel settings={novel.settings} onUpdate={() => {}} />}
                     </div>
                 </aside>
 

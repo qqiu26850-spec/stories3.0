@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Script, Scene } from '../../types';
 import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check, ChevronLeft, ChevronRight } from '../Icon';
@@ -43,6 +42,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     content: c.content
                 }));
                 setScript(prev => ({ ...prev, scenes: mapped }));
+                if (mapped.length > 0 && !activeScene) {
+                    setActiveScene(mapped[0]);
+                }
              }
         };
         loadInitialScenes();
@@ -79,6 +81,27 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             } else {
                 setSaveStatus('error');
             }
+        }
+    };
+
+    const handleCreateEpisode = async () => {
+        const newOrder = script.scenes.length + 1;
+        const tempId = `new-${Date.now()}`;
+        const newTitle = `第 ${newOrder} 集`;
+        const newId = await saveChapterToDB(script.id, tempId, newTitle, '', newOrder);
+
+        if (newId) {
+            const newScene: Scene = {
+                id: newId,
+                title: newTitle,
+                content: ''
+            };
+            setScript(prev => ({
+                ...prev,
+                scenes: [...prev.scenes, newScene]
+            }));
+            setActiveScene(newScene);
+            setSaveStatus('saved');
         }
     };
 
@@ -202,7 +225,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
             <div className="flex-1 flex overflow-hidden relative">
                 <aside className={`flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-52' : 'w-0'}`}>
-                    <ScriptEpisodeManager episodes={script.scenes} activeEpisodeId={activeScene?.id || null} onSelectEpisode={setActiveScene} onDeleteEpisode={deleteChapterFromDB} onCreateEpisode={() => {}} onReorderEpisodes={handleReorderScenes} />
+                    <ScriptEpisodeManager episodes={script.scenes} activeEpisodeId={activeScene?.id || null} onSelectEpisode={setActiveScene} onDeleteEpisode={deleteChapterFromDB} onCreateEpisode={handleCreateEpisode} onReorderEpisodes={handleReorderScenes} />
                 </aside>
 
                 <main className="flex-1 bg-gray-100 dark:bg-gray-900/50 flex flex-col p-4 relative overflow-hidden">
