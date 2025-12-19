@@ -1,4 +1,3 @@
-
 import { CreativeModule, Prompt, Asset, Workflow, PromptSubCategory } from './types';
 
 export const FUNCTIONAL_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
@@ -13,7 +12,8 @@ export const FUNCTIONAL_TAGS: { id: PromptSubCategory | 'all'; label: string }[]
     { id: 'style', label: '写作风格' },
     { id: 'continue', label: '续写' },
     { id: 'polish', label: '润色' },
-    { id: 'writing', label: '写稿' },
+    { id: 'expand', label: '扩写' },
+    { id: 'proofread', label: '审稿' },
 ];
 
 export const GENRE_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
@@ -37,7 +37,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成小说故事雏形和简要故事梗概。',
     content: '生成小说故事雏形和简要故事梗概。',
     category: 'long-story',
-    subCategories: ['idea'], // Updated to specific tag
+    subCategories: ['idea'],
     fields: [],
     template: '',
     heat: 5000,
@@ -49,7 +49,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成人物的附加功能、系统、特殊设定。',
     content: '生成人物的附加功能、系统、特殊设定。',
     category: 'long-story',
-    subCategories: ['golden_finger'], // Updated to specific tag
+    subCategories: ['golden_finger'],
     fields: [],
     template: '',
     heat: 4500,
@@ -61,7 +61,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成人物的爆款标签、社会&自然属性、人物关系。',
     content: '生成人物的爆款标签、社会&自然属性、人物关系。',
     category: 'long-story',
-    subCategories: ['character_design'], // Updated to specific tag
+    subCategories: ['character_design'],
     fields: [],
     template: '',
     heat: 4800,
@@ -73,7 +73,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成特殊的世界规则、社会背景设定。',
     content: '生成特殊的世界规则、社会背景设定。',
     category: 'long-story',
-    subCategories: ['worldview'], // Updated to specific tag
+    subCategories: ['worldview'],
     fields: [],
     template: '',
     heat: 3200,
@@ -85,7 +85,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成小说的创作简单纲要。',
     content: '生成小说的创作简单纲要。',
     category: 'long-story',
-    subCategories: ['outline'], // Updated to specific tag
+    subCategories: ['outline'],
     fields: [],
     template: '',
     heat: 6000,
@@ -97,7 +97,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成具有丰富细节和章节纲要。',
     content: '生成具有丰富细节和章节纲要。',
     category: 'long-story',
-    subCategories: ['detailed_outline'], // Updated to specific tag
+    subCategories: ['detailed_outline'],
     fields: [],
     template: '',
     heat: 5500,
@@ -109,7 +109,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成爆款小说介绍。',
     content: '生成爆款小说介绍。',
     category: 'short-story',
-    subCategories: ['synopsis'], // Updated to specific tag
+    subCategories: ['synopsis'],
     fields: [],
     template: '',
     heat: 4200,
@@ -230,7 +230,7 @@ export const PROMPTS: Prompt[] = [
     description: '对文本进行扩写，增加环境、心理或动作描写。',
     content: '请对以下文本进行扩写。',
     category: 'long-story',
-    subCategories: ['polish'],
+    subCategories: ['expand'],
     fields: [
         { id: 'focus', label: '扩写侧重', type: 'text', placeholder: '例如：环境细节、心理活动、动作描写...' },
         { id: 'text', label: '选中文本 (自动读取)', type: 'textarea', placeholder: '请在编辑器中选择文本...' }
@@ -259,7 +259,7 @@ export const PROMPTS: Prompt[] = [
     description: '将小说文本改编为标准的影视剧本格式。',
     content: '请将以下小说片段改编为标准剧本格式。',
     category: 'script',
-    subCategories: ['writing'],
+    subCategories: ['proofread'],
     fields: [
         { id: 'novel_text', label: '小说原文', type: 'textarea', placeholder: '粘贴需要改编的小说片段...' },
         { id: 'format_req', label: '格式要求', type: 'text', placeholder: '例如：标准电影剧本、电视剧本...' }
@@ -284,7 +284,7 @@ export const ASSETS: Asset[] = [
             personality: '冷静、内敛、重情义',
             relationships: '末代传人',
             notes: '表面是图书管理员',
-            tags: '男主, 高冷, 异能者'
+            tags: '男主, 高冷,异能者'
         }
     },
     { 

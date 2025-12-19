@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Prompt, PromptCategory, PromptField, PromptSubCategory } from '../types';
 import { Trash, Sparkles, Check, Bars2, DocumentText, ChevronDown, X, InformationCircle, Tag, Bolt } from './Icon';
@@ -45,8 +44,8 @@ const FUNCTION_TAGS: { id: PromptSubCategory; label: string }[] = [
     { id: 'style', label: '写作风格' },
     { id: 'continue', label: '续写' },
     { id: 'polish', label: '润色' },
-    { id: 'writing', label: '写稿' },
-    { id: 'proofread', label: '校对' },
+    { id: 'expand', label: '扩写' },
+    { id: 'proofread', label: '审稿' },
 ];
 
 const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, onSave, promptToEdit }) => {
@@ -138,7 +137,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
-                {/* 顶部置顶容器：降低了高度并改为浅蓝色渐变 */}
                 <div className="px-8 py-2.5 bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-900/20 dark:to-gray-900 border-b border-sky-100 dark:border-gray-800 flex-shrink-0">
                     <div className="flex justify-between items-center">
                         <h3 className="text-base font-bold text-sky-900 dark:text-sky-100 flex items-center gap-2">
@@ -151,7 +149,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 
                 <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
                     <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 [scrollbar-gutter:stable]">
-                        {/* 模块1：基本信息 */}
                         <div className="p-6 bg-blue-50/40 dark:bg-blue-900/10 rounded-xl space-y-4">
                             <h4 className="text-sm font-bold text-blue-600 flex items-center gap-2"><InformationCircle className="w-4 h-4"/>基本信息</h4>
                             <div className="grid grid-cols-2 gap-6">
@@ -168,7 +165,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             </div>
                         </div>
 
-                        {/* 模块2：标签 */}
                         <div className="p-6 bg-purple-50/40 dark:bg-purple-900/10 rounded-xl space-y-4">
                             <h4 className="text-sm font-bold text-purple-600 flex items-center gap-2"><Tag className="w-4 h-4"/>属性标签</h4>
                             <div className="space-y-4">
@@ -191,7 +187,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             </div>
                         </div>
 
-                        {/* 模块3：范例 */}
                         <div className="p-6 bg-orange-50/40 dark:bg-orange-900/10 rounded-xl space-y-4">
                             <h4 className="text-sm font-bold text-orange-600 flex items-center gap-2"><Bolt className="w-4 h-4"/>详情与范例</h4>
                             <div className="grid grid-cols-2 gap-6">
@@ -200,13 +195,11 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             </div>
                         </div>
 
-                        {/* 模块4：核心模板 */}
                         <div className="p-6 bg-indigo-50/40 dark:bg-indigo-900/10 rounded-xl space-y-4">
                             <h4 className="text-sm font-bold text-indigo-600 flex items-center gap-2"><DocumentText className="w-4 h-4"/>AI 提示词模板 (核心)</h4>
                             <textarea value={template} onChange={e => setTemplate(e.target.value)} placeholder="使用 ${变量名} 引用表单字段..." className="w-full h-40 p-4 bg-white text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl font-mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm" />
                         </div>
 
-                        {/* 模块5：表单定义 */}
                         <div className="p-6 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 space-y-4">
                             <div className="flex justify-between items-center">
                                 <h4 className="text-sm font-bold text-gray-600 dark:text-gray-300">自定义填写表单</h4>

@@ -3,7 +3,7 @@ import { View, Asset, AssetFormData } from '../types';
 import CreateAssetModal from './CreateAssetModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import AssetDetailModal from './AssetDetailModal';
-import { Pencil, Trash, Check, Tag, Search, UserCircle, BookOpen, Sparkles } from './Icon';
+import { Pencil, Trash, Check, Tag, Search, UserCircle, BookOpen, Sparkles, Plus, X, Bars2 } from './Icon';
 import { saveMaterial, fetchMaterials, deleteMaterial } from '../services/supabaseService';
 import { createPortal } from 'react-dom';
 
@@ -59,6 +59,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTag, setSelectedTag] = useState<string | 'all'>('all');
     
+    // 标签管理状态
+    const [customTags, setCustomTags] = useState<string[]>([]);
+    const [isTagEditing, setIsTagEditing] = useState(false);
+    const [newTagInput, setNewTagInput] = useState('');
+    const [draggingTagIndex, setDraggingTagIndex] = useState<number | null>(null);
+
     const [successMessage, setSuccessMessage] = useState('');
     const [showToast, setShowToast] = useState(false);
 
@@ -73,19 +79,27 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
         setIsLoading(true);
         try {
             const data = await fetchMaterials(assetType === 'inspiration' ? 'idea' : assetType);
-            setAssets(data.map((item: any) => ({
+            const mappedAssets = data.map((item: any) => ({
                 id: item.id, name: item.name, type: item.type === 'idea' ? 'inspiration' : item.type, content: item.content, tags: item.tags || []
-            })));
+            }));
+            setAssets(mappedAssets);
+            
+            // 从素材中提取初始标签并与现有排序后的标签合并
+            const tagsFromData = new Set<string>();
+            mappedAssets.forEach(a => a.tags.forEach(t => tagsFromData.add(t)));
+            const savedTags = JSON.parse(localStorage.getItem(`tags_${assetType}`) || '[]');
+            const uniqueTags = Array.from(new Set([...savedTags, ...Array.from(tagsFromData)]));
+            setCustomTags(uniqueTags);
         } catch (e) {} finally { setIsLoading(false); }
     };
 
     useEffect(() => { loadAssets(); }, [assetType, isActive]);
 
-    const allTags = useMemo(() => {
-        const tags = new Set<string>();
-        assets.forEach(a => a.tags.forEach(t => tags.add(t)));
-        return Array.from(tags);
-    }, [assets]);
+    useEffect(() => {
+        if (customTags.length > 0) {
+            localStorage.setItem(`tags_${assetType}`, JSON.stringify(customTags));
+        }
+    }, [customTags, assetType]);
 
     const filteredAssets = useMemo(() => assets.filter(a => {
         const matchesSearch = !searchTerm || a.name.toLowerCase().includes(searchTerm.toLowerCase()) || a.content.toLowerCase().includes(searchTerm.toLowerCase());
@@ -115,6 +129,31 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     const handleOpenEdit = (asset: Asset) => {
         setSelectedAsset(asset);
         setDetailModalOpen(true);
+    };
+
+    // 标签编辑方法
+    const handleAddTag = () => {
+        if (newTagInput.trim() && !customTags.includes(newTagInput.trim())) {
+            setCustomTags(prev => [...prev, newTagInput.trim()]);
+            setNewTagInput('');
+        }
+    };
+
+    const handleRemoveTag = (tag: string) => {
+        setCustomTags(prev => prev.filter(t => t !== tag));
+        if (selectedTag === tag) setSelectedTag('all');
+    };
+
+    // 拖拽排序逻辑
+    const onDragStart = (index: number) => setDraggingTagIndex(index);
+    const onDragOver = (e: React.DragEvent) => e.preventDefault();
+    const onDrop = (index: number) => {
+        if (draggingTagIndex === null) return;
+        const newTags = [...customTags];
+        const [movedTag] = newTags.splice(draggingTagIndex, 1);
+        newTags.splice(index, 0, movedTag);
+        setCustomTags(newTags);
+        setDraggingTagIndex(null);
     };
 
     const getAccentBorderClass = () => {
@@ -162,14 +201,65 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                 </div>
             </div>
 
-            {allTags.length > 0 && (
-                <div className="flex flex-wrap gap-2 items-center mb-8 px-1 flex-shrink-0">
-                    <button onClick={() => setSelectedTag('all')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${selectedTag === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-100'}`}>全部标签</button>
-                    {allTags.map(tag => (
-                        <button key={tag} onClick={() => setSelectedTag(tag)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${selectedTag === tag ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-2 ring-sky-500/30' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-50'}`}>{tag}</button>
-                    ))}
+            {/* 标签管理栏 */}
+            <div className="flex flex-col gap-3 mb-8 flex-shrink-0">
+                <div className="flex items-center justify-between px-1">
+                    <div className="flex flex-wrap gap-2 items-center flex-1 pr-4">
+                        <button 
+                            onClick={() => setSelectedTag('all')} 
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${selectedTag === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-100'}`}
+                        >
+                            全部
+                        </button>
+                        
+                        {customTags.map((tag, index) => (
+                            <div
+                                key={tag}
+                                draggable={isTagEditing}
+                                onDragStart={() => onDragStart(index)}
+                                onDragOver={onDragOver}
+                                onDrop={() => onDrop(index)}
+                                className={`group relative flex items-center transition-all ${isTagEditing ? 'cursor-move active:scale-95' : ''}`}
+                            >
+                                <button 
+                                    onClick={() => !isTagEditing && setSelectedTag(tag)} 
+                                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${selectedTag === tag ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-2 ring-sky-500/30' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-50'}`}
+                                >
+                                    {isTagEditing && <Bars2 className="w-3 h-3 opacity-40" />}
+                                    {tag}
+                                    {isTagEditing && (
+                                        <X 
+                                            className="w-3 h-3 hover:text-rose-500 transition-colors cursor-pointer" 
+                                            onClick={(e) => { e.stopPropagation(); handleRemoveTag(tag); }}
+                                        />
+                                    )}
+                                </button>
+                            </div>
+                        ))}
+
+                        {isTagEditing && (
+                            <div className="flex items-center gap-2 animate-fade-in">
+                                <input 
+                                    type="text" 
+                                    value={newTagInput}
+                                    onChange={e => setNewTagInput(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleAddTag()}
+                                    placeholder="新标签..."
+                                    className="px-3 py-1 text-xs border border-sky-200 dark:border-sky-800 bg-white dark:bg-gray-800 rounded-lg outline-none focus:ring-1 focus:ring-sky-500 w-24 transition-all"
+                                />
+                                <button onClick={handleAddTag} className="p-1.5 bg-sky-100 text-sky-600 rounded-lg hover:bg-sky-200 transition-colors"><Plus className="w-3 h-3" /></button>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <button 
+                        onClick={() => setIsTagEditing(!isTagEditing)} 
+                        className={`text-xs font-black px-3 py-1.5 rounded-lg transition-all ${isTagEditing ? 'bg-sky-100 text-sky-600 ring-1 ring-sky-500/50' : 'text-gray-400 hover:text-sky-500 hover:bg-sky-50'}`}
+                    >
+                        {isTagEditing ? '完成编辑' : '管理分类'}
+                    </button>
                 </div>
-            )}
+            </div>
 
             {isLoading ? <div className="flex-1 flex items-center justify-center"><div className="w-10 h-10 border-4 border-t-sky-500 border-gray-200 rounded-full animate-spin"></div></div> : (
                 <div className="flex-1 overflow-y-auto px-1 -mx-1 pb-12 custom-scrollbar">
@@ -181,30 +271,50 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                 className={`group relative bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-square overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 ${getAccentBorderClass()}`}
                             >
                                 <div className="p-7 flex flex-col h-full">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">{asset.name}</h3>
-                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0 flex-shrink-0">
-                                            <button onClick={e => { e.stopPropagation(); handleOpenEdit(asset); }} className="p-2 text-gray-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all" title="修改"><Pencil className="w-4 h-4" /></button>
-                                            <button onClick={e => { e.stopPropagation(); setAssetToDeleteId(asset.id); setDeleteModalOpen(true); }} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all" title="删除"><Trash className="w-4 h-4" /></button>
-                                        </div>
+                                    <div className="mb-4">
+                                        {/* 标题限制20字 */}
+                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" title={asset.name}>
+                                            {asset.name.length > 20 ? asset.name.substring(0, 20) + '...' : asset.name}
+                                        </h3>
                                     </div>
                                     
                                     <div className="relative flex-grow overflow-hidden">
+                                        {/* 确保没有空白内容展示，使用 line-clamp 保持排版，配合 line-clamp-6 */}
                                         <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap font-medium line-clamp-6">
-                                            {asset.content}
+                                            {asset.content.trim() || "暂无描述内容..."}
                                         </p>
                                         <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />
                                     </div>
 
-                                    <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex flex-wrap gap-2">
-                                        {asset.tags.length > 0 ? asset.tags.slice(0, 3).map((tag, i) => (
-                                            <span key={i} className={`text-[10px] px-2.5 py-0.5 rounded-lg font-black tracking-wider border uppercase ${getTagStyle(tag)}`}>
-                                                {tag}
-                                            </span>
-                                        )) : (
-                                            <span className="text-[10px] text-gray-300 dark:text-gray-600 font-bold italic">未分类</span>
-                                        )}
-                                        {asset.tags.length > 3 && <span className="text-[10px] text-gray-400">+{asset.tags.length - 3}</span>}
+                                    {/* 底部操作区：标签与按钮同一水平 */}
+                                    <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between gap-4">
+                                        <div className="flex flex-wrap gap-2 flex-1 min-w-0">
+                                            {asset.tags.length > 0 ? asset.tags.slice(0, 2).map((tag, i) => (
+                                                <span key={i} className={`text-[10px] px-2.5 py-0.5 rounded-lg font-black tracking-wider border uppercase truncate max-w-[80px] ${getTagStyle(tag)}`}>
+                                                    {tag}
+                                                </span>
+                                            )) : (
+                                                <span className="text-[10px] text-gray-300 dark:text-gray-600 font-bold italic">未分类</span>
+                                            )}
+                                            {asset.tags.length > 2 && <span className="text-[10px] text-gray-400 shrink-0">+{asset.tags.length - 2}</span>}
+                                        </div>
+
+                                        <div className="flex gap-1 shrink-0">
+                                            <button 
+                                                onClick={e => { e.stopPropagation(); handleOpenEdit(asset); }} 
+                                                className="p-2 text-gray-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all" 
+                                                title="修改"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                                onClick={e => { e.stopPropagation(); setAssetToDeleteId(asset.id); setDeleteModalOpen(true); }} 
+                                                className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all" 
+                                                title="删除"
+                                            >
+                                                <Trash className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -16,6 +16,15 @@ interface PromptLibraryProps {
 
 const FAVORITES_STORAGE_KEY = 'qisimiaoxie_prompt_favorites_v2';
 
+const SUB_CATEGORY_LABELS: Record<string, string> = {
+    'idea': '创意', 'golden_finger': '金手指', 'character_design': '人物设定', 'worldview': '世界观',
+    'outline': '大纲', 'detailed_outline': '细纲', 'synopsis': '简介', 'requirements': '写作要求',
+    'style': '写作风格', 'continue': '续写', 'polish': '润色', 'expand': '扩写', 'proofread': '审稿',
+    'general': '通用', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
+    'apocalypse': '末世', 'urban': '都市', 'fantasy': '玄幻', 'history': '历史', 'social': '世情',
+    'suspense': '悬疑', 'sci-fi': '科幻'
+};
+
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('all');
@@ -129,8 +138,19 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             if (activeTab === 'my-prompts') return p.userId === currentUserId;
             if (activeTab !== 'all' && p.category !== activeTab) return false;
             if (activeSubCategory !== 'all' && !p.subCategories.includes(activeSubCategory as PromptSubCategory)) return false;
+            
             const term = searchTerm.toLowerCase();
-            return p.title.toLowerCase().includes(term) || p.description.toLowerCase().includes(term);
+            if (!term) return true;
+
+            // 搜索标题
+            if (p.title.toLowerCase().includes(term)) return true;
+            // 搜索创建者
+            if (p.authorName?.toLowerCase().includes(term)) return true;
+            // 搜索标签内容
+            const tagLabels = p.subCategories.map(sc => SUB_CATEGORY_LABELS[sc] || sc).join(' ').toLowerCase();
+            if (tagLabels.includes(term)) return true;
+
+            return false;
         });
     }, [activeTab, activeSubCategory, searchTerm, prompts, favoritedIds, currentUserId]);
 
@@ -145,7 +165,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 await deletePrompt(promptToDelete.id);
                 setSuccessMessage('已删除');
                 setShowSuccessToast(true);
-                setTimeout(() => setShowSuccessToast(false), 2000); // 改为2秒
+                setTimeout(() => setShowSuccessToast(false), 2000); 
                 loadData(true);
             } catch (e) {
                 console.error("删除失败", e);
@@ -165,7 +185,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 setCreateModalOpen(false); loadData(true);
                 setSuccessMessage(id ? '已更新' : '已发布');
                 setShowSuccessToast(true);
-                setTimeout(() => setShowSuccessToast(false), 2000); // 改自用户要求：2秒
+                setTimeout(() => setShowSuccessToast(false), 2000); 
             }} promptToEdit={promptToEdit} />
             
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
@@ -186,7 +206,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                     </div>
                     
                     <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-                        {/* 文字提醒位置：位于“我的提示词”左侧 */}
                         {showSuccessToast && (
                             <span className="text-xs font-bold text-emerald-500 animate-fade-in-up flex items-center gap-1.5 whitespace-nowrap">
                                 <div className="w-5 h-5 bg-emerald-50 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
@@ -221,7 +240,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                     </div>
                     <div className="relative w-full lg:w-64 self-center">
                         <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
-                        <input type="text" placeholder="搜索..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 text-sm rounded-lg border border-gray-200 focus:ring-2 focus:ring-sky-500 outline-none" />
+                        <input type="text" placeholder="搜索标题、作者、标签..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 text-sm rounded-lg border border-gray-200 focus:ring-2 focus:ring-sky-500 outline-none" />
                     </div>
                 </div>
             </div>

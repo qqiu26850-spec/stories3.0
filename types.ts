@@ -45,9 +45,10 @@ export interface PromptField {
 
 export type PromptCategory = 'general' | 'short-story' | 'long-story' | 'script';
 
+/* Added 'expand' to PromptSubCategory to resolve type errors in constants.ts and CreatePromptModal.tsx */
 export type PromptSubCategory = 
   // Functional
-  'style' | 'requirements' | 'continue' | 'polish' | 'proofread' | 
+  'style' | 'requirements' | 'continue' | 'polish' | 'expand' | 'proofread' | 
   'idea' | 'golden_finger' | 'character_design' | 'worldview' | 'outline' | 'detailed_outline' | 'synopsis' | 'writing' |
   // Genres
   'general' | 'modern-romance' | 'ancient-romance' | 'period' | 'apocalypse' | 
