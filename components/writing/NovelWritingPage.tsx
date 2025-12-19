@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Novel, Chapter, NovelSettings } from '../../types';
-import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight } from '../Icon';
+import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight, PanelLeft, PanelRight } from '../Icon';
 import NovelSettingsPanel from './NovelSettingsPanel';
 import ChapterManager from './ChapterManager';
 import AIFunctionPanel from './AIFunctionPanel';
@@ -105,7 +105,8 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleCreateChapter = async () => {
         const newOrder = novel.chapters.length + 1;
         const tempId = `new-${Date.now()}`;
-        const newTitle = `新章节 ${newOrder}`;
+        // 修改点：标题后缀留空
+        const newTitle = `第${newOrder}章：`;
         const newId = await saveChapterToDB(novel.id, tempId, newTitle, '', newOrder);
         
         if (newId) {
@@ -122,6 +123,24 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             }));
             setActiveChapter(newChapter);
             setSaveStatus('saved');
+        }
+    };
+
+    const handleDeleteChapter = async (id: string) => {
+        try {
+            await deleteChapterFromDB(id);
+            setNovel(prev => ({
+                ...prev,
+                chapters: prev.chapters.filter(c => c.id !== id)
+            }));
+            if (activeChapter?.id === id) {
+                setActiveChapter(null);
+                setChapterTitle('');
+                if (editorRef.current) editorRef.current.innerHTML = '';
+            }
+            setSaveStatus('saved');
+        } catch (e) {
+            console.error("删除失败", e);
         }
     };
 
@@ -171,6 +190,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             document.execCommand('formatBlock', false, 'p');
             const selection = window.getSelection();
             if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
                 const paragraphs = editorRef.current.querySelectorAll('p');
                 paragraphs.forEach(p => {
                     if (selection.containsNode(p, true)) {
@@ -226,6 +246,9 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
 
             <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm">
                 <div className="w-64 flex-shrink-0 flex items-center gap-3 p-4 border-r border-gray-200 dark:border-gray-800">
+                    <button onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors mr-1">
+                        <PanelLeft className={`w-5 h-5 text-gray-400 ${isLeftSidebarOpen ? 'text-sky-500' : ''}`} />
+                    </button>
                     <BookSolid className="w-8 h-8 text-sky-500" />
                     <div className="flex-1 overflow-hidden">
                         <span className="font-bold text-lg tracking-wider text-gray-900 dark:text-white truncate block">{mode === 'long' ? '长篇小说' : '短篇故事'}</span>
@@ -235,7 +258,14 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 
                 <div className="flex-1 flex items-center justify-center p-2">
                     {isEditingTitle ? (
-                        <input value={tempTitle} onChange={(e) => setTempTitle(e.target.value)} onBlur={() => { setNovel(p=>({...p, title: tempTitle})); updateProject(novel.id, {title: tempTitle}); setIsEditingTitle(false); }} autoFocus className="text-center text-lg font-bold bg-gray-50 dark:bg-gray-800 border border-sky-500 rounded px-4 py-2 focus:outline-none min-w-[200px]" />
+                        <input 
+                            value={tempTitle} 
+                            onChange={(e) => setTempTitle(e.target.value)} 
+                            onBlur={() => { setNovel(p=>({...p, title: tempTitle})); updateProject(novel.id, {title: tempTitle}); setIsEditingTitle(false); }} 
+                            autoFocus 
+                            maxLength={15}
+                            className="text-center text-lg font-bold bg-gray-50 dark:bg-gray-800 border border-sky-500 rounded px-4 py-2 focus:outline-none min-w-[200px]" 
+                        />
                     ) : (
                         <div className="flex items-center gap-2 group cursor-pointer px-6 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-all" onClick={() => setIsEditingTitle(true)}>
                             <h1 className="font-bold text-lg text-gray-900 dark:text-white">{novel.title}</h1>
@@ -251,6 +281,9 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     </div>
                     <button onClick={handleSaveToCloud} className="px-3 py-2 text-sm font-bold text-sky-600 bg-sky-100 hover:bg-sky-200 rounded-lg flex items-center gap-1"><ArrowPath className="w-4 h-4" /> 同步</button>
                     <button onClick={onBack} className="px-4 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-sm">返回</button>
+                    <button onClick={() => setRightSidebarOpen(!isRightSidebarOpen)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors ml-1">
+                        <PanelRight className={`w-5 h-5 text-gray-400 ${isRightSidebarOpen ? 'text-sky-500' : ''}`} />
+                    </button>
                 </div>
             </header>
 
@@ -261,7 +294,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                         <button className={`flex-1 py-3 text-sm font-medium ${openModule === 'settings' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50' : 'text-gray-500'}`} onClick={() => setOpenModule('settings')}>设定</button>
                     </div>
                     <div className="flex-1 overflow-y-auto">
-                        {openModule === 'chapters' ? <ChapterManager chapters={novel.chapters} activeChapterId={activeChapter?.id || null} onSelectChapter={setActiveChapter} onDeleteChapter={deleteChapterFromDB} onCreateChapter={handleCreateChapter} onReorderChapters={handleReorderChapters} /> : <NovelSettingsPanel settings={novel.settings} onUpdate={() => {}} />}
+                        {openModule === 'chapters' ? <ChapterManager chapters={novel.chapters} activeChapterId={activeChapter?.id || null} onSelectChapter={setActiveChapter} onDeleteChapter={handleDeleteChapter} onCreateChapter={handleCreateChapter} onReorderChapters={handleReorderChapters} /> : <NovelSettingsPanel settings={novel.settings} onUpdate={() => {}} />}
                     </div>
                 </aside>
 
@@ -273,7 +306,13 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
                                 </div>
                                 <div className="flex-1 overflow-y-auto px-8 pb-12" ref={scrollContainerRef}>
-                                    <input value={chapterTitle} onChange={(e) => setChapterTitle(e.target.value)} placeholder="输入章节标题..." className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-4" />
+                                    <input 
+                                        value={chapterTitle} 
+                                        onChange={(e) => setChapterTitle(e.target.value)} 
+                                        placeholder="输入章节标题..." 
+                                        maxLength={15}
+                                        className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-4" 
+                                    />
                                     <div 
                                         ref={editorRef}
                                         contentEditable 

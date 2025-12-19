@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Script, Scene } from '../../types';
-import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check, ChevronLeft, ChevronRight } from '../Icon';
+import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check, ChevronLeft, ChevronRight, PanelLeft, PanelRight } from '../Icon';
 import ScriptEpisodeManager from './ScriptEpisodeManager';
 import ScriptAIPanel from './ScriptAIPanel';
 import ScriptAdaptationPanel from './ScriptAdaptationPanel';
@@ -87,7 +87,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const handleCreateEpisode = async () => {
         const newOrder = script.scenes.length + 1;
         const tempId = `new-${Date.now()}`;
-        const newTitle = `第 ${newOrder} 集`;
+        // 修改点：标题后缀留空
+        const newTitle = `第${newOrder}集：`;
         const newId = await saveChapterToDB(script.id, tempId, newTitle, '', newOrder);
 
         if (newId) {
@@ -102,6 +103,24 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             }));
             setActiveScene(newScene);
             setSaveStatus('saved');
+        }
+    };
+
+    const handleDeleteEpisode = async (id: string) => {
+        try {
+            await deleteChapterFromDB(id);
+            setScript(prev => ({
+                ...prev,
+                scenes: prev.scenes.filter(s => s.id !== id)
+            }));
+            if (activeScene?.id === id) {
+                setActiveScene(null);
+                setSceneTitle('');
+                if (editorRef.current) editorRef.current.innerHTML = '';
+            }
+            setSaveStatus('saved');
+        } catch (e) {
+            console.error("删除集数失败", e);
         }
     };
 
@@ -152,6 +171,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             document.execCommand('formatBlock', false, 'p');
             const selection = window.getSelection();
             if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
                 const paragraphs = editorRef.current.querySelectorAll('p');
                 paragraphs.forEach(p => {
                     if (selection.containsNode(p, true)) {
@@ -197,14 +217,24 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             )}
 
             <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm">
-                <div className="w-52 flex-shrink-0 flex items-center gap-2 p-4 border-r border-gray-200 dark:border-gray-800">
+                <div className="w-64 flex-shrink-0 flex items-center gap-2 p-4 border-r border-gray-200 dark:border-gray-800">
+                    <button onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors mr-1">
+                        <PanelLeft className={`w-5 h-5 text-gray-400 ${isLeftSidebarOpen ? 'text-sky-500' : ''}`} />
+                    </button>
                     <Film className="w-8 h-8 text-sky-500" />
                     <span className="font-bold text-xl tracking-wider text-gray-900 dark:text-white truncate">{script.type === 'original' ? '原创剧本' : '剧本改编'}</span>
                 </div>
                 
                 <div className="flex-1 flex items-center justify-center p-2">
                     {isEditingTitle ? (
-                        <input value={tempTitle} onChange={(e) => setTempTitle(e.target.value)} onBlur={() => { setScript(p=>({...p, title: tempTitle})); updateProject(script.id, {title: tempTitle}); setIsEditingTitle(false); }} autoFocus className="text-center text-lg font-bold bg-gray-50 dark:bg-gray-800 border border-sky-500 rounded px-4 py-2 focus:outline-none min-w-[200px]" />
+                        <input 
+                            value={tempTitle} 
+                            onChange={(e) => setTempTitle(e.target.value)} 
+                            onBlur={() => { setScript(p=>({...p, title: tempTitle})); updateProject(script.id, {title: tempTitle}); setIsEditingTitle(false); }} 
+                            autoFocus 
+                            maxLength={15}
+                            className="text-center text-lg font-bold bg-gray-50 dark:bg-gray-800 border border-sky-500 rounded px-4 py-2 focus:outline-none min-w-[200px]" 
+                        />
                     ) : (
                         <div className="flex items-center gap-2 group cursor-pointer px-6 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-all" onClick={() => setIsEditingTitle(true)}>
                             <h1 className="font-bold text-lg text-gray-900 dark:text-white">{script.title}</h1>
@@ -220,12 +250,16 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     </div>
                     <button onClick={handleSaveToCloud} className="px-3 py-2 text-sm font-bold text-sky-600 bg-sky-100 hover:bg-sky-200 rounded-lg flex items-center gap-1"><ArrowPath className="w-4 h-4" /> 同步</button>
                     <button onClick={onBack} className="px-4 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-sm">返回</button>
+                    <button onClick={() => setRightSidebarOpen(!isRightSidebarOpen)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors ml-1">
+                        <PanelRight className={`w-5 h-5 text-gray-400 ${isRightSidebarOpen ? 'text-sky-500' : ''}`} />
+                    </button>
                 </div>
             </header>
 
             <div className="flex-1 flex overflow-hidden relative">
-                <aside className={`flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-52' : 'w-0'}`}>
-                    <ScriptEpisodeManager episodes={script.scenes} activeEpisodeId={activeScene?.id || null} onSelectEpisode={setActiveScene} onDeleteEpisode={deleteChapterFromDB} onCreateEpisode={handleCreateEpisode} onReorderEpisodes={handleReorderScenes} />
+                {/* 修改点：宽度加宽 1/5, w-52 -> w-64 */}
+                <aside className={`flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-64' : 'w-0'}`}>
+                    <ScriptEpisodeManager episodes={script.scenes} activeEpisodeId={activeScene?.id || null} onSelectEpisode={setActiveScene} onDeleteEpisode={handleDeleteEpisode} onCreateEpisode={handleCreateEpisode} onReorderEpisodes={handleReorderScenes} />
                 </aside>
 
                 <main className="flex-1 bg-gray-100 dark:bg-gray-900/50 flex flex-col p-4 relative overflow-hidden">
@@ -236,7 +270,13 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
                                 </div>
                                 <div className="flex-1 overflow-y-auto px-8 pb-12" ref={scrollContainerRef}>
-                                    <input value={sceneTitle} onChange={(e) => setSceneTitle(e.target.value)} placeholder="输入集数标题..." className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-4" />
+                                    <input 
+                                        value={sceneTitle} 
+                                        onChange={(e) => setSceneTitle(e.target.value)} 
+                                        placeholder="输入集数标题..." 
+                                        maxLength={15}
+                                        className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-4" 
+                                    />
                                     <div 
                                         ref={editorRef}
                                         contentEditable 
