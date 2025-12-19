@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { signIn, signUp, resetPasswordForEmail, signOut } from '../services/supabaseService';
 import { BookSolid, X, Eye, EyeSlash } from './Icon';
@@ -7,6 +6,19 @@ interface AuthModalProps {
     isOpen: boolean;
     onSuccess: () => void;
 }
+
+// 错误信息翻译映射
+const ERROR_MAP: Record<string, string> = {
+    'Invalid login credentials': '邮箱或密码不正确，请重新输入',
+    'Email not confirmed': '邮箱尚未验证，请检查您的收件箱',
+    'User not found': '该账号不存在',
+    'Signup disabled': '当前已关闭注册功能',
+    'Password is too short': '密码长度不足，请输入至少 6 位密码',
+    'User already registered': '该邮箱已被注册',
+    'Email link expired': '链接已失效，请重新发送',
+    'Requested entity was not found.': 'API 配置错误，请检查您的 Key',
+    'Network request failed': '网络连接失败，请检查网络设置'
+};
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
     const [mode, setMode] = useState<'login' | 'register' | 'forgot-password'>('login');
@@ -19,20 +31,36 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
 
     if (!isOpen) return null;
 
+    // 校验邮箱格式
+    const validateEmail = (emailStr: string) => {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // 前端初步校验
+        if (!validateEmail(email)) {
+            setError('请输入正确的邮箱格式（例如：user@example.com）');
+            return;
+        }
+
+        if (mode !== 'forgot-password' && password.length < 6) {
+            setError('密码至少需要 6 位字符');
+            return;
+        }
+
         setLoading(true);
         setError('');
         setMessage('');
 
         try {
             if (mode === 'login') {
-                const { data, error } = await signIn(email, password);
-                if (error) throw error;
+                const { data, error: signInError } = await signIn(email, password);
+                if (signInError) throw signInError;
 
-                // Check for soft-delete flag in user metadata
                 if (data.user?.user_metadata?.is_deleted) {
-                    await signOut(); // Ensure session is cleared
+                    await signOut();
                     throw new Error("该账号已注销，无法登录。");
                 }
 
@@ -41,22 +69,25 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     onSuccess();
                 }, 1000);
             } else if (mode === 'register') {
-                const { error } = await signUp(email, password);
-                if (error) throw error;
+                const { error: signUpError } = await signUp(email, password);
+                if (signUpError) throw signUpError;
                 setMessage('注册成功！请检查邮箱完成验证，然后登录。');
                 setTimeout(() => {
                     setMode('login');
                 }, 2000);
             } else if (mode === 'forgot-password') {
-                const { error } = await resetPasswordForEmail(email);
-                if (error) throw error;
+                const { error: resetError } = await resetPasswordForEmail(email);
+                if (resetError) throw resetError;
                 setMessage('重置密码链接已发送至您的邮箱，请查收。');
                 setTimeout(() => {
                     setMode('login');
                 }, 3000);
             }
         } catch (err: any) {
-            setError(err.message || '操作失败，请检查网络或账号密码。');
+            // 翻译错误信息
+            const rawMessage = err.message || '';
+            const translatedMessage = ERROR_MAP[Object.keys(ERROR_MAP).find(key => rawMessage.includes(key)) || ''] || '操作失败，请重试';
+            setError(translatedMessage);
         } finally {
             setLoading(false);
         }
@@ -65,16 +96,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-fade-in-up relative">
-                <button 
-                    onClick={() => {
-                        if (mode === 'login' && !loading) {
-                            // Can't close without login if it's the main entry, but for now we rely on external handling
-                        }
-                    }}
-                    className="hidden absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                >
-                    <X className="w-6 h-6" />
-                </button>
                 
                 {/* Header */}
                 <div className="p-8 pb-0 flex flex-col items-center">
@@ -92,12 +113,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     <div>
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">邮箱</label>
                         <input 
-                            type="email" 
+                            type="text" 
                             required
                             value={email}
                             onChange={e => setEmail(e.target.value)}
-                            placeholder="name@example.com"
-                            className="w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition"
+                            placeholder="例如：user@example.com"
+                            className={`w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border ${error.includes('邮箱') ? 'border-red-400' : 'border-gray-200'} dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition`}
                         />
                     </div>
                     
@@ -111,7 +132,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
                                     placeholder="••••••••"
-                                    className="w-full p-3 pr-10 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition"
+                                    className={`w-full p-3 pr-10 rounded-lg bg-gray-50 dark:bg-gray-800 border ${error.includes('密码') ? 'border-red-400' : 'border-gray-200'} dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition`}
                                 />
                                 <button
                                     type="button"
@@ -138,13 +159,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     )}
 
                     {error && (
-                        <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg text-center">
+                        <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg text-center border border-red-100 dark:border-red-900/50 animate-pulse">
                             {error}
                         </div>
                     )}
                     
                     {message && (
-                        <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-sm rounded-lg text-center">
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-sm rounded-lg text-center border border-green-100 dark:border-green-900/50">
                             {message}
                         </div>
                     )}
@@ -152,9 +173,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     <button 
                         type="submit"
                         disabled={loading}
-                        className="w-full py-3.5 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-sky-500/30"
+                        className="w-full py-3.5 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-sky-500/30 active:scale-95"
                     >
-                        {loading ? '处理中...' : (mode === 'login' ? '登录' : (mode === 'register' ? '注册' : '发送重置链接'))}
+                        {loading ? (
+                            <div className="flex items-center justify-center gap-2">
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                请稍候...
+                            </div>
+                        ) : (
+                            mode === 'login' ? '登 录' : (mode === 'register' ? '立 即 注 册' : '发 送 重 置 链 接')
+                        )}
                     </button>
                 </form>
 
