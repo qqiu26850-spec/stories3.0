@@ -118,14 +118,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
         setDetailModalOpen(true);
     };
 
-    // 获取特定类型的配色
-    const getAccentClasses = () => {
-        if (assetType === 'character') return { border: 'hover:border-sky-400 hover:ring-2 hover:ring-sky-500/10', bar: 'bg-sky-500' };
-        if (assetType === 'plot') return { border: 'hover:border-purple-400 hover:ring-2 hover:ring-purple-500/10', bar: 'bg-purple-500' };
-        return { border: 'hover:border-amber-400 hover:ring-2 hover:ring-amber-500/10', bar: 'bg-amber-500' };
+    // 获取特定类型的配色边框
+    const getAccentBorderClass = () => {
+        if (assetType === 'character') return 'hover:border-sky-400 hover:ring-2 hover:ring-sky-500/10';
+        if (assetType === 'plot') return 'hover:border-purple-400 hover:ring-2 hover:ring-purple-500/10';
+        return 'hover:border-amber-400 hover:ring-2 hover:ring-amber-500/10';
     };
-
-    const accents = getAccentClasses();
 
     return (
         <div className="p-8 h-full animate-fade-in flex flex-col font-sans bg-gray-50/50 dark:bg-black/20">
@@ -176,41 +174,39 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
             )}
 
             {isLoading ? <div className="flex-1 flex items-center justify-center"><div className="w-10 h-10 border-4 border-t-sky-500 border-gray-200 rounded-full animate-spin"></div></div> : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-12 overflow-y-auto pr-2 custom-scrollbar">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-12 overflow-y-auto pr-2 custom-scrollbar">
                     {filteredAssets.map(asset => (
                         <div 
                             key={asset.id} 
                             onClick={() => handleOpenEdit(asset)} 
-                            className={`group relative bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col h-full overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${accents.border}`}
+                            className={`group relative bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-[3/4] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 ${getAccentBorderClass()}`}
                         >
-                            {/* 左侧彩色装饰条 */}
-                            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${accents.bar} opacity-60 group-hover:opacity-100 transition-opacity`} />
-                            
-                            <div className="p-7 pl-8 flex flex-col h-full">
+                            <div className="p-7 flex flex-col h-full">
                                 <div className="flex justify-between items-start mb-4">
                                     <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">{asset.name}</h3>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0 flex-shrink-0">
                                         <button onClick={e => { e.stopPropagation(); handleOpenEdit(asset); }} className="p-2 text-gray-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all" title="修改"><Pencil className="w-4 h-4" /></button>
                                         <button onClick={e => { e.stopPropagation(); setAssetToDeleteId(asset.id); setDeleteModalOpen(true); }} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all" title="删除"><Trash className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                                 
-                                <div className="relative flex-grow">
-                                    <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed line-clamp-5 whitespace-pre-wrap font-medium">
+                                <div className="relative flex-grow overflow-hidden">
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap font-medium">
                                         {asset.content}
                                     </p>
-                                    {/* 底部渐变遮罩 */}
-                                    <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-40" />
+                                    {/* 底部渐变遮罩，使长文本在卡片中优雅截断 */}
+                                    <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />
                                 </div>
 
-                                <div className="mt-6 flex flex-wrap gap-2">
-                                    {asset.tags.length > 0 ? asset.tags.map((tag, i) => (
+                                <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex flex-wrap gap-2">
+                                    {asset.tags.length > 0 ? asset.tags.slice(0, 5).map((tag, i) => (
                                         <span key={i} className={`text-[10px] px-2.5 py-0.5 rounded-lg font-black tracking-wider border uppercase ${getTagStyle(tag)}`}>
                                             {tag}
                                         </span>
                                     )) : (
                                         <span className="text-[10px] text-gray-300 dark:text-gray-600 font-bold italic">未分类</span>
                                     )}
+                                    {asset.tags.length > 5 && <span className="text-[10px] text-gray-400">+{asset.tags.length - 5}</span>}
                                 </div>
                             </div>
                         </div>
