@@ -4,7 +4,8 @@ import { View, Asset, AssetFormData } from '../types';
 import CreateAssetModal from './CreateAssetModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import AssetDetailModal from './AssetDetailModal';
-import { Pencil, Trash, Check } from './Icon';
+// Fix: Added missing Search icon to the import list
+import { Pencil, Trash, Check, Tag, Search } from './Icon';
 import { saveMaterial, fetchMaterials, deleteMaterial } from '../services/supabaseService';
 
 type AssetLibraryView = 'character-library' | 'plot-library' | 'inspiration-library';
@@ -42,6 +43,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     const [assetToDeleteId, setAssetToDeleteId] = useState<string | null>(null);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedTag, setSelectedTag] = useState<string | 'all'>('all');
 
     const loadAssets = async () => {
         if (!isActive) return; setIsLoading(true);
@@ -55,7 +57,17 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
 
     useEffect(() => { loadAssets(); }, [assetType, isActive]);
 
-    const filteredAssets = useMemo(() => assets.filter(a => !searchTerm || a.name.toLowerCase().includes(searchTerm.toLowerCase()) || a.content.toLowerCase().includes(searchTerm.toLowerCase())), [assets, searchTerm]);
+    const allTags = useMemo(() => {
+        const tags = new Set<string>();
+        assets.forEach(a => a.tags.forEach(t => tags.add(t)));
+        return Array.from(tags);
+    }, [assets]);
+
+    const filteredAssets = useMemo(() => assets.filter(a => {
+        const matchesSearch = !searchTerm || a.name.toLowerCase().includes(searchTerm.toLowerCase()) || a.content.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesTag = selectedTag === 'all' || a.tags.includes(selectedTag);
+        return matchesSearch && matchesTag;
+    }), [assets, searchTerm, selectedTag]);
 
     const handleSaveAsset = async (formData: AssetFormData) => {
         const tags = formData.tags ? formData.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) : [];
@@ -74,20 +86,33 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     };
 
     return (
-        <div className="p-8 h-full animate-fade-in flex flex-col">
+        <div className="p-8 h-full animate-fade-in flex flex-col font-sans">
             <CreateAssetModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} onSave={handleSaveAsset} assetType={assetType} />
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
-            <AssetDetailModal isOpen={isDetailModalOpen} onClose={() => setDetailModalOpen(false)} asset={selectedAsset} onDelete={setAssetToDeleteId} />
+            <AssetDetailModal isOpen={isDetailModalOpen} onClose={() => setDetailModalOpen(false)} asset={selectedAsset} onSaveSuccess={loadAssets} />
 
             <div className="mb-8 flex justify-between items-center">
                 <div><h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1><p className="text-gray-500 mt-1">{description}</p></div>
-                <button onClick={() => setCreateModalOpen(true)} className="px-6 py-3 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/30">+ 新建素材</button>
+                <button onClick={() => setCreateModalOpen(true)} className="px-6 py-3 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/30 transition-all">+ 新建素材</button>
             </div>
 
-            <div className="mb-6"><input type="text" placeholder="搜索素材..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full max-w-md px-4 py-2.5 bg-white dark:bg-gray-900 border rounded-xl focus:ring-2 focus:ring-sky-500 outline-none shadow-sm" /></div>
+            <div className="flex flex-col md:flex-row gap-4 mb-8 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                <div className="flex-1 min-w-0">
+                    <input type="text" placeholder="搜索素材标题或内容..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-none rounded-xl focus:ring-2 focus:ring-sky-500 outline-none transition-all shadow-inner" />
+                </div>
+                {allTags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 items-center min-w-0">
+                        <Tag className="w-4 h-4 text-gray-400 shrink-0" />
+                        <button onClick={() => setSelectedTag('all')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedTag === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>全部</button>
+                        {allTags.map(tag => (
+                            <button key={tag} onClick={() => setSelectedTag(tag)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${selectedTag === tag ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-1 ring-sky-500/50' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>{tag}</button>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {isLoading ? <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-t-sky-500 rounded-full animate-spin"></div></div> : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-10 overflow-y-auto pr-2 -mr-2">
                     {filteredAssets.map(asset => (
                         <div key={asset.id} onClick={() => handleOpenEdit(asset)} className="bg-white dark:bg-gray-900 p-8 rounded-2xl border border-gray-100 dark:border-gray-800 hover:shadow-2xl hover:border-sky-400 transition-all group cursor-pointer flex flex-col h-full relative">
                             <div className="flex justify-between items-start mb-4">
@@ -98,9 +123,15 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                 </div>
                             </div>
                             <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 line-clamp-6 leading-loose whitespace-pre-wrap flex-grow">{asset.content}</p>
-                            <div className="flex flex-wrap gap-2">{asset.tags.map((tag, i) => <span key={i} className={`text-xs px-2 py-1 rounded font-bold border ${getTagStyle(tag)}`}>{tag}</span>)}</div>
+                            <div className="flex flex-wrap gap-2">{asset.tags.map((tag, i) => <span key={i} className={`text-[10px] px-2 py-0.5 rounded-md font-bold border ${getTagStyle(tag)}`}>{tag}</span>)}</div>
                         </div>
                     ))}
+                    {filteredAssets.length === 0 && (
+                        <div className="col-span-full py-20 text-center text-gray-400 opacity-50 flex flex-col items-center">
+                            <Search className="w-16 h-16 mb-4" />
+                            <p className="text-lg">未找到匹配的素材</p>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

@@ -35,7 +35,6 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
                         const level = Math.min(match[1].length, 6);
                         const content = match[2];
                         
-                        // 直接使用 AI 输出的内容，不再额外添加序号前缀
                         let className = "font-bold text-gray-900 dark:text-white ";
                         if (level === 1) className += "text-xl mt-6 mb-4";
                         else if (level === 2) className += "text-lg mt-5 mb-3";
@@ -61,21 +60,6 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
-    if (!isVisible) return null;
-    return createPortal(
-        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-[200] animate-fade-in-up">
-            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border border-green-200 dark:border-green-900 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
-                <div className="w-6 h-6 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                    <Check className="w-4 h-4" />
-                </div>
-                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{message}</span>
-            </div>
-        </div>,
-        document.body
-    );
-};
-
 const ImportAssetModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
@@ -97,7 +81,7 @@ const ImportAssetModal: React.FC<{
     if (!isOpen) return null;
 
     return createPortal(
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 backdrop-blur-md font-sans" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-5xl h-[85vh] flex overflow-hidden animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
                 <div className="w-1/2 flex flex-col p-8 border-r border-gray-100 dark:border-gray-800">
                     <div className="flex justify-between items-center mb-8">
@@ -112,7 +96,7 @@ const ImportAssetModal: React.FC<{
                             <label className="block text-sm font-bold text-gray-500 mb-3 uppercase">分类</label>
                             <div className="grid grid-cols-3 gap-3 font-sans">
                                 {(['character', 'plot', 'inspiration'] as const).map(t => (
-                                    <button key={t} onClick={() => setType(t)} className={`py-3 rounded-xl border transition-all font-bold ${type === t ? 'bg-sky-500 border-sky-500 text-white shadow-lg' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
+                                    <button key={t} onClick={() => setType(t)} className={`py-3 rounded-xl border transition-all font-bold ${type === t ? 'bg-sky-50 border-sky-500 text-white shadow-lg' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
                                         {t === 'character' ? '角色' : t === 'plot' ? '剧情' : '灵感'}
                                     </button>
                                 ))}
@@ -161,7 +145,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const [promptModalOpen, setPromptModalOpen] = useState(false);
     const [assetModalOpen, setAssetModalOpen] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
-    const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [showInlineSuccess, setShowInlineSuccess] = useState(false);
     const [assets, setAssets] = useState<Asset[]>([]);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
@@ -220,15 +203,15 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             }
             setSuccessMessage('生成完毕');
             setShowInlineSuccess(true);
-            setTimeout(() => setShowInlineSuccess(false), 2000);
+            setTimeout(() => setShowInlineSuccess(false), 3000);
         } catch (e) {} finally { setIsGenerating(false); setIsWaitingForFirstChunk(false); setShowLoadingOverlay(false); }
     };
 
     const handleImportAsset = (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => {
         saveMaterial(data.name, data.content, data.type === 'inspiration' ? 'idea' : data.type, data.tags);
         setSuccessMessage('已导入素材库');
-        setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 1000);
+        setShowInlineSuccess(true);
+        setTimeout(() => setShowInlineSuccess(false), 3000);
     };
 
     if (!selectedModule) {
@@ -245,9 +228,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     return (
         <div className="h-full flex flex-col bg-gray-50 dark:bg-black overflow-hidden relative font-sans">
             <LoadingOverlay isVisible={showLoadingOverlay} onClose={handleStop} />
-            <SuccessToast message={successMessage} isVisible={showSuccessToast} />
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={generatedText} onSave={handleImportAsset} />
-            <PromptSelectionModal isOpen={promptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={setSelectedPrompt} initialSubCategory={selectedModule.subCategories[0]} />
+            {/* Fix: Corrected syntax for conditional rendering of PromptSelectionModal by wrapping it in curly braces */}
+            {promptModalOpen && <PromptSelectionModal isOpen={promptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={setSelectedPrompt} initialSubCategory={selectedModule.subCategories[0]} />}
             <AssetSelectionModal isOpen={assetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
 
             <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white dark:bg-gray-900 z-20 shadow-sm font-sans">
@@ -406,7 +389,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         )}
                                     </div>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { navigator.clipboard.writeText(generatedText); setSuccessMessage('已复制'); setShowInlineSuccess(true); setTimeout(()=>setShowInlineSuccess(false),2000); }} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-sky-100 text-sky-700 hover:bg-sky-200 transition-colors font-sans"><Copy className="w-4 h-4" /> 复制</button>
+                                        <button onClick={() => { navigator.clipboard.writeText(generatedText); setSuccessMessage('已复制'); setShowInlineSuccess(true); setTimeout(()=>setShowInlineSuccess(false),3000); }} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-sky-100 text-sky-700 hover:bg-sky-200 transition-colors font-sans"><Copy className="w-4 h-4" /> 复制</button>
                                         <button onClick={() => setImportModalOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors font-sans"><Database className="w-4 h-4" /> 导入素材库</button>
                                     </div>
                                 </div>
