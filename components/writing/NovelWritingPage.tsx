@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Novel, Chapter, NovelSettings } from '../../types';
 import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight, PanelLeft, PanelRight } from '../Icon';
@@ -105,7 +106,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleCreateChapter = async () => {
         const newOrder = novel.chapters.length + 1;
         const tempId = `new-${Date.now()}`;
-        // 修改点：标题后缀留空
+        // 修改点：标题后缀留空，仅保留序号部分
         const newTitle = `第${newOrder}章：`;
         const newId = await saveChapterToDB(novel.id, tempId, newTitle, '', newOrder);
         
@@ -236,7 +237,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     };
 
     return (
-        <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden relative">
+        <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden relative">
             {showCopyToast && (
                 <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] bg-gray-800/90 text-white px-6 py-2 rounded-full shadow-2xl backdrop-blur-sm animate-fade-in-up flex items-center gap-2 border border-gray-700">
                     <Check className="w-4 h-4 text-green-400" />
@@ -244,11 +245,8 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 </div>
             )}
 
-            <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm">
-                <div className="w-64 flex-shrink-0 flex items-center gap-3 p-4 border-r border-gray-200 dark:border-gray-800">
-                    <button onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors mr-1">
-                        <PanelLeft className={`w-5 h-5 text-gray-400 ${isLeftSidebarOpen ? 'text-sky-500' : ''}`} />
-                    </button>
+            <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm h-16">
+                <div className="w-64 flex-shrink-0 flex items-center gap-3 px-4 border-r border-gray-200 dark:border-gray-800">
                     <BookSolid className="w-8 h-8 text-sky-500" />
                     <div className="flex-1 overflow-hidden">
                         <span className="font-bold text-lg tracking-wider text-gray-900 dark:text-white truncate block">{mode === 'long' ? '长篇小说' : '短篇故事'}</span>
@@ -274,54 +272,63 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     )}
                 </div>
                 
-                <div className="w-[29%] flex-shrink-0 flex items-center justify-end p-4 border-l border-gray-200 dark:border-gray-800 gap-3">
+                <div className="w-64 flex-shrink-0 flex items-center justify-end px-4 border-l border-gray-200 dark:border-gray-800 gap-3">
                     <div className="flex items-center gap-2 mr-2">
                         {saveStatus === 'saving' && <span className="text-xs text-sky-500 font-medium animate-pulse">保存中...</span>}
                         {saveStatus === 'saved' && <span className="text-xs text-green-500 font-medium flex items-center gap-1"><Check className="w-3 h-3" /> 已保存</span>}
                     </div>
-                    <button onClick={handleSaveToCloud} className="px-3 py-2 text-sm font-bold text-sky-600 bg-sky-100 hover:bg-sky-200 rounded-lg flex items-center gap-1"><ArrowPath className="w-4 h-4" /> 同步</button>
+                    <button onClick={handleSaveToCloud} className="p-2 text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 rounded-lg transition-colors" title="同步数据"><ArrowPath className="w-5 h-5" /></button>
                     <button onClick={onBack} className="px-4 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-sm">返回</button>
-                    <button onClick={() => setRightSidebarOpen(!isRightSidebarOpen)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors ml-1">
-                        <PanelRight className={`w-5 h-5 text-gray-400 ${isRightSidebarOpen ? 'text-sky-500' : ''}`} />
-                    </button>
                 </div>
             </header>
 
             <div className="flex-1 flex overflow-hidden relative">
+                {/* Left Sidebar Toggle Button */}
+                <button 
+                    onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-64' : 'left-0'}`}
+                    style={{ marginLeft: isLeftSidebarOpen ? '-1px' : '0' }}
+                >
+                    {isLeftSidebarOpen ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                </button>
+
                 <aside className={`flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-64' : 'w-0'}`}>
                     <div className="flex border-b border-gray-200 dark:border-gray-800">
-                        <button className={`flex-1 py-3 text-sm font-medium ${openModule === 'chapters' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50' : 'text-gray-500'}`} onClick={() => setOpenModule('chapters')}>目录</button>
-                        <button className={`flex-1 py-3 text-sm font-medium ${openModule === 'settings' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50' : 'text-gray-500'}`} onClick={() => setOpenModule('settings')}>设定</button>
+                        <button className={`flex-1 py-3 text-sm font-medium ${openModule === 'chapters' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50 dark:bg-sky-900/10' : 'text-gray-500'}`} onClick={() => setOpenModule('chapters')}>目录</button>
+                        <button className={`flex-1 py-3 text-sm font-medium ${openModule === 'settings' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50 dark:bg-sky-900/10' : 'text-gray-500'}`} onClick={() => setOpenModule('settings')}>设定</button>
                     </div>
                     <div className="flex-1 overflow-y-auto">
                         {openModule === 'chapters' ? <ChapterManager chapters={novel.chapters} activeChapterId={activeChapter?.id || null} onSelectChapter={setActiveChapter} onDeleteChapter={handleDeleteChapter} onCreateChapter={handleCreateChapter} onReorderChapters={handleReorderChapters} /> : <NovelSettingsPanel settings={novel.settings} onUpdate={() => {}} />}
                     </div>
                 </aside>
 
-                <main className="flex-1 bg-gray-100 dark:bg-gray-900/50 flex flex-col p-4 relative overflow-hidden">
-                     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 w-full h-full overflow-hidden relative">
+                <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden px-2 py-0">
+                     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 shadow-sm border-x border-gray-200 dark:border-gray-800 w-full h-full overflow-hidden relative">
                         {activeChapter ? (
                             <>
                                 <div className="pt-4 px-8 pb-2 flex-shrink-0 bg-white dark:bg-gray-900 z-10">
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
                                 </div>
-                                <div className="flex-1 overflow-y-auto px-8 pb-12" ref={scrollContainerRef}>
+                                <div className="flex-1 overflow-y-auto px-12 pb-12 pt-6" ref={scrollContainerRef}>
                                     <input 
                                         value={chapterTitle} 
                                         onChange={(e) => setChapterTitle(e.target.value)} 
                                         placeholder="输入章节标题..." 
                                         maxLength={15}
-                                        className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-4" 
+                                        className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-2" 
                                     />
+                                    {/* 标题与正文分割线 */}
+                                    <div className="border-b border-gray-100 dark:border-gray-800 mb-8" />
+                                    
                                     <div 
                                         ref={editorRef}
                                         contentEditable 
                                         onInput={handleContentInput}
-                                        className="w-full bg-transparent focus:outline-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[60vh] outline-none"
+                                        className="w-full bg-transparent focus:outline-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[70vh] outline-none pb-20"
                                         style={{ textAlign: alignment }}
                                     ></div>
                                 </div>
-                                <div className="absolute bottom-2 right-6 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-gray-400 font-mono border border-gray-100 dark:border-gray-800">
+                                <div className="absolute bottom-4 right-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-gray-400 font-mono border border-gray-100 dark:border-gray-800 shadow-sm">
                                     <span className="text-sky-500 font-semibold">{wordCount}</span> 字
                                 </div>
                             </>
@@ -330,6 +337,15 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                         )}
                      </div>
                 </main>
+
+                {/* Right Sidebar Toggle Button */}
+                <button 
+                    onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-l-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isRightSidebarOpen ? 'right-[29%]' : 'right-0'}`}
+                    style={{ marginRight: isRightSidebarOpen ? '-1px' : '0' }}
+                >
+                    {isRightSidebarOpen ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+                </button>
 
                 <aside className={`flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 shadow-xl z-10 flex flex-col transition-all duration-300 overflow-hidden ${isRightSidebarOpen ? 'w-[29%]' : 'w-0'}`}>
                     <div className="flex-1 overflow-hidden min-w-[300px]">

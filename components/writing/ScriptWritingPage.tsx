@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Script, Scene } from '../../types';
 import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check, ChevronLeft, ChevronRight, PanelLeft, PanelRight } from '../Icon';
@@ -87,7 +88,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const handleCreateEpisode = async () => {
         const newOrder = script.scenes.length + 1;
         const tempId = `new-${Date.now()}`;
-        // 修改点：标题后缀留空
+        // 修改点：标题后缀留空，仅保留序号部分
         const newTitle = `第${newOrder}集：`;
         const newId = await saveChapterToDB(script.id, tempId, newTitle, '', newOrder);
 
@@ -208,7 +209,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     };
 
     return (
-        <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden relative">
+        <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden relative">
             {showCopyToast && (
                 <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] bg-gray-800/90 text-white px-6 py-2 rounded-full shadow-2xl backdrop-blur-sm animate-fade-in-up flex items-center gap-2 border border-gray-700">
                     <Check className="w-4 h-4 text-green-400" />
@@ -216,11 +217,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 </div>
             )}
 
-            <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm">
-                <div className="w-64 flex-shrink-0 flex items-center gap-2 p-4 border-r border-gray-200 dark:border-gray-800">
-                    <button onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors mr-1">
-                        <PanelLeft className={`w-5 h-5 text-gray-400 ${isLeftSidebarOpen ? 'text-sky-500' : ''}`} />
-                    </button>
+            <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm h-16">
+                <div className="w-64 flex-shrink-0 flex items-center gap-2 px-4 border-r border-gray-200 dark:border-gray-800">
                     <Film className="w-8 h-8 text-sky-500" />
                     <span className="font-bold text-xl tracking-wider text-gray-900 dark:text-white truncate">{script.type === 'original' ? '原创剧本' : '剧本改编'}</span>
                 </div>
@@ -243,49 +241,57 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     )}
                 </div>
                 
-                <div className="w-[29%] flex-shrink-0 flex items-center justify-end p-4 border-l border-gray-200 dark:border-gray-800 gap-3">
+                <div className="w-64 flex-shrink-0 flex items-center justify-end px-4 border-l border-gray-200 dark:border-gray-800 gap-3">
                     <div className="flex items-center gap-2 mr-2">
                         {saveStatus === 'saving' && <span className="text-xs text-sky-500 font-medium animate-pulse">正在保存...</span>}
                         {saveStatus === 'saved' && <span className="text-xs text-green-500 font-medium flex items-center gap-1"><Check className="w-3 h-3" /> 已实时保存</span>}
                     </div>
-                    <button onClick={handleSaveToCloud} className="px-3 py-2 text-sm font-bold text-sky-600 bg-sky-100 hover:bg-sky-200 rounded-lg flex items-center gap-1"><ArrowPath className="w-4 h-4" /> 同步</button>
+                    <button onClick={handleSaveToCloud} className="p-2 text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 rounded-lg transition-colors" title="同步数据"><ArrowPath className="w-5 h-5" /></button>
                     <button onClick={onBack} className="px-4 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-sm">返回</button>
-                    <button onClick={() => setRightSidebarOpen(!isRightSidebarOpen)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors ml-1">
-                        <PanelRight className={`w-5 h-5 text-gray-400 ${isRightSidebarOpen ? 'text-sky-500' : ''}`} />
-                    </button>
                 </div>
             </header>
 
             <div className="flex-1 flex overflow-hidden relative">
-                {/* 修改点：宽度加宽 1/5, w-52 -> w-64 */}
+                {/* Left Sidebar Toggle Button */}
+                <button 
+                    onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-64' : 'left-0'}`}
+                    style={{ marginLeft: isLeftSidebarOpen ? '-1px' : '0' }}
+                >
+                    {isLeftSidebarOpen ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                </button>
+
                 <aside className={`flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-64' : 'w-0'}`}>
                     <ScriptEpisodeManager episodes={script.scenes} activeEpisodeId={activeScene?.id || null} onSelectEpisode={setActiveScene} onDeleteEpisode={handleDeleteEpisode} onCreateEpisode={handleCreateEpisode} onReorderEpisodes={handleReorderScenes} />
                 </aside>
 
-                <main className="flex-1 bg-gray-100 dark:bg-gray-900/50 flex flex-col p-4 relative overflow-hidden">
-                     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 w-full h-full overflow-hidden relative">
+                <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden px-2 py-0">
+                     <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 shadow-sm border-x border-gray-200 dark:border-gray-800 w-full h-full overflow-hidden relative">
                         {activeScene ? (
                             <>
                                 <div className="pt-4 px-8 pb-2 flex-shrink-0 bg-white dark:bg-gray-900 z-10">
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
                                 </div>
-                                <div className="flex-1 overflow-y-auto px-8 pb-12" ref={scrollContainerRef}>
+                                <div className="flex-1 overflow-y-auto px-12 pb-12 pt-6" ref={scrollContainerRef}>
                                     <input 
                                         value={sceneTitle} 
                                         onChange={(e) => setSceneTitle(e.target.value)} 
                                         placeholder="输入集数标题..." 
                                         maxLength={15}
-                                        className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-4" 
+                                        className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-2" 
                                     />
+                                    {/* 标题与正文分割线 */}
+                                    <div className="border-b border-gray-100 dark:border-gray-800 mb-8" />
+                                    
                                     <div 
                                         ref={editorRef}
                                         contentEditable 
                                         onInput={handleContentInput}
-                                        className="w-full bg-transparent focus:outline-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-mono min-h-[60vh] outline-none"
+                                        className="w-full bg-transparent focus:outline-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-mono min-h-[70vh] outline-none pb-20"
                                         style={{ textAlign: alignment }}
                                     ></div>
                                 </div>
-                                <div className="absolute bottom-2 right-6 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-gray-400 font-mono border border-gray-100 dark:border-gray-800">
+                                <div className="absolute bottom-4 right-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-gray-400 font-mono border border-gray-100 dark:border-gray-800 shadow-sm">
                                     <span className="text-sky-500 font-semibold">{wordCount}</span> 字
                                 </div>
                             </>
@@ -294,6 +300,15 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         )}
                      </div>
                 </main>
+
+                {/* Right Sidebar Toggle Button */}
+                <button 
+                    onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-l-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isRightSidebarOpen ? 'right-[29%]' : 'right-0'}`}
+                    style={{ marginRight: isRightSidebarOpen ? '-1px' : '0' }}
+                >
+                    {isRightSidebarOpen ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+                </button>
 
                 <aside className={`flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 shadow-xl z-10 flex flex-col transition-all duration-300 overflow-hidden ${isRightSidebarOpen ? 'w-[29%]' : 'w-0'}`}>
                     <div className="flex-1 overflow-hidden min-w-[300px]">
