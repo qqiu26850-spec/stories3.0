@@ -32,7 +32,6 @@ export const getTagStyle = (tag: string) => {
   const index = Math.abs(hash) % TAG_COLORS.length; return TAG_COLORS[index];
 };
 
-// 成功提示组件
 const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
     if (!isVisible) return null;
     return createPortal(
@@ -118,7 +117,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
         setDetailModalOpen(true);
     };
 
-    // 获取特定类型的配色边框
     const getAccentBorderClass = () => {
         if (assetType === 'character') return 'hover:border-sky-400 hover:ring-2 hover:ring-sky-500/10';
         if (assetType === 'plot') return 'hover:border-purple-400 hover:ring-2 hover:ring-purple-500/10';
@@ -126,13 +124,13 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     };
 
     return (
-        <div className="p-8 h-full animate-fade-in flex flex-col font-sans bg-gray-50/50 dark:bg-black/20">
+        <div className="p-8 h-full animate-fade-in flex flex-col font-sans bg-gray-50/50 dark:bg-black/20 overflow-hidden">
             <SuccessToast message={successMessage} isVisible={showToast} />
             <CreateAssetModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} onSave={handleSaveAsset} assetType={assetType} />
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
             <AssetDetailModal isOpen={isDetailModalOpen} onClose={() => setDetailModalOpen(false)} asset={selectedAsset} onSaveSuccess={() => { loadAssets(); triggerToast('内容已更新'); }} />
 
-            <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 flex-shrink-0">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
                         <div className={`p-2 rounded-xl bg-${color}-100 dark:bg-${color}-900/30 text-${color}-600 dark:text-${color}-400 shadow-sm`}>
@@ -165,7 +163,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
             </div>
 
             {allTags.length > 0 && (
-                <div className="flex flex-wrap gap-2 items-center mb-8 px-1">
+                <div className="flex flex-wrap gap-2 items-center mb-8 px-1 flex-shrink-0">
                     <button onClick={() => setSelectedTag('all')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${selectedTag === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-100'}`}>全部标签</button>
                     {allTags.map(tag => (
                         <button key={tag} onClick={() => setSelectedTag(tag)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${selectedTag === tag ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 ring-2 ring-sky-500/30' : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-gray-50'}`}>{tag}</button>
@@ -174,52 +172,53 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
             )}
 
             {isLoading ? <div className="flex-1 flex items-center justify-center"><div className="w-10 h-10 border-4 border-t-sky-500 border-gray-200 rounded-full animate-spin"></div></div> : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-12 overflow-y-auto pr-2 custom-scrollbar">
-                    {filteredAssets.map(asset => (
-                        <div 
-                            key={asset.id} 
-                            onClick={() => handleOpenEdit(asset)} 
-                            className={`group relative bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-[3/4] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 ${getAccentBorderClass()}`}
-                        >
-                            <div className="p-7 flex flex-col h-full">
-                                <div className="flex justify-between items-start mb-4">
-                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">{asset.name}</h3>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0 flex-shrink-0">
-                                        <button onClick={e => { e.stopPropagation(); handleOpenEdit(asset); }} className="p-2 text-gray-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all" title="修改"><Pencil className="w-4 h-4" /></button>
-                                        <button onClick={e => { e.stopPropagation(); setAssetToDeleteId(asset.id); setDeleteModalOpen(true); }} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all" title="删除"><Trash className="w-4 h-4" /></button>
+                <div className="flex-1 overflow-y-auto px-1 -mx-1 pb-12 custom-scrollbar">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 content-start">
+                        {filteredAssets.map(asset => (
+                            <div 
+                                key={asset.id} 
+                                onClick={() => handleOpenEdit(asset)} 
+                                className={`group relative bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-[3/4] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 ${getAccentBorderClass()}`}
+                            >
+                                <div className="p-7 flex flex-col h-full">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">{asset.name}</h3>
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0 flex-shrink-0">
+                                            <button onClick={e => { e.stopPropagation(); handleOpenEdit(asset); }} className="p-2 text-gray-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all" title="修改"><Pencil className="w-4 h-4" /></button>
+                                            <button onClick={e => { e.stopPropagation(); setAssetToDeleteId(asset.id); setDeleteModalOpen(true); }} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all" title="删除"><Trash className="w-4 h-4" /></button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="relative flex-grow overflow-hidden">
+                                        <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap font-medium">
+                                            {asset.content}
+                                        </p>
+                                        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />
+                                    </div>
+
+                                    <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex flex-wrap gap-2">
+                                        {asset.tags.length > 0 ? asset.tags.slice(0, 5).map((tag, i) => (
+                                            <span key={i} className={`text-[10px] px-2.5 py-0.5 rounded-lg font-black tracking-wider border uppercase ${getTagStyle(tag)}`}>
+                                                {tag}
+                                            </span>
+                                        )) : (
+                                            <span className="text-[10px] text-gray-300 dark:text-gray-600 font-bold italic">未分类</span>
+                                        )}
+                                        {asset.tags.length > 5 && <span className="text-[10px] text-gray-400">+{asset.tags.length - 5}</span>}
                                     </div>
                                 </div>
-                                
-                                <div className="relative flex-grow overflow-hidden">
-                                    <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap font-medium">
-                                        {asset.content}
-                                    </p>
-                                    {/* 底部渐变遮罩，使长文本在卡片中优雅截断 */}
-                                    <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />
-                                </div>
-
-                                <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800 flex flex-wrap gap-2">
-                                    {asset.tags.length > 0 ? asset.tags.slice(0, 5).map((tag, i) => (
-                                        <span key={i} className={`text-[10px] px-2.5 py-0.5 rounded-lg font-black tracking-wider border uppercase ${getTagStyle(tag)}`}>
-                                            {tag}
-                                        </span>
-                                    )) : (
-                                        <span className="text-[10px] text-gray-300 dark:text-gray-600 font-bold italic">未分类</span>
-                                    )}
-                                    {asset.tags.length > 5 && <span className="text-[10px] text-gray-400">+{asset.tags.length - 5}</span>}
-                                </div>
                             </div>
-                        </div>
-                    ))}
-                    {filteredAssets.length === 0 && (
-                        <div className="col-span-full py-32 text-center flex flex-col items-center bg-white/50 dark:bg-gray-900/30 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
-                            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                                <Search className="w-10 h-10 text-gray-300" />
+                        ))}
+                        {filteredAssets.length === 0 && (
+                            <div className="col-span-full py-32 text-center flex flex-col items-center bg-white/50 dark:bg-gray-900/30 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+                                <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                                    <Search className="w-10 h-10 text-gray-300" />
+                                </div>
+                                <h3 className="text-xl font-bold text-gray-400">未找到相关素材</h3>
+                                <p className="text-gray-400 text-sm mt-1">换个关键词试试，或者新建一个素材</p>
                             </div>
-                            <h3 className="text-xl font-bold text-gray-400">未找到相关素材</h3>
-                            <p className="text-gray-400 text-sm mt-1">换个关键词试试，或者新建一个素材</p>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             )}
         </div>
