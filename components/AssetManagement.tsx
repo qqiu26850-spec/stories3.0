@@ -272,7 +272,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                     </div>
                                     
                                     <div className="relative flex-grow overflow-hidden">
-                                        <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed whitespace-pre-wrap line-clamp-[10]">
+                                        {/* 修改字号为 text-sm，使其显示效果更佳 */}
+                                        <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap line-clamp-[10]">
                                             {asset.content.trim() || "暂无内容..."}
                                         </p>
                                         <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />

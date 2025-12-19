@@ -18,7 +18,18 @@ interface CreativeGenerationProps {
   onClearInitialData?: () => void;
 }
 
-type PromptFormState = Record<string, string>;
+// 辅助函数：去除 Markdown 标记转为纯文本
+const stripMarkdown = (text: string) => {
+    return text
+        .replace(/#+\s/g, '') // 去除标题 #
+        .replace(/\*\*|\*/g, '') // 去除加粗和斜体 *
+        .replace(/>\s/g, '') // 去除引用 >
+        .replace(/!\[.*?\]\(.*?\)/g, '') // 去除图片
+        .replace(/\[(.*?)\]\(.*?\)/g, '$1') // 去除链接，保留文字
+        .replace(/`{1,3}.*?`{1,3}/gs, '') // 去除代码块
+        .replace(/<think>[\s\S]*?<\/think>/g, '') // 去除 R1 思索过程
+        .trim();
+};
 
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
@@ -73,8 +84,10 @@ const ImportAssetModal: React.FC<{
 
     useEffect(() => {
         if (isOpen && content) {
-            setName(content.slice(0, 15).replace(/[#\n\*]/g, ' ').trim() + (content.length > 15 ? '...' : ''));
-            setAssetContent(content);
+            // 自动去除 Markdown 标记
+            const plainContent = stripMarkdown(content);
+            setName(plainContent.slice(0, 15).replace(/\n/g, ' ').trim() + (plainContent.length > 15 ? '...' : ''));
+            setAssetContent(plainContent);
         }
     }, [isOpen, content]);
 
@@ -96,15 +109,15 @@ const ImportAssetModal: React.FC<{
                             <label className="block text-sm font-bold text-gray-500 mb-3 uppercase">分类</label>
                             <div className="grid grid-cols-3 gap-3 font-sans">
                                 {(['character', 'plot', 'inspiration'] as const).map(t => (
-                                    <button key={t} onClick={() => setType(t)} className={`py-3 rounded-xl border transition-all font-bold ${type === t ? 'bg-sky-50 border-sky-500 text-white shadow-lg' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
+                                    <button key={t} onClick={() => setType(t)} className={`py-3 rounded-xl border transition-all font-bold ${type === t ? 'bg-sky-50 border-sky-500 text-sky-600 shadow-lg' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
                                         {t === 'character' ? '角色' : t === 'plot' ? '剧情' : '灵感'}
                                     </button>
                                 ))}
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-500 mb-2 uppercase">文本修改</label>
-                            <textarea value={assetContent} onChange={e => setAssetContent(e.target.value)} className="w-full h-48 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-xs font-serif resize-none" />
+                            <label className="block text-sm font-bold text-gray-500 mb-2 uppercase">文本内容 (纯文本)</label>
+                            <textarea value={assetContent} onChange={e => setAssetContent(e.target.value)} className="w-full h-48 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-sm font-sans resize-none" />
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-gray-500 mb-2 uppercase">标签</label>
@@ -117,9 +130,12 @@ const ImportAssetModal: React.FC<{
                     </div>
                 </div>
                 <div className="w-1/2 bg-gray-50 dark:bg-black/40 flex flex-col p-8 font-sans">
-                    <h4 className="text-sm font-bold text-gray-500 mb-4 uppercase tracking-widest">格式预览 (Markdown)</h4>
+                    <h4 className="text-sm font-bold text-gray-500 mb-4 uppercase tracking-widest">保存预览</h4>
                     <div className="flex-1 bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 overflow-y-auto shadow-inner">
-                        <FormattedText text={assetContent} />
+                        {/* 导入时预览也切换为纯文本展示 */}
+                        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
+                            {assetContent}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -135,7 +151,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const [topP, setTopP] = useState(0.95);
     const [showConfig, setShowConfig] = useState(false);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
-    const [formState, setFormState] = useState<PromptFormState>({});
+    // Fix: Replaced undefined PromptFormState with Record<string, string>
+    const [formState, setFormState] = useState<Record<string, string>>({});
     const [freeInput, setFreeInput] = useState('');
     const [generatedText, setGeneratedText] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -229,8 +246,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         <div className="h-full flex flex-col bg-gray-50 dark:bg-black overflow-hidden relative font-sans">
             <LoadingOverlay isVisible={showLoadingOverlay} onClose={handleStop} />
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={generatedText} onSave={handleImportAsset} />
-            {/* Fix: Corrected syntax for conditional rendering of PromptSelectionModal by wrapping it in curly braces */}
-            {promptModalOpen && <PromptSelectionModal isOpen={promptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={setSelectedPrompt} initialSubCategory={selectedModule.subCategories[0]} />}
+            {promptModalOpen && <PromptSelectionModal isOpen={promptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={setSelectedPrompt} initialSubCategory={selectedModule.subCategories[0] as any} />}
             <AssetSelectionModal isOpen={assetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
 
             <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white dark:bg-gray-900 z-20 shadow-sm font-sans">

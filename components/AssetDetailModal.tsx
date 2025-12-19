@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Asset } from '../types';
-import { X, Check, ArrowPath, Plus } from './Icon';
+import { X, Check, ArrowPath, Plus, Pencil } from './Icon';
 import { updateMaterial } from '../services/supabaseService';
 
 interface AssetDetailModalProps {
@@ -30,6 +30,7 @@ const getTagStyle = (tag: string) => {
 };
 
 const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, asset: initialAsset, onSaveSuccess }) => {
+    const [editedName, setEditedName] = useState('');
     const [editedContent, setEditedContent] = useState('');
     const [tags, setTags] = useState<string[]>([]);
     const [newTag, setNewTag] = useState('');
@@ -39,6 +40,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, as
     useEffect(() => {
         if (isOpen && initialAsset) {
             setLocalAsset(initialAsset);
+            setEditedName(initialAsset.name);
             setEditedContent(initialAsset.content);
             setTags(initialAsset.tags || []);
         }
@@ -59,13 +61,18 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, as
 
     const handleSave = async () => {
         if (!localAsset) return;
+        if (!editedName.trim()) {
+            alert('素材名称不能为空');
+            return;
+        }
         setIsSaving(true);
         try {
             await updateMaterial(localAsset.id, { 
+                name: editedName,
                 content: editedContent,
                 tags: tags
             });
-            setLocalAsset({...localAsset, content: editedContent, tags: tags});
+            setLocalAsset({...localAsset, name: editedName, content: editedContent, tags: tags});
             if (onSaveSuccess) onSaveSuccess();
             onClose();
         } catch (e) {
@@ -79,8 +86,17 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ isOpen, onClose, as
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] animate-fade-in-up flex flex-col relative overflow-hidden font-sans" onClick={e => e.stopPropagation()}>
                 <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-gray-800 bg-sky-50/50 dark:bg-sky-900/10 flex justify-between items-center">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate">{localAsset.name}</h3>
+                    <div className="flex items-center gap-4 flex-1 mr-4">
+                        <div className="relative flex-1 group">
+                            <input 
+                                type="text"
+                                value={editedName}
+                                onChange={e => setEditedName(e.target.value)}
+                                placeholder="输入素材标题..."
+                                className="w-full bg-transparent border-none focus:ring-0 text-xl font-bold text-gray-900 dark:text-white truncate py-1 hover:bg-white/50 dark:hover:bg-black/20 rounded transition-colors"
+                            />
+                            <Pencil className="w-4 h-4 text-sky-400 absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity" />
+                        </div>
                         <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 flex-shrink-0">
                             {localAsset.type === 'character' ? '角色设定' : localAsset.type === 'plot' ? '剧情线索' : '灵感随笔'}
                         </span>
