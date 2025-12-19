@@ -262,7 +262,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                             <div 
                                 key={asset.id} 
                                 onClick={() => handleOpenEdit(asset)} 
-                                className={`group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col aspect-[4/3] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${getAccentBorderClass()}`}
+                                className={`group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col h-[380px] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${getAccentBorderClass()}`}
                             >
                                 <div className="p-5 flex flex-col h-full">
                                     <div className="mb-3">
@@ -272,7 +272,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                     </div>
                                     
                                     <div className="relative flex-grow overflow-hidden">
-                                        <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed whitespace-pre-wrap line-clamp-6">
+                                        <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed whitespace-pre-wrap line-clamp-[10]">
                                             {asset.content.trim() || "暂无内容..."}
                                         </p>
                                         <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-80" />

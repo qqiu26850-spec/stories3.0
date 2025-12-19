@@ -288,19 +288,19 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                      <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 shadow-sm border-x border-gray-100 dark:border-gray-800 w-full h-full overflow-hidden relative">
                         {activeScene ? (
                             <>
-                                <div className="pt-4 px-8 pb-1 flex-shrink-0 bg-white dark:bg-gray-900 z-10 flex flex-col gap-2">
+                                <div className="pt-1.5 px-8 pb-1 flex-shrink-0 bg-white dark:bg-gray-900 z-10 flex flex-col gap-1">
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto dynamic-scrollbar px-12 pb-12 pt-4" ref={scrollContainerRef}>
+                                <div className="flex-1 overflow-y-auto dynamic-scrollbar px-12 pb-12 pt-1" ref={scrollContainerRef}>
                                     <input 
                                         value={sceneTitle} 
                                         onChange={(e) => setSceneTitle(e.target.value)} 
                                         placeholder="输入集数标题..." 
                                         maxLength={15}
-                                        className="w-full py-2 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-2" 
+                                        className="w-full py-1 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-1.5" 
                                     />
-                                    <div className="border-b border-gray-100 dark:border-gray-800 mb-8" />
+                                    <div className="border-b border-gray-100 dark:border-gray-800 mb-6" />
                                     
                                     <div 
                                         ref={editorRef}
@@ -324,7 +324,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 {/* Right Sidebar Toggle Button */}
                 <button 
                     onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
-                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-l-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isRightSidebarOpen ? 'right-[29%]' : 'right-0'}`}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isRightSidebarOpen ? 'right-[29%]' : 'right-0'}`}
                     style={{ marginRight: isRightSidebarOpen ? '-1px' : '0' }}
                 >
                     {isRightSidebarOpen ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
