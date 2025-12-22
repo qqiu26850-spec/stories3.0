@@ -7,7 +7,7 @@ import WorkflowRun from './WorkflowRun';
 import WorkflowDetailModal from './WorkflowDetailModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { Workflow, PromptCategory, PromptSubCategory } from '../types';
-import { fetchWorkflows, deleteWorkflow, saveWorkflow, updateWorkflow, getCurrentUserId, incrementWorkflowUsage, fetchUserProfile } from '../services/supabaseService';
+import { fetchWorkflows, deleteWorkflow, saveWorkflow, updateWorkflow, getCurrentUserId, incrementWorkflowUsage, fetchUserProfile, supabase } from '../services/supabaseService';
 import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
 
 type ExtendedTab = PromptCategory | 'all' | 'favorites' | 'my-workflows';
@@ -31,7 +31,11 @@ const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ messa
     );
 };
 
-const WorkflowManagement: React.FC = () => {
+interface WorkflowManagementProps {
+    isActive?: boolean;
+}
+
+const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true }) => {
   const [activeTab, setActiveTab] = useState<ExtendedTab>('all');
   const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,6 +65,7 @@ const WorkflowManagement: React.FC = () => {
 
   // 加载数据
   const loadData = async () => {
+    if (!isActive && dbWorkflows.length > 0) return; // 只有在活跃状态下或者没数据时才刷新
     setIsLoading(true);
     try {
         const userId = await getCurrentUserId();
@@ -69,38 +74,60 @@ const WorkflowManagement: React.FC = () => {
         const profile = await fetchUserProfile();
         if(profile && profile.nickname) setUserNickname(profile.nickname);
 
-        const data = await fetchWorkflows();
-        const mapped: Workflow[] = data.map((wf: any) => {
-            let content: any = {};
-            try { content = JSON.parse(wf.content); } catch(e) {}
-            
-            let mainCat: PromptCategory = 'short-story';
-            if(wf.main_category === 'long') mainCat = 'long-story';
-            else if(wf.main_category === 'script') mainCat = 'script';
-            else if(wf.main_category === 'general') mainCat = 'general';
-            
-            return {
-                id: wf.id,
-                title: wf.title,
-                description: wf.description,
-                usageCount: wf.usage_count || 0,
-                heat: wf.usage_count || 0,
-                author: wf.profiles?.username || '匿名用户',
-                userId: wf.user_id,
-                category: mainCat,
-                subCategories: wf.sub_categories || [],
-                fields: content.fields || [],
-                steps: content.steps || []
-            };
-        });
-        setDbWorkflows(mapped);
+        // 尝试获取工作流数据
+        // 特别注意：如果 Supabase 里的 Foreign Key 没配好，profiles(username) 可能会导致整个查询失败
+        let { data, error } = await supabase.from('workflows').select(`*, profiles(username)`).order('usage_count', { ascending: false });
+        
+        // 如果跨表失败，回退到普通查询
+        if (error) {
+            console.warn("Cross-table query failed, falling back to simple query:", error.message);
+            const fallback = await supabase.from('workflows').select(`*`).order('usage_count', { ascending: false });
+            data = fallback.data;
+        }
+
+        if (data) {
+            const mapped: Workflow[] = data.map((wf: any) => {
+                let content: any = {};
+                try { content = typeof wf.content === 'string' ? JSON.parse(wf.content) : wf.content; } catch(e) { console.error("Parse content failed", e); }
+                
+                let mainCat: PromptCategory = 'short-story';
+                if(wf.main_category === 'long') mainCat = 'long-story';
+                else if(wf.main_category === 'script') mainCat = 'script';
+                else if(wf.main_category === 'general') mainCat = 'general';
+                else if(wf.main_category === 'short') mainCat = 'short-story';
+                
+                return {
+                    id: wf.id,
+                    title: wf.title,
+                    description: wf.description,
+                    usageCount: wf.usage_count || 0,
+                    heat: wf.usage_count || 0,
+                    author: wf.profiles?.username || '匿名用户',
+                    userId: wf.user_id,
+                    category: mainCat,
+                    subCategories: wf.sub_categories || [],
+                    fields: content?.fields || [],
+                    steps: content?.steps || []
+                };
+            });
+            setDbWorkflows(mapped);
+        }
 
         const storedFavs = localStorage.getItem(FAVORITES_KEY);
         if (storedFavs) try { setFavoritedIds(new Set(JSON.parse(storedFavs))); } catch(e){}
-    } catch(e) {} finally { setIsLoading(false); }
+    } catch(e) {
+        console.error("Load workflows global error:", e);
+    } finally { 
+        setIsLoading(false); 
+    }
   };
 
-  useEffect(() => { loadData(); }, []);
+  // 监听 active 状态，当切换回工作流页签时自动刷新
+  useEffect(() => {
+    if (isActive) {
+        loadData();
+    }
+  }, [isActive]);
 
   // 持久化收藏
   useEffect(() => {
@@ -171,7 +198,7 @@ const WorkflowManagement: React.FC = () => {
         } else {
           await saveWorkflow(data.name, data.description, data.type, data.subCategories || [], data.fields, data.steps);
           triggerToast('工作流发布成功');
-          // 创建成功后自动切换到“我的”或者“全部”，确保用户能立刻看到
+          // 创建成功后自动切换到“全部”，确保用户能立刻看到
           setActiveTab('all');
           setActiveSubCategory('all');
         }
@@ -284,7 +311,7 @@ const WorkflowManagement: React.FC = () => {
                               </h3>
                               <button
                                   onClick={(e) => toggleFavorite(e, workflow.id)}
-                                  className={`p-1.5 rounded-full transition-colors z-10 ${isFav ? 'text-red-500 bg-red-50' : 'text-gray-300 hover:text-red-500'}`}
+                                  className={`p-1.5 rounded-full transition-colors z-10 ${isFav ? 'text-red-500 bg-red-50' : 'text-gray-400 hover:text-red-500'}`}
                               >
                                   <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
                               </button>

@@ -110,7 +110,7 @@ const App: React.FC = () => {
                 </div>
 
                 <div className={activeView === 'workflow' ? 'block h-full' : 'hidden h-full'}>
-                    <WorkflowManagement />
+                    <WorkflowManagement isActive={activeView === 'workflow'} />
                 </div>
 
                 <div className={activeView === 'character-library' ? 'block h-full' : 'hidden h-full'}>
