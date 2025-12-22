@@ -53,7 +53,7 @@ const WorkflowManagement: React.FC = () => {
           author: '我',
           category: data.type === 'novel' ? 'short-story' : data.type as any,
           fields: data.fields,
-          template: data.template
+          steps: data.steps
       };
       setCustomWorkflows(prev => [newWorkflow, ...prev]);
       setFavoritedIds(prev => new Set(prev).add(newWorkflow.id));
@@ -76,7 +76,7 @@ const WorkflowManagement: React.FC = () => {
       <div className="mb-8 flex justify-between items-end">
         <div>
             <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">创作工作流</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">结构化生产工具，将您的创作逻辑转化为自动化生产线。</p>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">结构化多环节生成工具，将您的创作逻辑转化为自动化生产链。</p>
         </div>
         <button
            onClick={() => setView('create')} 
@@ -166,31 +166,37 @@ const WorkflowManagement: React.FC = () => {
 const SYSTEM_WORKFLOWS: Workflow[] = [
   {
     id: 'wf-sys-1',
-    title: '悬疑反转生成器',
-    description: '专为悬疑小说设计，基于核心梗概自动生成3个令人意想不到的结尾反转方案。',
-    usageCount: '12.4k',
-    heat: 9580,
+    title: '全自动短篇小说生产线',
+    description: '从灵感、大纲到正文一键生成的完整流程，保证逻辑一致。',
+    usageCount: '25.1k',
+    heat: 18900,
     author: '官方',
     category: 'short-story',
     fields: [
-        { id: 'f1', label: '故事梗概', variable: 'synopsis', type: 'textarea' },
-        { id: 'f2', label: '核心谜题', variable: 'mystery', type: 'text' }
+        { id: 'f1', label: '核心关键词', variable: 'keywords', type: 'text' },
+        { id: 'f2', label: '期望风格', variable: 'style', type: 'text' }
     ],
-    template: '请根据以下故事梗概：${synopsis}，以及核心谜题：${mystery}，设计3个出人意料的结局反转。'
+    steps: [
+        { id: 's1', name: '步骤1：生成三个创意构思', prompt: '请根据关键词 ${keywords}，生成三个风格为 ${style} 的小说创意脑洞方案。', outputVariable: 'ideas' },
+        { id: 's2', name: '步骤2：基于创意完善大纲', prompt: '从以下方案中任选一个最精彩的：\n${ideas}\n\n请为其编写一份详细的起承转合大纲。', outputVariable: 'outline' },
+        { id: 's3', name: '步骤3：生成正文开头', prompt: '基于大纲内容：\n${outline}\n\n请以此创作一段风格为 ${style} 的小说开篇，不少于800字。', outputVariable: 'content' }
+    ]
   },
   {
     id: 'wf-sys-2',
-    title: '三幕式结构拆解',
-    description: '输入故事大纲，自动拆解为标准的电影三幕式结构（建置、对抗、结局）。',
-    usageCount: '5.2k',
-    heat: 4500,
+    title: '三幕式剧本拆解器',
+    description: '输入梗概，自动拆解并生成每个场景的具体动作和对白草稿。',
+    usageCount: '12.4k',
+    heat: 9580,
     author: '官方',
     category: 'script',
     fields: [
-        { id: 'f1', label: '故事大纲', variable: 'outline', type: 'textarea' },
-        { id: 'f2', label: '类型片种', variable: 'genre', type: 'text' }
+        { id: 'f1', label: '故事梗概', variable: 'synopsis', type: 'textarea' }
     ],
-    template: '请将这个${genre}类型的故事大纲：${outline}，拆解为标准的三幕式结构。'
+    steps: [
+        { id: 's1', name: '环节1：三幕结构化', prompt: '请将故事梗概：${synopsis}，拆解为标准电影三幕式结构。', outputVariable: 'structure' },
+        { id: 's2', name: '环节2：场景化细分', prompt: '基于结构：\n${structure}\n\n请列出关键的5个分镜场景描述。', outputVariable: 'scenes' }
+    ]
   }
 ];
 

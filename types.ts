@@ -45,12 +45,9 @@ export interface PromptField {
 
 export type PromptCategory = 'general' | 'short-story' | 'long-story' | 'script';
 
-/* Added 'expand' to PromptSubCategory to resolve type errors in constants.ts and CreatePromptModal.tsx */
 export type PromptSubCategory = 
-  // Functional
   'style' | 'requirements' | 'continue' | 'polish' | 'expand' | 'proofread' | 
   'idea' | 'golden_finger' | 'character_design' | 'worldview' | 'outline' | 'detailed_outline' | 'synopsis' | 'writing' |
-  // Genres
   'general' | 'modern-romance' | 'ancient-romance' | 'period' | 'apocalypse' | 
   'urban' | 'fantasy' | 'history' | 'social' | 'suspense' | 'sci-fi';
 
@@ -59,7 +56,7 @@ export interface Prompt {
   id: string;
   title: string;
   description: string;
-  example?: string; // New field for effect preview
+  example?: string;
   content: string;
   category: PromptCategory;
   subCategories: PromptSubCategory[];
@@ -78,6 +75,13 @@ export interface WorkflowField {
     type: 'text' | 'textarea';
 }
 
+export interface WorkflowStep {
+  id: string;
+  name: string;
+  prompt: string;
+  outputVariable: string;
+}
+
 export interface Workflow {
   id: string;
   title: string;
@@ -87,7 +91,8 @@ export interface Workflow {
   author: string;
   category: 'short-story' | 'script' | 'my' | 'create';
   fields?: WorkflowField[];
-  template?: string;
+  steps?: WorkflowStep[];
+  template?: string; // 旧版兼容
 }
 
 export type AssetFormData = {
