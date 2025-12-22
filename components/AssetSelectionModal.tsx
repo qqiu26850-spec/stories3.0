@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Asset } from '../types';
-import { X, Search, UserCircle, BookOpen, Sparkles, Check, Tag } from './Icon';
+import { X, Search, UserCircle, BookOpen, Sparkles, Check, Tag, Database } from './Icon';
 
 interface AssetSelectionModalProps {
     isOpen: boolean;
@@ -39,11 +39,10 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
     const [selectedTag, setSelectedTag] = useState<string | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
 
-    // 动态获取当前可用标签
     const availableTags = useMemo(() => {
         const tags = new Set<string>();
         assets.forEach(a => {
-            if (activeTab === 'all' || a.type === (activeTab === 'inspiration' ? 'idea' : activeTab) || a.type === activeTab) {
+            if (activeTab === 'all' || a.type === (activeTab === 'inspiration' ? 'idea' : activeTab)) {
                 a.tags.forEach(t => tags.add(t));
             }
         });
@@ -54,13 +53,10 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
         return assets.filter(asset => {
             const typeMatch = activeTab === 'all' || 
                               (activeTab === 'inspiration' ? (asset.type === 'idea' || asset.type === 'inspiration') : asset.type === activeTab);
-            
             const tagMatch = selectedTag === 'all' || asset.tags.includes(selectedTag);
-
             const searchMatch = !searchTerm || 
                                 asset.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                 asset.content.toLowerCase().includes(searchTerm.toLowerCase());
-
             return typeMatch && tagMatch && searchMatch;
         });
     }, [assets, activeTab, selectedTag, searchTerm]);
@@ -77,76 +73,75 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
     return createPortal(
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col relative animate-fade-in-up overflow-hidden font-sans" onClick={e => e.stopPropagation()}>
-                {/* Header */}
-                <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <Database className="w-6 h-6 text-sky-500" />
-                        选择关联素材
-                    </h3>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
-                        <X className="w-6 h-6" />
-                    </button>
-                </div>
-
-                {/* Toolbar */}
-                <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 space-y-4 bg-white dark:bg-gray-900">
-                    <div className="flex flex-col md:flex-row items-center gap-4">
-                        <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-full md:w-auto overflow-x-auto scrollbar-hide">
+                {/* Header - 将分类切换移至此处 */}
+                <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50">
+                    <div className="flex items-center gap-6">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 shrink-0">
+                            <Database className="w-6 h-6 text-sky-500" />
+                            选择关联素材
+                        </h3>
+                        <div className="flex bg-gray-200/50 dark:bg-gray-800 rounded-xl p-1 shadow-inner">
                             {tabs.map(tab => {
                                 const Icon = tab.icon;
                                 return (
                                     <button
                                         key={tab.id}
                                         onClick={() => { setActiveTab(tab.id); setSelectedTag('all'); }}
-                                        className={`flex items-center gap-2 px-5 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                                        className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                                             activeTab === tab.id 
                                             ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' 
                                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                         }`}
                                     >
-                                        <Icon className="w-4 h-4" />
+                                        <Icon className="w-3.5 h-3.5" />
                                         {tab.label}
                                     </button>
                                 );
                             })}
                         </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
+                        <X className="w-6 h-6" />
+                    </button>
+                </div>
 
-                        <div className="relative w-full md:w-64 flex-shrink-0">
+                {/* Toolbar */}
+                <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 space-y-3 bg-white dark:bg-gray-900">
+                    <div className="flex items-center gap-6">
+                        <div className="relative w-64 flex-shrink-0">
                             <input 
                                 type="text" 
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="搜索素材名称或内容..."
-                                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all"
+                                placeholder="搜索名称或内容..."
+                                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all"
                             />
                             <Search className="w-4 h-4 absolute left-3.5 top-2.5 text-gray-400" />
                         </div>
-                    </div>
-
-                    {/* Tags Filter */}
-                    <div className="flex items-start gap-3 pt-1">
-                        <span className="text-xs font-bold text-gray-400 py-1.5 shrink-0 flex items-center gap-1"><Tag className="w-3.5 h-3.5"/> 标签:</span>
-                        <div className="flex flex-wrap gap-2 overflow-y-auto max-h-24 no-scrollbar">
-                            <button 
-                                onClick={() => setSelectedTag('all')}
-                                className={`px-3 py-1 text-[11px] font-medium rounded-full transition-all border ${selectedTag === 'all' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
-                            >
-                                全部
-                            </button>
-                            {availableTags.map(tag => (
+                        <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                            <span className="text-xs font-bold text-gray-400 shrink-0 flex items-center gap-1"><Tag className="w-3.5 h-3.5"/> 标签筛选:</span>
+                            <div className="flex flex-wrap gap-2 overflow-y-auto max-h-10 no-scrollbar">
                                 <button 
-                                    key={tag}
-                                    onClick={() => setSelectedTag(tag)}
-                                    className={`px-3 py-1 text-[11px] font-medium rounded-full transition-all border whitespace-nowrap ${selectedTag === tag ? 'bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-900/50 dark:text-sky-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                                    onClick={() => setSelectedTag('all')}
+                                    className={`px-3 py-1 text-[11px] font-medium rounded-full transition-all border ${selectedTag === 'all' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
                                 >
-                                    {tag}
+                                    全部
                                 </button>
-                            ))}
+                                {availableTags.map(tag => (
+                                    <button 
+                                        key={tag}
+                                        onClick={() => setSelectedTag(tag)}
+                                        className={`px-3 py-1 text-[11px] font-medium rounded-full transition-all border whitespace-nowrap ${selectedTag === tag ? 'bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-900/50 dark:text-sky-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                                    >
+                                        {tag}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* List - 改为 grid-cols-3 并防止文字换行 */}
+                {/* List - 强制三列且防止文字纵向排列 */}
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-black/20">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredAssets.map(asset => {
@@ -155,18 +150,18 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                                 <div 
                                     key={asset.id} 
                                     onClick={() => onToggleAsset(asset.id)}
-                                    className={`p-5 rounded-2xl border cursor-pointer transition-all group relative overflow-hidden flex flex-col h-[200px] ${
+                                    className={`p-5 rounded-2xl border cursor-pointer transition-all group relative overflow-hidden flex flex-col h-[220px] ${
                                         isSelected 
                                         ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 shadow-sm ring-1 ring-sky-500' 
                                         : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-md'
                                     }`}
                                 >
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex-1 min-w-0 pr-2">
-                                            <h4 className="font-bold text-gray-900 dark:text-white truncate text-base" title={asset.name}>
+                                    <div className="flex justify-between items-start mb-2 gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-bold text-gray-900 dark:text-white truncate text-[15px] whitespace-nowrap overflow-hidden" title={asset.name}>
                                                 {asset.name}
                                             </h4>
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-block mt-1 whitespace-nowrap ${
+                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded inline-block mt-1 whitespace-nowrap uppercase tracking-tighter ${
                                                 asset.type === 'character' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
                                                 asset.type === 'plot' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
                                                 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
@@ -175,17 +170,17 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                                             </span>
                                         </div>
                                         {isSelected && (
-                                            <div className="w-6 h-6 bg-sky-500 rounded-full flex items-center justify-center text-white shadow-sm flex-shrink-0">
-                                                <Check className="w-4 h-4" />
+                                            <div className="w-5 h-5 bg-sky-500 rounded-full flex items-center justify-center text-white shadow-sm flex-shrink-0">
+                                                <Check className="w-3 h-3" />
                                             </div>
                                         )}
                                     </div>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed mb-4 flex-1">
                                         {asset.content}
                                     </p>
-                                    <div className="flex flex-wrap gap-1.5 mt-auto overflow-hidden max-h-6">
+                                    <div className="flex flex-wrap gap-1 mt-auto overflow-hidden max-h-12">
                                         {asset.tags.map((tag, i) => (
-                                            <span key={i} className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap font-medium ${getTagStyle(tag)}`}>
+                                            <span key={i} className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap font-medium inline-block ${getTagStyle(tag)}`}>
                                                 {tag}
                                             </span>
                                         ))}
@@ -196,8 +191,7 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                         {filteredAssets.length === 0 && (
                             <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
                                 <Search className="w-16 h-16 mb-4 opacity-10" />
-                                <p className="text-lg font-medium">未找到匹配的素材</p>
-                                <button onClick={() => { setActiveTab('all'); setSelectedTag('all'); setSearchTerm(''); }} className="mt-3 text-sky-500 hover:underline text-sm font-bold">显示全部</button>
+                                <p className="text-lg font-medium">未找到匹配素材</p>
                             </div>
                         )}
                     </div>
@@ -205,12 +199,7 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
 
                 {/* Footer */}
                 <div className="flex-shrink-0 p-5 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-between items-center px-8">
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-500">已选择 <span className="font-black text-sky-600 dark:text-sky-400 text-lg">{selectedAssetIds.size}</span> 项素材</span>
-                        {selectedAssetIds.size > 0 && (
-                            <button onClick={() => onToggleAsset('')} className="text-xs text-gray-400 hover:text-rose-500 font-medium">（此功能不支持全选/全不选快捷键，请手动点击）</button>
-                        )}
-                    </div>
+                    <span className="text-sm text-gray-500">已选择 <span className="font-black text-sky-600 dark:text-sky-400 text-lg">{selectedAssetIds.size}</span> 项素材</span>
                     <button onClick={onClose} className="px-12 py-2.5 bg-sky-600 text-white rounded-xl font-bold hover:bg-sky-500 transition-all shadow-lg shadow-sky-500/30 active:scale-95">
                         确认关联
                     </button>
@@ -220,12 +209,5 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
         document.body
     );
 };
-
-// 这里的 Database 图标引用
-const Database = (props: any) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75" />
-  </svg>
-);
 
 export default AssetSelectionModal;

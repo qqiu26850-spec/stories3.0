@@ -1,11 +1,10 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Asset, Prompt } from '../../types';
+import { Asset, Prompt, NovelSettings } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
-// Added missing ClipboardDocumentCheck to imports
-import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle, ListBullet, ClipboardDocumentCheck } from '../Icon';
+import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle, Check, ClipboardDocumentCheck } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -18,15 +17,17 @@ interface AIFunctionPanelProps {
     onInsert: (text: string) => void;
     onReplace: (text: string) => void;
     onStream?: (text: string, isFirst: boolean) => void;
+    projectSettings?: NovelSettings;
 }
 
-const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream }) => {
+const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream, projectSettings }) => {
     const [activeTab, setActiveTab] = useState<TabType>('expand');
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
     const [showConfig, setShowConfig] = useState(false);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+    const [isProjectSettingsAssociated, setProjectSettingsAssociated] = useState(false);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [selectedWorkflow, setSelectedWorkflow] = useState('');
     const [assets, setAssets] = useState<Asset[]>([]);
@@ -125,8 +126,13 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         abortControllerRef.current = controller;
         try {
             const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考素材：${a!.name}】\n${a!.content}`).join('\n\n');
-            let finalPrompt = '';
             
+            let settingsContext = '';
+            if (isProjectSettingsAssociated && projectSettings) {
+                settingsContext = `【作品背景设定】\n题材：${projectSettings.typeElements}\n主题：${projectSettings.theme}\n世界观：${projectSettings.worldview}\n人物基础设定：${projectSettings.characterSettings}\n梗概：${projectSettings.synopsis}`;
+            }
+
+            let finalPrompt = '';
             if (selectedPrompt) {
                 incrementPromptHeat(selectedPrompt.id);
                 let template = selectedPrompt.template || selectedPrompt.content;
@@ -134,10 +140,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     const val = formState[field.id] || '';
                     template = template.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
                 }
-                finalPrompt = `${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
+                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
             } else {
-                // Fallback prompt generation if no template is selected
-                finalPrompt = `请进行创作内容扩写。\n当前上下文：\n${contextText.slice(-1000)}\n\n选中的参考文本：\n${selectedText}\n\n${assetContext ? `关联素材：\n${assetContext}` : ''}`;
+                finalPrompt = `请进行创作内容扩写。\n${settingsContext ? `${settingsContext}\n\n` : ''}当前上下文：\n${contextText.slice(-1000)}\n\n选中的参考文本：\n${selectedText}\n\n${assetContext ? `关联素材：\n${assetContext}` : ''}`;
             }
 
             if (onStream && (activeTab === 'expand' || activeTab === 'continue')) {
@@ -226,7 +231,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         </div>
                     )}
                     
-                    {/* Prompt Selection Modules */}
                     <div className="grid grid-cols-2 gap-3 font-sans">
                         <div className="flex flex-col gap-1.5 font-sans">
                             <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">写作要求</label>
@@ -250,30 +254,31 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
                     <div className="flex flex-col gap-2 font-sans">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center justify-between">
-                            工作流选择 <span className="text-[10px] font-normal opacity-50 italic">(可选)</span>
+                            关联内容 <span className="text-[10px] font-normal opacity-50 italic">(可选)</span>
                         </label>
-                        <div className="relative font-sans">
-                            <select value={selectedWorkflow} onChange={e => setSelectedWorkflow(e.target.value)} className="w-full py-2.5 pl-3 pr-8 text-xs font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer font-sans">
-                                <option value="">不使用工作流</option>
-                                {MOCK_WORKFLOWS.map(wf => <option key={wf.id} value={wf.id}>{wf.title}</option>)}
-                            </select>
-                            <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3.5 pointer-events-none" />
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2 font-sans">
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center justify-between">
-                            关联素材 <span className="text-[10px] font-normal opacity-50 italic">(可选)</span>
-                        </label>
-                        <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
-                            <div className="flex items-center justify-between font-sans">
-                                <div className="flex items-center gap-2 font-sans">
-                                    <Database className={`w-4 h-4 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400'}`} />
-                                    <span className="font-semibold text-xs">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 个素材` : '关联人物/剧情/设定...'}</span>
+                        <div className="space-y-2">
+                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
+                                <div className="flex items-center justify-between font-sans">
+                                    <div className="flex items-center gap-2 font-sans">
+                                        <Database className={`w-4 h-4 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400'}`} />
+                                        <span className="font-semibold text-xs">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 个素材` : '关联人物/剧情/设定...'}</span>
+                                    </div>
+                                    <ChevronDown className="w-4 h-4 opacity-50" />
                                 </div>
-                                <ChevronDown className="w-4 h-4 opacity-50" />
-                            </div>
-                        </button>
+                            </button>
+                            
+                            {/* 新增关联作品设定按钮 */}
+                            <button 
+                                onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} 
+                                className={`w-full p-3 rounded-lg border text-left transition-all font-sans flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-emerald-400'}`}
+                            >
+                                <div className="flex items-center gap-2 font-sans">
+                                    <BookOpen className={`w-4 h-4 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`} />
+                                    <span className="font-semibold text-xs">{isProjectSettingsAssociated ? 'AI 已关联作品设定' : '关联作品设定 (世界观/人物等)'}</span>
+                                </div>
+                                {isProjectSettingsAssociated ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <ChevronDown className="w-4 h-4 opacity-50" />}
+                            </button>
+                        </div>
                     </div>
                 </div>
 

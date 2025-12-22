@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Asset, Prompt, Workflow } from '../../types';
+import { Asset, Prompt, Workflow, NovelSettings } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
-import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle } from '../Icon';
+// Added Database to the imports
+import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle, Check, Database } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
@@ -17,9 +18,10 @@ interface ShortStoryAIPanelProps {
     onInsert: (text: string) => void;
     onReplace: (text: string) => void;
     onStream?: (text: string, isFirst: boolean) => void;
+    projectSettings?: NovelSettings;
 }
 
-const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream }) => {
+const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream, projectSettings }) => {
     const [activeTab, setActiveTab] = useState<ShortStoryTab>('original');
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(1);
@@ -27,6 +29,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const [showConfig, setShowConfig] = useState(false);
     const [selectedWorkflow, setSelectedWorkflow] = useState(MOCK_WORKFLOWS[0]?.id || '');
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+    const [isProjectSettingsAssociated, setProjectSettingsAssociated] = useState(false);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
@@ -106,6 +109,12 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         abortControllerRef.current = controller;
         try {
             const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考素材：${a!.name}】\n${a!.content}`).join('\n\n');
+            
+            let settingsContext = '';
+            if (isProjectSettingsAssociated && projectSettings) {
+                settingsContext = `【作品背景设定】\n题材：${projectSettings.typeElements}\n主题：${projectSettings.theme}\n梗概：${projectSettings.synopsis}\n人物设定：${projectSettings.characterSettings}`;
+            }
+
             let finalPrompt = '';
             if (selectedPrompt) {
                 incrementPromptHeat(selectedPrompt.id);
@@ -114,21 +123,25 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     const val = formState[field.id] || '';
                     template = template.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
                 }
-                finalPrompt = `${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
+                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
             } else {
                 const currentContext = contextText.slice(-2000);
-                if (activeTab === 'original') finalPrompt = `请根据以下要求写一段短篇小说的正文。\n\n【要求】：${promptInput}\n\n${assetContext ? `\n${assetContext}` : ''}`;
-                else if (activeTab === 'imitate') finalPrompt = `请模仿以下参考文本的风格，并根据新的要求进行创作。\n\n【参考文本风格】：${referenceText}\n\n【新内容要求】：${promptInput}\n\n${assetContext ? `\n${assetContext}` : ''}`;
+                let basePrompt = '';
+                if (activeTab === 'original') basePrompt = `请根据以下要求写一段短篇小说的正文。\n\n【要求】：${promptInput}`;
+                else if (activeTab === 'imitate') basePrompt = `请模仿以下参考文本的风格，并根据新的要求进行创作。\n\n【参考文本风格】：${referenceText}\n\n【新内容要求】：${promptInput}`;
                 else if (activeTab === 'polish') {
                     const textToPolish = selectedText || currentContext;
-                    finalPrompt = `请对以下文本进行润色优化，使其更具文学性，风格要求：${promptInput || '通用文学风格'}。\n\n【待润色文本】：\n${textToPolish}\n\n${assetContext ? `\n${assetContext}` : ''}`;
+                    basePrompt = `请对以下文本进行润色优化，使其更具文学性，风格要求：${promptInput || '通用文学风格'}。\n\n【待润色文本】：\n${textToPolish}`;
                 } else if (activeTab === 'review') {
                      const textToReview = selectedText || currentContext;
-                     finalPrompt = `请作为一名专业的文学编辑，对以下文本进行评审，指出优缺点并给出修改建议。关注点：${promptInput || '情节逻辑、人物塑造'}。\n\n【待评审文本】：\n${textToReview}`;
+                     basePrompt = `请作为一名专业的文学编辑，对以下文本进行评审，指出优缺点并给出修改建议。关注点：${promptInput || '情节逻辑、人物塑造'}。\n\n【待评审文本】：\n${textToReview}`;
                 }
+                
+                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n` : ''}${basePrompt}`;
                 const workflowName = MOCK_WORKFLOWS.find(w => w.id === selectedWorkflow)?.title;
                 if (workflowName) finalPrompt = `[工作流：${workflowName}]\n${finalPrompt}`;
             }
+            
             if (onStream && (activeTab === 'original' || activeTab === 'imitate')) {
                 const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
                 let isFirst = true;
@@ -200,18 +213,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                         </div>
                         <button onClick={() => setShowConfig(!showConfig)} className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 font-sans ${showConfig ? 'bg-sky-100 text-sky-600 border-sky-200 dark:bg-sky-900/30 dark:border-sky-800' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}><AdjustmentsHorizontal className="w-4 h-4" />参数</button>
                     </div>
-                    {showConfig && (
-                        <div className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800 grid grid-cols-1 gap-4 animate-fade-in text-[10px] font-sans">
-                            <div className="space-y-1">
-                                <label className="block font-black text-sky-500 flex justify-between uppercase"><span>温度 (Temperature): {temperature}</span></label>
-                                <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="block font-black text-sky-500 flex justify-between uppercase"><span>核采样 (Top P): {topP}</span></label>
-                                <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 font-sans">
@@ -233,24 +234,26 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             </div>
                         </button>
                     </div>
-
-                    {!selectedPrompt && (
-                        <div className="col-span-1 font-sans">
-                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">工作流选择 <span className="text-[10px] font-normal opacity-50">(可选)</span></label>
-                            <div className="relative font-sans">
-                                <select value={selectedWorkflow} onChange={e => setSelectedWorkflow(e.target.value)} className="w-full py-2.5 pl-3 pr-8 text-xs rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer font-sans">
-                                    <option value="">不使用工作流</option>
-                                    {MOCK_WORKFLOWS.map(wf => <option key={wf.id} value={wf.id}>{wf.title}</option>)}
-                                </select>
-                                <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3.5 pointer-events-none" />
+                    
+                    <div className="col-span-2 space-y-2">
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">关联参考</label>
+                        <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 text-sm rounded-lg border focus:ring-2 focus:ring-sky-500 outline-none transition shadow-sm flex items-center justify-between font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-900/30 dark:border-sky-800 dark:text-sky-400' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300'}`}>
+                            <div className="flex items-center gap-2">
+                                <Database className={`w-4 h-4 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
+                                <span className="truncate text-[11px]">{selectedAssetIds.size > 0 ? `已选 ${selectedAssetIds.size} 项素材` : '点击关联素材设定...'}</span>
                             </div>
-                        </div>
-                    )}
-                    <div className={`${selectedPrompt ? "col-span-2" : "col-span-1"} font-sans`}>
-                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">关联素材 <span className="text-[10px] font-normal opacity-50">(可选)</span></label>
-                        <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 text-sm rounded-lg border focus:ring-2 focus:ring-sky-500 outline-none transition shadow-sm flex items-center justify-between font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-900/30 dark:border-sky-800 dark:text-sky-400' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}>
-                            <span className="truncate text-[11px]">{selectedAssetIds.size > 0 ? `已选 ${selectedAssetIds.size} 项` : '点击关联设定...'}</span>
-                            <BookOpen className="w-4 h-4 flex-shrink-0" />
+                            <ChevronDown className="w-4 h-4 flex-shrink-0 opacity-50" />
+                        </button>
+                        
+                        <button 
+                            onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} 
+                            className={`w-full p-3 rounded-lg border text-left transition-all font-sans flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-sky-100' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-500 hover:border-emerald-400'}`}
+                        >
+                            <div className="flex items-center gap-2 font-sans">
+                                <BookOpen className={`w-4 h-4 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`} />
+                                <span className="font-semibold text-xs">{isProjectSettingsAssociated ? 'AI 已关联作品设定' : '关联作品设定'}</span>
+                            </div>
+                            {isProjectSettingsAssociated ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <ChevronDown className="w-4 h-4 opacity-50" />}
                         </button>
                     </div>
                 </div>
@@ -314,7 +317,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 <>
                                      <div className="font-sans">
                                         <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">参考范文 / 风格来源</label>
-                                        <textarea value={referenceText} onChange={e => setReferenceText(e.target.value)} placeholder="在此粘贴你想模仿的文本段落..." className="w-full h-24 p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm mb-4 font-sans" />
+                                        <textarea value={referenceText} onChange={e => setReferenceText(e.target.value)} placeholder="在此粘贴你想模仿的文本段落..." className="w-full h-24 p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm mb-4 font-sans" />
                                     </div>
                                     <div className="font-sans">
                                         <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">新内容要求</label>

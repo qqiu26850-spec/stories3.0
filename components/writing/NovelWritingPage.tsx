@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Novel, Chapter, NovelSettings } from '../../types';
 import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight, PanelLeft, PanelRight } from '../Icon';
@@ -102,6 +103,19 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }
     };
 
+    const handleUpdateSettings = async (key: keyof NovelSettings, value: string) => {
+        const newSettings = { ...novel.settings, [key]: value };
+        setNovel(prev => ({ ...prev, settings: newSettings }));
+        setSaveStatus('saving');
+        try {
+            // 将整个设定对象序列化后存入 description 或者单独的设定字段
+            await updateProject(novel.id, { description: JSON.stringify(newSettings) });
+            setSaveStatus('saved');
+        } catch (e) {
+            setSaveStatus('error');
+        }
+    };
+
     const handleCreateChapter = async () => {
         const newOrder = novel.chapters.length + 1;
         const tempId = `new-${Date.now()}`;
@@ -173,23 +187,19 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
 
     const handleToolbarAction = (action: ToolbarAction) => {
         if (!editorRef.current) return;
-
         if (action === 'copy') {
             navigator.clipboard.writeText(editorRef.current.innerText);
             setShowCopyToast(true);
             setTimeout(() => setShowCopyToast(false), 2000);
             return;
         }
-
         if (action === 'bold') {
             document.execCommand('bold', false);
         }
-
         if (action === 'indent-add') {
             document.execCommand('formatBlock', false, 'p');
             const selection = window.getSelection();
             if (selection && selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
                 const paragraphs = editorRef.current.querySelectorAll('p');
                 paragraphs.forEach(p => {
                     if (selection.containsNode(p, true)) {
@@ -198,21 +208,17 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 });
             }
         }
-        
         if (action.startsWith('align-')) {
             const align = action.replace('align-', '');
             document.execCommand(`justify${align.charAt(0).toUpperCase() + align.slice(1)}`, false);
             setAlignment(align as any);
         }
-
         handleContentInput();
     };
 
     const handleAIStream = (chunk: string, isFirst: boolean) => {
         if (!editorRef.current) return;
-        if (isFirst) {
-            editorRef.current.focus();
-        }
+        if (isFirst) { editorRef.current.focus(); }
         document.execCommand('insertText', false, chunk);
         handleContentInput();
         if (scrollContainerRef.current) {
@@ -252,7 +258,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     </div>
                 </div>
                 
-                {/* Header Center - 作品标题放置于此 */}
                 <div className="flex-1 flex items-center justify-center p-2">
                     {isEditingTitle ? (
                         <input 
@@ -271,53 +276,51 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     )}
                 </div>
                 
-                {/* Right Header Section */}
                 <div className="w-[29%] flex-shrink-0 flex items-center justify-end px-4 border-l border-gray-200 dark:border-gray-800 gap-3">
                     <div className="flex items-center gap-2 mr-2">
-                        {saveStatus === 'saving' && (
+                         {saveStatus === 'saving' && (
                             <div className="flex items-center gap-1.5 text-sky-500 animate-pulse whitespace-nowrap">
                                 <ArrowPath className="w-4.5 h-4.5 animate-spin" />
-                                <span className="text-sm font-bold">保存中...</span>
+                                <span className="text-sm font-bold">正在同步...</span>
                             </div>
                         )}
                         {saveStatus === 'saved' && (
                             <div className="flex flex-row items-center gap-1.5 text-green-500 whitespace-nowrap">
                                 <Check className="w-5 h-5" />
-                                <span className="text-sm font-bold">已保存</span>
+                                <span className="text-sm font-bold">云端已同步</span>
                             </div>
                         )}
                     </div>
-                    
-                    <button 
-                        onClick={handleSaveToCloud} 
-                        className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all shadow-sm"
-                        title="同步数据"
-                    >
-                        <ArrowPath className="w-4 h-4" />
-                        <span>同步</span>
-                    </button>
-                    
-                    <button onClick={onBack} className="px-5 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-sm">返回</button>
+                    <button onClick={onBack} className="px-5 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-sm">返回管理</button>
                 </div>
             </header>
 
             <div className="flex-1 flex overflow-hidden relative">
-                {/* Left Sidebar Toggle Button */}
                 <button 
                     onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
                     className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-64' : 'left-0'}`}
-                    style={{ marginLeft: isLeftSidebarOpen ? '-1px' : '0' }}
                 >
                     {isLeftSidebarOpen ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                 </button>
 
                 <aside className={`flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-64' : 'w-0'}`}>
-                    <div className="flex border-b border-gray-200 dark:border-gray-800">
-                        <button className={`flex-1 py-3 text-sm font-medium ${openModule === 'chapters' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50 dark:bg-sky-900/10' : 'text-gray-500'}`} onClick={() => setOpenModule('chapters')}>目录</button>
-                        <button className={`flex-1 py-3 text-sm font-medium ${openModule === 'settings' ? 'text-sky-600 border-b-2 border-sky-600 bg-sky-50 dark:bg-sky-900/10' : 'text-gray-500'}`} onClick={() => setOpenModule('settings')}>设定</button>
+                    <div className="flex p-2 gap-1 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+                        <button onClick={() => setOpenModule('chapters')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${openModule === 'chapters' ? 'bg-sky-500 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>章节列表</button>
+                        <button onClick={() => setOpenModule('settings')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${openModule === 'settings' ? 'bg-sky-500 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>作品设定</button>
                     </div>
-                    <div className="flex-1 overflow-y-auto">
-                        {openModule === 'chapters' ? <ChapterManager chapters={novel.chapters} activeChapterId={activeChapter?.id || null} onSelectChapter={setActiveChapter} onDeleteChapter={handleDeleteChapter} onCreateChapter={handleCreateChapter} onReorderChapters={handleReorderChapters} /> : <NovelSettingsPanel settings={novel.settings} onUpdate={() => {}} />}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        {openModule === 'chapters' ? (
+                            <ChapterManager 
+                                chapters={novel.chapters} 
+                                activeChapterId={activeChapter?.id || null} 
+                                onSelectChapter={setActiveChapter} 
+                                onDeleteChapter={handleDeleteChapter}
+                                onCreateChapter={handleCreateChapter}
+                                onReorderChapters={handleReorderChapters}
+                            />
+                        ) : (
+                            <NovelSettingsPanel settings={novel.settings} onUpdate={handleUpdateSettings} />
+                        )}
                     </div>
                 </aside>
 
@@ -333,7 +336,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                     <input 
                                         value={chapterTitle} 
                                         onChange={(e) => setChapterTitle(e.target.value)} 
-                                        placeholder="输入章节标题..." 
+                                        placeholder="请输入章节标题..." 
                                         maxLength={15}
                                         className="w-full py-1 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-1.5" 
                                     />
@@ -347,32 +350,44 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                         style={{ textAlign: alignment }}
                                     ></div>
                                 </div>
-                                
+
                                 <div className="absolute bottom-6 right-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-4 py-1.5 rounded-full text-xs text-gray-400 font-mono border border-gray-100 dark:border-gray-800 shadow-sm z-20">
                                     <span className="text-sky-500 font-black">{wordCount}</span> 字
                                 </div>
                             </>
                         ) : (
-                            <div className="flex-1 flex items-center justify-center text-gray-400 flex-col"><BookOpen className="w-16 h-16 mb-4 opacity-20" /><p>请新建或选择一章开始创作</p></div>
+                            <div className="flex-1 flex items-center justify-center text-gray-400 flex-col"><BookOpen className="w-16 h-16 mb-4 opacity-20" /><p>请在左侧新建或选择一个章节开始创作</p></div>
                         )}
                      </div>
                 </main>
 
-                {/* Right Sidebar Toggle Button */}
                 <button 
                     onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
-                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isRightSidebarOpen ? 'right-[29%]' : 'right-0'}`}
-                    style={{ marginRight: isRightSidebarOpen ? '-1px' : '0' }}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-l-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isRightSidebarOpen ? 'right-[29%]' : 'right-0'}`}
                 >
                     {isRightSidebarOpen ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
                 </button>
 
                 <aside className={`flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 shadow-xl z-10 flex flex-col transition-all duration-300 overflow-hidden ${isRightSidebarOpen ? 'w-[29%]' : 'w-0'}`}>
                     <div className="flex-1 overflow-hidden min-w-[300px]">
-                        {mode === 'long' ? (
-                            <AIFunctionPanel contextText={editorRef.current?.innerText || ''} selectedText={window.getSelection()?.toString() || ''} onInsert={handleInsertText} onReplace={handleReplaceText} onStream={handleAIStream} />
+                        {mode === 'short' ? (
+                            <ShortStoryAIPanel 
+                                contextText={editorRef.current?.innerText || ''} 
+                                selectedText={window.getSelection()?.toString() || ''} 
+                                onInsert={handleInsertText} 
+                                onReplace={handleReplaceText} 
+                                onStream={handleAIStream}
+                                projectSettings={novel.settings}
+                            />
                         ) : (
-                            <ShortStoryAIPanel contextText={editorRef.current?.innerText || ''} selectedText={window.getSelection()?.toString() || ''} onInsert={handleInsertText} onReplace={handleReplaceText} onStream={handleAIStream} />
+                            <AIFunctionPanel 
+                                contextText={editorRef.current?.innerText || ''} 
+                                selectedText={window.getSelection()?.toString() || ''} 
+                                onInsert={handleInsertText} 
+                                onReplace={handleReplaceText} 
+                                onStream={handleAIStream}
+                                projectSettings={novel.settings}
+                            />
                         )}
                     </div>
                 </aside>
