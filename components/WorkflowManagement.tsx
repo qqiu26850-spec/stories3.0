@@ -158,7 +158,7 @@ const WorkflowManagement: React.FC = () => {
   if (view === 'run' && selectedWorkflow) return <WorkflowRun workflow={selectedWorkflow} onBack={() => setView('list')} />;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col font-sans">
+    <div className="h-full animate-fade-in flex flex-col font-sans bg-white dark:bg-black">
       <WorkflowDetailModal 
         isOpen={isDetailModalOpen} 
         onClose={() => setDetailModalOpen(false)} 
@@ -167,7 +167,8 @@ const WorkflowManagement: React.FC = () => {
       />
       <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDetailModalOpen(false)} onConfirm={handleConfirmDelete} />
 
-      <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
+      {/* 顶部栏 - 减少色彩差异，移除底部间隔 */}
+      <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 pb-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <div className="flex justify-between items-center">
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1">
                 {[
@@ -180,7 +181,7 @@ const WorkflowManagement: React.FC = () => {
                     <button 
                         key={tab.id} 
                         onClick={() => setActiveTab(tab.id as any)} 
-                        className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
+                        className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
                     >
                         {tab.label}
                     </button>
@@ -189,14 +190,14 @@ const WorkflowManagement: React.FC = () => {
             
             <div className="flex items-center gap-3 flex-shrink-0 ml-4">
                 <div className="flex gap-2">
-                     <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm ${activeTab === 'my-workflows' ? 'bg-sky-100 text-sky-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><UserCircle className="w-4 h-4" />我的工作流</button>
-                     <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><Heart className="w-4 h-4" />我的收藏</button>
+                     <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm ${activeTab === 'my-workflows' ? 'bg-sky-100 text-sky-600' : 'bg-white dark:bg-gray-900 text-gray-500'}`}><UserCircle className="w-4 h-4" />我的工作流</button>
+                     <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-white dark:bg-gray-900 text-gray-500'}`}><Heart className="w-4 h-4" />我的收藏</button>
                     <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-4 py-2 rounded-xl font-black bg-sky-600 text-white hover:bg-sky-500 shadow-lg shadow-sky-500/20 text-sm flex items-center gap-1"><Plus className="w-4 h-4" />创建</button>
                 </div>
             </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-4 justify-between items-start bg-gray-100 dark:bg-gray-900/50 p-3 rounded-2xl border border-gray-200 dark:border-gray-800">
+        <div className="flex flex-col lg:flex-row gap-4 justify-between items-start bg-gray-50 dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
             <div className="flex-1 w-full space-y-2">
                 <div className="flex flex-wrap gap-2 items-center">
                     <span className="text-[10px] font-bold text-gray-400 mr-1 shrink-0">功能:</span>
@@ -205,7 +206,7 @@ const WorkflowManagement: React.FC = () => {
                         <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-sky-100 text-sky-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
                     ))}
                 </div>
-                <div className="flex flex-wrap gap-2 items-center border-t border-gray-200 dark:border-gray-700 pt-2">
+                <div className="flex flex-wrap gap-2 items-center border-t border-gray-100 dark:border-gray-800 pt-2">
                     <span className="text-[10px] font-bold text-gray-400 mr-1 shrink-0">题材:</span>
                     {GENRE_TAGS.map(cat => (
                         <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-purple-100 text-purple-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
@@ -219,13 +220,13 @@ const WorkflowManagement: React.FC = () => {
                     placeholder="搜索工作流..." 
                     value={searchTerm} 
                     onChange={e => setSearchTerm(e.target.value)} 
-                    className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 text-sm rounded-xl border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all" 
+                    className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-900 text-sm rounded-xl border border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-sky-500 outline-none transition-all" 
                 />
             </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-2 -mr-2 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-gray-50 dark:bg-black/50">
           {isLoading ? (
               <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-t-sky-500 rounded-full animate-spin"></div></div>
           ) : (
@@ -237,7 +238,7 @@ const WorkflowManagement: React.FC = () => {
                       <div 
                           key={workflow.id} 
                           onClick={() => handleCardClick(workflow)} 
-                          className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 hover:shadow-xl hover:border-sky-500 transition-all duration-300 cursor-pointer group flex flex-col h-full relative"
+                          className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5 hover:shadow-xl hover:border-sky-500 transition-all duration-300 cursor-pointer group flex flex-col h-full relative"
                       >
                           <div className="flex justify-between items-start mb-1">
                               <h3 className="text-[15px] font-bold text-gray-900 dark:text-white group-hover:text-sky-600 transition-colors line-clamp-1 tracking-tight" title={workflow.title}>
@@ -245,7 +246,7 @@ const WorkflowManagement: React.FC = () => {
                               </h3>
                               <button
                                   onClick={(e) => toggleFavorite(e, workflow.id)}
-                                  className={`p-1.5 rounded-full transition-colors z-10 ${isFav ? 'text-red-500 bg-red-50' : 'text-gray-300 hover:text-red-500'}`}
+                                  className={`p-1.5 rounded-full transition-colors z-10 ${isFav ? 'text-red-500 bg-red-50' : 'text-gray-400 hover:text-red-500'}`}
                               >
                                   <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
                               </button>
@@ -285,7 +286,7 @@ const WorkflowManagement: React.FC = () => {
                   );
               })}
               {filteredWorkflows.length === 0 && (
-                  <div className="col-span-full flex flex-col items-center justify-center py-24 text-gray-400 bg-gray-50/50 dark:bg-gray-900/20 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+                  <div className="col-span-full flex flex-col items-center justify-center py-24 text-gray-400 bg-white dark:bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
                       <Box className="w-16 h-16 mb-4 opacity-10" />
                       <p className="text-lg font-medium">暂无工作流，换个分类或搜索词试试</p>
                       <button onClick={() => setView('create')} className="mt-4 text-sky-500 hover:underline font-bold">创建一个我的工作流</button>

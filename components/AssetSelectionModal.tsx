@@ -42,7 +42,7 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
     const availableTags = useMemo(() => {
         const tags = new Set<string>();
         assets.forEach(a => {
-            if (activeTab === 'all' || a.type === (activeTab === 'inspiration' ? 'idea' : activeTab)) {
+            if (activeTab === 'all' || a.type === (activeTab === 'inspiration' ? 'inspiration' : activeTab)) {
                 a.tags.forEach(t => tags.add(t));
             }
         });
@@ -51,8 +51,10 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
 
     const filteredAssets = useMemo(() => {
         return assets.filter(asset => {
+            // Fix: asset.type can be 'inspiration' or 'idea' in DB, but interface only allows 'character' | 'inspiration' | 'plot'
+            // In AssetManagement.tsx, 'idea' is mapped to 'inspiration'. So we only check 'inspiration' here.
             const typeMatch = activeTab === 'all' || 
-                              (activeTab === 'inspiration' ? (asset.type === 'idea' || asset.type === 'inspiration') : asset.type === activeTab);
+                              (activeTab === 'inspiration' ? asset.type === 'inspiration' : asset.type === activeTab);
             const tagMatch = selectedTag === 'all' || asset.tags.includes(selectedTag);
             const searchMatch = !searchTerm || 
                                 asset.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -127,7 +129,7 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                         <div className="flex flex-wrap gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
                             <button 
                                 onClick={() => setSelectedTag('all')}
-                                className={`px-2.5 py-0.5 text-[10px] font-medium rounded-full transition-all border whitespace-nowrap ${selectedTag === 'all' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                                className={`px-2.5 py-0.5 text-[10px] font-medium rounded-full transition-all border whitespace-nowrap ${selectedTag === 'all' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
                             >
                                 全部
                             </button>

@@ -73,6 +73,8 @@ export interface WorkflowField {
     label: string;
     variable: string;
     type: 'text' | 'textarea';
+    required?: boolean;
+    description?: string;
 }
 
 export interface WorkflowStep {

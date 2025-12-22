@@ -39,6 +39,7 @@ const WorkflowDetailModal: React.FC<WorkflowDetailModalProps> = ({ isOpen, onClo
         setTimeout(() => setCopied(false), 2000);
     };
 
+    // Fix: Explicitly ensuring createPortal receives correct number of arguments (JSX, container)
     return createPortal(
         <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col relative max-h-[90vh] animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
@@ -120,7 +121,8 @@ const WorkflowDetailModal: React.FC<WorkflowDetailModalProps> = ({ isOpen, onClo
                     {onRun && <button onClick={() => onRun(formState)} className="flex-[1.5] py-3 rounded-xl bg-sky-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95 transition-all hover:bg-sky-500 font-black"><Play className="w-5 h-5" />立即运行流程</button>}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
