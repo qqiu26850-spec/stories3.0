@@ -1,163 +1,254 @@
 
-import React, { useState, useEffect } from 'react';
-import { Sparkles, Film, UserCircle, Plus, Play, Fire, Heart } from './Icon';
+import React, { useState, useEffect, useMemo } from 'react';
+/* Added InformationCircle to the imports below */
+import { Sparkles, Film, UserCircle, Plus, Play, Fire, Heart, Box, Search, BookOpen, Pencil, Trash, InformationCircle } from './Icon';
 import CreateWorkflow from './CreateWorkflow';
 import WorkflowRun from './WorkflowRun';
-import { Workflow } from '../types';
+import WorkflowDetailModal from './WorkflowDetailModal';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
+import { Workflow, PromptCategory } from '../types';
 
-type Tab = 'short-story' | 'script' | 'my';
+type ExtendedTab = PromptCategory | 'all' | 'favorites' | 'my-workflows';
 type ViewState = 'list' | 'create' | 'run';
 
-const FAVORITES_KEY = 'qisimiaoxie_workflow_favorites';
+const FAVORITES_KEY = 'qisimiaoxie_workflow_favorites_v2';
+const CUSTOM_WORKFLOWS_KEY = 'qisimiaoxie_custom_workflows';
 
 const WorkflowManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('short-story');
+  const [activeTab, setActiveTab] = useState<ExtendedTab>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [view, setView] = useState<ViewState>('list');
+  
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
+  const [workflowToEdit, setWorkflowToEdit] = useState<Workflow | null>(null);
+  const [isDetailModalOpen, setDetailModalOpen] = useState(false);
+  const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [workflowToDelete, setWorkflowToDelete] = useState<Workflow | null>(null);
+
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [customWorkflows, setCustomWorkflows] = useState<Workflow[]>([]);
 
-  // 加载收藏
+  // 加载本地存储
   useEffect(() => {
-    const stored = localStorage.getItem(FAVORITES_KEY);
-    if (stored) try { setFavoritedIds(new Set(JSON.parse(stored))); } catch(e){}
+    const storedFavs = localStorage.getItem(FAVORITES_KEY);
+    if (storedFavs) try { setFavoritedIds(new Set(JSON.parse(storedFavs))); } catch(e){}
+
+    const storedWorkflows = localStorage.getItem(CUSTOM_WORKFLOWS_KEY);
+    if (storedWorkflows) try { setCustomWorkflows(JSON.parse(storedWorkflows)); } catch(e){}
   }, []);
 
-  // 持久化收藏
+  // 持久化
   useEffect(() => {
     localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(favoritedIds)));
   }, [favoritedIds]);
 
-  const handleSelectWorkflow = (wf: Workflow) => {
-      setSelectedWorkflow(wf);
-      setView('run');
+  useEffect(() => {
+    localStorage.setItem(CUSTOM_WORKFLOWS_KEY, JSON.stringify(customWorkflows));
+  }, [customWorkflows]);
+
+  const allWorkflows = useMemo(() => [...SYSTEM_WORKFLOWS, ...customWorkflows], [customWorkflows]);
+
+  const filteredWorkflows = useMemo(() => {
+    return allWorkflows.filter(w => {
+      if (activeTab === 'favorites') return favoritedIds.has(w.id);
+      if (activeTab === 'my-workflows') return w.author === '我';
+      if (activeTab !== 'all' && w.category !== activeTab) return false;
+      
+      const term = searchTerm.toLowerCase();
+      return !term || w.title.toLowerCase().includes(term) || w.description.toLowerCase().includes(term);
+    });
+  }, [activeTab, searchTerm, allWorkflows, favoritedIds]);
+
+  const handleCardClick = (wf: Workflow) => {
+    setSelectedWorkflow(wf);
+    setDetailModalOpen(true);
+  };
+
+  const handleEdit = (e: React.MouseEvent, wf: Workflow) => {
+    e.stopPropagation();
+    setWorkflowToEdit(wf);
+    setView('create');
+  };
+
+  const handleOpenDelete = (e: React.MouseEvent, wf: Workflow) => {
+    e.stopPropagation();
+    setWorkflowToDelete(wf);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (workflowToDelete) {
+      setCustomWorkflows(prev => prev.filter(w => w.id !== workflowToDelete.id));
+      setDeleteModalOpen(false);
+      setWorkflowToDelete(null);
+    }
   };
 
   const toggleFavorite = (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      setFavoritedIds(prev => {
-          const next = new Set(prev);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          return next;
-      });
+    e.stopPropagation();
+    setFavoritedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const handleSaveWorkflow = (data: any) => {
+    if (workflowToEdit) {
+      // 更新现有
+      setCustomWorkflows(prev => prev.map(w => w.id === workflowToEdit.id ? { ...w, ...data, title: data.name } : w));
+    } else {
+      // 新增
       const newWorkflow: Workflow = {
-          id: `wf-${Date.now()}`,
-          title: data.name,
-          description: data.description,
-          usageCount: '0',
-          heat: 0,
-          author: '我',
-          category: data.type === 'novel' ? 'short-story' : data.type as any,
-          fields: data.fields,
-          steps: data.steps
+        id: `wf-${Date.now()}`,
+        title: data.name,
+        description: data.description,
+        usageCount: '0',
+        heat: 0,
+        author: '我',
+        category: data.type as any,
+        fields: data.fields,
+        steps: data.steps
       };
       setCustomWorkflows(prev => [newWorkflow, ...prev]);
-      setFavoritedIds(prev => new Set(prev).add(newWorkflow.id));
-      setView('list');
+    }
+    setView('list');
+    setWorkflowToEdit(null);
   };
 
-  // 模拟系统预设数据 + 用户自定义数据
-  const allWorkflows = [...SYSTEM_WORKFLOWS, ...customWorkflows];
+  const handleRunFromDetail = (filledValues: Record<string, string>) => {
+    // 这里为了演示简单，直接进入运行页，WorkflowRun 内部会处理初始值
+    setDetailModalOpen(false);
+    setView('run');
+  };
 
-  const filteredWorkflows = allWorkflows.filter(w => {
-      if (activeTab === 'my') return favoritedIds.has(w.id);
-      return w.category === activeTab;
-  });
-
-  if (view === 'create') return <CreateWorkflow onBack={() => setView('list')} onSave={handleSaveWorkflow} />;
+  if (view === 'create') return <CreateWorkflow onBack={() => { setView('list'); setWorkflowToEdit(null); }} onSave={handleSaveWorkflow} workflowToEdit={workflowToEdit} />;
   if (view === 'run' && selectedWorkflow) return <WorkflowRun workflow={selectedWorkflow} onBack={() => setView('list')} />;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col font-sans">
-      <div className="mb-8 flex justify-between items-end">
-        <div>
-            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">创作工作流</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">结构化多环节生成工具，将您的创作逻辑转化为自动化生产链。</p>
-        </div>
-        <button
-           onClick={() => setView('create')} 
-           className="px-6 py-2.5 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 transition-all shadow-lg shadow-sky-500/20 active:scale-95 flex items-center gap-2"
-        >
-           <Plus className="w-5 h-5" />
-           自定义工作流
-        </button>
-      </div>
+      <WorkflowDetailModal 
+        isOpen={isDetailModalOpen} 
+        onClose={() => setDetailModalOpen(false)} 
+        workflow={selectedWorkflow} 
+        onRun={handleRunFromDetail} 
+      />
+      <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
 
-      <div className="flex gap-2 mb-8 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl w-fit">
-        {[
-            { id: 'short-story', label: '短篇小说', icon: Sparkles },
-            { id: 'script', label: '影视剧本', icon: Film },
-            { id: 'my', label: '我的收藏', icon: Heart },
-        ].map(tab => (
-            <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as Tab)}
-                className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all ${
-                    activeTab === tab.id 
-                    ? 'bg-white dark:bg-gray-800 text-sky-600 dark:text-sky-400 shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'
-                }`}
-            >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-            </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto pr-2 custom-scrollbar">
-        {filteredWorkflows.map(workflow => {
-            const isFav = favoritedIds.has(workflow.id);
-            return (
-                <div 
-                    key={workflow.id} 
-                    onClick={() => handleSelectWorkflow(workflow)} 
-                    className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 hover:shadow-xl hover:border-sky-500 transition-all duration-300 cursor-pointer group flex flex-col h-full relative"
-                >
-                    <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-sky-600 transition-colors truncate pr-8" title={workflow.title}>
-                            {workflow.title}
-                        </h3>
-                        <button
-                            onClick={(e) => toggleFavorite(e, workflow.id)}
-                            className={`absolute top-6 right-6 p-1.5 rounded-full transition-colors z-10 ${isFav ? 'text-red-500 bg-red-50' : 'text-gray-300 hover:text-red-500'}`}
-                        >
-                            <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
-                        </button>
-                    </div>
-                    
-                    <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-6 line-clamp-3 flex-grow">
-                        {workflow.description}
-                    </p>
-                    
-                    <div className="flex items-center justify-between text-[11px] text-gray-400 pt-4 border-t border-gray-100 dark:border-gray-800 mt-auto">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1 text-orange-400 font-bold">
-                                <Fire className="w-3 h-3" />
-                                <span>{workflow.heat || 0}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <UserCircle className="w-3 h-3" />
-                                <span className="max-w-[70px] truncate">{workflow.author}</span>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-1 bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded font-bold border border-sky-100 dark:border-sky-800">
-                             运行
-                        </div>
-                    </div>
-                </div>
-            );
-        })}
-        {filteredWorkflows.length === 0 && (
-            <div className="col-span-full flex flex-col items-center justify-center py-24 text-gray-400 bg-gray-50/50 dark:bg-gray-900/20 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
-                <Sparkles className="w-16 h-16 mb-4 opacity-10" />
-                <p className="text-lg font-medium">该分类下暂无工作流</p>
-                <button onClick={() => setView('create')} className="mt-4 text-sky-500 hover:underline font-bold">创建一个？</button>
+      {/* 顶部导航栏 - 与提示词库截图保持一致 */}
+      <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
+        <div className="flex justify-between items-center">
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1">
+                {[
+                    { id: 'all', label: '全部' },
+                    { id: 'short-story', label: '短篇小说' },
+                    { id: 'long-story', label: '长篇小说' },
+                    { id: 'script', label: '剧本' },
+                    { id: 'general', label: '全类型' },
+                ].map(tab => (
+                    <button 
+                        key={tab.id} 
+                        onClick={() => setActiveTab(tab.id as any)} 
+                        className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
             </div>
-        )}
+            
+            <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                <div className="flex gap-2">
+                     <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm ${activeTab === 'my-workflows' ? 'bg-sky-100 text-sky-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><UserCircle className="w-4 h-4" />我的工作流</button>
+                     <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><Heart className="w-4 h-4" />我的收藏</button>
+                    <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-4 py-2 rounded-xl font-black bg-sky-600 text-white hover:bg-sky-500 shadow-lg shadow-sky-500/20 text-sm flex items-center gap-1"><Plus className="w-4 h-4" />创建</button>
+                </div>
+            </div>
+        </div>
+
+        <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-gray-100 dark:bg-gray-900/50 p-3 rounded-2xl border border-gray-200 dark:border-gray-800">
+            <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
+                <InformationCircle className="w-4 h-4 text-sky-500" />
+                工作流可以将多个 AI 处理环节串联，实现从构思到正文的一站式自动化生产。
+            </div>
+            <div className="relative w-full lg:w-80">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
+                <input 
+                    type="text" 
+                    placeholder="搜索工作流名称、简介..." 
+                    value={searchTerm} 
+                    onChange={e => setSearchTerm(e.target.value)} 
+                    className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 text-sm rounded-xl border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all" 
+                />
+            </div>
+        </div>
+      </div>
+
+      {/* 工作流列表 */}
+      <div className="flex-1 overflow-y-auto pr-2 -mr-2 custom-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
+            {filteredWorkflows.map(workflow => {
+                const isFav = favoritedIds.has(workflow.id);
+                const isOwner = workflow.author === '我';
+                return (
+                    <div 
+                        key={workflow.id} 
+                        onClick={() => handleCardClick(workflow)} 
+                        className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 hover:shadow-xl hover:border-sky-500 transition-all duration-300 cursor-pointer group flex flex-col h-full relative"
+                    >
+                        <div className="flex justify-between items-start mb-1">
+                            <h3 className="text-[15px] font-bold text-gray-900 dark:text-white group-hover:text-sky-600 transition-colors line-clamp-1 tracking-tight" title={workflow.title}>
+                                {workflow.title}
+                            </h3>
+                            <button
+                                onClick={(e) => toggleFavorite(e, workflow.id)}
+                                className={`p-1.5 rounded-full transition-colors z-10 ${isFav ? 'text-red-500 bg-red-50' : 'text-gray-300 hover:text-red-500'}`}
+                            >
+                                <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
+                            </button>
+                        </div>
+                        
+                        <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-4 line-clamp-3 flex-grow">
+                            {workflow.description}
+                        </p>
+                        
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800 mt-auto gap-2">
+                            <div className="flex items-center gap-1.5 overflow-hidden flex-wrap max-h-6">
+                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-900/20 dark:text-sky-400 dark:border-sky-800">
+                                    {workflow.category === 'script' ? '剧本' : workflow.category === 'short-story' ? '短篇' : '长篇'}
+                                </span>
+                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:text-purple-300">
+                                    {workflow.steps?.length || 0} 步
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0 text-xs text-gray-400">
+                                <div className="flex items-center gap-1 text-orange-400 font-bold">
+                                    <Fire className="w-3 h-3" />
+                                    <span>{workflow.heat || 0}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <UserCircle className="w-3 h-3" />
+                                    <span className="max-w-[60px] truncate">{workflow.author}</span>
+                                </div>
+                                {isOwner && (
+                                    <div className="flex gap-1.5 pl-2 border-l border-gray-100 dark:border-gray-800">
+                                        <button onClick={(e) => handleEdit(e, workflow)} className="text-gray-400 hover:text-sky-500 transition-colors" title="编辑"><Pencil className="w-3.5 h-3.5" /></button>
+                                        <button onClick={(e) => handleOpenDelete(e, workflow)} className="text-gray-400 hover:text-rose-500 transition-colors" title="删除"><Trash className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+            {filteredWorkflows.length === 0 && (
+                <div className="col-span-full flex flex-col items-center justify-center py-24 text-gray-400 bg-gray-50/50 dark:bg-gray-900/20 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+                    <Box className="w-16 h-16 mb-4 opacity-10" />
+                    <p className="text-lg font-medium">该分类下暂无工作流</p>
+                    <button onClick={() => setView('create')} className="mt-4 text-sky-500 hover:underline font-bold">立即创建一个</button>
+                </div>
+            )}
+          </div>
       </div>
     </div>
   );
