@@ -34,13 +34,33 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
     }, [workflowToEdit]);
 
     const addField = () => {
-        setFields([...fields, { id: `field_${Date.now()}`, label: '', variable: '', type: 'text', required: true, description: '' }]);
+        setFields([...fields, { 
+            id: `field_${Date.now()}`, 
+            label: '', 
+            variable: '', 
+            type: 'text', 
+            required: true, 
+            description: '' 
+        }]);
     };
 
     const updateField = (index: number, key: keyof WorkflowField, value: any) => {
         const newFields = [...fields];
         // @ts-ignore
         newFields[index][key] = value;
+        setFields(newFields);
+    };
+
+    const removeField = (index: number) => {
+        setFields(fields.filter((_, i) => i !== index));
+    };
+
+    const moveField = (index: number, direction: 'up' | 'down') => {
+        const newFields = [...fields];
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= newFields.length) return;
+        const [temp] = newFields.splice(index, 1);
+        newFields.splice(targetIndex, 0, temp);
         setFields(newFields);
     };
 
@@ -54,6 +74,10 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
         // @ts-ignore
         newSteps[index][key] = value;
         setSteps(newSteps);
+    };
+
+    const removeStep = (index: number) => {
+        setSteps(steps.filter((_, i) => i !== index));
     };
 
     const handleImportPrompt = (index: number) => {
@@ -75,7 +99,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
 
     const handleSave = () => {
         if (!name.trim()) { alert('请输入名称'); return; }
-        if (steps.length === 0) { alert('请至少添加一个运行节点'); return; }
+        if (steps.length === 0) { alert('请至少添加一个运行步骤'); return; }
         onSave({ name, type, description, subCategories, fields, steps });
     };
 
@@ -135,7 +159,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                         </div>
                     </div>
 
-                    {/* 2. 用户输入表单 - 增加间隔 */}
+                    {/* 2. 用户输入表单 */}
                     <div className="bg-amber-50/40 dark:bg-amber-900/10 p-8 rounded-3xl border border-amber-100 dark:border-amber-900/30 space-y-6 shadow-sm">
                         <div className="flex justify-between items-center">
                             <h2 className="text-lg font-black text-amber-700 dark:text-amber-300 flex items-center gap-3">
@@ -146,30 +170,91 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                             </button>
                         </div>
                         <div className="space-y-4">
-                            {fields.length === 0 ? <div className="text-center py-10 text-gray-400 text-xs italic border-2 border-dashed border-amber-200 dark:border-amber-900/50 rounded-2xl">请添加字段以获取用户输入的初始参数</div> : fields.map((field, index) => (
-                                <div key={field.id} className="flex flex-col md:flex-row gap-4 items-end bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 shadow-sm">
-                                    <div className="flex-1 space-y-1.5 w-full">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase">显示名称</label>
-                                        <input type="text" value={field.label} onChange={e => updateField(index, 'label', e.target.value)} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none focus:ring-1 focus:ring-amber-500" placeholder="如：主角性格" />
+                            {fields.length === 0 ? (
+                                <div className="text-center py-10 text-gray-400 text-xs italic border-2 border-dashed border-amber-200 dark:border-amber-900/50 rounded-2xl">请添加字段以获取用户输入的初始参数</div>
+                            ) : (
+                                fields.map((field, index) => (
+                                    <div key={field.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4 relative group">
+                                        {/* 排序按钮 */}
+                                        <div className="absolute right-4 top-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button 
+                                                onClick={() => moveField(index, 'up')} 
+                                                disabled={index === 0}
+                                                className="p-1.5 bg-gray-50 dark:bg-gray-700 rounded-lg text-gray-400 hover:text-sky-500 disabled:opacity-30"
+                                                title="上移"
+                                            >
+                                                <ChevronUp className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                                onClick={() => moveField(index, 'down')} 
+                                                disabled={index === fields.length - 1}
+                                                className="p-1.5 bg-gray-50 dark:bg-gray-700 rounded-lg text-gray-400 hover:text-sky-500 disabled:opacity-30"
+                                                title="下移"
+                                            >
+                                                <ChevronDown className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => removeField(index)} className="p-1.5 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-400 hover:text-red-600" title="删除">
+                                                <Trash className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pr-24">
+                                            <div className="space-y-1.5 w-full">
+                                                <label className="text-[9px] font-black text-gray-400 uppercase">显示名称</label>
+                                                <input type="text" value={field.label} onChange={e => updateField(index, 'label', e.target.value)} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-1 focus:ring-amber-500" placeholder="如：主角性格" />
+                                            </div>
+                                            <div className="space-y-1.5 w-full">
+                                                <label className="text-[9px] font-black text-gray-400 uppercase">变量名 (ID)</label>
+                                                <input type="text" value={field.variable} onChange={e => updateField(index, 'variable', e.target.value)} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none font-mono focus:ring-1 focus:ring-amber-500" placeholder="如：trait" />
+                                            </div>
+                                            <div className="space-y-1.5 w-full">
+                                                <label className="text-[9px] font-black text-gray-400 uppercase">必填选项</label>
+                                                <div className="flex items-center h-10 px-2 gap-4">
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input 
+                                                            type="radio" 
+                                                            checked={field.required !== false} 
+                                                            onChange={() => updateField(index, 'required', true)} 
+                                                            className="accent-amber-500" 
+                                                        />
+                                                        <span className="text-xs text-gray-600 dark:text-gray-300">必填</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input 
+                                                            type="radio" 
+                                                            checked={field.required === false} 
+                                                            onChange={() => updateField(index, 'required', false)} 
+                                                            className="accent-amber-500" 
+                                                        />
+                                                        <span className="text-xs text-gray-600 dark:text-gray-300">选填</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5 w-full">
+                                            <label className="text-[9px] font-black text-gray-400 uppercase">补充说明 (输入提示内容)</label>
+                                            <input 
+                                                type="text" 
+                                                value={field.description || ''} 
+                                                onChange={e => updateField(index, 'description', e.target.value)} 
+                                                className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-1 focus:ring-amber-500" 
+                                                placeholder="例如：请具体描述人物的三个以上性格关键词..." 
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="flex-1 space-y-1.5 w-full">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase">变量名 (ID)</label>
-                                        <input type="text" value={field.variable} onChange={e => updateField(index, 'variable', e.target.value)} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none font-mono focus:ring-1 focus:ring-amber-500" placeholder="如：trait" />
-                                    </div>
-                                    <button onClick={() => setFields(fields.filter((_, i) => i !== index))} className="p-3 text-gray-300 hover:text-rose-500 transition-colors"><Trash className="w-5 h-5" /></button>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     </div>
 
-                    {/* 3. AI 节点配置 - 增加间隔 */}
+                    {/* 3. 运行步骤 */}
                     <div className="bg-purple-50/40 dark:bg-purple-900/10 p-8 rounded-3xl border border-purple-100 dark:border-purple-900/30 space-y-6 shadow-sm">
                         <div className="flex justify-between items-center">
                             <h2 className="text-lg font-black text-purple-700 dark:text-purple-300 flex items-center gap-3">
-                                <Sparkles className="w-5 h-5" /> 3. 自动化链路节点
+                                <Sparkles className="w-5 h-5" /> 3. 运行步骤配置
                             </h2>
                             <button onClick={addStep} className="px-4 py-2 bg-purple-600 text-white font-bold rounded-xl flex items-center gap-2 hover:bg-purple-500 transition-all text-xs shadow-lg shadow-purple-500/20">
-                                <Plus className="w-4 h-4" /> 增加节点
+                                <Plus className="w-4 h-4" /> 增加步骤
                             </button>
                         </div>
                         
@@ -181,7 +266,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                     
                                     <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 space-y-4 shadow-sm">
                                         <div className="flex justify-between items-center border-b border-gray-50 dark:border-gray-700 pb-3">
-                                            <input type="text" value={step.name} onChange={e => updateStep(index, 'name', e.target.value)} className="bg-transparent font-black text-gray-900 dark:text-white outline-none border-b border-transparent focus:border-purple-500 transition-all flex-1" placeholder="节点名称..." />
+                                            <input type="text" value={step.name} onChange={e => updateStep(index, 'name', e.target.value)} className="bg-transparent font-black text-gray-900 dark:text-white outline-none border-b border-transparent focus:border-purple-500 transition-all flex-1" placeholder="步骤名称..." />
                                             <div className="flex gap-2">
                                                 <button onClick={() => handleImportPrompt(index)} className="px-3 py-1.5 bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 rounded-lg text-[10px] font-bold border border-sky-100 dark:border-sky-800 hover:bg-sky-100 flex items-center gap-1.5"><Box className="w-3.5 h-3.5" /> 导入模板</button>
                                                 <button onClick={() => setSteps(steps.filter((_, i) => i !== index))} className="p-2 text-gray-300 hover:text-rose-500"><Trash className="w-4 h-4" /></button>
@@ -190,7 +275,12 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
 
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">运行 Prompt (提示词内容)</label>
-                                            <textarea value={step.prompt} onChange={e => updateStep(index, 'prompt', e.target.value)} className="w-full p-4 h-32 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl focus:ring-2 focus:ring-purple-500 outline-none text-sm resize-none transition-all shadow-inner" placeholder="输入 AI 指令，使用 ${变量名} 引用上文..." />
+                                            <textarea 
+                                                value={step.prompt} 
+                                                onChange={e => updateStep(index, 'prompt', e.target.value)} 
+                                                className="w-full p-4 h-72 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl focus:ring-2 focus:ring-purple-500 outline-none text-sm resize-y transition-all shadow-inner" 
+                                                placeholder="输入 AI 指令，使用 ${变量名} 引用上文..." 
+                                            />
                                         </div>
 
                                         <div className="flex items-center gap-4 bg-purple-50/50 dark:bg-purple-900/10 p-3 rounded-2xl border border-purple-100/50">
@@ -201,7 +291,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                     </div>
                                 </div>
                             ))}
-                            {steps.length === 0 && <div className="text-center py-16 text-gray-400 flex flex-col items-center gap-4 bg-white dark:bg-gray-900 rounded-3xl border border-dashed"><Sparkles className="w-12 h-12 opacity-10" /><p className="text-sm font-medium">尚未定义任何处理环节，点击右上方“增加节点”开始构建链路</p></div>}
+                            {steps.length === 0 && <div className="text-center py-16 text-gray-400 flex flex-col items-center gap-4 bg-white dark:bg-gray-900 rounded-3xl border border-dashed"><Sparkles className="w-12 h-12 opacity-10" /><p className="text-sm font-medium">尚未定义任何运行步骤，点击右上方“增加步骤”开始构建链路</p></div>}
                         </div>
                     </div>
                 </div>

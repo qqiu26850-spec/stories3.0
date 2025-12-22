@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import { Sparkles, Film, UserCircle, Plus, Play, Fire, Heart, Box, Search, BookOpen, Pencil, Trash, InformationCircle, Check } from './Icon';
 import CreateWorkflow from './CreateWorkflow';
 import WorkflowRun from './WorkflowRun';
@@ -14,22 +13,6 @@ type ExtendedTab = PromptCategory | 'all' | 'favorites' | 'my-workflows';
 type ViewState = 'list' | 'create' | 'run';
 
 const FAVORITES_KEY = 'qisimiaoxie_workflow_favorites_v3';
-
-// 成功提示组件 - 可复用
-export const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
-    if (!isVisible) return null;
-    return createPortal(
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] animate-fade-in-up">
-            <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border border-green-200 dark:border-green-900 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
-                <div className="w-6 h-6 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                    <Check className="w-4 h-4" />
-                </div>
-                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{message}</span>
-            </div>
-        </div>,
-        document.body
-    );
-};
 
 interface WorkflowManagementProps {
     isActive?: boolean;
@@ -52,14 +35,12 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 浮动提示状态
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+  // 顶部栏通知状态
+  const [notification, setNotification] = useState<string | null>(null);
 
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+  const triggerNotification = (msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 3000);
   };
 
   const loadData = async () => {
@@ -147,7 +128,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       loadData();
       setDeleteModalOpen(false);
       setWorkflowToDelete(null);
-      triggerToast('工作流已成功删除');
+      triggerNotification('工作流删除成功');
     }
   };
 
@@ -162,17 +143,17 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
               fields: data.fields,
               steps: data.steps
           });
-          triggerToast('更新成功');
+          triggerNotification('工作流更新成功');
         } else {
           await saveWorkflow(data.name, data.description, data.type, data.subCategories || [], data.fields, data.steps);
-          triggerToast('发布成功');
+          triggerNotification('工作流创建成功');
           setActiveTab('all');
         }
         setView('list');
         setWorkflowToEdit(null);
         await loadData();
     } catch (e) {
-        triggerToast('操作失败，请重试');
+        triggerNotification('操作失败，请重试');
     }
   };
 
@@ -181,7 +162,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
   return (
     <div className="h-full animate-fade-in flex flex-col font-sans bg-white dark:bg-black">
-      <SuccessToast message={toastMessage} isVisible={showToast} />
       <WorkflowDetailModal 
         isOpen={isDetailModalOpen} 
         onClose={() => setDetailModalOpen(false)} 
@@ -192,22 +172,30 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
       <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 pb-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <div className="flex justify-between items-center">
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1">
-                {[
-                    { id: 'all', label: '全部' },
-                    { id: 'short-story', label: '短篇小说' },
-                    { id: 'long-story', label: '长篇小说' },
-                    { id: 'script', label: '剧本' },
-                    { id: 'general', label: '全类型' },
-                ].map(tab => (
-                    <button 
-                        key={tab.id} 
-                        onClick={() => setActiveTab(tab.id as any)} 
-                        className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
+            <div className="flex items-center gap-4 flex-1">
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                    {[
+                        { id: 'all', label: '全部' },
+                        { id: 'short-story', label: '短篇小说' },
+                        { id: 'long-story', label: '长篇小说' },
+                        { id: 'script', label: '剧本' },
+                        { id: 'general', label: '全类型' },
+                    ].map(tab => (
+                        <button 
+                            key={tab.id} 
+                            onClick={() => setActiveTab(tab.id as any)} 
+                            className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+                {notification && (
+                    <div className="flex items-center gap-2 px-4 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-100 dark:border-emerald-800 animate-fade-in text-xs font-bold whitespace-nowrap">
+                        <Check className="w-3.5 h-3.5" />
+                        {notification}
+                    </div>
+                )}
             </div>
             
             <div className="flex items-center gap-3 flex-shrink-0 ml-4">
