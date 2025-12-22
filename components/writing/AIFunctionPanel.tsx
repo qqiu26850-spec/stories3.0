@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -291,7 +292,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                             {field.required !== false ? (
                                                 <span className="ml-1 text-red-500 font-normal">* (必填)</span>
                                             ) : (
-                                                <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
+                                                <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
                                             )}
                                         </span>
                                     </label>

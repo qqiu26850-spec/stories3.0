@@ -103,7 +103,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                                             {field.required !== false ? (
                                                 <span className="ml-1 text-red-500 font-normal">* (必填)</span>
                                             ) : (
-                                                <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
+                                                <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
                                             )}
                                         </label>
                                         {field.maxLength && (

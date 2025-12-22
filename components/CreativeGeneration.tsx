@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
@@ -343,7 +344,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                                         {f.required !== false ? (
                                                             <span className="ml-1 text-red-500 font-normal">* (必填)</span>
                                                         ) : (
-                                                            <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
+                                                            <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
                                                         )}
                                                     </label>
                                                     {f.maxLength && (

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -271,7 +272,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                             {field.required !== false ? (
                                                 <span className="ml-1 text-red-500 font-normal">* (必填)</span>
                                             ) : (
-                                                <span className="ml-1 text-gray-400 font-normal"> (非必填)</span>
+                                                <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
                                             )}
                                         </label>
                                         {field.maxLength && (

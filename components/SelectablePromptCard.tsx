@@ -39,8 +39,7 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'apocalypse': '末世',
     'urban': '都市',
     'fantasy': '玄幻',
-    'history': '历史',
-    'social': '世情',
+    'history': '历史', 'social': '世情',
     'suspense': '悬疑',
     'sci-fi': '科幻'
 };
@@ -55,7 +54,7 @@ const SelectablePromptCard: React.FC<SelectablePromptCardProps> = ({ prompt, onS
       onClick={onSelect}
       className="w-full text-left p-5 bg-white dark:bg-gray-800 rounded-xl hover:shadow-lg hover:border-sky-500 border border-gray-200 dark:border-gray-700 transition-all group h-full flex flex-col relative"
     >
-      <div className="flex justify-between items-start mb-2">
+      <div className="flex justify-between items-start mb-1">
         <h4 className="text-[15px] font-bold text-gray-900 dark:text-white flex-grow pr-2 line-clamp-1 group-hover:text-sky-600 transition-colors tracking-tight" title={prompt.title}>
             {prompt.title}
         </h4>

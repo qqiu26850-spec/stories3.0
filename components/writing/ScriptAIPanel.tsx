@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -226,7 +227,12 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                         {selectedPrompt.fields.map((field, index) => (
                             <div key={field.id} className="font-sans">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                                    {index + 1}. {field.label} {field.required !== false && <span className="text-red-500">*</span>}
+                                    {index + 1}. {field.label}
+                                    {field.required !== false ? (
+                                        <span className="ml-1 text-red-500 font-normal">* (必填)</span>
+                                    ) : (
+                                        <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
+                                    )}
                                 </label>
                                 {field.type === 'textarea' ? (
                                     <textarea 

@@ -108,13 +108,19 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     };
 
     const moveField = (index: number, direction: 'up' | 'down') => {
-        const newFields = [...fields];
         if (direction === 'up' && index > 0) {
-            [newFields[index], newFields[index - 1]] = [newFields[index - 1], newFields[index]];
-        } else if (direction === 'down' && index < newFields.length - 1) {
-            [newFields[index], newFields[index + 1]] = [newFields[index + 1], newFields[index]];
+            const newFields = [...fields];
+            const temp = newFields[index];
+            newFields[index] = newFields[index - 1];
+            newFields[index - 1] = temp;
+            setFields(newFields);
+        } else if (direction === 'down' && index < fields.length - 1) {
+            const newFields = [...fields];
+            const temp = newFields[index];
+            newFields[index] = newFields[index + 1];
+            newFields[index + 1] = temp;
+            setFields(newFields);
         }
-        setFields(newFields);
     };
     
     const removeField = (index: number) => {
@@ -144,9 +150,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             const invalidField = fields.find(f => !f.label.trim() || !f.id.trim());
             if (invalidField) { alert('发布失败：请完整填写所有自定义表单的“显示名称”和“变量名”'); return; }
         } else {
-            // 如果模板中有变量但没定义字段，提示用户，但这取决于应用逻辑
-            // 这里简单要求至少定义一个字段（如果模板是动态的）或者允许空字段（如果模板是静态的）
-            // 根据需求，表单字段是必填项相关的逻辑
             if (template.includes('${') && fields.length === 0) {
                 alert('发布失败：您的模板中包含变量，请添加对应的“自定义填写表单”');
                 return;
@@ -252,8 +255,8 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                             <div className="col-span-2">
                                                 <label className="text-[10px] text-gray-400 block mb-1">是否必填</label>
                                                 <select value={field.required ? 'true' : 'false'} onChange={e => updateField(index, 'required', e.target.value === 'true')} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border rounded text-[10px] outline-none">
-                                                    <option value="true">必须填写</option>
-                                                    <option value="false">可选填写</option>
+                                                    <option value="true">必填</option>
+                                                    <option value="false">选填</option>
                                                 </select>
                                             </div>
                                             <div className="col-span-2">

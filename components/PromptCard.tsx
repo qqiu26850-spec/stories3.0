@@ -35,7 +35,7 @@ const isGenre = (tag: string) => GENRE_TAGS.some(g => g.id === tag);
 const PromptCard: React.FC<PromptCardProps> = ({ prompt, onSelect, onDelete, onEdit, isFavorited = false, onToggleFavorite, isOwner }) => {
   return (
     <div onClick={() => onSelect(prompt)} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 hover:shadow-lg hover:border-sky-500 transition-all duration-300 cursor-pointer group flex flex-col h-full relative">
-        <div className="flex justify-between items-start mb-2">
+        <div className="flex justify-between items-start mb-1">
             <h3 className="text-[15px] font-bold text-gray-900 dark:text-white group-hover:text-sky-600 transition-colors line-clamp-1 tracking-tight" title={prompt.title}>
                 {prompt.title}
             </h3>
