@@ -58,6 +58,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     const [subCategories, setSubCategories] = useState<PromptSubCategory[]>([]);
     const [fields, setFields] = useState<PromptField[]>([]);
     const [error, setError] = useState('');
+    const [fieldIndexToDelete, setFieldIndexToDelete] = useState<number | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -79,12 +80,13 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 setFields([]);
             }
             setError('');
+            setFieldIndexToDelete(null);
         }
     }, [isOpen, promptToEdit]);
 
     const addField = () => {
         const newId = `field_${Date.now()}`;
-        setFields([...fields, { 
+        setFields(prev => [...prev, { 
             id: newId, 
             label: '', 
             type: 'text', 
@@ -96,35 +98,36 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     };
 
     const updateField = (index: number, key: keyof PromptField, value: any) => {
-        const newFields = [...fields];
-        const fieldToUpdate = { ...newFields[index] };
-        // @ts-ignore
-        fieldToUpdate[key] = value;
-        if (key === 'label') {
-            fieldToUpdate.placeholder = `请输入${value}...`;
-        }
-        newFields[index] = fieldToUpdate;
-        setFields(newFields);
+        setFields(prev => {
+            const next = [...prev];
+            const fieldToUpdate = { ...next[index] };
+            // @ts-ignore
+            fieldToUpdate[key] = value;
+            if (key === 'label' && !fieldToUpdate.placeholder) {
+                fieldToUpdate.placeholder = `请输入${value}...`;
+            }
+            next[index] = fieldToUpdate;
+            return next;
+        });
     };
 
     const moveField = (index: number, direction: 'up' | 'down') => {
-        if (direction === 'up' && index > 0) {
-            const newFields = [...fields];
-            const temp = newFields[index];
-            newFields[index] = newFields[index - 1];
-            newFields[index - 1] = temp;
-            setFields(newFields);
-        } else if (direction === 'down' && index < fields.length - 1) {
-            const newFields = [...fields];
-            const temp = newFields[index];
-            newFields[index] = newFields[index + 1];
-            newFields[index + 1] = temp;
-            setFields(newFields);
-        }
+        setFields(prev => {
+            const next = [...prev];
+            const targetIndex = direction === 'up' ? index - 1 : index + 1;
+            if (targetIndex < 0 || targetIndex >= next.length) return prev;
+            
+            // 使用 ES6 解构进行交换，确保引用的纯净性
+            [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+            return next;
+        });
     };
     
-    const removeField = (index: number) => {
-        setFields(fields.filter((_, i) => i !== index));
+    const confirmDeleteField = () => {
+        if (fieldIndexToDelete !== null) {
+            setFields(prev => prev.filter((_, i) => i !== fieldIndexToDelete));
+            setFieldIndexToDelete(null);
+        }
     };
 
     const toggleSubCategory = (tag: PromptSubCategory) => {
@@ -165,6 +168,23 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
+            {/* 删除确认挽留弹窗 */}
+            {fieldIndexToDelete !== null && (
+                <div className="fixed inset-0 flex items-center justify-center z-[110] bg-black/40 backdrop-blur-[2px]" onClick={() => setFieldIndexToDelete(null)}>
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl max-w-xs w-full text-center animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+                            <Trash className="w-6 h-6" />
+                        </div>
+                        <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">确定删除该字段？</h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">此操作将移除该表单项及其关联的变量，且不可撤销。</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setFieldIndexToDelete(null)} className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors">取消</button>
+                            <button onClick={confirmDeleteField} className="flex-1 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-500 transition-colors shadow-lg shadow-red-600/20">确认删除</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
                 <div className="px-8 py-2.5 bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-900/20 dark:to-gray-900 border-b border-sky-100 dark:border-gray-800 flex-shrink-0">
                     <div className="flex justify-between items-center">
@@ -232,7 +252,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
                         <div className="p-6 bg-indigo-50/40 dark:bg-indigo-900/10 rounded-xl space-y-4">
                             <h4 className="text-sm font-bold text-indigo-600 flex items-center gap-2"><DocumentText className="w-4 h-4"/>AI 提示词模板 <span className="text-[10px] font-normal text-gray-400">(必填)</span></h4>
-                            <textarea value={template} onChange={e => setTemplate(e.target.value)} placeholder="使用 ${变量名} 引用下方定义的字段，例如：写一个关于 ${name} 的故事..." className="w-full h-40 p-4 bg-white text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl font-mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm" />
+                            <textarea value={template} onChange={e => setTemplate(e.target.value)} placeholder="使用 ${变量名} 引用下方定义的字段，例如：写一个关于 ${name} 的故事..." className="w-full h-60 p-4 bg-white text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl font-mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm resize-y" />
                         </div>
 
                         <div className="p-6 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 space-y-4">
@@ -268,7 +288,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                                 <button type="button" onClick={() => moveField(index, 'down')} disabled={index === fields.length - 1} className={`p-1.5 border rounded text-gray-400 hover:text-sky-500 disabled:opacity-20 transition-colors`} title="下移"><ChevronDown className="w-3.5 h-3.5"/></button>
                                             </div>
                                             <div className="col-span-1 flex items-end pb-1 justify-end">
-                                                <button type="button" onClick={() => removeField(index)} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors" title="删除字段"><Trash className="w-4 h-4"/></button>
+                                                <button type="button" onClick={() => setFieldIndexToDelete(index)} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors" title="删除字段"><Trash className="w-4 h-4"/></button>
                                             </div>
                                         </div>
                                         <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex gap-4">
