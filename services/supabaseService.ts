@@ -372,6 +372,58 @@ export async function deletePrompt(id: string) {
     promptsCache = null;
 }
 
+// Workflows Storage
+export async function saveWorkflow(title: string, description: string, category: string, subCategories: string[], fields: any[], steps: any[]) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        const content = JSON.stringify({ fields, steps });
+        const { error } = await supabase.from('workflows').insert([{ 
+            user_id: userId, title, description, content, main_category: mapPromptCategory(category), sub_categories: subCategories, usage_count: 0 
+        }]);
+        if (error) throw error;
+        return { success: true };
+    } catch (err: any) { return { success: false, error: err }; }
+}
+
+export async function updateWorkflow(id: string, updates: { title?: string, description?: string, category?: string, subCategories?: string[], fields?: any[], steps?: any[] }) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        const dbUpdates: any = { ...updates };
+        if (updates.category) dbUpdates.main_category = mapPromptCategory(updates.category);
+        if (updates.subCategories) dbUpdates.sub_categories = updates.subCategories;
+        if (updates.fields || updates.steps) {
+            dbUpdates.content = JSON.stringify({ fields: updates.fields, steps: updates.steps });
+        }
+        const { error } = await supabase.from('workflows').update(dbUpdates).eq('id', id).eq('user_id', userId);
+        if (error) throw error;
+        return { success: true };
+    } catch (err: any) { return { success: false, error: err }; }
+}
+
+export async function fetchWorkflows() {
+    try {
+        const { data, error } = await supabase.from('workflows').select(`*, profiles(username)`).order('usage_count', { ascending: false });
+        return error ? [] : data;
+    } catch (e) { return []; }
+}
+
+export async function deleteWorkflow(id: string) {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    await supabase.from('workflows').delete().eq('id', id).eq('user_id', userId);
+}
+
+export async function incrementWorkflowUsage(id: string) {
+    try {
+        const { data } = await supabase.from('workflows').select('usage_count').eq('id', id).single();
+        if (data) {
+            await supabase.from('workflows').update({ usage_count: (data.usage_count || 0) + 1 }).eq('id', id);
+        }
+    } catch (e) {}
+}
+
 export async function uploadCoverImage(file: File) {
     try {
         const userId = await getCurrentUserId();

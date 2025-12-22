@@ -86,10 +86,12 @@ export interface Workflow {
   id: string;
   title: string;
   description: string;
-  usageCount: string;
+  usageCount: string | number;
   heat: number;
   author: string;
-  category: 'short-story' | 'script' | 'my' | 'create';
+  userId?: string;
+  category: PromptCategory;
+  subCategories?: PromptSubCategory[];
   fields?: WorkflowField[];
   steps?: WorkflowStep[];
   template?: string; // 旧版兼容
