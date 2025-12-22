@@ -116,8 +116,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             const next = [...prev];
             const targetIndex = direction === 'up' ? index - 1 : index + 1;
             if (targetIndex < 0 || targetIndex >= next.length) return prev;
-            
-            // 使用 ES6 解构进行交换，确保引用的纯净性
             [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
             return next;
         });
@@ -144,7 +142,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
-        // 必填项中文校验
         if (!title.trim()) { alert('发布失败：请填写“提示词标题”'); return; }
         if (!description.trim()) { alert('发布失败：请填写“提示词简介”'); return; }
         if (!template.trim()) { alert('发布失败：请填写“AI 提示词模板”内容'); return; }
@@ -168,7 +165,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
-            {/* 删除确认挽留弹窗 */}
             {fieldIndexToDelete !== null && (
                 <div className="fixed inset-0 flex items-center justify-center z-[110] bg-black/40 backdrop-blur-[2px]" onClick={() => setFieldIndexToDelete(null)}>
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl max-w-xs w-full text-center animate-fade-in-up" onClick={e => e.stopPropagation()}>

@@ -8,7 +8,7 @@ import WorkflowDetailModal from './WorkflowDetailModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { Workflow, PromptCategory, PromptSubCategory } from '../types';
 import { fetchWorkflows, deleteWorkflow, saveWorkflow, updateWorkflow, getCurrentUserId, incrementWorkflowUsage, fetchUserProfile, supabase } from '../services/supabaseService';
-import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
+import { GENRE_TAGS } from '../constants';
 
 type ExtendedTab = PromptCategory | 'all' | 'favorites' | 'my-workflows';
 type ViewState = 'list' | 'create' | 'run';
@@ -16,7 +16,7 @@ type ViewState = 'list' | 'create' | 'run';
 const FAVORITES_KEY = 'qisimiaoxie_workflow_favorites_v3';
 
 // 成功提示组件
-const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
+export const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
     if (!isVisible) return null;
     return createPortal(
         <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] animate-fade-in-up">
@@ -65,7 +65,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
   // 加载数据
   const loadData = async () => {
-    if (!isActive && dbWorkflows.length > 0) return; // 只有在活跃状态下或者没数据时才刷新
+    if (!isActive && dbWorkflows.length > 0) return;
     setIsLoading(true);
     try {
         const userId = await getCurrentUserId();
@@ -74,11 +74,8 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         const profile = await fetchUserProfile();
         if(profile && profile.nickname) setUserNickname(profile.nickname);
 
-        // 尝试获取工作流数据
-        // 特别注意：如果 Supabase 里的 Foreign Key 没配好，profiles(username) 可能会导致整个查询失败
         let { data, error } = await supabase.from('workflows').select(`*, profiles(username)`).order('usage_count', { ascending: false });
         
-        // 如果跨表失败，回退到普通查询
         if (error) {
             console.warn("Cross-table query failed, falling back to simple query:", error.message);
             const fallback = await supabase.from('workflows').select(`*`).order('usage_count', { ascending: false });
@@ -122,14 +119,12 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
     }
   };
 
-  // 监听 active 状态，当切换回工作流页签时自动刷新
   useEffect(() => {
     if (isActive) {
         loadData();
     }
   }, [isActive]);
 
-  // 持久化收藏
   useEffect(() => {
     localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(favoritedIds)));
   }, [favoritedIds]);
@@ -198,16 +193,15 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         } else {
           await saveWorkflow(data.name, data.description, data.type, data.subCategories || [], data.fields, data.steps);
           triggerToast('工作流发布成功');
-          // 创建成功后自动切换到“全部”，确保用户能立刻看到
           setActiveTab('all');
           setActiveSubCategory('all');
         }
         setView('list');
         setWorkflowToEdit(null);
-        await loadData(); // 立即重新加载数据
+        await loadData();
     } catch (e) {
         console.error("Save workflow failed", e);
-        alert('保存失败，请检查网络后重试');
+        triggerToast('保存失败，请检查网络后重试');
     }
   };
 
@@ -265,14 +259,8 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         <div className="flex flex-col lg:flex-row gap-4 justify-between items-start bg-gray-50 dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
             <div className="flex-1 w-full space-y-2">
                 <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-[10px] font-bold text-gray-400 mr-1 shrink-0">功能:</span>
+                    <span className="text-[10px] font-bold text-gray-400 mr-1 shrink-0">题材分类:</span>
                     <button onClick={() => setActiveSubCategory('all')} className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-colors ${activeSubCategory === 'all' ? 'bg-sky-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>全部</button>
-                    {FUNCTIONAL_TAGS.map(cat => (
-                        <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-sky-100 text-sky-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
-                    ))}
-                </div>
-                <div className="flex flex-wrap gap-2 items-center border-t border-gray-100 dark:border-gray-800 pt-2">
-                    <span className="text-[10px] font-bold text-gray-400 mr-1 shrink-0">题材:</span>
                     {GENRE_TAGS.map(cat => (
                         <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-purple-100 text-purple-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
                     ))}
