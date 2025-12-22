@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Sparkles, Film, UserCircle, Plus, Play, Fire, Heart, Box, Search, BookOpen, Pencil, Trash, InformationCircle } from './Icon';
+import { createPortal } from 'react-dom';
+import { Sparkles, Film, UserCircle, Plus, Play, Fire, Heart, Box, Search, BookOpen, Pencil, Trash, InformationCircle, Check } from './Icon';
 import CreateWorkflow from './CreateWorkflow';
 import WorkflowRun from './WorkflowRun';
 import WorkflowDetailModal from './WorkflowDetailModal';
@@ -13,6 +14,22 @@ type ExtendedTab = PromptCategory | 'all' | 'favorites' | 'my-workflows';
 type ViewState = 'list' | 'create' | 'run';
 
 const FAVORITES_KEY = 'qisimiaoxie_workflow_favorites_v3';
+
+// 成功提示组件
+const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
+    if (!isVisible) return null;
+    return createPortal(
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] animate-fade-in-up">
+            <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border border-green-200 dark:border-green-900 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
+                <div className="w-6 h-6 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                    <Check className="w-4 h-4" />
+                </div>
+                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{message}</span>
+            </div>
+        </div>,
+        document.body
+    );
+};
 
 const WorkflowManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ExtendedTab>('all');
@@ -31,6 +48,16 @@ const WorkflowManagement: React.FC = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userNickname, setUserNickname] = useState<string>('社区用户');
   const [isLoading, setIsLoading] = useState(true);
+
+  // 提示框状态
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
 
   // 加载数据
   const loadData = async () => {
@@ -57,7 +84,7 @@ const WorkflowManagement: React.FC = () => {
                 title: wf.title,
                 description: wf.description,
                 usageCount: wf.usage_count || 0,
-                heat: wf.usage_count || 0, // 热度关联使用次数
+                heat: wf.usage_count || 0,
                 author: wf.profiles?.username || '匿名用户',
                 userId: wf.user_id,
                 category: mainCat,
@@ -115,6 +142,7 @@ const WorkflowManagement: React.FC = () => {
       loadData();
       setDeleteModalOpen(false);
       setWorkflowToDelete(null);
+      triggerToast('工作流已成功删除');
     }
   };
 
@@ -129,21 +157,31 @@ const WorkflowManagement: React.FC = () => {
   };
 
   const handleSaveWorkflow = async (data: any) => {
-    if (workflowToEdit) {
-      await updateWorkflow(workflowToEdit.id, {
-          title: data.name,
-          description: data.description,
-          category: data.type,
-          subCategories: data.subCategories,
-          fields: data.fields,
-          steps: data.steps
-      });
-    } else {
-      await saveWorkflow(data.name, data.description, data.type, data.subCategories || [], data.fields, data.steps);
+    try {
+        if (workflowToEdit) {
+          await updateWorkflow(workflowToEdit.id, {
+              title: data.name,
+              description: data.description,
+              category: data.type,
+              subCategories: data.subCategories,
+              fields: data.fields,
+              steps: data.steps
+          });
+          triggerToast('工作流更新成功');
+        } else {
+          await saveWorkflow(data.name, data.description, data.type, data.subCategories || [], data.fields, data.steps);
+          triggerToast('工作流发布成功');
+          // 创建成功后自动切换到“我的”或者“全部”，确保用户能立刻看到
+          setActiveTab('all');
+          setActiveSubCategory('all');
+        }
+        setView('list');
+        setWorkflowToEdit(null);
+        await loadData(); // 立即重新加载数据
+    } catch (e) {
+        console.error("Save workflow failed", e);
+        alert('保存失败，请检查网络后重试');
     }
-    setView('list');
-    setWorkflowToEdit(null);
-    loadData();
   };
 
   const handleRunFromDetail = (filledValues: Record<string, string>) => {
@@ -159,15 +197,15 @@ const WorkflowManagement: React.FC = () => {
 
   return (
     <div className="h-full animate-fade-in flex flex-col font-sans bg-white dark:bg-black">
+      <SuccessToast message={toastMessage} isVisible={showToast} />
       <WorkflowDetailModal 
         isOpen={isDetailModalOpen} 
         onClose={() => setDetailModalOpen(false)} 
         workflow={selectedWorkflow} 
         onRun={handleRunFromDetail} 
       />
-      <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDetailModalOpen(false)} onConfirm={handleConfirmDelete} />
+      <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
 
-      {/* 顶部栏 - 减少色彩差异，移除底部间隔 */}
       <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 pb-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <div className="flex justify-between items-center">
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1">
@@ -246,7 +284,7 @@ const WorkflowManagement: React.FC = () => {
                               </h3>
                               <button
                                   onClick={(e) => toggleFavorite(e, workflow.id)}
-                                  className={`p-1.5 rounded-full transition-colors z-10 ${isFav ? 'text-red-500 bg-red-50' : 'text-gray-400 hover:text-red-500'}`}
+                                  className={`p-1.5 rounded-full transition-colors z-10 ${isFav ? 'text-red-500 bg-red-50' : 'text-gray-300 hover:text-red-500'}`}
                               >
                                   <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
                               </button>
