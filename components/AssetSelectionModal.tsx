@@ -17,7 +17,7 @@ type TabType = 'all' | 'character' | 'plot' | 'inspiration';
 const TAG_COLORS = [
   'bg-red-50 text-red-700 border border-red-100 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
   'bg-orange-50 text-orange-700 border border-orange-100 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
-  'bg-amber-50 text-amber-700 border border-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+  'bg-amber-50 text-amber-700 border border-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-orange-800',
   'bg-yellow-50 text-yellow-700 border border-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800',
   'bg-green-50 text-green-700 border border-green-100 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
   'bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800',
@@ -73,84 +73,87 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
     return createPortal(
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col relative animate-fade-in-up overflow-hidden font-sans" onClick={e => e.stopPropagation()}>
-                {/* Header - 将分类切换移至此处 */}
-                <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50">
-                    <div className="flex items-center gap-6">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 shrink-0">
-                            <Database className="w-6 h-6 text-sky-500" />
-                            选择关联素材
+                {/* Header - 包含标题、高度集成的分类切换和搜索框 */}
+                <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50">
+                    <div className="flex items-center gap-4 flex-1">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 shrink-0">
+                            <Database className="w-5 h-5 text-sky-500" />
+                            关联素材
                         </h3>
-                        <div className="flex bg-gray-200/50 dark:bg-gray-800 rounded-xl p-1 shadow-inner">
+                        
+                        {/* 缩小间距的分类切换 */}
+                        <div className="flex bg-gray-200/50 dark:bg-gray-800 rounded-lg p-1 shrink-0 gap-0.5">
                             {tabs.map(tab => {
                                 const Icon = tab.icon;
                                 return (
                                     <button
                                         key={tab.id}
                                         onClick={() => { setActiveTab(tab.id); setSelectedTag('all'); }}
-                                        className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all whitespace-nowrap ${
                                             activeTab === tab.id 
                                             ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' 
                                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                         }`}
                                     >
-                                        <Icon className="w-3.5 h-3.5" />
+                                        <Icon className="w-3 h-3" />
                                         {tab.label}
                                     </button>
                                 );
                             })}
                         </div>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
-                        <X className="w-6 h-6" />
-                    </button>
-                </div>
 
-                {/* Toolbar */}
-                <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 space-y-3 bg-white dark:bg-gray-900">
-                    <div className="flex items-center gap-6">
-                        <div className="relative w-64 flex-shrink-0">
+                        {/* 搜索框移至顶部 */}
+                        <div className="relative flex-1 max-w-xs ml-2">
                             <input 
                                 type="text" 
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 placeholder="搜索名称或内容..."
-                                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all"
+                                className="w-full pl-8 pr-4 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 outline-none transition-all"
                             />
-                            <Search className="w-4 h-4 absolute left-3.5 top-2.5 text-gray-400" />
+                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                         </div>
-                        <div className="flex items-center gap-3 flex-1 overflow-hidden">
-                            <span className="text-xs font-bold text-gray-400 shrink-0 flex items-center gap-1"><Tag className="w-3.5 h-3.5"/> 标签筛选:</span>
-                            <div className="flex flex-wrap gap-2 overflow-y-auto max-h-10 no-scrollbar">
+                    </div>
+
+                    <button onClick={onClose} className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400 ml-4">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Toolbar - 仅保留标签筛选 */}
+                <div className="flex-shrink-0 p-3 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                        <span className="text-[10px] font-bold text-gray-400 shrink-0 flex items-center gap-1"><Tag className="w-3 h-3"/> 标签筛选:</span>
+                        <div className="flex flex-wrap gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                            <button 
+                                onClick={() => setSelectedTag('all')}
+                                className={`px-2.5 py-0.5 text-[10px] font-medium rounded-full transition-all border whitespace-nowrap ${selectedTag === 'all' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                            >
+                                全部
+                            </button>
+                            {availableTags.map(tag => (
                                 <button 
-                                    onClick={() => setSelectedTag('all')}
-                                    className={`px-3 py-1 text-[11px] font-medium rounded-full transition-all border ${selectedTag === 'all' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                                    key={tag}
+                                    onClick={() => setSelectedTag(tag)}
+                                    className={`px-2.5 py-0.5 text-[10px] font-medium rounded-full transition-all border whitespace-nowrap ${selectedTag === tag ? 'bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-900/50 dark:text-sky-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
                                 >
-                                    全部
+                                    {tag}
                                 </button>
-                                {availableTags.map(tag => (
-                                    <button 
-                                        key={tag}
-                                        onClick={() => setSelectedTag(tag)}
-                                        className={`px-3 py-1 text-[11px] font-medium rounded-full transition-all border whitespace-nowrap ${selectedTag === tag ? 'bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-900/50 dark:text-sky-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
-                                    >
-                                        {tag}
-                                    </button>
-                                ))}
-                            </div>
+                            ))}
                         </div>
                     </div>
                 </div>
 
-                {/* List - 强制三列且防止文字纵向排列 */}
-                <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-black/20">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* List - 保持一行三列布局 */}
+                <div className="flex-1 overflow-y-auto p-5 bg-gray-50 dark:bg-black/20">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                         {filteredAssets.map(asset => {
                             const isSelected = selectedAssetIds.has(asset.id);
                             return (
                                 <div 
                                     key={asset.id} 
                                     onClick={() => onToggleAsset(asset.id)}
-                                    className={`p-5 rounded-2xl border cursor-pointer transition-all group relative overflow-hidden flex flex-col h-[220px] ${
+                                    className={`p-4 rounded-xl border cursor-pointer transition-all group relative overflow-hidden flex flex-col h-[200px] ${
                                         isSelected 
                                         ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 shadow-sm ring-1 ring-sky-500' 
                                         : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-md'
@@ -158,10 +161,10 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                                 >
                                     <div className="flex justify-between items-start mb-2 gap-2">
                                         <div className="flex-1 min-w-0">
-                                            <h4 className="font-bold text-gray-900 dark:text-white truncate text-[15px] whitespace-nowrap overflow-hidden" title={asset.name}>
+                                            <h4 className="font-bold text-gray-900 dark:text-white truncate text-[14px] leading-tight" title={asset.name}>
                                                 {asset.name}
                                             </h4>
-                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded inline-block mt-1 whitespace-nowrap uppercase tracking-tighter ${
+                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded inline-block mt-1 whitespace-nowrap uppercase tracking-tighter ${
                                                 asset.type === 'character' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
                                                 asset.type === 'plot' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
                                                 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
@@ -175,12 +178,12 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed mb-4 flex-1">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-4 leading-relaxed mb-3 flex-1 overflow-hidden">
                                         {asset.content}
                                     </p>
-                                    <div className="flex flex-wrap gap-1 mt-auto overflow-hidden max-h-12">
+                                    <div className="flex flex-wrap gap-1 mt-auto overflow-hidden max-h-6">
                                         {asset.tags.map((tag, i) => (
-                                            <span key={i} className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap font-medium inline-block ${getTagStyle(tag)}`}>
+                                            <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded border whitespace-nowrap font-medium inline-block ${getTagStyle(tag)}`}>
                                                 {tag}
                                             </span>
                                         ))}
@@ -190,17 +193,17 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                         })}
                         {filteredAssets.length === 0 && (
                             <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
-                                <Search className="w-16 h-16 mb-4 opacity-10" />
-                                <p className="text-lg font-medium">未找到匹配素材</p>
+                                <Search className="w-12 h-12 mb-3 opacity-10" />
+                                <p className="text-sm font-medium">未找到匹配素材</p>
                             </div>
                         )}
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex-shrink-0 p-5 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-between items-center px-8">
-                    <span className="text-sm text-gray-500">已选择 <span className="font-black text-sky-600 dark:text-sky-400 text-lg">{selectedAssetIds.size}</span> 项素材</span>
-                    <button onClick={onClose} className="px-12 py-2.5 bg-sky-600 text-white rounded-xl font-bold hover:bg-sky-500 transition-all shadow-lg shadow-sky-500/30 active:scale-95">
+                <div className="flex-shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex justify-between items-center px-6">
+                    <span className="text-xs text-gray-500 font-medium">已选择 <span className="font-black text-sky-600 dark:text-sky-400 text-base">{selectedAssetIds.size}</span> 项素材</span>
+                    <button onClick={onClose} className="px-10 py-2 bg-sky-600 text-white rounded-lg font-bold hover:bg-sky-500 transition-all shadow-md shadow-sky-500/20 active:scale-95 text-sm">
                         确认关联
                     </button>
                 </div>
