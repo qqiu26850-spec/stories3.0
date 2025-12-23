@@ -44,7 +44,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
   };
 
   const loadData = async () => {
-    if (!isActive && dbWorkflows.length > 0) return;
     setIsLoading(true);
     try {
         const userId = await getCurrentUserId();
@@ -125,7 +124,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
   const handleConfirmDelete = async () => {
     if (workflowToDelete) {
       await deleteWorkflow(workflowToDelete.id);
-      loadData();
+      await loadData();
       setDeleteModalOpen(false);
       setWorkflowToDelete(null);
       triggerNotification('工作流删除成功');
@@ -151,14 +150,22 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         }
         setView('list');
         setWorkflowToEdit(null);
+        // Force reload to sync changes to cards immediately
         await loadData();
     } catch (e) {
         triggerNotification('操作失败，请重试');
     }
   };
 
+  const handleRunClick = (e: React.MouseEvent, wf: Workflow) => {
+      e.stopPropagation();
+      setSelectedWorkflow(wf);
+      incrementWorkflowUsage(wf.id);
+      setView('run');
+  };
+
   if (view === 'create') return <CreateWorkflow onBack={() => { setView('list'); setWorkflowToEdit(null); }} onSave={handleSaveWorkflow} workflowToEdit={workflowToEdit} />;
-  if (view === 'run' && selectedWorkflow) return <WorkflowRun workflow={selectedWorkflow} onBack={() => setView('list')} />;
+  if (view === 'run' && selectedWorkflow) return <WorkflowRun workflow={selectedWorkflow} onBack={() => { setView('list'); loadData(); }} />;
 
   return (
     <div className="h-full animate-fade-in flex flex-col font-sans bg-white dark:bg-black">
@@ -170,85 +177,91 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       />
       <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
 
+      {/* Top Bar */}
       <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 pb-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
-        <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4 flex-1">
-                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                    {[
-                        { id: 'all', label: '全部' },
-                        { id: 'short-story', label: '短篇小说' },
-                        { id: 'long-story', label: '长篇小说' },
-                        { id: 'script', label: '剧本' },
-                        { id: 'general', label: '全类型' },
-                    ].map(tab => (
-                        <button 
-                            key={tab.id} 
-                            onClick={() => setActiveTab(tab.id as any)} 
-                            className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
-                {notification && (
-                    <div className="flex items-center gap-2 px-4 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-100 dark:border-emerald-800 animate-fade-in text-xs font-bold whitespace-nowrap">
-                        <Check className="w-3.5 h-3.5" />
-                        {notification}
-                    </div>
-                )}
+        <div className="flex flex-col xl:flex-row justify-between xl:items-center gap-4">
+            <div className="flex items-center gap-4 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide">
+                {[
+                    { id: 'all', label: '全部' },
+                    { id: 'short-story', label: '短篇小说' },
+                    { id: 'long-story', label: '长篇小说' },
+                    { id: 'script', label: '剧本' },
+                    { id: 'general', label: '全类型' },
+                ].map(tab => (
+                    <button 
+                        key={tab.id} 
+                        onClick={() => setActiveTab(tab.id as any)} 
+                        className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20' : 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-900/10'}`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
             </div>
             
-            <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-                <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm ${activeTab === 'my-workflows' ? 'bg-sky-100 text-sky-600' : 'bg-white dark:bg-gray-900 text-gray-500'}`}><UserCircle className="w-4 h-4" />我的</button>
-                <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-white dark:bg-gray-900 text-gray-500'}`}><Heart className="w-4 h-4" />收藏</button>
-                <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-4 py-2 rounded-xl font-black bg-sky-600 text-white hover:bg-sky-500 shadow-lg shadow-sky-500/20 text-sm flex items-center gap-1"><Plus className="w-4 h-4" />创建</button>
+            <div className="flex items-center gap-3 flex-shrink-0 self-end xl:self-auto">
+                <div className="relative w-full sm:w-64">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
+                    <input type="text" placeholder="搜索工作流..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 text-sm rounded-xl border border-transparent focus:bg-white dark:focus:bg-black focus:border-purple-500 outline-none transition-all" />
+                </div>
+
+                <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'my-workflows' ? 'bg-purple-100 text-purple-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><UserCircle className="w-4 h-4" />我的</button>
+                <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><Heart className="w-4 h-4" />收藏</button>
+                <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-6 py-2.5 rounded-xl font-black bg-purple-600 text-white hover:bg-purple-500 shadow-lg shadow-purple-500/20 text-sm flex items-center gap-2 whitespace-nowrap active:scale-95 transition-all">
+                    <Plus className="w-4 h-4" /> 创建工作流
+                </button>
             </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-4 justify-between items-start bg-gray-50 dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
-            <div className="flex-1 w-full overflow-hidden">
-                <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-[10px] font-bold text-gray-400 mr-1 shrink-0">题材分类:</span>
-                    <button onClick={() => setActiveSubCategory('all')} className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-colors ${activeSubCategory === 'all' ? 'bg-sky-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>全部</button>
-                    {GENRE_TAGS.map(cat => (
-                        <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-purple-100 text-purple-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
-                    ))}
-                </div>
-            </div>
-            <div className="relative w-full lg:w-64">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
-                <input type="text" placeholder="搜索工作流..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-900 text-sm rounded-xl border border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-sky-500 outline-none" />
-            </div>
+        <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-hide">
+            <span className="text-xs font-bold text-gray-400 mr-1 shrink-0 uppercase tracking-wider">题材分类:</span>
+            <button onClick={() => setActiveSubCategory('all')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>全部</button>
+            {GENRE_TAGS.map(cat => (
+                <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>{cat.label}</button>
+            ))}
         </div>
+        
+        {notification && (
+            <div className="fixed top-20 right-8 z-50 flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-lg animate-fade-in-up text-sm font-bold">
+                <Check className="w-4 h-4" />
+                {notification}
+            </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-gray-50/50 dark:bg-black/50">
           {isLoading ? (
-              <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-t-sky-500 rounded-full animate-spin"></div></div>
+              <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-t-purple-500 rounded-full animate-spin"></div></div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
               {filteredWorkflows.map(workflow => (
-                  <div key={workflow.id} onClick={() => { setSelectedWorkflow(workflow); setDetailModalOpen(true); }} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5 hover:shadow-xl hover:border-sky-500 transition-all cursor-pointer group flex flex-col h-full relative">
-                      <div className="flex justify-between items-start mb-1">
-                          <h3 className="text-[15px] font-bold text-gray-900 dark:text-white group-hover:text-sky-600 transition-colors line-clamp-1">{workflow.title}</h3>
-                          <button onClick={(e) => { e.stopPropagation(); setFavoritedIds(prev => { const n = new Set(prev); if(n.has(workflow.id)) n.delete(workflow.id); else n.add(workflow.id); return n; }); }} className={`p-1.5 rounded-full ${favoritedIds.has(workflow.id) ? 'text-red-500 bg-red-50' : 'text-gray-400 hover:text-red-500'}`}><Heart className={`w-4 h-4 ${favoritedIds.has(workflow.id) ? 'fill-current' : ''}`} /></button>
+                  <div key={workflow.id} onClick={() => { setSelectedWorkflow(workflow); setDetailModalOpen(true); }} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-6 hover:shadow-xl hover:border-purple-400 transition-all cursor-pointer group flex flex-col h-full relative">
+                      <div className="flex justify-between items-start mb-3">
+                          <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-purple-600 transition-colors line-clamp-1 pr-8">{workflow.title}</h3>
+                          <button onClick={(e) => { e.stopPropagation(); setFavoritedIds(prev => { const n = new Set(prev); if(n.has(workflow.id)) n.delete(workflow.id); else n.add(workflow.id); return n; }); }} className={`p-1.5 rounded-full absolute top-5 right-5 transition-colors ${favoritedIds.has(workflow.id) ? 'text-red-500 bg-red-50 dark:bg-red-900/20' : 'text-gray-300 hover:text-red-500 hover:bg-red-50'}`}><Heart className={`w-5 h-5 ${favoritedIds.has(workflow.id) ? 'fill-current' : ''}`} /></button>
                       </div>
-                      <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-4 line-clamp-3 flex-grow">{workflow.description}</p>
-                      <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800 mt-auto gap-2">
-                          <div className="flex items-center gap-1.5 overflow-hidden">
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-900/20">
-                                  {workflow.category === 'script' ? '剧本' : workflow.category === 'short-story' ? '短篇' : '长篇'}
+                      <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-6 line-clamp-3 flex-grow">{workflow.description}</p>
+                      
+                      <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800 mt-auto">
+                          <div className="flex items-center gap-2">
+                              <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                  {workflow.category === 'script' ? '剧本' : workflow.category === 'short-story' ? '短篇' : workflow.category === 'general' ? '通用' : '长篇'}
                               </span>
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20">{workflow.steps?.length || 0}步</span>
+                              <div className="flex items-center gap-1 text-xs text-orange-400 font-bold"><Fire className="w-3.5 h-3.5" />{workflow.heat || 0}</div>
                           </div>
-                          <div className="flex items-center gap-3 text-xs text-gray-400 shrink-0">
-                              <div className="flex items-center gap-1 text-orange-400 font-bold"><Fire className="w-3 h-3" />{workflow.heat || 0}</div>
+                          
+                          <div className="flex items-center gap-2">
                               {workflow.userId === currentUserId && (
-                                  <div className="flex gap-1.5 pl-2 border-l border-gray-100 dark:border-gray-800">
-                                      <button onClick={(e) => handleEdit(e, workflow)} className="hover:text-sky-500"><Pencil className="w-3.5 h-3.5" /></button>
-                                      <button onClick={(e) => handleOpenDelete(e, workflow)} className="hover:text-rose-500"><Trash className="w-3.5 h-3.5" /></button>
-                                  </div>
+                                  <>
+                                      <button onClick={(e) => handleEdit(e, workflow)} className="p-2 text-gray-400 hover:text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
+                                      <button onClick={(e) => handleOpenDelete(e, workflow)} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"><Trash className="w-4 h-4" /></button>
+                                  </>
                               )}
+                              <button 
+                                onClick={(e) => handleRunClick(e, workflow)}
+                                className="ml-2 px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg shadow-md shadow-purple-500/20 flex items-center gap-1.5 active:scale-95 transition-all"
+                              >
+                                <Play className="w-3 h-3" /> 运行
+                              </button>
                           </div>
                       </div>
                   </div>
