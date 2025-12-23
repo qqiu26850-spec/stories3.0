@@ -201,12 +201,21 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                             </button>
                         </div>
 
-                        {/* Note about auto-importing forms */}
-                        <div className="px-4 py-3 bg-white/60 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl flex items-start gap-3 shadow-sm">
-                            <InformationCircle className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
-                            <div className="text-xs text-purple-800 dark:text-purple-200 leading-relaxed font-medium">
-                                <span className="font-black bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded mr-1">提示</span>
-                                在<strong>第1步</strong>中使用“提示词模板”时，系统会自动将模板中的参数同步到下方的【输入表单定义】中，方便用户填写。后续步骤引用模板则不会修改表单。
+                        {/* Note about auto-importing forms and chaining */}
+                        <div className="px-5 py-4 bg-white/60 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl space-y-3 shadow-sm">
+                            <div className="flex items-start gap-3">
+                                <InformationCircle className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                                <div className="text-sm text-purple-800 dark:text-purple-200 leading-relaxed font-medium">
+                                    <span className="font-black bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-md mr-1 text-xs align-text-top">提示 1</span>
+                                    在<strong>第1步</strong>中使用“提示词模板”时，系统会自动将模板中的参数同步到下方的【输入表单定义】中，方便用户填写。后续步骤引用模板则不会修改表单。
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3 border-t border-purple-200/50 dark:border-purple-800/50 pt-3">
+                                <InformationCircle className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                                <div className="text-sm text-purple-800 dark:text-purple-200 leading-relaxed font-medium">
+                                    <span className="font-black bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-md mr-1 text-xs align-text-top">提示 2</span>
+                                    上一个步骤生成的<strong>结果</strong>（即下方定义的“输出变量名”），可以在下一个步骤的 Prompt 中通过 <code>{'${变量名}'}</code> 引用，实现内容的链式生成。
+                                </div>
                             </div>
                         </div>
                         
