@@ -250,22 +250,26 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                       </div>
                       <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-6 line-clamp-3 flex-grow">{workflow.description}</p>
                       
-                      {/* Tags Section - NEW */}
-                      <div className="flex flex-wrap gap-2 mb-4">
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold border bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800">
-                              {CATEGORY_LABELS[workflow.category] || '通用'}
-                          </span>
-                          {workflow.subCategories && workflow.subCategories.map((sub) => (
-                              <span key={sub} className="px-2 py-0.5 rounded-md text-[10px] font-bold border bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800">
-                                  {getSubCategoryLabel(sub as string)}
-                              </span>
-                          ))}
-                      </div>
-
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800 mt-auto">
-                          <div className="flex items-center gap-1 text-xs text-orange-400 font-bold"><Fire className="w-3.5 h-3.5" />{workflow.heat || 0}</div>
+                      <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800 mt-auto gap-2">
+                          <div className="flex items-center gap-2 overflow-hidden flex-1">
+                              <div className="flex items-center gap-1 text-xs text-orange-400 font-bold shrink-0" title={`热度: ${workflow.heat}`}>
+                                  <Fire className="w-3.5 h-3.5" />
+                                  {workflow.heat || 0}
+                              </div>
+                              <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
+                              <div className="flex items-center gap-1.5 overflow-hidden">
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 whitespace-nowrap">
+                                      {CATEGORY_LABELS[workflow.category] || '通用'}
+                                  </span>
+                                  {workflow.subCategories && workflow.subCategories.slice(0, 2).map((sub) => (
+                                      <span key={sub} className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800 whitespace-nowrap">
+                                          {getSubCategoryLabel(sub as string)}
+                                      </span>
+                                  ))}
+                              </div>
+                          </div>
                           
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 shrink-0">
                               {workflow.userId === currentUserId && (
                                   <>
                                       <button onClick={(e) => handleEdit(e, workflow)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
