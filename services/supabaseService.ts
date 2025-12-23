@@ -210,10 +210,6 @@ export async function updateChapterOrder(updates: { id: string, order_index: num
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("未登录");
-        
-        // Supabase upsert/bulk update can be complex for individual column updates on specific rows
-        // A common pattern is using a RPC or just looping for small sets like novel chapters
-        // Given we typically have < 100 chapters in a view, individual updates are acceptable
         const promises = updates.map(update => 
             supabase.from('chapters').update({ order_index: update.order_index }).eq('id', update.id)
         );
@@ -434,6 +430,29 @@ export async function incrementWorkflowUsage(id: string) {
             await supabase.from('workflows').update({ usage_count: (data.usage_count || 0) + 1 }).eq('id', id);
         }
     } catch (e) {}
+}
+
+export async function fetchWorkflowFavorites(): Promise<string[]> {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+    try {
+        const { data } = await supabase.from('workflow_favorites').select('workflow_id').eq('user_id', userId);
+        return data?.map((d: any) => d.workflow_id) || [];
+    } catch (e) { return []; }
+}
+
+export async function toggleWorkflowFavoriteDB(workflowId: string, isFavorite: boolean) {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    try {
+        if (isFavorite) {
+            // Remove
+            await supabase.from('workflow_favorites').delete().eq('user_id', userId).eq('workflow_id', workflowId);
+        } else {
+            // Add
+            await supabase.from('workflow_favorites').insert({ user_id: userId, workflow_id: workflowId });
+        }
+    } catch (e) { console.error("Toggle favorite failed", e); }
 }
 
 export async function uploadCoverImage(file: File) {

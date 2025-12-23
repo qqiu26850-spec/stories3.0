@@ -6,13 +6,11 @@ import WorkflowRun from './WorkflowRun';
 import WorkflowDetailModal from './WorkflowDetailModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { Workflow, PromptCategory, PromptSubCategory } from '../types';
-import { fetchWorkflows, deleteWorkflow, saveWorkflow, updateWorkflow, getCurrentUserId, incrementWorkflowUsage, fetchUserProfile, supabase } from '../services/supabaseService';
+import { fetchWorkflows, deleteWorkflow, saveWorkflow, updateWorkflow, getCurrentUserId, incrementWorkflowUsage, fetchUserProfile, supabase, fetchWorkflowFavorites, toggleWorkflowFavoriteDB } from '../services/supabaseService';
 import { GENRE_TAGS } from '../constants';
 
 type ExtendedTab = PromptCategory | 'all' | 'favorites' | 'my-workflows';
 type ViewState = 'list' | 'create' | 'run';
-
-const FAVORITES_KEY = 'qisimiaoxie_workflow_favorites_v3';
 
 interface WorkflowManagementProps {
     isActive?: boolean;
@@ -88,8 +86,8 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
             setDbWorkflows(mapped);
         }
 
-        const storedFavs = localStorage.getItem(FAVORITES_KEY);
-        if (storedFavs) try { setFavoritedIds(new Set(JSON.parse(storedFavs))); } catch(e){}
+        const favs = await fetchWorkflowFavorites();
+        setFavoritedIds(new Set(favs));
     } catch(e) {} finally { 
         setIsLoading(false); 
     }
@@ -97,9 +95,17 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
   useEffect(() => { if (isActive) loadData(); }, [isActive]);
 
-  useEffect(() => {
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(favoritedIds)));
-  }, [favoritedIds]);
+  const toggleFavorite = async (id: string) => {
+      const isFav = favoritedIds.has(id);
+      setFavoritedIds(prev => {
+          const next = new Set(prev);
+          if (isFav) next.delete(id);
+          else next.add(id);
+          return next;
+      });
+      // Optimistic update, but fire off DB request
+      await toggleWorkflowFavoriteDB(id, isFav);
+  };
 
   const filteredWorkflows = useMemo(() => {
     return dbWorkflows.filter(w => {
@@ -246,7 +252,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                   <div key={workflow.id} onClick={() => { setSelectedWorkflow(workflow); setDetailModalOpen(true); }} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-6 hover:shadow-xl hover:border-blue-400 transition-all cursor-pointer group flex flex-col h-full relative">
                       <div className="flex justify-between items-start mb-3">
                           <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors line-clamp-1 pr-8">{workflow.title}</h3>
-                          <button onClick={(e) => { e.stopPropagation(); setFavoritedIds(prev => { const n = new Set(prev); if(n.has(workflow.id)) n.delete(workflow.id); else n.add(workflow.id); return n; }); }} className={`p-1.5 rounded-full absolute top-5 right-5 transition-colors ${favoritedIds.has(workflow.id) ? 'text-red-500 bg-red-50 dark:bg-red-900/20' : 'text-gray-300 hover:text-red-500 hover:bg-red-50'}`}><Heart className={`w-5 h-5 ${favoritedIds.has(workflow.id) ? 'fill-current' : ''}`} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); toggleFavorite(workflow.id); }} className={`p-1.5 rounded-full absolute top-5 right-5 transition-colors ${favoritedIds.has(workflow.id) ? 'text-red-500 bg-red-50 dark:bg-red-900/20' : 'text-gray-300 hover:text-red-500 hover:bg-red-50'}`}><Heart className={`w-5 h-5 ${favoritedIds.has(workflow.id) ? 'fill-current' : ''}`} /></button>
                       </div>
                       <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-6 line-clamp-3 flex-grow">{workflow.description}</p>
                       
