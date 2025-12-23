@@ -26,6 +26,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
+    const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
     const [showConfig, setShowConfig] = useState(false);
     const [selectedWorkflow, setSelectedWorkflow] = useState(MOCK_WORKFLOWS[0]?.id || '');
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
@@ -143,7 +144,13 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
             }
             
             if (onStream && (activeTab === 'original' || activeTab === 'imitate')) {
-                const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
+                const stream = generateTextStream(finalPrompt, { 
+                    model, 
+                    temperature, 
+                    topP, 
+                    maxOutputTokens, 
+                    signal: controller.signal 
+                });
                 let isFirst = true;
                 let fullText = '';
                 for await (const chunk of stream) {
@@ -155,7 +162,13 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 }
                 setOverlayStatus('success');
             } else {
-                const text = await generateText(finalPrompt, { model, temperature, topP, signal: controller.signal });
+                const text = await generateText(finalPrompt, { 
+                    model, 
+                    temperature, 
+                    topP, 
+                    maxOutputTokens, 
+                    signal: controller.signal 
+                });
                 if (activeTab === 'original' || activeTab === 'imitate') onInsert(text);
                 setResultText(text);
                 setOverlayStatus('success');
@@ -214,6 +227,22 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                         <button onClick={() => setShowConfig(!showConfig)} className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 font-sans ${showConfig ? 'bg-sky-100 text-sky-600 border-sky-200 dark:bg-sky-900/30 dark:border-sky-800' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}><AdjustmentsHorizontal className="w-4 h-4" />参数</button>
                     </div>
                 </div>
+                {showConfig && (
+                    <div className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800 grid grid-cols-1 gap-4 animate-fade-in text-[10px] font-sans">
+                        <div className="space-y-1">
+                            <label className="block font-black text-sky-500 flex justify-between uppercase"><span>随机度 (Temperature): {temperature}</span></label>
+                            <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="block font-black text-sky-500 flex justify-between uppercase"><span>核采样 (Top P): {topP}</span></label>
+                            <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="block font-black text-sky-500 flex justify-between uppercase"><span>最大长度 (Max Tokens): {maxOutputTokens}</span></label>
+                            <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4 font-sans">
                     <div className="col-span-1 font-sans">
@@ -299,7 +328,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                             onChange={e => handleInputChange(field.id, e.target.value)} 
                                             placeholder={field.placeholder} 
                                             maxLength={field.maxLength}
-                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" 
+                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" 
                                         />
                                     )}
                                 </div>

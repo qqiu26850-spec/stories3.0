@@ -192,8 +192,8 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       />
       <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
 
-      {/* Top Bar */}
-      <div className="flex flex-col gap-4 p-4 sm:p-6 lg:p-8 pb-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+      {/* Top Bar: Height reduced by adjusting padding and gap */}
+      <div className="flex flex-col gap-3 px-6 py-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <div className="flex flex-col xl:flex-row justify-between xl:items-center gap-4">
             <div className="flex items-center gap-4 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide">
                 {[
@@ -206,7 +206,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                     <button 
                         key={tab.id} 
                         onClick={() => setActiveTab(tab.id as any)} 
-                        className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-blue-100 text-blue-600 shadow-md shadow-blue-500/10' : 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/10'}`}
+                        className={`px-5 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-xs sm:text-sm ${activeTab === tab.id ? 'bg-blue-100 text-blue-600 shadow-md shadow-blue-500/10' : 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/10'}`}
                     >
                         {tab.label}
                     </button>
@@ -214,24 +214,25 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
             </div>
             
             <div className="flex items-center gap-3 flex-shrink-0 self-end xl:self-auto">
-                <div className="relative w-full sm:w-64">
+                <div className="relative w-full sm:w-56">
                     <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
-                    <input type="text" placeholder="搜索工作流..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 text-sm rounded-xl border border-transparent focus:bg-white dark:focus:bg-black focus:border-blue-500 outline-none transition-all" />
+                    <input type="text" placeholder="搜索工作流..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 text-sm rounded-xl border border-transparent focus:bg-white dark:focus:bg-black focus:border-blue-500 outline-none transition-all" />
                 </div>
 
-                <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'my-workflows' ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><UserCircle className="w-4 h-4" />我的</button>
-                <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><Heart className="w-4 h-4" />收藏</button>
-                <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-6 py-2.5 rounded-xl font-black bg-blue-100 text-blue-600 hover:bg-blue-200 shadow-lg shadow-blue-500/10 text-sm flex items-center gap-2 whitespace-nowrap active:scale-95 transition-all">
-                    <Plus className="w-4 h-4" /> 创建工作流
+                <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'my-workflows' ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><UserCircle className="w-4 h-4" />我的</button>
+                <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><Heart className="w-4 h-4" />收藏</button>
+                <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-5 py-2 rounded-xl font-black bg-blue-100 text-blue-600 hover:bg-blue-200 shadow-lg shadow-blue-500/10 text-sm flex items-center gap-2 whitespace-nowrap active:scale-95 transition-all">
+                    <Plus className="w-4 h-4" /> 创建
                 </button>
             </div>
         </div>
 
         <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-hide">
             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0 uppercase tracking-wider">题材分类:</span>
-            <button onClick={() => setActiveSubCategory('all')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>全部</button>
+            {/* Removed font-bold from genre tabs */}
+            <button onClick={() => setActiveSubCategory('all')} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>全部</button>
             {GENRE_TAGS.map(cat => (
-                <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>{cat.label}</button>
+                <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>{cat.label}</button>
             ))}
         </div>
         
@@ -243,7 +244,8 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-gray-50/50 dark:bg-black/50">
+      {/* Reduced top padding for content area */}
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 custom-scrollbar bg-gray-50/50 dark:bg-black/50">
           {isLoading ? (
               <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-t-blue-500 rounded-full animate-spin"></div></div>
           ) : (

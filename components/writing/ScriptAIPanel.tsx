@@ -21,6 +21,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
+    const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
     const [showConfig, setShowConfig] = useState(false);
     
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
@@ -110,13 +111,25 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
             else finalPrompt = `请写一段影视剧本正文。包含场景标题、场景描述、动作、对白。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
             
             if (activeTab === 'idea') {
-                const result = await generateText(finalPrompt, { model, temperature, topP, signal: controller.signal });
+                const result = await generateText(finalPrompt, { 
+                    model, 
+                    temperature, 
+                    topP, 
+                    maxOutputTokens, 
+                    signal: controller.signal 
+                });
                 setOverlayStatus('success');
                 const ideas = result.split(/【方案[一二三]】/).filter(s => s.trim().length > 10);
                 setGeneratedIdeas(ideas.length === 0 ? [result] : ideas.map(s => s.trim()));
             } else {
                 if (onStream) {
-                    const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
+                    const stream = generateTextStream(finalPrompt, { 
+                        model, 
+                        temperature, 
+                        topP, 
+                        maxOutputTokens, 
+                        signal: controller.signal 
+                    });
                     let isFirst = true;
                     let fullText = '';
                     for await (const chunk of stream) {
@@ -128,7 +141,13 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                     }
                     setOverlayStatus('success');
                 } else {
-                    const result = await generateText(finalPrompt, { model, temperature, topP, signal: controller.signal });
+                    const result = await generateText(finalPrompt, { 
+                        model, 
+                        temperature, 
+                        topP, 
+                        maxOutputTokens, 
+                        signal: controller.signal 
+                    });
                     setGeneratedText(result);
                     setOverlayStatus('success');
                 }
@@ -179,6 +198,10 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                             <div className="space-y-1">
                                 <label className="block font-black text-sky-500 flex justify-between uppercase"><span>核采样 (Top P): {topP}</span></label>
                                 <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="block font-black text-sky-500 flex justify-between uppercase"><span>最大长度 (Max Tokens): {maxOutputTokens}</span></label>
+                                <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                             </div>
                         </div>
                     )}

@@ -77,6 +77,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
+    const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
     const [showConfig, setShowConfig] = useState(false);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     // Fix: Replaced undefined PromptFormState with Record<string, string>
@@ -136,7 +137,13 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         const finalPrompt = assetContext ? `${assetContext}\n\n---\n\n${basePrompt}` : basePrompt;
         const controller = new AbortController(); abortControllerRef.current = controller;
         try {
-            const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
+            const stream = generateTextStream(finalPrompt, { 
+                model, 
+                temperature, 
+                topP, 
+                maxOutputTokens, 
+                signal: controller.signal 
+            });
             let first = true;
             for await (const chunk of stream) {
                 if (first) { 
@@ -227,6 +234,16 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                             <p className="text-[10px] text-gray-400 leading-relaxed italic">
                                                 <InformationCircle className="w-3 h-3 inline mr-1" />
                                                 控制词汇多样性。值越高选词越丰富，值越低则更倾向于常用、稳妥的词汇。
+                                            </p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="block text-[10px] font-black text-sky-400 flex justify-between uppercase">
+                                                <span>最大长度 (Max Tokens): {maxOutputTokens}</span>
+                                            </label>
+                                            <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-100 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <p className="text-[10px] text-gray-400 leading-relaxed italic">
+                                                <InformationCircle className="w-3 h-3 inline mr-1" />
+                                                控制生成内容的最大长度。
                                             </p>
                                         </div>
                                     </div>

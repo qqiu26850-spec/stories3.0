@@ -25,6 +25,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
+    const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
     const [showConfig, setShowConfig] = useState(false);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [isProjectSettingsAssociated, setProjectSettingsAssociated] = useState(false);
@@ -146,7 +147,13 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
             }
 
             if (onStream && (activeTab === 'expand' || activeTab === 'continue')) {
-                const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
+                const stream = generateTextStream(finalPrompt, { 
+                    model, 
+                    temperature, 
+                    topP, 
+                    maxOutputTokens, 
+                    signal: controller.signal 
+                });
                 let isFirst = true;
                 let fullText = '';
                 for await (const chunk of stream) {
@@ -158,7 +165,13 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 }
                 setOverlayStatus('success'); 
             } else {
-                const text = await generateText(finalPrompt, { model, temperature, topP, signal: controller.signal });
+                const text = await generateText(finalPrompt, { 
+                    model, 
+                    temperature, 
+                    topP, 
+                    maxOutputTokens, 
+                    signal: controller.signal 
+                });
                 if (activeTab === 'expand' || activeTab === 'continue') onInsert(text);
                 setResultText(text);
                 setOverlayStatus('success');
@@ -227,6 +240,10 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             <div className="space-y-1">
                                 <label className="block font-black text-sky-500 flex justify-between uppercase"><span>核采样 (Top P): {topP}</span></label>
                                 <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="block font-black text-sky-500 flex justify-between uppercase"><span>最大长度 (Max Tokens): {maxOutputTokens}</span></label>
+                                <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                             </div>
                         </div>
                     )}

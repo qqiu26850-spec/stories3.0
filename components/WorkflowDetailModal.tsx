@@ -38,7 +38,8 @@ const WorkflowDetailModal: React.FC<WorkflowDetailModalProps> = ({ isOpen, onClo
                         <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-3">{workflow.title}</h2>
                         <div className="flex flex-wrap gap-2 text-xs font-bold">
                             <span className="px-2.5 py-1 rounded-md bg-purple-50 text-purple-600 border border-purple-100 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800">{CATEGORY_LABELS[workflow.category] || '全类型'}</span>
-                            <span className="px-2.5 py-1 rounded-md bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700">
+                            {/* Changed Automation Chain badge color from gray to blue */}
+                            <span className="px-2.5 py-1 rounded-md bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800">
                                 自动化链路：{workflow.steps?.length || 0} 步骤
                             </span>
                         </div>
@@ -50,7 +51,8 @@ const WorkflowDetailModal: React.FC<WorkflowDetailModalProps> = ({ isOpen, onClo
                     <div className="space-y-5">
                         <div className="bg-purple-50/50 dark:bg-purple-900/10 p-6 rounded-2xl space-y-3 border border-purple-100 dark:border-purple-800/50">
                             <h4 className="text-lg font-bold text-purple-700 dark:text-purple-300 flex items-center gap-2"><BookOpen className="w-5 h-5" /> 工作流介绍</h4>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-medium">{workflow.description}</p>
+                            {/* Added whitespace-pre-wrap to support line breaks */}
+                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-medium whitespace-pre-wrap">{workflow.description}</p>
                         </div>
 
                         <div className="bg-white dark:bg-gray-800/20 p-6 rounded-2xl space-y-4 border border-gray-100 dark:border-gray-800">
