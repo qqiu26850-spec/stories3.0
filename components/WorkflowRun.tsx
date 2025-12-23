@@ -1,14 +1,63 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Workflow } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { Sparkles, ChevronDoubleLeft, X, AdjustmentsHorizontal, ChevronDown, Check, Copy, Trash, Stop, InformationCircle, ArrowPath, Bolt, Play } from './Icon';
-import LoadingOverlay from './LoadingOverlay';
+import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play } from './Icon';
 
 interface WorkflowRunProps {
     workflow: Workflow;
     onBack: () => void;
 }
+
+const stripMarkdown = (text: string) => {
+    return text
+        .replace(/#+\s/g, '')
+        .replace(/\*\*|\*/g, '')
+        .replace(/>\s/g, '')
+        .replace(/!\[.*?\]\(.*?\)/g, '')
+        .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+        .replace(/`{1,3}.*?`{1,3}/gs, '')
+        .replace(/<think>[\s\S]*?<\/think>/g, '')
+        .trim();
+};
+
+const FormattedText: React.FC<{ text: string }> = ({ text }) => {
+    const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+    return (
+        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
+            {cleanedText.split('\n').map((line, index) => {
+                const trimmedLine = line.trim();
+                const isMarkdownHeader = trimmedLine.startsWith('#');
+                
+                if (isMarkdownHeader) {
+                    const match = trimmedLine.match(/^(#+)\s*(.*)/);
+                    if (match) {
+                        const level = Math.min(match[1].length, 6);
+                        const content = match[2];
+                        let className = "font-bold text-gray-900 dark:text-white ";
+                        if (level === 1) className += "text-lg mt-4 mb-2";
+                        else if (level === 2) className += "text-base mt-3 mb-1.5";
+                        else className += "text-sm mt-2 mb-1";
+                        return <div key={index} className={className}>{content}</div>;
+                    }
+                }
+                
+                const parts = line.split(/(\*\*.*?\*\*)/g);
+                return (
+                    <div key={index} className="min-h-[1.5em] mb-1">
+                        {parts.map((part, i) => {
+                            if (part.startsWith('**') && part.endsWith('**')) {
+                                return <span key={i} className="font-bold text-gray-900 dark:text-white">{part.slice(2, -2)}</span>;
+                            }
+                            return <span key={i}>{part}</span>;
+                        })}
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
 
 const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [model, setModel] = useState('gemini-3-flash-preview');
@@ -22,9 +71,18 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [nextStepIndex, setNextStepIndex] = useState<number>(0);
     const [executionStatus, setExecutionStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
     const [isLoading, setIsLoading] = useState(false);
-    const [showOverlay, setShowOverlay] = useState(false);
     const [error, setError] = useState('');
-    const [overlayStatus, setOverlayStatus] = useState<'loading' | 'success'>('loading');
+    
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    const handleStop = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsLoading(false);
+        setExecutionStatus('paused');
+    };
 
     const handleRunWorkflow = async (startIndex: number = 0) => {
         const steps = workflow.steps || [];
@@ -35,34 +93,30 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
 
         setIsLoading(true);
         setExecutionStatus('running');
-        setOverlayStatus('loading');
-        setShowOverlay(true);
         setError('');
         
         // Context includes form inputs and all previous step results
         const currentContext: Record<string, string> = { ...formState, ...stepResults };
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
         try {
             for (let i = startIndex; i < steps.length; i++) {
+                if (controller.signal.aborted) break;
+                
                 const step = steps[i];
                 setCurrentStepIndex(i);
 
                 // Replace variables in prompt
                 let finalPrompt = step.prompt;
                 Object.keys(currentContext).forEach(key => {
-                    // Simple global replacement for ${variable}
                     finalPrompt = finalPrompt.split(`\${${key}}`).join(currentContext[key] || '');
                 });
 
                 let stepContent = '';
-                const stream = generateTextStream(finalPrompt, { model, temperature, topP });
+                const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
                 
-                let isFirstChunk = true;
                 for await (const chunk of stream) {
-                    if (isFirstChunk) {
-                        setShowOverlay(false);
-                        isFirstChunk = false;
-                    }
                     stepContent += chunk;
                     setStepResults(prev => ({ ...prev, [step.outputVariable]: stepContent }));
                 }
@@ -75,26 +129,28 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                     setExecutionStatus('paused');
                     setIsLoading(false);
                     setCurrentStepIndex(null);
-                    return; // Exit loop to wait for user interaction
+                    return; 
                 }
             }
-            setOverlayStatus('success');
-            setExecutionStatus('completed');
-            setCurrentStepIndex(null);
-            setNextStepIndex(0); // Reset for restart
+            if (!controller.signal.aborted) {
+                setExecutionStatus('completed');
+                setCurrentStepIndex(null);
+                setNextStepIndex(0); 
+            }
         } catch (e: any) {
-            setError(e.message || '生成失败');
-            setShowOverlay(false);
-            setExecutionStatus('paused'); // Allow retry
+            if (e.message !== 'Aborted') {
+                setError(e.message || '生成失败');
+                setExecutionStatus('paused');
+            }
         } finally {
             if (executionStatus !== 'paused') {
                 setIsLoading(false);
             }
+            abortControllerRef.current = null;
         }
     };
 
     const handleRegenerateStep = (stepIndex: number) => {
-        // Regenerate specific step means run from that index
         handleRunWorkflow(stepIndex);
     };
 
@@ -103,52 +159,62 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     };
 
     const getStatusColor = (idx: number) => {
-        if (currentStepIndex === idx) return 'bg-sky-500 text-white animate-pulse ring-4 ring-sky-500/20';
+        if (currentStepIndex === idx) return 'bg-sky-500 text-white animate-pulse ring-2 ring-sky-500/20';
         if (idx < nextStepIndex || executionStatus === 'completed') return 'bg-emerald-500 text-white';
         return 'bg-gray-100 dark:bg-gray-800 text-gray-400';
     };
 
     return (
-        <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col font-sans bg-gray-50/30 dark:bg-black/20">
-            <LoadingOverlay isVisible={showOverlay} onClose={() => setShowOverlay(false)} status={overlayStatus} />
-            
-            <div className="flex items-center justify-between mb-8">
-                 <div className="flex items-center gap-4">
-                    <button onClick={onBack} className="p-2 text-gray-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-full transition-all">
+        <div className="p-4 h-full animate-fade-in flex flex-col font-sans bg-gray-50/30 dark:bg-black/20">
+            {/* Header: Compact, Title Left, Progress Right */}
+            <div className="flex items-center justify-between mb-4 bg-white dark:bg-gray-900 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-shrink-0 h-16">
+                 <div className="flex items-center gap-3">
+                    <button onClick={onBack} className="p-1.5 text-gray-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-full transition-all">
                         <ChevronDoubleLeft className="w-5 h-5" />
                     </button>
                     <div>
-                        <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{workflow.title}</h1>
-                        <p className="text-xs text-gray-500 font-medium">多步骤串行工作流执行中</p>
+                        <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tight leading-tight">{workflow.title}</h1>
+                        <p className="text-[10px] text-gray-500 font-medium">工作流运行中</p>
                     </div>
                  </div>
-                 <div className="flex items-center gap-3">
-                    <span className="px-3 py-1 bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300 rounded-lg text-[10px] font-black uppercase tracking-widest border border-sky-200 dark:border-sky-800">
-                        {workflow.category === 'script' ? '影视剧本' : '短篇小说'}
-                    </span>
+                 
+                 {/* Execution Progress in Header */}
+                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-2">
+                    {workflow.steps?.map((step, idx) => (
+                        <div key={step.id} className="flex items-center gap-2">
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 transition-colors ${getStatusColor(idx)}`}>
+                                {idx < nextStepIndex || executionStatus === 'completed' ? <Check className="w-3 h-3" /> : idx + 1}
+                            </div>
+                            <span className={`text-[10px] font-bold whitespace-nowrap hidden md:inline ${currentStepIndex === idx ? 'text-sky-600' : 'text-gray-400'}`}>
+                                {step.name}
+                            </span>
+                            {idx < (workflow.steps?.length || 0) - 1 && <div className="w-3 h-0.5 bg-gray-100 dark:bg-gray-800" />}
+                        </div>
+                    ))}
                  </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 overflow-hidden">
                 {/* Left Form Panel */}
-                <div className="lg:col-span-4 flex flex-col overflow-y-auto pr-2 space-y-6 custom-scrollbar">
-                    <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-6">
-                        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-4">
-                            <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                <div className="lg:col-span-4 flex flex-col overflow-y-auto pr-1 space-y-4 custom-scrollbar">
+                    <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+                            <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
                                 <AdjustmentsHorizontal className="w-4 h-4 text-sky-500" />
                                 参数配置
                             </h3>
                             <button onClick={() => setShowConfig(!showConfig)} className="text-[10px] font-bold text-sky-500 hover:underline">
-                                {showConfig ? '隐藏设置' : '模型设置'}
+                                {showConfig ? '收起配置' : '模型设置'}
                             </button>
                         </div>
 
                         {showConfig && (
-                            <div className="space-y-4 animate-fade-in p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                            <div className="space-y-3 animate-fade-in p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
                                 <div>
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">模型</label>
-                                    <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-2 text-xs rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none cursor-pointer">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">模型</label>
+                                    <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none cursor-pointer">
                                         <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+                                        <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
                                         <option value="deepseek-chat">DeepSeek V3</option>
                                     </select>
                                 </div>
@@ -158,19 +224,34 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                     </label>
                                     <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                                 </div>
+                                 <div className="space-y-1">
+                                    <label className="block text-[10px] font-black text-sky-500 flex justify-between">
+                                        <span>核采样: {topP}</span>
+                                    </label>
+                                    <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                </div>
                             </div>
                         )}
                         
-                        <div className="space-y-5">
-                            {workflow.fields?.map(field => (
-                                <div key={field.id} className="space-y-2">
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 ml-1">{field.label}</label>
+                        <div className="space-y-4">
+                            {workflow.fields?.map((field, idx) => (
+                                <div key={field.id} className="space-y-1">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 ml-1 flex items-center justify-between">
+                                        <span>
+                                            <span className="opacity-50 mr-1">{idx + 1}.</span> 
+                                            {field.label}
+                                            {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
+                                        </span>
+                                        <span className="text-[10px] text-gray-400 font-normal scale-90 origin-right">
+                                            {field.required !== false ? '必填' : '选填'}
+                                        </span>
+                                    </label>
                                     {field.type === 'textarea' ? (
                                         <textarea
                                             value={formState[field.variable] || ''}
                                             onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}
                                             placeholder={`请输入${field.label}...`}
-                                            className="w-full p-4 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all resize-none h-32 shadow-inner"
+                                            className="w-full p-3 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all resize-none h-24 shadow-inner"
                                         />
                                     ) : (
                                         <input
@@ -178,122 +259,105 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                             value={formState[field.variable] || ''}
                                             onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}
                                             placeholder={`请输入${field.label}...`}
-                                            className="w-full p-4 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all shadow-inner"
+                                            className="w-full p-3 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all shadow-inner"
                                         />
                                     )}
+                                    {field.description && <p className="text-[10px] text-blue-500 dark:text-blue-400 ml-1 leading-tight">{field.description}</p>}
                                 </div>
                             ))}
                         </div>
                         
-                        {executionStatus === 'paused' ? (
+                        {isLoading ? (
+                             <button 
+                                onClick={handleStop}
+                                className="w-full py-3 bg-red-500 text-white font-black rounded-xl hover:bg-red-600 transition-all shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 active:scale-95"
+                            >
+                                <Stop className="w-4 h-4" /> 停止生成
+                            </button>
+                        ) : executionStatus === 'paused' ? (
                             <div className="flex gap-2">
                                 <button 
                                     onClick={handleContinue}
-                                    className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 active:scale-95"
+                                    className="flex-1 py-3 bg-emerald-600 text-white font-black rounded-xl hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 active:scale-95"
                                 >
-                                    <Play className="w-5 h-5" /> 继续执行
+                                    <Play className="w-4 h-4" /> 继续执行
                                 </button>
                             </div>
                         ) : (
                             <button 
                                 onClick={() => handleRunWorkflow(0)}
-                                disabled={isLoading}
-                                className="w-full py-4 bg-sky-600 text-white font-black rounded-2xl hover:bg-sky-500 transition-all shadow-xl shadow-sky-500/30 flex items-center justify-center gap-3 disabled:bg-gray-400 active:scale-95"
+                                className="w-full py-3 bg-sky-600 text-white font-black rounded-xl hover:bg-sky-500 transition-all shadow-lg shadow-sky-500/30 flex items-center justify-center gap-2 active:scale-95"
                             >
-                                {isLoading ? <ArrowPath className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                                {executionStatus === 'completed' ? '重新开始' : (isLoading ? '正在执行...' : '开始自动执行')}
+                                <Sparkles className="w-4 h-4" />
+                                {executionStatus === 'completed' ? '重新开始' : '开始运行'}
                             </button>
                         )}
-                    </div>
-
-                    <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4">
-                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">执行进度</h3>
-                        <div className="space-y-4 relative">
-                            {workflow.steps?.map((step, idx) => (
-                                <div key={step.id} className="flex items-center gap-4 relative">
-                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 transition-colors ${getStatusColor(idx)}`}>
-                                        {idx < nextStepIndex || executionStatus === 'completed' ? <Check className="w-3.5 h-3.5" /> : idx + 1}
-                                    </div>
-                                    <div className="flex-1 flex justify-between items-center">
-                                        <div className={`text-xs font-bold ${currentStepIndex === idx ? 'text-sky-600' : 'text-gray-500'}`}>
-                                            {step.name}
-                                        </div>
-                                        {step.manualConfirmation && (
-                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 dark:bg-orange-900/30 font-medium">
-                                                暂停点
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
                     </div>
                 </div>
 
                 {/* Right Result Panel */}
-                <div className="lg:col-span-8 bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col overflow-hidden relative">
-                     <div className="flex-shrink-0 px-8 py-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900">
-                        <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <Sparkles className="w-5 h-5 text-sky-500" />
+                <div className="lg:col-span-8 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col overflow-hidden relative">
+                     <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 h-12">
+                        <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-sky-500" />
                             创作产出
+                            {isLoading && <span className="text-[10px] font-normal text-sky-500 animate-pulse ml-2 flex items-center gap-1"><ArrowPath className="w-3 h-3 animate-spin" /> AI 正在思考...</span>}
                         </h3>
                         {Object.keys(stepResults).length > 0 && (
                             <div className="flex items-center gap-2">
                                 <button 
                                     onClick={() => { 
-                                        const fullText = Object.values(stepResults).join('\n\n---\n\n');
+                                        const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
                                         navigator.clipboard.writeText(fullText); 
                                     }}
                                     className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1"
                                 >
-                                    <Copy className="w-3.5 h-3.5" /> 复制全部
+                                    <Copy className="w-3.5 h-3.5" /> 复制全文
                                 </button>
                             </div>
                         )}
                      </div>
 
-                     <div className="flex-1 overflow-y-auto p-8 relative custom-scrollbar space-y-12">
+                     <div className="flex-1 overflow-y-auto p-6 relative custom-scrollbar space-y-8">
                         {workflow.steps?.map((step, idx) => {
                             const result = stepResults[step.outputVariable];
                             // Only show if we have a result OR it's the current running step
                             if (!result && currentStepIndex !== idx) return null;
 
                             return (
-                                <div key={step.id} className="animate-fade-in space-y-4">
+                                <div key={step.id} className="animate-fade-in space-y-2">
                                     <div className="flex items-center gap-3">
-                                        <div className="h-0.5 flex-1 bg-gray-100 dark:bg-gray-800" />
+                                        <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{step.name}</span>
-                                        <div className="h-0.5 flex-1 bg-gray-100 dark:bg-gray-800" />
+                                        <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
                                     </div>
                                     {result ? (
-                                        <div className="p-6 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-gray-800 relative group">
-                                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                {/* Allow regeneration of this specific step if we are paused or done */}
+                                        <div className="p-5 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group">
+                                            <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                                 {(executionStatus === 'paused' && idx === nextStepIndex - 1) || executionStatus === 'completed' ? (
                                                     <button 
                                                         onClick={() => handleRegenerateStep(idx)} 
-                                                        className="p-2 text-gray-400 hover:text-sky-500 bg-white dark:bg-gray-800 rounded-lg shadow-sm"
+                                                        className="p-1.5 text-gray-400 hover:text-sky-500 bg-white dark:bg-gray-800 rounded-lg shadow-sm"
                                                         title="重新生成此步骤"
                                                     >
-                                                        <ArrowPath className="w-4 h-4" />
+                                                        <ArrowPath className="w-3.5 h-3.5" />
                                                     </button>
                                                 ) : null}
                                                 <button 
-                                                    onClick={() => navigator.clipboard.writeText(result)}
-                                                    className="p-2 text-gray-400 hover:text-sky-500 bg-white dark:bg-gray-800 rounded-lg shadow-sm"
+                                                    onClick={() => navigator.clipboard.writeText(stripMarkdown(result))}
+                                                    className="p-1.5 text-gray-400 hover:text-sky-500 bg-white dark:bg-gray-800 rounded-lg shadow-sm"
                                                     title="复制内容"
                                                 >
-                                                    <Copy className="w-4 h-4" />
+                                                    <Copy className="w-3.5 h-3.5" />
                                                 </button>
                                             </div>
-                                            <div className="whitespace-pre-wrap text-base leading-loose text-gray-700 dark:text-gray-200 font-serif">
-                                                {result}
-                                            </div>
+                                            {/* Render formatting text instead of raw markdown */}
+                                            <FormattedText text={result} />
                                         </div>
                                     ) : (
-                                        <div className="py-12 flex flex-col items-center justify-center text-sky-500 animate-pulse">
-                                            <ArrowPath className="w-8 h-8 animate-spin mb-3" />
-                                            <p className="text-xs font-bold uppercase tracking-widest">AI 正在构思本环节内容...</p>
+                                        <div className="py-8 flex flex-col items-center justify-center text-sky-500 animate-pulse bg-gray-50/50 rounded-xl">
+                                            <div className="w-2 h-2 bg-sky-500 rounded-full animate-ping mb-2"></div>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest">AI 正在构思本环节内容...</p>
                                         </div>
                                     )}
                                 </div>
@@ -301,16 +365,16 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                         })}
 
                         {!isLoading && Object.keys(stepResults).length === 0 && (
-                            <div className="h-full flex flex-col items-center justify-center text-gray-300 dark:text-gray-700 opacity-40 py-20">
-                                <Bolt className="w-24 h-24 mb-6" />
-                                <p className="text-xl font-black italic tracking-tighter">WAITING FOR EXECUTION</p>
-                                <p className="text-sm mt-2 font-medium">填写左侧参数并运行，结果将显示在这里</p>
+                            <div className="h-full flex flex-col items-center justify-center text-gray-300 dark:text-gray-700 opacity-40 py-10">
+                                <Bolt className="w-20 h-20 mb-4" />
+                                <p className="text-lg font-black italic tracking-tighter">WAITING FOR EXECUTION</p>
+                                <p className="text-xs mt-1 font-medium">填写左侧参数并运行，结果将显示在这里</p>
                             </div>
                         )}
                         
                         {error && (
-                            <div className="p-4 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl border border-rose-100 dark:border-rose-900/50 text-sm font-bold animate-shake">
-                                ⚠️ 错误提示: {error}
+                            <div className="p-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl border border-rose-100 dark:border-rose-900/50 text-xs font-bold animate-shake text-center">
+                                ⚠️ {error}
                             </div>
                         )}
                      </div>

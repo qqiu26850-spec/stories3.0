@@ -18,6 +18,10 @@ interface WorkflowManagementProps {
     isActive?: boolean;
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+    'long-story': '长篇小说', 'short-story': '短篇小说', 'script': '剧本', 'general': '通用/全类型',
+};
+
 const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true }) => {
   const [activeTab, setActiveTab] = useState<ExtendedTab>('all');
   const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
@@ -164,6 +168,11 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       setView('run');
   };
 
+  const getSubCategoryLabel = (id: string) => {
+      const found = GENRE_TAGS.find(t => t.id === id);
+      return found ? found.label : id;
+  };
+
   if (view === 'create') return <CreateWorkflow onBack={() => { setView('list'); setWorkflowToEdit(null); }} onSave={handleSaveWorkflow} workflowToEdit={workflowToEdit} />;
   if (view === 'run' && selectedWorkflow) return <WorkflowRun workflow={selectedWorkflow} onBack={() => { setView('list'); loadData(); }} />;
 
@@ -241,13 +250,20 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                       </div>
                       <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-6 line-clamp-3 flex-grow">{workflow.description}</p>
                       
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800 mt-auto">
-                          <div className="flex items-center gap-2">
-                              <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                                  {workflow.category === 'script' ? '剧本' : workflow.category === 'short-story' ? '短篇' : workflow.category === 'general' ? '通用' : '长篇'}
+                      {/* Tags Section - NEW */}
+                      <div className="flex flex-wrap gap-2 mb-4">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold border bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800">
+                              {CATEGORY_LABELS[workflow.category] || '通用'}
+                          </span>
+                          {workflow.subCategories && workflow.subCategories.map((sub) => (
+                              <span key={sub} className="px-2 py-0.5 rounded-md text-[10px] font-bold border bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800">
+                                  {getSubCategoryLabel(sub as string)}
                               </span>
-                              <div className="flex items-center gap-1 text-xs text-orange-400 font-bold"><Fire className="w-3.5 h-3.5" />{workflow.heat || 0}</div>
-                          </div>
+                          ))}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800 mt-auto">
+                          <div className="flex items-center gap-1 text-xs text-orange-400 font-bold"><Fire className="w-3.5 h-3.5" />{workflow.heat || 0}</div>
                           
                           <div className="flex items-center gap-2">
                               {workflow.userId === currentUserId && (
