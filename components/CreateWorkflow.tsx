@@ -262,6 +262,19 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                 </div>
                             ))}
                             {steps.length === 0 && <div className="text-center py-16 text-gray-400 flex flex-col items-center gap-4 bg-white dark:bg-gray-900 rounded-3xl border border-dashed"><Sparkles className="w-12 h-12 opacity-10" /><p className="text-sm font-medium">尚未定义任何运行步骤，点击右上方“增加步骤”开始构建链路</p></div>}
+                            
+                            {/* NEW: Bottom Continue Adding Button */}
+                            {steps.length > 0 && (
+                                <div className="pl-12 mt-4">
+                                    <button 
+                                        onClick={addStep} 
+                                        className="w-full py-4 border-2 border-dashed border-purple-200 dark:border-purple-800 rounded-2xl text-purple-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-300 transition-all font-bold flex items-center justify-center gap-2 group"
+                                    >
+                                        <Plus className="w-5 h-5 transition-transform group-hover:scale-110" />
+                                        继续添加步骤
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
 
