@@ -206,7 +206,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
                 <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'my-workflows' ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><UserCircle className="w-4 h-4" />我的</button>
                 <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><Heart className="w-4 h-4" />收藏</button>
-                <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-6 py-2.5 rounded-xl font-black bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 text-sm flex items-center gap-2 whitespace-nowrap active:scale-95 transition-all">
+                <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-6 py-2.5 rounded-xl font-black bg-blue-100 text-blue-600 hover:bg-blue-200 shadow-lg shadow-blue-500/10 text-sm flex items-center gap-2 whitespace-nowrap active:scale-95 transition-all">
                     <Plus className="w-4 h-4" /> 创建工作流
                 </button>
             </div>
@@ -214,7 +214,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
         <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-hide">
             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0 uppercase tracking-wider">题材分类:</span>
-            <button onClick={() => setActiveSubCategory('all')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>全部</button>
+            <button onClick={() => setActiveSubCategory('all')} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>全部</button>
             {GENRE_TAGS.map(cat => (
                 <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>{cat.label}</button>
             ))}

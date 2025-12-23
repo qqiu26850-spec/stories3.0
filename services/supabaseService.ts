@@ -390,12 +390,24 @@ export async function updateWorkflow(id: string, updates: { title?: string, desc
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("未登录");
-        const dbUpdates: any = { ...updates };
+        
+        // Construct valid DB updates
+        const dbUpdates: any = {};
+        if (updates.title) dbUpdates.title = updates.title;
+        if (updates.description) dbUpdates.description = updates.description;
         if (updates.category) dbUpdates.main_category = mapPromptCategory(updates.category);
         if (updates.subCategories) dbUpdates.sub_categories = updates.subCategories;
+        
+        // Serialize content fields if provided
         if (updates.fields || updates.steps) {
-            dbUpdates.content = JSON.stringify({ fields: updates.fields, steps: updates.steps });
+            dbUpdates.content = JSON.stringify({ 
+                fields: updates.fields || [], 
+                steps: updates.steps || [] 
+            });
         }
+        
+        if (Object.keys(dbUpdates).length === 0) return { success: true };
+
         const { error } = await supabase.from('workflows').update(dbUpdates).eq('id', id).eq('user_id', userId);
         if (error) throw error;
         return { success: true };
