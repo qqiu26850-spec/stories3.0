@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Workflow } from '../types';
 import { generateTextStream } from '../services/geminiService';
-// Fix: Added missing Bolt icon to the imports from Icon component
-import { Sparkles, ChevronDoubleLeft, X, AdjustmentsHorizontal, ChevronDown, Check, Copy, Trash, Stop, InformationCircle, ArrowPath, Bolt } from './Icon';
+import { Sparkles, ChevronDoubleLeft, X, AdjustmentsHorizontal, ChevronDown, Check, Copy, Trash, Stop, InformationCircle, ArrowPath, Bolt, Play } from './Icon';
 import LoadingOverlay from './LoadingOverlay';
 
 interface WorkflowRunProps {
@@ -20,12 +19,14 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [formState, setFormState] = useState<Record<string, string>>({});
     const [stepResults, setStepResults] = useState<Record<string, string>>({});
     const [currentStepIndex, setCurrentStepIndex] = useState<number | null>(null);
+    const [nextStepIndex, setNextStepIndex] = useState<number>(0);
+    const [executionStatus, setExecutionStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
     const [isLoading, setIsLoading] = useState(false);
     const [showOverlay, setShowOverlay] = useState(false);
     const [error, setError] = useState('');
     const [overlayStatus, setOverlayStatus] = useState<'loading' | 'success'>('loading');
 
-    const handleGenerate = async () => {
+    const handleRunWorkflow = async (startIndex: number = 0) => {
         const steps = workflow.steps || [];
         if (steps.length === 0) {
             setError('该工作流没有定义执行步骤。');
@@ -33,23 +34,24 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         }
 
         setIsLoading(true);
+        setExecutionStatus('running');
         setOverlayStatus('loading');
         setShowOverlay(true);
         setError('');
         
-        // 初始上下文：仅包含用户填写的表单
-        const currentContext: Record<string, string> = { ...formState };
-        setStepResults({});
+        // Context includes form inputs and all previous step results
+        const currentContext: Record<string, string> = { ...formState, ...stepResults };
 
         try {
-            for (let i = 0; i < steps.length; i++) {
+            for (let i = startIndex; i < steps.length; i++) {
                 const step = steps[i];
                 setCurrentStepIndex(i);
 
-                // 替换提示词中的变量
+                // Replace variables in prompt
                 let finalPrompt = step.prompt;
                 Object.keys(currentContext).forEach(key => {
-                    finalPrompt = finalPrompt.split(`\${${key}}`).join(currentContext[key]);
+                    // Simple global replacement for ${variable}
+                    finalPrompt = finalPrompt.split(`\${${key}}`).join(currentContext[key] || '');
                 });
 
                 let stepContent = '';
@@ -62,21 +64,48 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                         isFirstChunk = false;
                     }
                     stepContent += chunk;
-                    // 实时更新当前步骤的结果预览
                     setStepResults(prev => ({ ...prev, [step.outputVariable]: stepContent }));
                 }
 
-                // 将输出存入上下文供下一步使用
                 currentContext[step.outputVariable] = stepContent;
+                
+                // Handle manual confirmation pause
+                if (step.manualConfirmation && i < steps.length - 1) {
+                    setNextStepIndex(i + 1);
+                    setExecutionStatus('paused');
+                    setIsLoading(false);
+                    setCurrentStepIndex(null);
+                    return; // Exit loop to wait for user interaction
+                }
             }
             setOverlayStatus('success');
+            setExecutionStatus('completed');
             setCurrentStepIndex(null);
+            setNextStepIndex(0); // Reset for restart
         } catch (e: any) {
             setError(e.message || '生成失败');
             setShowOverlay(false);
+            setExecutionStatus('paused'); // Allow retry
         } finally {
-            setIsLoading(false);
+            if (executionStatus !== 'paused') {
+                setIsLoading(false);
+            }
         }
+    };
+
+    const handleRegenerateStep = (stepIndex: number) => {
+        // Regenerate specific step means run from that index
+        handleRunWorkflow(stepIndex);
+    };
+
+    const handleContinue = () => {
+        handleRunWorkflow(nextStepIndex);
+    };
+
+    const getStatusColor = (idx: number) => {
+        if (currentStepIndex === idx) return 'bg-sky-500 text-white animate-pulse ring-4 ring-sky-500/20';
+        if (idx < nextStepIndex || executionStatus === 'completed') return 'bg-emerald-500 text-white';
+        return 'bg-gray-100 dark:bg-gray-800 text-gray-400';
     };
 
     return (
@@ -156,32 +185,44 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                             ))}
                         </div>
                         
-                        <button 
-                            onClick={handleGenerate}
-                            disabled={isLoading}
-                            className="w-full py-4 bg-sky-600 text-white font-black rounded-2xl hover:bg-sky-500 transition-all shadow-xl shadow-sky-500/30 flex items-center justify-center gap-3 disabled:bg-gray-400 active:scale-95"
-                        >
-                            {isLoading ? <ArrowPath className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                            {isLoading ? '正在执行链式处理...' : '开始自动执行'}
-                        </button>
+                        {executionStatus === 'paused' ? (
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={handleContinue}
+                                    className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 active:scale-95"
+                                >
+                                    <Play className="w-5 h-5" /> 继续执行
+                                </button>
+                            </div>
+                        ) : (
+                            <button 
+                                onClick={() => handleRunWorkflow(0)}
+                                disabled={isLoading}
+                                className="w-full py-4 bg-sky-600 text-white font-black rounded-2xl hover:bg-sky-500 transition-all shadow-xl shadow-sky-500/30 flex items-center justify-center gap-3 disabled:bg-gray-400 active:scale-95"
+                            >
+                                {isLoading ? <ArrowPath className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                                {executionStatus === 'completed' ? '重新开始' : (isLoading ? '正在执行...' : '开始自动执行')}
+                            </button>
+                        )}
                     </div>
 
                     <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4">
-                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">执行步骤</h3>
+                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">执行进度</h3>
                         <div className="space-y-4 relative">
                             {workflow.steps?.map((step, idx) => (
                                 <div key={step.id} className="flex items-center gap-4 relative">
-                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 transition-colors ${
-                                        currentStepIndex === idx 
-                                        ? 'bg-sky-500 text-white animate-pulse ring-4 ring-sky-500/20' 
-                                        : (idx < (currentStepIndex ?? -1) || overlayStatus === 'success' ? 'bg-emerald-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-400')
-                                    }`}>
-                                        {idx < (currentStepIndex ?? -1) || overlayStatus === 'success' ? <Check className="w-3.5 h-3.5" /> : idx + 1}
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 transition-colors ${getStatusColor(idx)}`}>
+                                        {idx < nextStepIndex || executionStatus === 'completed' ? <Check className="w-3.5 h-3.5" /> : idx + 1}
                                     </div>
-                                    <div className="flex-1">
+                                    <div className="flex-1 flex justify-between items-center">
                                         <div className={`text-xs font-bold ${currentStepIndex === idx ? 'text-sky-600' : 'text-gray-500'}`}>
                                             {step.name}
                                         </div>
+                                        {step.manualConfirmation && (
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 dark:bg-orange-900/30 font-medium">
+                                                暂停点
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -214,6 +255,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                      <div className="flex-1 overflow-y-auto p-8 relative custom-scrollbar space-y-12">
                         {workflow.steps?.map((step, idx) => {
                             const result = stepResults[step.outputVariable];
+                            // Only show if we have a result OR it's the current running step
                             if (!result && currentStepIndex !== idx) return null;
 
                             return (
@@ -225,12 +267,25 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                     </div>
                                     {result ? (
                                         <div className="p-6 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-gray-800 relative group">
-                                            <button 
-                                                onClick={() => navigator.clipboard.writeText(result)}
-                                                className="absolute top-4 right-4 p-2 text-gray-300 hover:text-sky-500 opacity-0 group-hover:opacity-100 transition-all"
-                                            >
-                                                <Copy className="w-4 h-4" />
-                                            </button>
+                                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                {/* Allow regeneration of this specific step if we are paused or done */}
+                                                {(executionStatus === 'paused' && idx === nextStepIndex - 1) || executionStatus === 'completed' ? (
+                                                    <button 
+                                                        onClick={() => handleRegenerateStep(idx)} 
+                                                        className="p-2 text-gray-400 hover:text-sky-500 bg-white dark:bg-gray-800 rounded-lg shadow-sm"
+                                                        title="重新生成此步骤"
+                                                    >
+                                                        <ArrowPath className="w-4 h-4" />
+                                                    </button>
+                                                ) : null}
+                                                <button 
+                                                    onClick={() => navigator.clipboard.writeText(result)}
+                                                    className="p-2 text-gray-400 hover:text-sky-500 bg-white dark:bg-gray-800 rounded-lg shadow-sm"
+                                                    title="复制内容"
+                                                >
+                                                    <Copy className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                             <div className="whitespace-pre-wrap text-base leading-loose text-gray-700 dark:text-gray-200 font-serif">
                                                 {result}
                                             </div>
@@ -249,7 +304,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                             <div className="h-full flex flex-col items-center justify-center text-gray-300 dark:text-gray-700 opacity-40 py-20">
                                 <Bolt className="w-24 h-24 mb-6" />
                                 <p className="text-xl font-black italic tracking-tighter">WAITING FOR EXECUTION</p>
-                                <p className="text-sm mt-2 font-medium">请在左侧填写所需参数，AI 将分步骤为您自动创作</p>
+                                <p className="text-sm mt-2 font-medium">填写左侧参数并运行，结果将显示在这里</p>
                             </div>
                         )}
                         

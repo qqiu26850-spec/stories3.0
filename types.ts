@@ -82,6 +82,7 @@ export interface WorkflowStep {
   name: string;
   prompt: string;
   outputVariable: string;
+  manualConfirmation?: boolean;
 }
 
 export interface Workflow {
