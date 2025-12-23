@@ -274,7 +274,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                               )}
                               <button 
                                 onClick={(e) => handleRunClick(e, workflow)}
-                                className="ml-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-md shadow-blue-500/20 flex items-center gap-1.5 active:scale-95 transition-all"
+                                className="ml-2 px-4 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 active:scale-95 transition-all"
                               >
                                 <Play className="w-3 h-3" /> 运行
                               </button>
