@@ -1,15 +1,20 @@
+
 import { GoogleGenAI } from "@google/genai";
 
 interface GenerationOptions {
     model: string;
     temperature: number;
     topP: number;
+    maxOutputTokens?: number; // Added parameter
     signal?: AbortSignal;
 }
 
 // Removed PLAIN_TEXT_INSTRUCTION to allow Markdown headers (#) for hierarchical numbering in UI
 
 export const generateText = async (prompt: string, options: GenerationOptions): Promise<string> => {
+  // Default to a higher token limit if not specified to prevent short responses
+  const maxOutputTokens = options.maxOutputTokens || 8192;
+
   if (options.model.startsWith('gemini')) {
     // Fix: Always use named parameter for apiKey and obtain it exclusively from process.env.API_KEY.
     // Create the instance inside the function to ensure it uses the most up-to-date environment variable.
@@ -23,6 +28,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
             config: {
                 temperature: options.temperature,
                 topP: options.topP,
+                maxOutputTokens: maxOutputTokens,
             }
         });
         // Fix: Use the .text property directly as per latest SDK guidelines
@@ -49,6 +55,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
                 ],
                 temperature: options.temperature,
                 top_p: options.topP,
+                max_tokens: maxOutputTokens, // Pass max_tokens to DeepSeek
                 stream: false
             }),
             signal: options.signal
@@ -85,6 +92,9 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 };
 
 export const generateTextStream = async function* (prompt: string, options: GenerationOptions): AsyncGenerator<string, void, unknown> {
+    // Default to a higher token limit if not specified
+    const maxOutputTokens = options.maxOutputTokens || 8192;
+
     if (options.model.startsWith('gemini')) {
         // Fix: Use process.env.API_KEY and create instance locally to follow GenAI guidelines.
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -95,6 +105,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                 config: {
                     temperature: options.temperature,
                     topP: options.topP,
+                    maxOutputTokens: maxOutputTokens,
                 }
             });
 
@@ -128,6 +139,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                     ],
                     temperature: options.temperature,
                     top_p: options.topP,
+                    max_tokens: maxOutputTokens, // Pass max_tokens to DeepSeek
                     stream: true
                 }),
                 signal: options.signal

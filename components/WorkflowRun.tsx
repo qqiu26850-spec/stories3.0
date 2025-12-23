@@ -63,6 +63,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [model, setModel] = useState('gemini-3-flash-preview');
     const [temperature, setTemperature] = useState(0.8);
     const [topP, setTopP] = useState(0.95);
+    const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
     const [showConfig, setShowConfig] = useState(false);
 
     const [formState, setFormState] = useState<Record<string, string>>({});
@@ -114,7 +115,13 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 });
 
                 let stepContent = '';
-                const stream = generateTextStream(finalPrompt, { model, temperature, topP, signal: controller.signal });
+                const stream = generateTextStream(finalPrompt, { 
+                    model, 
+                    temperature, 
+                    topP, 
+                    maxOutputTokens, 
+                    signal: controller.signal 
+                });
                 
                 for await (const chunk of stream) {
                     stepContent += chunk;
@@ -174,7 +181,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                     </button>
                     <div>
                         <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tight leading-tight">{workflow.title}</h1>
-                        <p className="text-[10px] text-gray-500 font-medium">工作流运行中</p>
                     </div>
                  </div>
                  
@@ -224,11 +230,17 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                     </label>
                                     <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                                 </div>
-                                 <div className="space-y-1">
+                                <div className="space-y-1">
                                     <label className="block text-[10px] font-black text-sky-500 flex justify-between">
                                         <span>核采样: {topP}</span>
                                     </label>
                                     <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="block text-[10px] font-black text-sky-500 flex justify-between">
+                                        <span>最大长度: {maxOutputTokens}</span>
+                                    </label>
+                                    <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                                 </div>
                             </div>
                         )}
