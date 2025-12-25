@@ -6,6 +6,9 @@ import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
 
 type NewPromptData = Omit<Prompt, 'id' | 'heat' | 'content'>;
 
+// Extended type for internal state use only, adding a stable key for React rendering
+type EditablePromptField = PromptField & { _key: string };
+
 interface CreatePromptModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -20,6 +23,8 @@ const CATEGORIES: { id: PromptCategory; label: string }[] = [
     { id: 'general', label: '全类型' },
 ];
 
+const generateKey = () => `k_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
 const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, onSave, promptToEdit }) => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -27,7 +32,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     const [template, setTemplate] = useState('');
     const [category, setCategory] = useState<PromptCategory>('short-story');
     const [subCategories, setSubCategories] = useState<PromptSubCategory[]>([]);
-    const [fields, setFields] = useState<PromptField[]>([]);
+    const [fields, setFields] = useState<EditablePromptField[]>([]);
     const [error, setError] = useState('');
     const [fieldIndexToDelete, setFieldIndexToDelete] = useState<number | null>(null);
 
@@ -40,7 +45,8 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 setTemplate(promptToEdit.template || promptToEdit.content);
                 setCategory(promptToEdit.category);
                 setSubCategories(promptToEdit.subCategories && promptToEdit.subCategories.length > 0 ? promptToEdit.subCategories : []);
-                setFields(promptToEdit.fields || []);
+                // Add stable keys to existing fields
+                setFields((promptToEdit.fields || []).map(f => ({ ...f, _key: generateKey() })));
             } else {
                 setTitle('');
                 setDescription('');
@@ -64,7 +70,8 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             placeholder: '',
             required: true,
             description: '',
-            maxLength: undefined
+            maxLength: undefined,
+            _key: generateKey() // Generate stable key
         }]);
     };
 
@@ -128,8 +135,11 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
         if (!template.trim()) { setError('请填写模板'); return; }
         if (subCategories.length === 0) { setError('请至少选择一个标签（功能或题材）'); return; }
 
+        // Remove the internal _key before saving
+        const cleanFields = fields.map(({ _key, ...rest }) => rest);
+
         onSave({
-            title, description, example, template, category, subCategories: subCategories, fields, creator: 'user',
+            title, description, example, template, category, subCategories: subCategories, fields: cleanFields, creator: 'user',
         }, promptToEdit?.id);
     };
 
@@ -236,7 +246,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                     <div className="text-center py-8 text-gray-400 text-xs italic bg-white/50 dark:bg-gray-900/50 rounded-lg border border-dashed border-rose-200 dark:border-rose-800/50">请点击上方按钮添加字段，用于接收用户输入</div>
                                 ) : (
                                     fields.map((field, index) => (
-                                        <div key={field.id} className="p-5 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4 shadow-sm group relative hover:border-rose-300 transition-colors">
+                                        <div key={field._key} className="p-5 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4 shadow-sm group relative hover:border-rose-300 transition-colors">
                                             
                                             {/* Controls */}
                                             <div className="absolute right-3 top-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-gray-900 p-1 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm z-10">
