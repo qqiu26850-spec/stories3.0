@@ -150,7 +150,8 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                     {onRun && <button onClick={handleRun} className="flex-[1.5] py-3 rounded-xl bg-sky-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95 transition-all hover:bg-sky-500"><Sparkles className="w-5 h-5" />去创作</button>}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
