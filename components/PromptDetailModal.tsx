@@ -16,6 +16,7 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'idea': '创意', 'golden_finger': '金手指', 'character_design': '人物设定', 'worldview': '世界观',
     'outline': '大纲', 'detailed_outline': '细纲', 'synopsis': '简介', 'requirements': '写作要求',
     'style': '写作风格', 'continue': '续写', 'polish': '润色', 'proofread': '校对', 'writing': '写稿',
+    'expand': '扩写',
     'general': '通用', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
     'apocalypse': '末世', 'urban': '都市', 'fantasy': '玄幻', 'history': '历史', 'social': '世情',
     'suspense': '悬疑', 'sci-fi': '科幻'
@@ -30,11 +31,19 @@ const isGenre = (tag: string) => GENRE_TAGS.some(g => g.id === tag);
 const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, prompt, onRun }) => {
     const [copied, setCopied] = useState(false);
     const [showRawTemplate, setShowRawTemplate] = useState(false);
+    const [formState, setFormState] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        if (prompt) {
+            const initial: Record<string, string> = {};
+            prompt.fields?.forEach(f => initial[f.id] = '');
+            setFormState(initial);
+        }
+    }, [prompt]);
 
     if (!isOpen || !prompt) return null;
 
     const handleCopy = () => {
-        // Copy raw template since user cannot fill values here
         navigator.clipboard.writeText(prompt.template || prompt.content);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -42,10 +51,13 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
 
     const handleRun = () => {
         if (onRun) {
-            // Pass empty values, let CreativeGeneration handle it
-            onRun({});
+            onRun(formState);
         }
     }
+
+    const handleInputChange = (id: string, value: string) => {
+        setFormState(prev => ({ ...prev, [id]: value }));
+    };
 
     return createPortal(
         <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
@@ -88,7 +100,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                         {showRawTemplate && <div className="p-3 bg-gray-900 rounded-lg text-gray-300 font-mono text-[10px] whitespace-pre-wrap border border-gray-800">{prompt.template}</div>}
                         <div className="space-y-5">
                             {prompt.fields?.map((field, index) => (
-                                <div key={field.id} className="space-y-2 opacity-75">
+                                <div key={field.id} className="space-y-2">
                                     <div className="flex justify-between items-center">
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                             <span className="opacity-50 mr-1">{index + 1}.</span> 
@@ -99,15 +111,29 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                                                 <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
                                             )}
                                         </label>
+                                        {field.maxLength && (
+                                            <span className={`text-[10px] ${(formState[field.id]?.length || 0) > field.maxLength ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
+                                                {formState[field.id]?.length || 0} / {field.maxLength}
+                                            </span>
+                                        )}
                                     </div>
                                     {field.type === 'textarea' ? (
-                                        <div className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-400 select-none cursor-not-allowed overflow-hidden">
-                                            {field.placeholder || "此处填写内容..."}
-                                        </div>
+                                        <textarea
+                                            value={formState[field.id] || ''}
+                                            onChange={e => handleInputChange(field.id, e.target.value)}
+                                            className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none resize-none transition-all shadow-sm"
+                                            placeholder={field.placeholder || "此处填写内容..."}
+                                            maxLength={field.maxLength}
+                                        />
                                     ) : (
-                                        <div className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-400 select-none cursor-not-allowed">
-                                            {field.placeholder || "此处填写内容..."}
-                                        </div>
+                                        <input
+                                            type="text"
+                                            value={formState[field.id] || ''}
+                                            onChange={e => handleInputChange(field.id, e.target.value)}
+                                            className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition-all shadow-sm"
+                                            placeholder={field.placeholder || "此处填写内容..."}
+                                            maxLength={field.maxLength}
+                                        />
                                     )}
                                     {field.description && <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1 opacity-80 font-medium">💡 {field.description}</p>}
                                 </div>

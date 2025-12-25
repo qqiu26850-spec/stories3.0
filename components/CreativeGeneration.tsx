@@ -292,7 +292,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                                         )}
                                                     </label>
                                                     {f.maxLength && (
-                                                        <span className={`text-[10px] ${(formState[f.id]?.length || 0) >= f.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
+                                                        <span className={`text-[10px] ${(formState[f.id]?.length || 0) > f.maxLength ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
                                                             {formState[f.id]?.length || 0} / {f.maxLength}
                                                         </span>
                                                     )}

@@ -251,7 +251,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
               {filteredWorkflows.map(workflow => (
-                  <div key={workflow.id} onClick={() => { setSelectedWorkflow(workflow); setDetailModalOpen(true); }} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-6 hover:shadow-xl hover:border-blue-400 transition-all cursor-pointer group flex flex-col h-full relative">
+                  <div key={workflow.id} onClick={() => { setSelectedWorkflow(workflow); setDetailModalOpen(true); }} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl hover:border-blue-400 transition-all cursor-pointer group flex flex-col h-full relative">
                       <div className="flex justify-between items-start mb-3">
                           <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors line-clamp-1 pr-8">{workflow.title}</h3>
                           <button onClick={(e) => { e.stopPropagation(); toggleFavorite(workflow.id); }} className={`p-1.5 rounded-full absolute top-5 right-5 transition-colors ${favoritedIds.has(workflow.id) ? 'text-red-500 bg-red-50 dark:bg-red-900/20' : 'text-gray-300 hover:text-red-500 hover:bg-red-50'}`}><Heart className={`w-5 h-5 ${favoritedIds.has(workflow.id) ? 'fill-current' : ''}`} /></button>
