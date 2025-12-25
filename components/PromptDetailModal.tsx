@@ -28,31 +28,24 @@ const CATEGORY_LABELS: Record<string, string> = {
 const isGenre = (tag: string) => GENRE_TAGS.some(g => g.id === tag);
 
 const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, prompt, onRun }) => {
-    const [formState, setFormState] = useState<Record<string, string>>({});
     const [copied, setCopied] = useState(false);
     const [showRawTemplate, setShowRawTemplate] = useState(false);
-
-    useEffect(() => {
-        if (prompt) {
-            const initialFormState = prompt.fields.reduce((acc, field) => {
-                acc[field.id] = '';
-                return acc;
-            }, {} as Record<string, string>);
-            setFormState(initialFormState);
-        }
-    }, [prompt]);
 
     if (!isOpen || !prompt) return null;
 
     const handleCopy = () => {
-        let filledTemplate = prompt.template || prompt.content;
-        for (const key in formState) {
-            filledTemplate = filledTemplate.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), formState[key]);
-        }
-        navigator.clipboard.writeText(filledTemplate);
+        // Copy raw template since user cannot fill values here
+        navigator.clipboard.writeText(prompt.template || prompt.content);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
+
+    const handleRun = () => {
+        if (onRun) {
+            // Pass empty values, let CreativeGeneration handle it
+            onRun({});
+        }
+    }
 
     return createPortal(
         <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
@@ -89,46 +82,32 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
 
                     <div className="space-y-4 pt-2">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2"><Sparkles className="w-4 h-4 text-sky-500" />参数设置</h3>
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2"><Sparkles className="w-4 h-4 text-sky-500" />参数设置预览</h3>
                             <button onClick={() => setShowRawTemplate(!showRawTemplate)} className="text-[10px] text-gray-400 hover:text-sky-500 flex items-center gap-1">{showRawTemplate ? <EyeSlash className="w-3 h-3"/> : <Eye className="w-3 h-3"/>}查看模板</button>
                         </div>
                         {showRawTemplate && <div className="p-3 bg-gray-900 rounded-lg text-gray-300 font-mono text-[10px] whitespace-pre-wrap border border-gray-800">{prompt.template}</div>}
                         <div className="space-y-5">
                             {prompt.fields?.map((field, index) => (
-                                <div key={field.id} className="space-y-2">
+                                <div key={field.id} className="space-y-2 opacity-75">
                                     <div className="flex justify-between items-center">
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                             <span className="opacity-50 mr-1">{index + 1}.</span> 
                                             {field.label}
                                             {field.required !== false ? (
-                                                <span className="ml-1 text-red-500 font-normal">* (必填)</span>
+                                                <span className="ml-1 text-red-500 font-normal">*</span>
                                             ) : (
                                                 <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
                                             )}
                                         </label>
-                                        {field.maxLength && (
-                                            <span className={`text-[10px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
-                                                {formState[field.id]?.length || 0} / {field.maxLength}
-                                            </span>
-                                        )}
                                     </div>
                                     {field.type === 'textarea' ? (
-                                        <textarea 
-                                            value={formState[field.id] || ''} 
-                                            onChange={e => setFormState({...formState, [field.id]: e.target.value})} 
-                                            maxLength={field.maxLength}
-                                            placeholder={field.placeholder}
-                                            className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all shadow-sm" 
-                                        />
+                                        <div className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-400 select-none cursor-not-allowed overflow-hidden">
+                                            {field.placeholder || "此处填写内容..."}
+                                        </div>
                                     ) : (
-                                        <input 
-                                            type="text" 
-                                            value={formState[field.id] || ''} 
-                                            onChange={e => setFormState({...formState, [field.id]: e.target.value})} 
-                                            maxLength={field.maxLength}
-                                            placeholder={field.placeholder}
-                                            className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none transition-all shadow-sm" 
-                                        />
+                                        <div className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-400 select-none cursor-not-allowed">
+                                            {field.placeholder || "此处填写内容..."}
+                                        </div>
                                     )}
                                     {field.description && <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1 opacity-80 font-medium">💡 {field.description}</p>}
                                 </div>
@@ -140,13 +119,12 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                 <div className="p-5 border-t border-gray-100 dark:border-gray-800 flex gap-3 bg-white dark:bg-gray-900">
                     <button onClick={handleCopy} className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-700 font-bold hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center gap-2 transition-all">
                         {copied ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
-                        {copied ? '已复制' : '复制全文'}
+                        {copied ? '已复制' : '复制模板'}
                     </button>
-                    {onRun && <button onClick={() => onRun(formState)} className="flex-[1.5] py-3 rounded-xl bg-sky-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95 transition-all hover:bg-sky-500"><Sparkles className="w-5 h-5" />立即生成</button>}
+                    {onRun && <button onClick={handleRun} className="flex-[1.5] py-3 rounded-xl bg-sky-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95 transition-all hover:bg-sky-500"><Sparkles className="w-5 h-5" />去创作</button>}
                 </div>
             </div>
-        </div>,
-        document.body
+        </div>
     );
 };
 

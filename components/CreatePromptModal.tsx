@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Prompt, PromptCategory, PromptField, PromptSubCategory } from '../types';
-import { Trash, Sparkles, Check, Bars2, DocumentText, ChevronDown, ChevronUp, X, InformationCircle, Tag, Bolt } from './Icon';
+import { Trash, Sparkles, Check, Bars2, DocumentText, ChevronDown, ChevronUp, X, InformationCircle, Tag, Bolt, Plus } from './Icon';
 
 type NewPromptData = Omit<Prompt, 'id' | 'heat' | 'content'>;
 
@@ -213,31 +213,61 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
                         <div className="p-6 bg-white dark:bg-gray-800/40 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 space-y-4">
                             <div className="flex justify-between items-center">
-                                <h4 className="text-sm font-bold text-gray-600 dark:text-gray-300">动态表单字段</h4>
-                                <button type="button" onClick={addField} className="px-4 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-500 shadow-md">添加字段</button>
+                                <h4 className="text-sm font-bold text-gray-600 dark:text-gray-300 flex items-center gap-2"><Bolt className="w-4 h-4"/>动态表单字段</h4>
+                                <button type="button" onClick={addField} className="px-4 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-500 shadow-md flex items-center gap-1"><Plus className="w-3 h-3"/> 添加字段</button>
                             </div>
                             <div className="space-y-4">
-                                {fields.map((field, index) => (
-                                    <div key={field.id} className="p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 space-y-3 shadow-sm group">
-                                        <div className="grid grid-cols-12 gap-4">
-                                            <div className="col-span-4">
-                                                <label className="text-[10px] text-gray-400 block mb-1">显示名称</label>
-                                                <input type="text" value={field.label} onChange={e => updateField(index, 'label', e.target.value)} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border rounded text-xs focus:ring-1 focus:ring-sky-500 outline-none" />
+                                {fields.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-400 text-xs italic">请点击上方按钮添加字段，用于接收用户输入</div>
+                                ) : (
+                                    fields.map((field, index) => (
+                                        <div key={field.id} className="p-5 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4 shadow-sm group relative hover:border-sky-300 transition-colors">
+                                            
+                                            {/* Controls */}
+                                            <div className="absolute right-3 top-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-gray-900 p-1 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm z-10">
+                                                <button type="button" onClick={() => moveField(index, 'up')} disabled={index === 0} className="p-1.5 text-gray-400 hover:text-sky-500 disabled:opacity-30 transition-colors" title="上移"><ChevronUp className="w-4 h-4"/></button>
+                                                <button type="button" onClick={() => moveField(index, 'down')} disabled={index === fields.length - 1} className="p-1.5 text-gray-400 hover:text-sky-500 disabled:opacity-30 transition-colors" title="下移"><ChevronDown className="w-4 h-4"/></button>
+                                                <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1 self-center"></div>
+                                                <button type="button" onClick={() => setFieldIndexToDelete(index)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="删除"><Trash className="w-4 h-4"/></button>
                                             </div>
-                                            <div className="col-span-4">
-                                                <label className="text-[10px] text-gray-400 block mb-1">变量 ID</label>
-                                                <input type="text" value={field.id} onChange={e => updateField(index, 'id', e.target.value)} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border rounded font-mono text-xs focus:ring-1 focus:ring-sky-500 outline-none" />
+
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pr-10">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">显示名称 (Label)</label>
+                                                    <input type="text" value={field.label} onChange={e => updateField(index, 'label', e.target.value)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all" placeholder="如：主角姓名" />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">变量名 (ID)</label>
+                                                    <input type="text" value={field.id} onChange={e => updateField(index, 'id', e.target.value)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-mono text-sky-600 dark:text-sky-400 focus:ring-2 focus:ring-sky-500 outline-none transition-all" placeholder="name" />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">是否必填</label>
+                                                    <div className="flex items-center h-[42px] gap-4 px-1">
+                                                        <label className="flex items-center gap-2 cursor-pointer group/radio">
+                                                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${field.required !== false ? 'border-sky-500 bg-sky-500' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 group-hover/radio:border-sky-400'}`}>
+                                                                {field.required !== false && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+                                                            </div>
+                                                            <input type="radio" checked={field.required !== false} onChange={() => updateField(index, 'required', true)} className="hidden" />
+                                                            <span className={`text-sm font-medium ${field.required !== false ? 'text-sky-600 dark:text-sky-400' : 'text-gray-600 dark:text-gray-400'}`}>必填</span>
+                                                        </label>
+                                                        <label className="flex items-center gap-2 cursor-pointer group/radio">
+                                                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${field.required === false ? 'border-sky-500 bg-sky-500' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 group-hover/radio:border-sky-400'}`}>
+                                                                {field.required === false && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+                                                            </div>
+                                                            <input type="radio" checked={field.required === false} onChange={() => updateField(index, 'required', false)} className="hidden" />
+                                                            <span className={`text-sm font-medium ${field.required === false ? 'text-sky-600 dark:text-sky-400' : 'text-gray-600 dark:text-gray-400'}`}>选填</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="col-span-3 flex items-end gap-2 pb-1">
-                                                <button type="button" onClick={() => moveField(index, 'up')} disabled={index === 0} className="p-1.5 border rounded text-gray-400 disabled:opacity-20 hover:text-sky-500"><ChevronUp className="w-4 h-4"/></button>
-                                                <button type="button" onClick={() => moveField(index, 'down')} disabled={index === fields.length - 1} className="p-1.5 border rounded text-gray-400 disabled:opacity-20 hover:text-sky-500"><ChevronDown className="w-4 h-4"/></button>
-                                            </div>
-                                            <div className="col-span-1 flex items-end justify-end pb-1">
-                                                <button type="button" onClick={() => setFieldIndexToDelete(index)} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><Trash className="w-4 h-4"/></button>
+                                            
+                                            <div className="space-y-1.5">
+                                                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">补充说明 (输入提示)</label>
+                                                <input type="text" value={field.description || ''} onChange={e => updateField(index, 'description', e.target.value)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none transition-all" placeholder="例如：请填写用户的具体要求，越详细越好..." />
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))
+                                )}
                             </div>
                         </div>
                     </div>
