@@ -72,8 +72,18 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
         setFields(prev => {
             const next = [...prev];
             const fieldToUpdate = { ...next[index] };
-            // @ts-ignore
-            fieldToUpdate[key] = value;
+            
+            // Special handling for ID to allow English words (letters, numbers, underscore)
+            if (key === 'id') {
+                // Remove invalid characters to ensure clean variable names
+                const sanitized = String(value).replace(/[^a-zA-Z0-9_]/g, '');
+                // @ts-ignore
+                fieldToUpdate[key] = sanitized;
+            } else {
+                // @ts-ignore
+                fieldToUpdate[key] = value;
+            }
+
             if (key === 'label' && !fieldToUpdate.placeholder) {
                 fieldToUpdate.placeholder = `请输入${value}...`;
             }
@@ -104,7 +114,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             if (prev.includes(tag)) {
                 return prev.filter(t => t !== tag);
             } else {
-                if (prev.length >= 8) return prev; // Increased limit slightly to accommodate both types
+                if (prev.length >= 5) return prev; // Limit changed to 5
                 return [...prev, tag];
             }
         });
@@ -172,11 +182,11 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             </div>
                         </div>
 
-                        {/* 标签选择区域 */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* 标签选择区域 - Changed from grid to flex-col to stack vertically */}
+                        <div className="flex flex-col gap-6">
                             {/* 功能属性 */}
                             <div className="p-6 bg-emerald-50/40 dark:bg-emerald-900/10 rounded-xl space-y-4 border border-emerald-100 dark:border-emerald-900/30">
-                                <h4 className="text-sm font-bold text-emerald-600 flex items-center gap-2"><Bolt className="w-4 h-4"/>功能类型</h4>
+                                <h4 className="text-sm font-bold text-emerald-600 flex items-center gap-2"><Bolt className="w-4 h-4"/>功能类型 (可多选，总限5个)</h4>
                                 <div className="flex flex-wrap gap-2">
                                     {FUNCTIONAL_TAGS.filter(t => t.id !== 'all').map(tag => (
                                         <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id as PromptSubCategory)} className={`px-4 py-1.5 text-xs rounded-full border transition-all ${subCategories.includes(tag.id as any) ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-emerald-300'}`}>{tag.label}</button>
@@ -186,7 +196,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
                             {/* 题材属性 */}
                             <div className="p-6 bg-purple-50/40 dark:bg-purple-900/10 rounded-xl space-y-4 border border-purple-100 dark:border-purple-900/30">
-                                <h4 className="text-sm font-bold text-purple-600 flex items-center gap-2"><Tag className="w-4 h-4"/>题材属性</h4>
+                                <h4 className="text-sm font-bold text-purple-600 flex items-center gap-2"><Tag className="w-4 h-4"/>题材属性 (可多选，总限5个)</h4>
                                 <div className="flex flex-wrap gap-2">
                                     {GENRE_TAGS.filter(t => t.id !== 'all').map(tag => (
                                         <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id as PromptSubCategory)} className={`px-4 py-1.5 text-xs rounded-full border transition-all ${subCategories.includes(tag.id as any) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}>{tag.label}</button>
@@ -200,11 +210,11 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <h4 className="text-sm font-bold text-orange-600 dark:text-orange-400 flex items-center gap-2"><BookOpen className="w-4 h-4"/>功能简介</h4>
-                                    <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="简单描述这个提示词的用途..." className="w-full h-32 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm resize-none focus:ring-2 focus:ring-orange-500 outline-none" />
+                                    <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="简单描述这个提示词的用途..." className="w-full h-32 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm resize-y focus:ring-2 focus:ring-orange-500 outline-none" />
                                 </div>
                                 <div className="space-y-2">
                                     <h4 className="text-sm font-bold text-orange-600 dark:text-orange-400 flex items-center gap-2"><Sparkles className="w-4 h-4"/>效果预览 (选填)</h4>
-                                    <textarea value={example} onChange={e => setExample(e.target.value)} placeholder="展示 AI 生成的结果范例..." className="w-full h-32 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm resize-none focus:ring-2 focus:ring-orange-500 outline-none" />
+                                    <textarea value={example} onChange={e => setExample(e.target.value)} placeholder="展示 AI 生成的结果范例..." className="w-full h-32 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm resize-y focus:ring-2 focus:ring-orange-500 outline-none" />
                                 </div>
                             </div>
                         </div>
