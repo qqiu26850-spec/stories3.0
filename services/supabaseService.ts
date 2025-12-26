@@ -77,10 +77,18 @@ export async function fetchUserProfile() {
     try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return { nickname: '未登录用户', avatarUrl: null, email: '' };
+        
+        // 尝试获取 profile 表数据，但优先使用 metadata
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        
+        // 优先使用 session 中的 metadata，因为它在 updateUser 后是即时更新的
+        // 如果 metadata 中没有，再回退到 profile 表，最后是默认值
+        const nickname = session.user.user_metadata?.full_name || profile?.username || '奇思妙想家';
+        const avatarUrl = session.user.user_metadata?.avatar_url || profile?.avatar_url || null;
+
         return {
-            nickname: profile?.username || session.user.user_metadata?.full_name || '奇思妙想家',
-            avatarUrl: profile?.avatar_url || session.user.user_metadata?.avatar_url || null,
+            nickname,
+            avatarUrl,
             email: session.user.email
         };
     } catch (e) {
@@ -97,10 +105,12 @@ export async function updateUserProfile(nickname: string, avatarUrl: string | nu
         };
         if (email) updates.email = email;
 
+        // 1. 更新 Auth 元数据 (Session)
         const { data, error: authError } = await supabase.auth.updateUser(updates);
         
         if (authError) throw authError;
 
+        // 2. 更新 Profiles 表 (即使失败也不阻塞返回，确保 Session 更新成功即可)
         const { error } = await supabase.from('profiles').upsert({ 
             id: userId, 
             username: nickname, 
@@ -108,12 +118,14 @@ export async function updateUserProfile(nickname: string, avatarUrl: string | nu
             updated_at: new Date().toISOString()
         });
 
-        // 关键修改：更新个人资料成功后，清除提示词缓存，确保列表页显示最新昵称
-        if (!error) {
-            promptsCache = null;
+        if (error) {
+            console.warn("Profiles table update failed, but Auth metadata updated.", error);
         }
 
-        return { error, data };
+        // 关键修改：更新个人资料成功后，清除提示词缓存，确保列表页显示最新昵称
+        promptsCache = null;
+
+        return { error: null, data };
     } catch (e: any) {
         return { error: e };
     }

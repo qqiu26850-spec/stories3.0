@@ -6,7 +6,7 @@ import WorkflowRun from './WorkflowRun';
 import WorkflowDetailModal from './WorkflowDetailModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { Workflow, PromptCategory, PromptSubCategory } from '../types';
-import { fetchWorkflows, deleteWorkflow, saveWorkflow, updateWorkflow, getCurrentUserId, incrementWorkflowUsage, fetchUserProfile, supabase, fetchWorkflowFavorites, toggleWorkflowFavoriteDB } from '../services/supabaseService';
+import { fetchWorkflows, deleteWorkflow, saveWorkflow, updateWorkflow, getCurrentUserId, incrementWorkflowUsage, fetchUserProfile, fetchWorkflowFavorites, toggleWorkflowFavoriteDB } from '../services/supabaseService';
 import { GENRE_TAGS } from '../constants';
 
 type ExtendedTab = PromptCategory | 'all' | 'favorites' | 'my-workflows';
@@ -51,12 +51,11 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         const userId = await getCurrentUserId();
         setCurrentUserId(userId);
         
-        let { data, error } = await supabase.from('workflows').select(`*, profiles(username)`).order('usage_count', { ascending: false });
+        // 获取当前用户资料，用于回退显示（如果 DB 关联查询延迟或失败）
+        const currentUserProfile = await fetchUserProfile();
         
-        if (error) {
-            const fallback = await supabase.from('workflows').select(`*`).order('usage_count', { ascending: false });
-            data = fallback.data;
-        }
+        // 使用 service 中的统一获取方法（包含 profiles 关联查询）
+        const data = await fetchWorkflows();
 
         if (data) {
             const mapped: Workflow[] = data.map((wf: any) => {
@@ -69,13 +68,23 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                 else if(wf.main_category === 'general') mainCat = 'general';
                 else if(wf.main_category === 'short') mainCat = 'short-story';
                 
+                // 智能解析作者名称
+                let authorName = '匿名用户';
+                if (wf.profiles && wf.profiles.username) {
+                    // 优先使用数据库关联查询到的昵称
+                    authorName = wf.profiles.username;
+                } else if (wf.user_id === userId && currentUserProfile.nickname) {
+                    // 如果关联失败但这是我自己的工作流，使用当前会话昵称
+                    authorName = currentUserProfile.nickname;
+                }
+
                 return {
                     id: wf.id,
                     title: wf.title,
                     description: wf.description,
                     usageCount: wf.usage_count || 0,
                     heat: wf.usage_count || 0,
-                    author: wf.profiles?.username || '匿名用户',
+                    author: authorName,
                     userId: wf.user_id,
                     category: mainCat,
                     subCategories: wf.sub_categories || [],
@@ -88,7 +97,9 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
         const favs = await fetchWorkflowFavorites();
         setFavoritedIds(new Set(favs));
-    } catch(e) {} finally { 
+    } catch(e) {
+        console.error("Workflow load error", e);
+    } finally { 
         setIsLoading(false); 
     }
   };
@@ -266,10 +277,10 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                               </div>
                               <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
                               
-                              {/* Display Author Name */}
+                              {/* Display Author Name - Slightly widened max-width */}
                               <div className="flex items-center gap-1 text-xs text-gray-400 shrink-0" title={`创建者: ${workflow.author}`}>
                                 <UserCircle className="w-3.5 h-3.5" />
-                                <span className="max-w-[60px] truncate">{workflow.author}</span>
+                                <span className="max-w-[80px] truncate">{workflow.author}</span>
                               </div>
                               <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
 
