@@ -102,10 +102,6 @@ export async function updateUserProfile(nickname: string, avatarUrl: string | nu
             avatar_url: avatarUrl,
             updated_at: new Date().toISOString()
         });
-        
-        // Clear cache to reflect name changes in Prompt Library immediately
-        promptsCache = null;
-        
         return { error, data };
     } catch (e: any) {
         return { error: e };
@@ -345,8 +341,7 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
             }
             return data;
         }
-        // Updated to join with profiles to get dynamic author name
-        let query = supabase.from('prompts').select('*, profiles(username, avatar_url)').order('usage_count', { ascending: false });
+        let query = supabase.from('prompts').select('*').order('usage_count', { ascending: false });
         if (mainCategory && mainCategory !== 'all') {
             const dbCat = mapPromptCategory(mainCategory);
             query = query.eq('main_category', dbCat);
