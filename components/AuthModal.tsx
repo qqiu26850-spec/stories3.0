@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { signIn, signUp, resetPasswordForEmail, signOut } from '../services/supabaseService';
 import { BookSolid, X, Eye, EyeSlash } from './Icon';
@@ -31,9 +32,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
 
     if (!isOpen) return null;
 
-    // 校验邮箱格式
+    // 校验邮箱格式 - Relaxed validation to allow 123@123 format
     const validateEmail = (emailStr: string) => {
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr);
+        return /^[^\s@]+@[^\s@]+$/.test(emailStr);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {

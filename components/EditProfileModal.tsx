@@ -6,7 +6,7 @@ import { UserCircle } from './Icon';
 interface EditProfileModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (nickname: string, avatarUrl: string | null, email: string) => void;
+    onSave: (nickname: string, avatarUrl: string | null) => void;
     currentUser: UserProfile;
 }
 
@@ -42,11 +42,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose, on
             setError('昵称不能为空。');
             return;
         }
-        if (!email.trim()) {
-            setError('邮箱不能为空。');
-            return;
-        }
-        onSave(nickname, avatarPreview, email);
+        onSave(nickname, avatarPreview);
         onClose();
     };
 
@@ -84,13 +80,13 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose, on
                         />
                     </div>
                     <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">邮箱</label>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">邮箱 (不可修改)</label>
                         <input
                             type="email"
                             id="email"
                             value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
+                            disabled
+                            className="w-full p-2 bg-gray-200 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-700 rounded-md text-gray-500 dark:text-gray-400 cursor-not-allowed"
                         />
                     </div>
                     {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}

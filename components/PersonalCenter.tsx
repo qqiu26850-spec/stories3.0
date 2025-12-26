@@ -125,11 +125,11 @@ const PersonalCenter: React.FC<PersonalCenterProps> = ({ onLogout }) => {
         init();
     }, []);
 
-    const handleProfileUpdate = async (newNickname: string, newAvatarUrl: string | null, newEmail: string) => {
-        // Save to Supabase Auth Metadata
-        await updateUserProfile(newNickname, newAvatarUrl, newEmail);
+    const handleProfileUpdate = async (newNickname: string, newAvatarUrl: string | null) => {
+        // Save to Supabase Auth Metadata. We no longer allow email updates here.
+        await updateUserProfile(newNickname, newAvatarUrl);
         // Update local state
-        setUserProfile(prev => ({ ...prev, nickname: newNickname, avatarUrl: newAvatarUrl, email: newEmail }));
+        setUserProfile(prev => ({ ...prev, nickname: newNickname, avatarUrl: newAvatarUrl }));
     };
 
     const handleDestroyAccount = async () => {
