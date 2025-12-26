@@ -26,6 +26,11 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     }
 });
 
+// --- Global Cache Variables ---
+let promptsCache: any[] | null = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 60000 * 5;
+
 export async function getCurrentUserId() {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.user?.id || null;
@@ -102,6 +107,12 @@ export async function updateUserProfile(nickname: string, avatarUrl: string | nu
             avatar_url: avatarUrl,
             updated_at: new Date().toISOString()
         });
+
+        // 关键修改：更新个人资料成功后，清除提示词缓存，确保列表页显示最新昵称
+        if (!error) {
+            promptsCache = null;
+        }
+
         return { error, data };
     } catch (e: any) {
         return { error: e };
@@ -326,10 +337,6 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
     }
 }
 
-let promptsCache: any[] | null = null;
-let lastFetchTime = 0;
-const CACHE_DURATION = 60000 * 5;
-
 export async function fetchPrompts(mainCategory?: string, forceRefresh = false) {
     try {
         const now = Date.now();
@@ -341,7 +348,7 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
             }
             return data;
         }
-        let query = supabase.from('prompts').select('*').order('usage_count', { ascending: false });
+        let query = supabase.from('prompts').select('*, profiles(username)').order('usage_count', { ascending: false });
         if (mainCategory && mainCategory !== 'all') {
             const dbCat = mapPromptCategory(mainCategory);
             query = query.eq('main_category', dbCat);
