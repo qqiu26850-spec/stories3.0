@@ -340,6 +340,8 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
 export async function fetchPrompts(mainCategory?: string, forceRefresh = false) {
     try {
         const now = Date.now();
+        
+        // Cache Check
         if (!forceRefresh && promptsCache && (now - lastFetchTime < CACHE_DURATION)) {
             let data = promptsCache;
             if (mainCategory && mainCategory !== 'all') {
@@ -348,19 +350,52 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
             }
             return data;
         }
+
+        // DB Fetch - Try with profiles join first
         let query = supabase.from('prompts').select('*, profiles(username)').order('usage_count', { ascending: false });
-        if (mainCategory && mainCategory !== 'all') {
+        let shouldCache = false;
+
+        // If requesting a specific category via DB (not via cache filtering), modify query
+        // However, for best caching strategy, we typically fetch 'all' first.
+        // We'll trust the 'all' request from PromptLibrary.
+        if (!mainCategory || mainCategory === 'all') {
+            shouldCache = true;
+        } else {
             const dbCat = mapPromptCategory(mainCategory);
             query = query.eq('main_category', dbCat);
         }
-        const { data, error } = await query;
-        if (error) return [];
-        if (!mainCategory || mainCategory === 'all') {
+
+        let { data, error } = await query;
+
+        // Fallback Mechanism: If profiles join fails (e.g. no FK or RLS issue), fetch without join
+        if (error) {
+            console.warn("fetchPrompts: fetching with profile failed, trying fallback...", error);
+            let fallbackQuery = supabase.from('prompts').select('*').order('usage_count', { ascending: false });
+            if (!shouldCache && mainCategory) {
+                const dbCat = mapPromptCategory(mainCategory);
+                fallbackQuery = fallbackQuery.eq('main_category', dbCat);
+            }
+            const res = await fallbackQuery;
+            data = res.data;
+            error = res.error;
+        }
+
+        if (error) {
+            console.error("fetchPrompts failed", error);
+            return [];
+        }
+
+        // Only update cache if we fetched the full dataset
+        if (shouldCache) {
             promptsCache = data;
             lastFetchTime = now;
         }
-        return data;
-    } catch (e) { return []; }
+        
+        return data || [];
+    } catch (e) {
+        console.error("fetchPrompts exception", e);
+        return [];
+    }
 }
 
 export async function incrementPromptHeat(id: string) {
@@ -425,7 +460,16 @@ export async function updateWorkflow(id: string, updates: { title?: string, desc
 
 export async function fetchWorkflows() {
     try {
-        const { data, error } = await supabase.from('workflows').select(`*, profiles(username)`).order('usage_count', { ascending: false });
+        // First try with profiles join
+        let { data, error } = await supabase.from('workflows').select(`*, profiles(username)`).order('usage_count', { ascending: false });
+        
+        // Fallback if join fails
+        if (error) {
+             const fallback = await supabase.from('workflows').select(`*`).order('usage_count', { ascending: false });
+             data = fallback.data;
+             error = fallback.error;
+        }
+        
         return error ? [] : data;
     } catch (e) { return []; }
 }
