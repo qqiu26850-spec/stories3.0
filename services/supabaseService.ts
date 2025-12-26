@@ -83,20 +83,26 @@ export async function fetchUserProfile() {
     }
 }
 
-export async function updateUserProfile(nickname: string, avatarUrl: string | null) {
+export async function updateUserProfile(nickname: string, avatarUrl: string | null, email?: string) {
     const userId = await getCurrentUserId();
     if (!userId) return { error: '未登录' };
     try {
-        await supabase.auth.updateUser({
+        const updates: any = {
             data: { full_name: nickname, avatar_url: avatarUrl }
-        });
+        };
+        if (email) updates.email = email;
+
+        const { data, error: authError } = await supabase.auth.updateUser(updates);
+        
+        if (authError) throw authError;
+
         const { error } = await supabase.from('profiles').upsert({ 
             id: userId, 
             username: nickname, 
             avatar_url: avatarUrl,
             updated_at: new Date().toISOString()
         });
-        return { error };
+        return { error, data };
     } catch (e: any) {
         return { error: e };
     }

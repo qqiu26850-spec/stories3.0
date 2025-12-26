@@ -265,15 +265,18 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                                   {workflow.heat || 0}
                               </div>
                               <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
+                              
+                              {/* Display Author Name */}
+                              <div className="flex items-center gap-1 text-xs text-gray-400 shrink-0" title={`创建者: ${workflow.author}`}>
+                                <UserCircle className="w-3.5 h-3.5" />
+                                <span className="max-w-[60px] truncate">{workflow.author}</span>
+                              </div>
+                              <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
+
                               <div className="flex items-center gap-1.5 overflow-hidden">
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 whitespace-nowrap">
                                       {CATEGORY_LABELS[workflow.category] || '通用'}
                                   </span>
-                                  {workflow.subCategories && workflow.subCategories.slice(0, 2).map((sub) => (
-                                      <span key={sub} className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800 whitespace-nowrap">
-                                          {getSubCategoryLabel(sub as string)}
-                                      </span>
-                                  ))}
                               </div>
                           </div>
                           

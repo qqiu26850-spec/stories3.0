@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { UserCircle } from './Icon';
@@ -5,18 +6,20 @@ import { UserCircle } from './Icon';
 interface EditProfileModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (nickname: string, avatarUrl: string | null) => void;
+    onSave: (nickname: string, avatarUrl: string | null, email: string) => void;
     currentUser: UserProfile;
 }
 
 const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose, onSave, currentUser }) => {
     const [nickname, setNickname] = useState('');
+    const [email, setEmail] = useState('');
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
     const [error, setError] = useState('');
 
     useEffect(() => {
         if (isOpen) {
             setNickname(currentUser.nickname);
+            setEmail(currentUser.email || '');
             setAvatarPreview(currentUser.avatarUrl);
             setError('');
         }
@@ -39,7 +42,11 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose, on
             setError('昵称不能为空。');
             return;
         }
-        onSave(nickname, avatarPreview);
+        if (!email.trim()) {
+            setError('邮箱不能为空。');
+            return;
+        }
+        onSave(nickname, avatarPreview, email);
         onClose();
     };
 
@@ -73,6 +80,16 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose, on
                             id="nickname"
                             value={nickname}
                             onChange={(e) => setNickname(e.target.value)}
+                            className="w-full p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">邮箱</label>
+                        <input
+                            type="email"
+                            id="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             className="w-full p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition"
                         />
                     </div>
