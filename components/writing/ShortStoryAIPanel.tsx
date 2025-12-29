@@ -219,9 +219,9 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-medium rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer font-sans">
                                 <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
                                 <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
-                                <option value="doubao-pro-32k">豆包 Pro (Doubao)</option>
                                 <option value="gemini-3-flash-preview">谷歌极速 (Gemini 3 Flash)</option>
                                 <option value="gemini-3-pro-preview">谷歌深度 (Gemini 3 Pro)</option>
+                                <option value="doubao-flash">豆包 Flash (Doubao Flash)</option>
                             </select>
                             <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                         </div>
@@ -301,14 +301,12 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 <div key={field.id} className="font-sans">
                                     <div className="flex justify-between items-center mb-1.5">
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 font-sans">
-                                            <span className="font-sans">
-                                                {index + 1}. {field.label}
-                                                {field.required !== false ? (
-                                                    <span className="ml-1 text-red-500 font-normal">* (必填)</span>
-                                                ) : (
-                                                    <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
-                                                )}
-                                            </span>
+                                            {index + 1}. {field.label}
+                                            {field.required !== false ? (
+                                                <span className="ml-1 text-red-500 font-normal">* (必填)</span>
+                                            ) : (
+                                                <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
+                                            )}
                                         </label>
                                         {field.maxLength && (
                                             <span className={`text-[10px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
@@ -322,7 +320,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                             onChange={e => handleInputChange(field.id, e.target.value)} 
                                             placeholder={field.placeholder} 
                                             maxLength={field.maxLength}
-                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm h-24 font-sans" 
+                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm h-24 font-sans" 
                                         />
                                     ) : (
                                         <input 

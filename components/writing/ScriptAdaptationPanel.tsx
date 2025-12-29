@@ -174,7 +174,6 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                             <div className="relative flex-1">
                                 <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-medium rounded-lg bg-gray-50 dark:bg-gray-800 border focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer font-sans">
                                     <option value="deepseek-chat">DeepSeek V3</option>
-                                    <option value="doubao-pro-32k">豆包 Pro (Doubao)</option>
                                     <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
                                 </select>
                                 <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />

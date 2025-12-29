@@ -102,11 +102,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         const loadAssets = async () => {
             const data = await fetchMaterials();
             setAssets(data.map((item: any) => ({
-                id: item.id,
-                name: item.name,
-                type: item.type === 'idea' ? 'inspiration' : item.type,
-                content: item.content,
-                tags: item.tags || [],
+                id: item.id, name: item.name, type: item.type === 'idea' ? 'inspiration' : item.type, content: item.content, tags: item.tags || []
             })));
         };
         loadAssets();
@@ -211,9 +207,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-bold bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 rounded-lg text-gray-700 dark:text-gray-200 outline-none appearance-none cursor-pointer font-sans">
                                             <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
                                             <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
-                                            <option value="doubao-pro-32k">豆包 Pro (Doubao)</option>
                                             <option value="gemini-3-flash-preview">谷歌极速 (Gemini 3 Flash)</option>
                                             <option value="gemini-3-pro-preview">谷歌深度 (Gemini 3 Pro)</option>
+                                            <option value="doubao-flash">豆包 Flash (Doubao Flash)</option>
                                         </select>
                                         <ChevronDown className="w-3 h-3 text-sky-400 absolute right-2.5 top-3 pointer-events-none" />
                                     </div>
