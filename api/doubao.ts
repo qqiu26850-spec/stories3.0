@@ -25,10 +25,11 @@ export default async function handler(request: Request) {
     // Get API Key from the standard Volcengine env var name requested
     const apiKey = process.env.ARK_API_KEY;
     
-    // Hardcode the specific endpoint ID for 'doubao-flash' as requested
-    // This allows the user to only configure one environment variable (ARK_API_KEY)
+    // Hardcode the specific endpoint ID for 'doubao-flash' as requested.
+    // We map ANY model name starting with 'doubao' to this endpoint to prevent errors 
+    // if the frontend sends a legacy model name (like doubao-pro-32k).
     let endpointId = '';
-    if (model === 'doubao-flash') {
+    if (model && model.startsWith('doubao')) {
         endpointId = 'ep-20251229180745-tbpdh';
     } else {
         // Fallback or direct pass-through if needed
