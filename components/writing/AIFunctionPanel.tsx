@@ -223,6 +223,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer font-sans">
                                     <option value="deepseek-chat">DeepSeek V3 (通用对话)</option>
                                     <option value="deepseek-reasoner">DeepSeek R1 (深度推理)</option>
+                                    <option value="doubao-pro-32k">豆包 Pro (Doubao)</option>
                                     <option value="gemini-3-flash-preview">Gemini 3 Flash (极速)</option>
                                     <option value="gemini-3-pro-preview">Gemini 3 Pro (深度)</option>
                                 </select>

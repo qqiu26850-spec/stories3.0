@@ -259,6 +259,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                     <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none cursor-pointer">
                                         <option value="deepseek-chat">DeepSeek V3</option>
                                         <option value="deepseek-reasoner">DeepSeek R1</option>
+                                        <option value="doubao-pro-32k">豆包 Pro (Doubao)</option>
                                         <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
                                         <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
                                     </select>
@@ -346,8 +347,9 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                     </div>
                 </div>
 
-                {/* Right Result Panel */}
+                {/* Right Panel: Output */}
                 <div className="lg:col-span-8 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col overflow-hidden relative">
+                     
                      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 h-12">
                         <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
                             <Sparkles className="w-4 h-4 text-sky-500" />

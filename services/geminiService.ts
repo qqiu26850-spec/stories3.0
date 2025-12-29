@@ -78,6 +78,41 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         console.error("Error generating text with DeepSeek:", error);
         return `DeepSeek 生成出错: ${error.message}`;
     }
+  } else if (options.model.startsWith('doubao')) {
+    try {
+        const response = await fetch("/api/doubao", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                model: options.model, // Backend should map this to Endpoint ID if necessary
+                messages: [
+                    { role: "system", content: "You are a helpful creative writing assistant. Use Markdown headers (# ## ###) for structure." },
+                    { role: "user", content: prompt }
+                ],
+                temperature: options.temperature,
+                top_p: options.topP,
+                max_tokens: maxOutputTokens,
+                stream: false
+            }),
+            signal: options.signal
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Server Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.choices?.[0]?.message?.content || "";
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            throw new Error('已停止生成');
+        }
+        console.error("Error generating text with Doubao:", error);
+        return `豆包生成出错: ${error.message}`;
+    }
   } else {
     if (options.signal?.aborted) throw new Error("Aborted");
     await new Promise((resolve, reject) => {
@@ -124,9 +159,10 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             console.error("Error generating text stream with Gemini:", error);
             yield `Gemini 生成内容时出错：${error.message}`;
         }
-    } else if (options.model.startsWith('deepseek')) {
+    } else if (options.model.startsWith('deepseek') || options.model.startsWith('doubao')) {
+        const apiEndpoint = options.model.startsWith('deepseek') ? "/api/deepseek" : "/api/doubao";
         try {
-            const response = await fetch("/api/deepseek", {
+            const response = await fetch(apiEndpoint, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -139,7 +175,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                     ],
                     temperature: options.temperature,
                     top_p: options.topP,
-                    max_tokens: maxOutputTokens, // Pass max_tokens to DeepSeek
+                    max_tokens: maxOutputTokens,
                     stream: true
                 }),
                 signal: options.signal
@@ -182,7 +218,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
 
                         const content = delta.content;
                         if (content) {
-                            // Filter logic for <think> blocks in R1
+                            // Filter logic for <think> blocks in R1 (only relevant for deepseek-reasoner, safe for doubao)
                             if (content.includes('<think>')) {
                                 inThinkingBlock = true;
                                 const afterThink = content.split('<think>')[1];
@@ -209,8 +245,9 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             }
         } catch (error: any) {
             if (error.name === 'AbortError' || options.signal?.aborted) return;
-            console.error("Error generating text stream with DeepSeek:", error);
-            yield `DeepSeek 连接出错：${error.message}`;
+            const modelName = options.model.startsWith('deepseek') ? 'DeepSeek' : 'Doubao';
+            console.error(`Error generating text stream with ${modelName}:`, error);
+            yield `${modelName} 连接出错：${error.message}`;
         }
     } else {
         const simulatedResponse = `[来自 ${options.model.toUpperCase()} 的模拟流式响应]\n\n${prompt.substring(0, 50)}...`;
