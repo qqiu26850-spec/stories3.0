@@ -4,13 +4,19 @@ import { Asset, Prompt, Workflow, NovelSettings } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
-// Added Database to the imports
-import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle, Check, Database } from '../Icon';
+import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle, Check, Database, ArrowPath, Plus } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
-import LoadingOverlay from '../LoadingOverlay';
 
 type ShortStoryTab = 'original' | 'imitate' | 'polish' | 'review';
+
+const WRITING_STRATEGIES = [
+    "💡 提示：短篇小说需要一个有力的开头，迅速抓住读者的注意力。",
+    "💡 提示：减少不必要的次要情节，保持故事紧凑。",
+    "💡 提示：结尾应该给读者留下深刻印象，或是反转，或是余韵。",
+    "💡 提示：用最少的文字传达最多的信息。",
+    "💡 提示：每一个字都应该为主题服务。",
+];
 
 interface ShortStoryAIPanelProps {
     contextText: string;
@@ -42,15 +48,16 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     
     const [promptInput, setPromptInput] = useState('');
     const [referenceText, setReferenceText] = useState('');
-    const [polishContent, setPolishContent] = useState(''); // New State for Polish Text
+    const [polishContent, setPolishContent] = useState('');
     
     const [formState, setFormState] = useState<Record<string, string>>({});
-    const [isLoading, setIsLoading] = useState(false);
-    const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
-    const [overlayStatus, setOverlayStatus] = useState<'loading' | 'success'>('loading');
+    
+    // New Loading & Result Logic
+    const [isGenerating, setIsGenerating] = useState(false);
     const [resultText, setResultText] = useState('');
     const [error, setError] = useState('');
     const [lastGeneratedTab, setLastGeneratedTab] = useState<ShortStoryTab | null>(null);
+    const [strategyIndex, setStrategyIndex] = useState(0);
     const abortControllerRef = useRef<AbortController | null>(null);
 
     // Handle external trigger and selection updates
@@ -88,12 +95,24 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
             .join(', ');
     }, [selectedAssetIds, assets]);
 
+    // Strategies Rotation
+    useEffect(() => {
+        let interval: any;
+        if (isGenerating) {
+            interval = setInterval(() => {
+                setStrategyIndex(prev => (prev + 1) % WRITING_STRATEGIES.length);
+            }, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [isGenerating]);
+
     useEffect(() => {
         setPromptInput('');
         setReferenceText('');
         setResultText('');
         setError('');
         setSelectedPrompt(null);
+        setIsGenerating(false);
     }, [activeTab]);
 
     useEffect(() => {
@@ -115,8 +134,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
         }
-        setIsLoading(false);
-        setShowLoadingOverlay(false);
+        setIsGenerating(false);
     };
 
     const handleOpenPromptModal = (filter: 'requirements' | 'style' | 'polish') => {
@@ -125,9 +143,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     };
 
     const handleGenerate = async () => {
-        setIsLoading(true);
-        setOverlayStatus('loading');
-        setShowLoadingOverlay(true);
+        setIsGenerating(true);
         setResultText('');
         setError('');
         setLastGeneratedTab(activeTab);
@@ -170,43 +186,24 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n` : ''}${basePrompt}`;
             }
 
-            if (onStream && (activeTab === 'original' || activeTab === 'imitate')) {
-                const stream = generateTextStream(finalPrompt, { 
-                    model, 
-                    temperature, 
-                    topP, 
-                    maxOutputTokens, 
-                    signal: controller.signal 
-                });
-                let isFirst = true;
-                let fullText = '';
-                for await (const chunk of stream) {
-                    if (isFirst) setShowLoadingOverlay(false);
-                    onStream(chunk, isFirst);
-                    fullText += chunk;
-                    setResultText(fullText);
-                    isFirst = false;
-                }
-                setOverlayStatus('success'); 
-            } else {
-                const text = await generateText(finalPrompt, { 
-                    model, 
-                    temperature, 
-                    topP, 
-                    maxOutputTokens, 
-                    signal: controller.signal 
-                });
-                if (activeTab === 'original' || activeTab === 'imitate') onInsert(text);
-                setResultText(text);
-                setOverlayStatus('success');
+            // Stream to panel result
+            const stream = generateTextStream(finalPrompt, { 
+                model, 
+                temperature, 
+                topP, 
+                maxOutputTokens, 
+                signal: controller.signal 
+            });
+            
+            for await (const chunk of stream) {
+                setResultText(prev => prev + chunk);
             }
         } catch (err: any) {
             if (err.message !== 'Aborted') {
                 setError(err.message || '生成失败');
-                setShowLoadingOverlay(false);
             }
         } finally {
-            setIsLoading(false);
+            setIsGenerating(false);
             abortControllerRef.current = null;
         }
     };
@@ -227,7 +224,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 font-sans">
-            <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} onStop={handleStop} status={overlayStatus} />
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
 
@@ -239,22 +235,22 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar">
-                {/* Unified Collapsible Container - Updated Styles */}
-                <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/30 dark:bg-sky-900/10 overflow-hidden">
+                {/* Unified Collapsible Container - Lighter Blue */}
+                <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/10 dark:bg-sky-900/5 overflow-hidden">
                     <button 
                         onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} 
                         className="w-full flex items-center justify-between p-3 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors"
                     >
                         <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
                             <AdjustmentsHorizontal className="w-4 h-4 text-sky-500" />
-                            创作配置
+                            参数填写
                         </span>
                         <ChevronDown className={`w-3 h-3 text-sky-400 transition-transform ${isConfigCollapsed ? 'rotate-180' : ''}`} />
                     </button>
                     
                     {!isConfigCollapsed && (
                         <div className="px-3 pb-3 space-y-4">
-                            {/* Model Config - Titles now Sky Blue */}
+                            {/* Model Config */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">模型配置</label>
                                 <div className="flex gap-2 font-sans">
@@ -286,7 +282,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 )}
                             </div>
 
-                            {/* Writing Requirements & Style (Purple Title & Rose Title) - Stacked */}
+                            {/* Writing Requirements & Style - Stacked */}
                             <div className="flex flex-col gap-3">
                                 <div className="flex flex-col gap-1.5 font-sans">
                                     <label className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">写作要求</label>
@@ -349,7 +345,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             return (
                                 <div key={field.id} className="font-sans">
                                     <div className="flex justify-between items-center mb-1.5">
-                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 font-sans">
+                                        <label className="block text-[10px] font-bold text-gray-700 dark:text-gray-300 font-sans">
                                             <span className="font-sans">
                                                 {index + 1}. {field.label}
                                                 {field.required !== false ? (
@@ -401,21 +397,57 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     </div>
                 )}
 
-                <button onClick={isLoading ? handleStop : handleGenerate} className={`w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans ${isLoading ? 'bg-red-500 hover:bg-red-600 text-white hover:shadow-red-500/30' : 'bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed'}`}>
-                    {isLoading ? <><Stop className="w-5 h-5" />停止生成</> : <><Sparkles className="w-5 h-5" />{activeTab === 'review' ? '开始智能评审' : '立即生成内容'}</>}
-                </button>
-                {error && <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/50 font-sans">{error}</div>}
-                {resultText && (
-                    <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-800 animate-fade-in-up font-sans">
-                        <div className="flex justify-between items-center font-sans">
-                            <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果 {(lastGeneratedTab === 'original' || lastGeneratedTab === 'imitate') && <span className="text-xs font-normal text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full font-sans">已插入正文 (灰色字体)</span>}</h4>
-                            <div className="flex gap-2 font-sans">
-                                <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
-                                <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>
+                {!isGenerating && !resultText && (
+                    <button onClick={handleGenerate} className={`w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed`}>
+                        <Sparkles className="w-5 h-5" />{activeTab === 'review' ? '开始智能评审' : '立即生成内容'}
+                    </button>
+                )}
+
+                {/* Loading & Result View */}
+                {(isGenerating || resultText) && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in-up">
+                        {isGenerating && !resultText && (
+                            <div className="p-6 bg-white dark:bg-gray-900 rounded-xl border border-sky-100 dark:border-sky-800 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
+                                <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="text-sm font-bold text-gray-800 dark:text-gray-200 animate-pulse">AI 正在思考...</div>
+                                <div className="text-[10px] text-sky-600 dark:text-sky-400 font-medium italic transition-opacity duration-500 px-4">
+                                    {WRITING_STRATEGIES[strategyIndex]}
+                                </div>
+                                <button onClick={handleStop} className="mt-2 text-xs text-red-500 hover:text-red-600 flex items-center gap-1 font-bold">
+                                    <Stop className="w-3 h-3" /> 停止生成
+                                </button>
                             </div>
-                        </div>
-                        <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">{resultText}</div>
-                        {lastGeneratedTab === 'polish' && <button onClick={() => onReplace(resultText)} className="w-full py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm font-sans">替换选中文本</button>}
+                        )}
+
+                        {resultText && (
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center font-sans">
+                                    <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果</h4>
+                                    <div className="flex gap-2 font-sans">
+                                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
+                                        <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">{resultText}</div>
+                                
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => {
+                                            if (lastGeneratedTab === 'polish') onReplace(resultText);
+                                            else onInsert(resultText);
+                                        }} 
+                                        className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
+                                    >
+                                        {lastGeneratedTab === 'polish' ? '替换选中文本' : <><Plus className="w-3 h-3" /> 插入正文</>}
+                                    </button>
+                                    {!isGenerating && (
+                                        <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
+                                            <ArrowPath className="w-3 h-3" /> 重试
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

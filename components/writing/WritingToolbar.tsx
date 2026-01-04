@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { Copy, AlignLeft, AlignCenter, AlignRight, IndentIncrease, Bold, ArrowUturnLeft, ArrowUturnRight } from '../Icon';
+import { Copy, AlignLeft, AlignCenter, AlignRight, IndentIncrease, Bold, ArrowUturnLeft, ArrowUturnRight, TextIncrease, TextDecrease } from '../Icon';
 
-export type ToolbarAction = 'copy' | 'bold' | 'align-left' | 'align-center' | 'align-right' | 'indent-add' | 'undo' | 'redo';
+export type ToolbarAction = 'copy' | 'bold' | 'align-left' | 'align-center' | 'align-right' | 'indent-add' | 'undo' | 'redo' | 'font-increase' | 'font-decrease';
 
 interface WritingToolbarProps {
     onAction: (action: ToolbarAction) => void;
@@ -14,6 +14,9 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
     const formattingButtons = [
         { id: 'bold', icon: Bold, label: '加粗' },
         { id: 'indent-add', icon: IndentIncrease, label: '首行缩进' },
+        { id: 'separator' },
+        { id: 'font-decrease', icon: TextDecrease, label: '减小字号' },
+        { id: 'font-increase', icon: TextIncrease, label: '增大字号' },
         { id: 'separator' },
         { id: 'align-left', icon: AlignLeft, label: '左对齐' },
         { id: 'align-center', icon: AlignCenter, label: '居中对齐' },

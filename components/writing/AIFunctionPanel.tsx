@@ -4,12 +4,21 @@ import { Asset, Prompt, NovelSettings } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
-import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle, Check, ClipboardDocumentCheck } from '../Icon';
+import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, ClipboardDocumentCheck, Check, ArrowPath, Plus } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
-import LoadingOverlay from '../LoadingOverlay';
 
 type TabType = 'expand' | 'continue' | 'polish' | 'review';
+
+const WRITING_STRATEGIES = [
+    "💡 提示：'展示，不要告诉' (Show, don't tell) 是写作的金科玉律。",
+    "💡 提示：好的人物需要有缺陷，完美的英雄往往令人乏味。",
+    "💡 提示：每一个场景都应该推动剧情发展或深化人物关系。",
+    "💡 提示：对话应该有潜台词，人们往往不说出他们真正的想法。",
+    "💡 提示：给主角一个难以两全的困境，迫使他们做出选择。",
+    "💡 提示：尝试从反派的视角思考，这会让冲突更加真实。",
+    "💡 提示：环境描写可以烘托氛围，也是人物心境的投射。",
+];
 
 interface AIFunctionPanelProps {
     contextText: string;
@@ -42,12 +51,12 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     // Polish specific state
     const [polishContent, setPolishContent] = useState('');
     
-    const [isLoading, setIsLoading] = useState(false);
-    const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
-    const [overlayStatus, setOverlayStatus] = useState<'loading' | 'success'>('loading');
+    // New Loading & Display Logic
+    const [isGenerating, setIsGenerating] = useState(false);
     const [resultText, setResultText] = useState('');
     const [error, setError] = useState('');
-    const [lastGeneratedTab, setLastGeneratedTab] = useState<TabType | null>(null);
+    const [strategyIndex, setStrategyIndex] = useState(0);
+    
     const abortControllerRef = useRef<AbortController | null>(null);
 
     // Handle external trigger (Context Menu) and initial selection
@@ -58,10 +67,20 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 setPolishContent(externalAction.text);
             }
         } else if (selectedText) {
-            // If user manually selects text, update polish content if in polish tab
             setPolishContent(selectedText);
         }
     }, [externalAction, selectedText]);
+
+    // Strategies Rotation
+    useEffect(() => {
+        let interval: any;
+        if (isGenerating) {
+            interval = setInterval(() => {
+                setStrategyIndex(prev => (prev + 1) % WRITING_STRATEGIES.length);
+            }, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [isGenerating]);
 
     useEffect(() => {
         const loadAssets = async () => {
@@ -105,12 +124,12 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         }
         setResultText(''); 
         setError('');
+        setIsGenerating(false);
     }, [activeTab, defaultTabPrompts]);
 
     useEffect(() => {
         if (!selectedPrompt) return;
         const newFormState = { ...formState };
-        // Clean fields if template changes
         setFormState(prev => ({ ...prev, ...newFormState }));
     }, [selectedPrompt]);
 
@@ -123,8 +142,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
         }
-        setIsLoading(false);
-        setShowLoadingOverlay(false);
+        setIsGenerating(false);
     };
 
     const handleOpenPromptModal = (filter: 'requirements' | 'style' | 'polish') => {
@@ -133,12 +151,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     };
 
     const handleGenerate = async () => {
-        setIsLoading(true);
-        setOverlayStatus('loading');
-        setShowLoadingOverlay(true);
+        setIsGenerating(true);
         setResultText('');
         setError('');
-        setLastGeneratedTab(activeTab);
         const controller = new AbortController();
         abortControllerRef.current = controller;
         try {
@@ -150,8 +165,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
             }
 
             let finalPrompt = '';
-            // For polish/review, prefer the content in the textarea. 
-            // For continue/expand, prefer contextText or selectedText if context is not main focus.
             const textToProcess = (activeTab === 'polish' || activeTab === 'review') 
                 ? polishContent 
                 : (selectedText || contextText.slice(-2000));
@@ -163,7 +176,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 let template = selectedPrompt.template || selectedPrompt.content;
                 for (const field of selectedPrompt.fields) {
                     let val = formState[field.id] || '';
-                    // Auto-fill context/text fields if they exist in prompt but user left empty
                     if (!val && (field.id === 'context' || field.id === 'text')) {
                         val = textToProcess;
                     }
@@ -174,46 +186,25 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 finalPrompt = `${instruction}。\n${settingsContext ? `${settingsContext}\n\n` : ''}当前上下文/选中文本：\n${textToProcess}\n\n${assetContext ? `关联素材：\n${assetContext}` : ''}`;
             }
 
-            if (onStream && (activeTab === 'expand' || activeTab === 'continue')) {
-                const stream = generateTextStream(finalPrompt, { 
-                    model, 
-                    temperature, 
-                    topP, 
-                    maxOutputTokens, 
-                    signal: controller.signal 
-                });
-                let isFirst = true;
-                let fullText = '';
-                for await (const chunk of stream) {
-                    if (isFirst) setShowLoadingOverlay(false);
-                    onStream(chunk, isFirst);
-                    fullText += chunk;
-                    setResultText(fullText);
-                    isFirst = false;
-                }
-                setOverlayStatus('success'); 
-            } else {
-                const text = await generateText(finalPrompt, { 
-                    model, 
-                    temperature, 
-                    topP, 
-                    maxOutputTokens, 
-                    signal: controller.signal 
-                });
-                // For direct insertion types
-                if (activeTab === 'expand' || activeTab === 'continue') {
-                    onInsert(text);
-                }
-                setResultText(text);
-                setOverlayStatus('success');
+            // We do NOT call onStream to insert directly into editor anymore.
+            // We stream to the sidebar result area.
+            const stream = generateTextStream(finalPrompt, { 
+                model, 
+                temperature, 
+                topP, 
+                maxOutputTokens, 
+                signal: controller.signal 
+            });
+            
+            for await (const chunk of stream) {
+                setResultText(prev => prev + chunk);
             }
         } catch (err: any) {
             if (err.message !== 'Aborted') {
                 setError(err.message || '生成失败');
-                setShowLoadingOverlay(false);
             }
         } finally {
-            setIsLoading(false);
+            setIsGenerating(false);
             abortControllerRef.current = null;
         }
     };
@@ -234,7 +225,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 font-sans">
-            <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} onStop={handleStop} status={overlayStatus} />
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
 
@@ -246,15 +236,15 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar">
-                {/* Unified Collapsible Container */}
-                <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/30 dark:bg-sky-900/10 overflow-hidden">
+                {/* Unified Collapsible Container - Lighter Blue */}
+                <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/10 dark:bg-sky-900/5 overflow-hidden">
                     <button 
                         onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} 
                         className="w-full flex items-center justify-between p-3 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors"
                     >
                         <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
                             <AdjustmentsHorizontal className="w-4 h-4 text-sky-500" />
-                            创作配置
+                            参数填写
                         </span>
                         <ChevronDown className={`w-3 h-3 text-sky-400 transition-transform ${isConfigCollapsed ? 'rotate-180' : ''}`} />
                     </button>
@@ -290,7 +280,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             </div>
 
                             {activeTab === 'polish' ? (
-                                /* Polish Mode: Simplified Config */
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">润色提示词</label>
                                     <button onClick={() => handleOpenPromptModal('polish')} className="w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
@@ -303,7 +292,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                     </button>
                                 </div>
                             ) : (
-                                /* Standard Mode: Requirements & Style */
                                 <div className="flex flex-col gap-2">
                                     <div className="space-y-1">
                                         <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">写作要求</label>
@@ -326,7 +314,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 </div>
                             )}
 
-                            {/* Associated Content */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">关联素材</label>
                                 <div className="flex flex-col gap-2">
@@ -379,7 +366,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             return (
                                 <div key={field.id}>
                                     <div className="flex justify-between items-center mb-1">
-                                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                                        <label className="block text-[10px] font-medium text-gray-700 dark:text-gray-300">
                                             {index + 1}. {field.label}
                                             {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
                                         </label>
@@ -420,23 +407,62 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                      )
                 )}
                 
-                <button onClick={isLoading ? handleStop : handleGenerate} className={`w-full py-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] text-sm mt-4 ${isLoading ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/30' : 'bg-sky-600 hover:bg-sky-500 text-white shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed'}`}>
-                    {isLoading ? <><Stop className="w-4 h-4" />停止</> : <><Sparkles className="w-4 h-4" />{activeTab === 'review' ? '开始评审' : '立即生成'}</>}
-                </button>
-                {error && <div className="p-2 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100 text-center">{error}</div>}
-                {resultText && (
-                    <div className="space-y-2 pt-3 border-t border-gray-100 dark:border-gray-800 animate-fade-in-up">
-                        <div className="flex justify-between items-center">
-                            <h4 className="text-xs font-bold text-gray-800 dark:text-white flex items-center gap-2">生成结果 {(lastGeneratedTab === 'expand' || lastGeneratedTab === 'continue') && <span className="text-[10px] font-normal text-green-600 bg-green-50 px-2 py-0.5 rounded-full">已插入</span>}</h4>
-                            <div className="flex gap-1">
-                                <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1 text-gray-500 hover:text-sky-600 bg-gray-100 hover:bg-sky-50 rounded transition-colors"><Copy className="w-3.5 h-3.5" /></button>
-                                <button onClick={() => setResultText('')} className="p-1 text-gray-500 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded transition-colors"><Trash className="w-3.5 h-3.5" /></button>
+                {!isGenerating && !resultText && (
+                    <button onClick={handleGenerate} className="w-full py-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] text-sm mt-4 bg-sky-600 hover:bg-sky-500 text-white shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        <Sparkles className="w-4 h-4" />{activeTab === 'review' ? '开始评审' : '立即生成'}
+                    </button>
+                )}
+
+                {/* Loading / Result Area */}
+                {(isGenerating || resultText) && (
+                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 animate-fade-in-up">
+                        {isGenerating && !resultText && (
+                            <div className="p-6 bg-white dark:bg-gray-900 rounded-xl border border-sky-100 dark:border-sky-800 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
+                                <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="text-sm font-bold text-gray-800 dark:text-gray-200 animate-pulse">AI 正在思考...</div>
+                                <div className="text-[10px] text-sky-600 dark:text-sky-400 font-medium italic transition-opacity duration-500 px-4">
+                                    {WRITING_STRATEGIES[strategyIndex]}
+                                </div>
+                                <button onClick={handleStop} className="mt-2 text-xs text-red-500 hover:text-red-600 flex items-center gap-1 font-bold">
+                                    <Stop className="w-3 h-3" /> 停止生成
+                                </button>
                             </div>
-                        </div>
-                        <div className="p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-xs leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-48 overflow-y-auto shadow-inner">{resultText}</div>
-                        {lastGeneratedTab === 'polish' && <button onClick={() => onReplace(resultText)} className="w-full py-2 bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-xs">替换选中文本</button>}
+                        )}
+
+                        {resultText && (
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-xs font-bold text-gray-800 dark:text-white flex items-center gap-2">生成结果</h4>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1 text-gray-500 hover:text-sky-600 bg-gray-100 hover:bg-sky-50 rounded transition-colors"><Copy className="w-3.5 h-3.5" /></button>
+                                        <button onClick={() => setResultText('')} className="p-1 text-gray-500 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded transition-colors"><Trash className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                </div>
+                                <div className="p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-xs leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">
+                                    {resultText}
+                                </div>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => {
+                                            if (activeTab === 'polish') onReplace(resultText);
+                                            else onInsert(resultText);
+                                        }} 
+                                        className="flex-1 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-xs flex items-center justify-center gap-1"
+                                    >
+                                        {activeTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
+                                    </button>
+                                    {!isGenerating && (
+                                        <button onClick={handleGenerate} className="px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-xs flex items-center gap-1">
+                                            <ArrowPath className="w-3 h-3" /> 重试
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
+
+                {error && <div className="mt-2 p-2 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100 text-center">{error}</div>}
             </div>
         </div>
     );

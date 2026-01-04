@@ -26,6 +26,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const editorRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>('left');
+    const [fontSize, setFontSize] = useState(18); // Default font size
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [tempTitle, setTempTitle] = useState(script.title);
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
@@ -183,6 +184,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             const align = action.replace('align-', '');
             document.execCommand(`justify${align.charAt(0).toUpperCase() + align.slice(1)}`, false);
             setAlignment(align as any);
+        } else if (action === 'font-increase') {
+            setFontSize(prev => Math.min(prev + 2, 32));
+        } else if (action === 'font-decrease') {
+            setFontSize(prev => Math.max(prev - 2, 12));
         }
 
         handleContentInput();
@@ -305,8 +310,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         ref={editorRef}
                                         contentEditable 
                                         onInput={handleContentInput}
-                                        className="w-full bg-transparent focus:outline-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-mono min-h-[75vh] outline-none pb-32"
-                                        style={{ textAlign: alignment }}
+                                        className="w-full bg-transparent focus:outline-none leading-relaxed text-gray-800 dark:text-gray-200 font-mono min-h-[75vh] outline-none pb-32"
+                                        style={{ textAlign: alignment, fontSize: `${fontSize}px` }}
                                     ></div>
                                 </div>
 

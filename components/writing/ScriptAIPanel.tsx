@@ -4,10 +4,9 @@ import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
-import { Sparkles, Film, X, ChevronDown, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, Database, InformationCircle, Check } from '../Icon';
+import { Sparkles, Film, X, ChevronDown, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, Database, InformationCircle, Check, ArrowPath, Plus } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
-import LoadingOverlay from '../LoadingOverlay';
 
 interface ScriptAIPanelProps {
     onInsert: (text: string) => void;
@@ -16,13 +15,20 @@ interface ScriptAIPanelProps {
 
 type ScriptTab = 'idea' | 'script';
 
+const WRITING_STRATEGIES = [
+    "💡 提示：剧本创作强调'画面感'，避免过多的心理描写。",
+    "💡 提示：动作线要清晰，指示演员的具体行为。",
+    "💡 提示：对白要精炼，符合人物性格。",
+    "💡 提示：场景标题要规范，明确内/外景、时间。",
+    "💡 提示：冲突是戏剧的核心。",
+];
+
 const CollapsibleSection: React.FC<{ title: string; icon: any; color: string; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, icon: Icon, color, children, defaultOpen = true }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
-    // Force blue theme for all sections as requested
     const themeColor = 'sky'; 
     
     return (
-        <div className={`rounded-xl border transition-all ${isOpen ? `bg-${themeColor}-50/30 dark:bg-${themeColor}-900/10 border-${themeColor}-100 dark:border-${themeColor}-900` : `bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800`}`}>
+        <div className={`rounded-xl border transition-all ${isOpen ? `bg-${themeColor}-50/10 dark:bg-${themeColor}-900/5 border-${themeColor}-100 dark:border-${themeColor}-900` : `bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800`}`}>
             <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between p-3">
                 <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isOpen ? `text-${themeColor}-600 dark:text-${themeColor}-400` : 'text-gray-500'}`}>
                     <Icon className="w-4 h-4" />
@@ -52,12 +58,13 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
     
     const [customInput, setCustomInput] = useState('');
     const [formState, setFormState] = useState<Record<string, string>>({});
-    const [isLoading, setIsLoading] = useState(false);
-    const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
-    const [overlayStatus, setOverlayStatus] = useState<'loading' | 'success'>('loading');
+    
+    // New Loading & Result Logic
+    const [isGenerating, setIsGenerating] = useState(false);
     const [generatedIdeas, setGeneratedIdeas] = useState<string[]>([]);
     const [generatedText, setGeneratedText] = useState('');
     const [error, setError] = useState('');
+    const [strategyIndex, setStrategyIndex] = useState(0);
     const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
@@ -83,6 +90,17 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
             .join(', ');
     }, [selectedAssetIds, assets]);
 
+    // Strategies Rotation
+    useEffect(() => {
+        let interval: any;
+        if (isGenerating) {
+            interval = setInterval(() => {
+                setStrategyIndex(prev => (prev + 1) % WRITING_STRATEGIES.length);
+            }, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [isGenerating]);
+
     useEffect(() => {
         if (selectedPrompt) {
             const newForm: Record<string, string> = {};
@@ -107,14 +125,11 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
         }
-        setIsLoading(false);
-        setShowLoadingOverlay(false);
+        setIsGenerating(false);
     };
 
     const handleGenerate = async () => {
-        setIsLoading(true);
-        setOverlayStatus('loading');
-        setShowLoadingOverlay(true);
+        setIsGenerating(true);
         setGeneratedIdeas([]);
         setGeneratedText('');
         setError('');
@@ -144,54 +159,34 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                     maxOutputTokens, 
                     signal: controller.signal 
                 });
-                setOverlayStatus('success');
                 const ideas = result.split(/【方案[一二三]】/).filter(s => s.trim().length > 10);
                 setGeneratedIdeas(ideas.length === 0 ? [result] : ideas.map(s => s.trim()));
             } else {
-                if (onStream) {
-                    const stream = generateTextStream(finalPrompt, { 
-                        model, 
-                        temperature, 
-                        topP, 
-                        maxOutputTokens, 
-                        signal: controller.signal 
-                    });
-                    let isFirst = true;
-                    let fullText = '';
-                    for await (const chunk of stream) {
-                        if (isFirst) setShowLoadingOverlay(false);
-                        onStream(chunk, isFirst);
-                        fullText += chunk;
-                        setGeneratedText(fullText);
-                        isFirst = false;
-                    }
-                    setOverlayStatus('success');
-                } else {
-                    const result = await generateText(finalPrompt, { 
-                        model, 
-                        temperature, 
-                        topP, 
-                        maxOutputTokens, 
-                        signal: controller.signal 
-                    });
-                    setGeneratedText(result);
-                    setOverlayStatus('success');
+                // Stream to panel result
+                const stream = generateTextStream(finalPrompt, { 
+                    model, 
+                    temperature, 
+                    topP, 
+                    maxOutputTokens, 
+                    signal: controller.signal 
+                });
+                
+                for await (const chunk of stream) {
+                    setGeneratedText(prev => prev + chunk);
                 }
             }
         } catch (err: any) {
             if (err.message !== 'Aborted') {
                 setError(err.message || '生成失败');
-                setShowLoadingOverlay(false);
             }
         } finally {
-            setIsLoading(false);
+            setIsGenerating(false);
             abortControllerRef.current = null;
         }
     };
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full font-sans">
-            <LoadingOverlay isVisible={showLoadingOverlay} onClose={() => setShowLoadingOverlay(false)} onStop={handleStop} status={overlayStatus} />
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
             
@@ -201,7 +196,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar">
-                <CollapsibleSection title="模型配置" icon={AdjustmentsHorizontal} color="sky">
+                <CollapsibleSection title="参数填写" icon={AdjustmentsHorizontal} color="sky">
                     <div className="flex flex-col gap-2 font-sans">
                         <div className="flex gap-2">
                             <div className="relative flex-1">
@@ -247,7 +242,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                         </div>
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">写作风格</label>
-                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all relative overflow-hidden group hover:border-sky-300`}>
+                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-pink-50 border-pink-300 text-pink-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
                                 <div className="flex items-center justify-between text-[11px] font-semibold truncate text-gray-600 dark:text-gray-300">
                                     <span>{selectedPrompt && selectedPrompt.subCategories.includes('style') ? selectedPrompt.title : '选择风格...'}</span>
                                     <ChevronDown className="w-3 h-3 text-sky-400 opacity-50" />
@@ -260,7 +255,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                 <CollapsibleSection title="关联素材" icon={Database} color="sky">
                     <div className="space-y-1">
                         <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">素材选择</label>
-                        <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
+                        <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
                             <div className="flex items-center justify-between text-[11px] font-semibold truncate">
                                 <div className="flex items-center gap-1.5 overflow-hidden">
                                     <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
@@ -272,9 +267,72 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                     </div>
                 </CollapsibleSection>
 
-                <button onClick={isLoading ? handleStop : handleGenerate} className="w-full py-3 font-bold rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 bg-sky-600 text-white font-sans mt-2 text-sm">
-                     {isLoading ? <><Stop className="w-4 h-4" />停止</> : <><Sparkles className="w-4 h-4" />生成内容</>}
-                </button>
+                {!isGenerating && !generatedText && generatedIdeas.length === 0 && (
+                    <button onClick={handleGenerate} className="w-full py-3 font-bold rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 bg-sky-600 text-white font-sans mt-2 text-sm">
+                        <Sparkles className="w-4 h-4" /> 生成内容
+                    </button>
+                )}
+
+                {/* Loading / Result Area */}
+                {(isGenerating || generatedText || generatedIdeas.length > 0) && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in-up">
+                        {isGenerating && !generatedText && generatedIdeas.length === 0 && (
+                            <div className="p-6 bg-white dark:bg-gray-900 rounded-xl border border-sky-100 dark:border-sky-800 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
+                                <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="text-sm font-bold text-gray-800 dark:text-gray-200 animate-pulse">AI 正在创作...</div>
+                                <div className="text-[10px] text-sky-600 dark:text-sky-400 font-medium italic transition-opacity duration-500 px-4">
+                                    {WRITING_STRATEGIES[strategyIndex]}
+                                </div>
+                                <button onClick={handleStop} className="mt-2 text-xs text-red-500 hover:text-red-600 flex items-center gap-1 font-bold">
+                                    <Stop className="w-3 h-3" /> 停止生成
+                                </button>
+                            </div>
+                        )}
+
+                        {(generatedText || generatedIdeas.length > 0) && (
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center font-sans">
+                                    <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果</h4>
+                                    <div className="flex gap-2 font-sans">
+                                        <button onClick={() => {
+                                            const text = activeTab === 'idea' ? generatedIdeas.join('\n\n') : generatedText;
+                                            navigator.clipboard.writeText(text);
+                                        }} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
+                                        <button onClick={() => {
+                                            setGeneratedText('');
+                                            setGeneratedIdeas([]);
+                                        }} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+                                
+                                <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">
+                                    {activeTab === 'idea' ? generatedIdeas.map((idea, i) => (
+                                        <div key={i} className="mb-4 last:mb-0 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-700">
+                                            <span className="font-bold text-sky-600 block mb-1">方案 {i+1}</span>
+                                            {idea}
+                                        </div>
+                                    )) : generatedText}
+                                </div>
+                                
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => onInsert(activeTab === 'idea' ? generatedIdeas.join('\n\n') : generatedText)} 
+                                        className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
+                                    >
+                                        <Plus className="w-3 h-3" /> 插入正文
+                                    </button>
+                                    {!isGenerating && (
+                                        <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
+                                            <ArrowPath className="w-3 h-3" /> 重试
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {error && <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/50 font-sans mt-2">{error}</div>}
             </div>
         </div>
     );

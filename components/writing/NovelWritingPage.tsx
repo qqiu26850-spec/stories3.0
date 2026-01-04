@@ -76,6 +76,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const [openModule, setOpenModule] = useState<SidebarModule>('chapters');
     const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>('left');
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+    const [fontSize, setFontSize] = useState(18); // Default font size
     
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
@@ -260,6 +261,10 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             const align = action.replace('align-', '');
             document.execCommand(`justify${align.charAt(0).toUpperCase() + align.slice(1)}`, false);
             setAlignment(align as any);
+        } else if (action === 'font-increase') {
+            setFontSize(prev => Math.min(prev + 2, 32));
+        } else if (action === 'font-decrease') {
+            setFontSize(prev => Math.max(prev - 2, 12));
         }
         handleContentInput();
     };
@@ -267,6 +272,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleAIStream = (chunk: string, isFirst: boolean) => {
         if (!editorRef.current) return;
         if (isFirst) { editorRef.current.focus(); }
+        // Ensure inserted text can be undone by user
         document.execCommand('insertHTML', false, `<span style="color: gray;">${chunk}</span>`);
         handleContentInput();
         if (scrollContainerRef.current) {
@@ -430,8 +436,8 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                         contentEditable 
                                         onInput={handleContentInput}
                                         onContextMenu={handleContextMenu}
-                                        className="w-full bg-transparent focus:outline-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[75vh] outline-none pb-32"
-                                        style={{ textAlign: alignment }}
+                                        className="w-full bg-transparent focus:outline-none leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[75vh] outline-none pb-32"
+                                        style={{ textAlign: alignment, fontSize: `${fontSize}px` }}
                                     ></div>
                                 </div>
 
