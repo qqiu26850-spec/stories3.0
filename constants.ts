@@ -1,3 +1,4 @@
+
 import { CreativeModule, Prompt, Asset, Workflow, PromptSubCategory } from './types';
 
 export const FUNCTIONAL_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
@@ -13,6 +14,7 @@ export const FUNCTIONAL_TAGS: { id: PromptSubCategory | 'all'; label: string }[]
     { id: 'continue', label: '续写' },
     { id: 'polish', label: '润色' },
     { id: 'expand', label: '扩写' },
+    { id: 'imitate', label: '仿写' },
     { id: 'proofread', label: '审稿' },
 ];
 
@@ -259,7 +261,7 @@ export const PROMPTS: Prompt[] = [
     description: '将小说文本改编为标准的影视剧本格式。',
     content: '请将以下小说片段改编为标准剧本格式。',
     category: 'script',
-    subCategories: ['proofread'],
+    subCategories: ['imitate'],
     fields: [
         { id: 'novel_text', label: '小说原文', type: 'textarea', placeholder: '粘贴需要改编的小说片段...' },
         { id: 'format_req', label: '格式要求', type: 'text', placeholder: '例如：标准电影剧本、电视剧本...' }

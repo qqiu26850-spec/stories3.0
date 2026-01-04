@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Prompt, PromptCategory, PromptSubCategory } from '../types';
@@ -19,7 +20,7 @@ const FAVORITES_STORAGE_KEY = 'qisimiaoxie_prompt_favorites_v2';
 const SUB_CATEGORY_LABELS: Record<string, string> = {
     'idea': '创意', 'golden_finger': '金手指', 'character_design': '人物设定', 'worldview': '世界观',
     'outline': '大纲', 'detailed_outline': '细纲', 'synopsis': '简介', 'requirements': '写作要求',
-    'style': '写作风格', 'continue': '续写', 'polish': '润色', 'expand': '扩写', 'proofread': '审稿',
+    'style': '写作风格', 'continue': '续写', 'polish': '润色', 'expand': '扩写', 'proofread': '审稿', 'imitate': '仿写',
     'general': '通用', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
     'apocalypse': '末世', 'urban': '都市', 'fantasy': '玄幻', 'history': '历史', 'social': '世情',
     'suspense': '悬疑', 'sci-fi': '科幻'
@@ -198,14 +199,14 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             />
             
             <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
-                <div className="flex justify-between items-center">
-                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1">
+                <div className="flex justify-between items-center flex-wrap gap-4">
+                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1 min-w-[300px]">
                         {CATEGORY_TABS.map(tab => (
                             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}>{tab.label}</button>
                         ))}
                     </div>
                     
-                    <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                    <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
                         {showSuccessToast && (
                             <span className="text-xs font-bold text-emerald-500 animate-fade-in-up flex items-center gap-1.5 whitespace-nowrap">
                                 <div className="w-5 h-5 bg-emerald-50 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
@@ -214,16 +215,22 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                                 {successMessage}
                             </span>
                         )}
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 items-center flex-wrap">
                              <button onClick={() => setActiveTab('my-prompts')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'my-prompts' ? 'bg-sky-100 text-sky-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><UserCircle className="w-4 h-4" />我的提示词</button>
+                             
+                             <div className="relative w-48 sm:w-64">
+                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
+                                <input type="text" placeholder="搜索标题、作者、标签..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 text-sm rounded-xl border border-gray-200 focus:ring-2 focus:ring-sky-500 outline-none" />
+                             </div>
+
                              <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-white dark:bg-gray-800 text-gray-500'}`}><Heart className="w-4 h-4" />我的收藏</button>
                             <button onClick={() => { setPromptToEdit(null); setCreateModalOpen(true); }} className="px-4 py-2 rounded-xl font-bold bg-sky-600 text-white hover:bg-sky-500 shadow-lg shadow-sky-500/20 text-sm flex items-center gap-1"><Plus className="w-4 h-4" />创建</button>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex flex-col lg:flex-row gap-4 justify-between items-start bg-gray-100 dark:bg-gray-900/50 p-3 rounded-xl">
-                    <div className="flex-1 w-full space-y-2">
+                <div className="flex flex-col gap-4 justify-between items-start bg-gray-100 dark:bg-gray-900/50 p-3 rounded-xl">
+                    <div className="w-full space-y-2">
                         <div className="flex flex-wrap gap-2 items-center">
                             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">功能:</span>
                             <button onClick={() => setActiveSubCategory('all')} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === 'all' ? 'bg-sky-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>全部</button>
@@ -237,10 +244,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                                 <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-purple-100 text-purple-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
                             ))}
                         </div>
-                    </div>
-                    <div className="relative w-full lg:w-64 self-center">
-                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
-                        <input type="text" placeholder="搜索标题、作者、标签..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 text-sm rounded-lg border border-gray-200 focus:ring-2 focus:ring-sky-500 outline-none" />
                     </div>
                 </div>
             </div>
