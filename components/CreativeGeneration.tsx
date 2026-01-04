@@ -204,9 +204,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                 <div className="flex gap-2">
                                     <div className="relative flex-1">
                                         <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-bold bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 rounded-lg text-gray-700 dark:text-gray-200 outline-none appearance-none cursor-pointer font-sans">
-                                            <option value="deepseek-chat">奇思版</option>
-                                            <option value="gemini-2.0-flash">妙写版</option>
-                                            <option value="doubao-flash">速写版</option>
+                                            <option value="deepseek-chat">奇思版 (DeepSeek)</option>
+                                            <option value="gemini-2.0-flash">妙写版 (Gemini)</option>
+                                            <option value="doubao-flash">速写版 (豆包)</option>
                                         </select>
                                         <ChevronDown className="w-3 h-3 text-sky-400 absolute right-2.5 top-3 pointer-events-none" />
                                     </div>

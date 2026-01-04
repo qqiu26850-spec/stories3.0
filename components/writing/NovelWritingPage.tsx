@@ -219,7 +219,8 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleAIStream = (chunk: string, isFirst: boolean) => {
         if (!editorRef.current) return;
         if (isFirst) { editorRef.current.focus(); }
-        document.execCommand('insertText', false, chunk);
+        // Use span with color to distinguish AI text
+        document.execCommand('insertHTML', false, `<span style="color: gray;">${chunk}</span>`);
         handleContentInput();
         if (scrollContainerRef.current) {
             scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
@@ -229,14 +230,15 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleInsertText = (text: string) => {
         if (!editorRef.current) return;
         editorRef.current.focus();
-        document.execCommand('insertText', false, text);
+        // Insert as colored span
+        document.execCommand('insertHTML', false, `<span style="color: gray;">${text}</span>`);
         handleContentInput();
     };
 
     const handleReplaceText = (text: string) => {
         if (!editorRef.current) return;
         editorRef.current.focus();
-        document.execCommand('insertHTML', false, text);
+        document.execCommand('insertHTML', false, `<span style="color: gray;">${text}</span>`);
         handleContentInput();
     };
 

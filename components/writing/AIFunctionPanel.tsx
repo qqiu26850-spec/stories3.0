@@ -20,6 +20,22 @@ interface AIFunctionPanelProps {
     projectSettings?: NovelSettings;
 }
 
+const CollapsibleSection: React.FC<{ title: string; icon: any; color: string; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, icon: Icon, color, children, defaultOpen = true }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+    return (
+        <div className={`rounded-xl border transition-all ${isOpen ? `bg-${color}-50/30 dark:bg-${color}-900/10 border-${color}-200 dark:border-${color}-800` : `bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800`}`}>
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between p-3">
+                <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isOpen ? `text-${color}-600 dark:text-${color}-400` : 'text-gray-500'}`}>
+                    <Icon className="w-4 h-4" />
+                    {title}
+                </div>
+                <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && <div className="px-3 pb-3">{children}</div>}
+        </div>
+    );
+};
+
 const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream, projectSettings }) => {
     const [activeTab, setActiveTab] = useState<TabType>('expand');
     const [model, setModel] = useState('deepseek-chat');
@@ -30,7 +46,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [isProjectSettingsAssociated, setProjectSettingsAssociated] = useState(false);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
-    const [selectedWorkflow, setSelectedWorkflow] = useState('');
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
     const [isPromptModalOpen, setPromptModalOpen] = useState(false);
@@ -91,19 +106,14 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     useEffect(() => {
         if (!selectedPrompt) return;
         const newFormState = { ...formState };
-        let hasChange = false;
+        // If template has context/text fields, pre-fill them
         selectedPrompt.fields.forEach(field => {
-            if (field.id === 'context' && !newFormState['context']) {
-                newFormState['context'] = contextText.slice(-2000);
-                hasChange = true;
-            }
-            if (field.id === 'text' && !newFormState['text']) {
-                newFormState['text'] = selectedText || (activeTab === 'review' ? contextText.slice(-2000) : ''); 
-                hasChange = true;
+            if (field.id === 'context' || field.id === 'text') {
+                // Keep empty initially, logic handled in generation
             }
         });
-        if (hasChange) setFormState(prev => ({ ...prev, ...newFormState }));
-    }, [activeTab, selectedPrompt, contextText, selectedText]);
+        setFormState(prev => ({ ...prev, ...newFormState }));
+    }, [selectedPrompt]);
 
     const handleInputChange = (id: string, val: string) => {
         setFormState(prev => ({ ...prev, [id]: val }));
@@ -141,16 +151,23 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
             }
 
             let finalPrompt = '';
+            // If text is selected, prioritize it for polish/expand/review
+            const textToProcess = selectedText || contextText.slice(-2000); 
+            const instruction = activeTab === 'continue' ? '请根据上文续写' : (activeTab === 'polish' ? '请润色以下文本' : (activeTab === 'expand' ? '请扩写以下文本' : '请评审以下文本'));
+
             if (selectedPrompt) {
                 incrementPromptHeat(selectedPrompt.id);
                 let template = selectedPrompt.template || selectedPrompt.content;
                 for (const field of selectedPrompt.fields) {
-                    const val = formState[field.id] || '';
+                    let val = formState[field.id] || '';
+                    if (!val && (field.id === 'context' || field.id === 'text')) {
+                        val = textToProcess;
+                    }
                     template = template.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
                 }
                 finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
             } else {
-                finalPrompt = `请进行创作内容扩写。\n${settingsContext ? `${settingsContext}\n\n` : ''}当前上下文：\n${contextText.slice(-1000)}\n\n选中的参考文本：\n${selectedText}\n\n${assetContext ? `关联素材：\n${assetContext}` : ''}`;
+                finalPrompt = `${instruction}。\n${settingsContext ? `${settingsContext}\n\n` : ''}当前上下文/选中文本：\n${textToProcess}\n\n${assetContext ? `关联素材：\n${assetContext}` : ''}`;
             }
 
             if (onStream && (activeTab === 'expand' || activeTab === 'continue')) {
@@ -179,7 +196,10 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     maxOutputTokens, 
                     signal: controller.signal 
                 });
-                if (activeTab === 'expand' || activeTab === 'continue') onInsert(text);
+                // For direct insertion types
+                if (activeTab === 'expand' || activeTab === 'continue') {
+                    onInsert(text);
+                }
                 setResultText(text);
                 setOverlayStatus('success');
             }
@@ -221,24 +241,23 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 {renderTabButton('review', '评审', ClipboardDocumentCheck)}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 font-sans">
-                <div className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 space-y-5 shadow-sm font-sans">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans">
+                <CollapsibleSection title="模型配置" icon={AdjustmentsHorizontal} color="sky">
                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型配置</label>
                         <div className="flex gap-2 font-sans">
                             <div className="relative flex-1">
                                 <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer font-sans">
-                                    <option value="deepseek-chat">奇思版</option>
-                                    <option value="gemini-2.0-flash">妙写版</option>
-                                    <option value="doubao-flash">速写版</option>
+                                    <option value="deepseek-chat">奇思版 (DeepSeek)</option>
+                                    <option value="gemini-2.0-flash">妙写版 (Gemini)</option>
+                                    <option value="doubao-flash">速写版 (豆包)</option>
                                 </select>
                                 <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
-                            <button onClick={() => setShowConfig(!showConfig)} className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 font-sans ${showConfig ? 'bg-sky-100 text-sky-600 border-sky-200 dark:bg-sky-900/30 dark:border-sky-800' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}><AdjustmentsHorizontal className="w-4 h-4" />参数</button>
+                            <button onClick={() => setShowConfig(!showConfig)} className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 font-sans ${showConfig ? 'bg-sky-100 text-sky-600 border-sky-200 dark:bg-sky-900/30 dark:border-sky-800' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>参数</button>
                         </div>
                     </div>
                     {showConfig && (
-                        <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800 grid grid-cols-1 gap-4 animate-fade-in text-[10px] font-sans">
+                        <div className="mt-3 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800 grid grid-cols-1 gap-4 animate-fade-in text-[10px] font-sans">
                             <div className="space-y-1">
                                 <label className="block font-black text-sky-500 flex justify-between uppercase"><span>随机度 (Temperature): {temperature}</span></label>
                                 <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
@@ -253,11 +272,13 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             </div>
                         </div>
                     )}
-                    
+                </CollapsibleSection>
+                
+                <CollapsibleSection title="写作要求 & 风格" icon={Sparkles} color="purple">
                     <div className="grid grid-cols-2 gap-3 font-sans">
                         <div className="flex flex-col gap-1.5 font-sans">
-                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">写作要求</label>
-                            <button onClick={() => handleOpenPromptModal('requirements')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? 'bg-sky-50 border-sky-300 text-sky-900 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-400'}`}>
+                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">要求模板</label>
+                            <button onClick={() => handleOpenPromptModal('requirements')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
                                 <div className="flex items-center justify-between relative z-10 font-sans">
                                     <span className="font-semibold truncate text-[11px]">{selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? selectedPrompt.title : '选择要求...'}</span>
                                     <ChevronDown className="w-3 h-3 opacity-50" />
@@ -265,8 +286,8 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             </button>
                         </div>
                         <div className="flex flex-col gap-1.5 font-sans">
-                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">写作风格</label>
-                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
+                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">风格模板</label>
+                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-pink-50 border-pink-300 text-pink-900 dark:bg-pink-900/30 dark:border-pink-700 dark:text-pink-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-pink-400'}`}>
                                 <div className="flex items-center justify-between relative z-10 font-sans">
                                     <span className="font-semibold truncate text-[11px]">{selectedPrompt && selectedPrompt.subCategories.includes('style') ? selectedPrompt.title : '选择风格...'}</span>
                                     <ChevronDown className="w-3 h-3 opacity-50" />
@@ -274,26 +295,24 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             </button>
                         </div>
                     </div>
+                </CollapsibleSection>
 
+                <CollapsibleSection title="关联素材" icon={Database} color="amber">
                     <div className="flex flex-col gap-2 font-sans">
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center justify-between">
-                            关联内容 <span className="text-[10px] font-normal opacity-50 italic">(可选)</span>
-                        </label>
                         <div className="space-y-2">
-                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
+                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-amber-400'}`}>
                                 <div className="flex items-center justify-between font-sans">
                                     <div className="flex items-center gap-2 font-sans overflow-hidden">
-                                        <Database className={`w-4 h-4 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400'}`} />
+                                        <Database className={`w-4 h-4 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}`} />
                                         <span className="font-semibold text-xs truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '关联人物/剧情/设定...'}</span>
                                     </div>
                                     <ChevronDown className="w-4 h-4 opacity-50 flex-shrink-0" />
                                 </div>
                             </button>
                             
-                            {/* 新增关联作品设定按钮 */}
                             <button 
                                 onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} 
-                                className={`w-full p-3 rounded-lg border text-left transition-all font-sans flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-emerald-400'}`}
+                                className={`w-full p-3 rounded-lg border text-left transition-all font-sans flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-emerald-400'}`}
                             >
                                 <div className="flex items-center gap-2 font-sans">
                                     <BookOpen className={`w-4 h-4 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`} />
@@ -303,70 +322,79 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             </button>
                         </div>
                     </div>
-                </div>
+                </CollapsibleSection>
 
                 {selectedPrompt ? (
-                    <div className="space-y-4 animate-fade-in font-sans">
-                        <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-800">
+                    <div className="space-y-4 animate-fade-in font-sans border-t border-gray-100 dark:border-gray-800 pt-4">
+                        <div className="flex items-center justify-between">
                             <span className="text-sm font-bold text-gray-900 dark:text-white">参数配置</span>
                             <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500">重置</button>
                         </div>
-                        {selectedPrompt.fields.map((field, index) => (
-                            <div key={field.id} className="font-sans">
-                                <div className="flex justify-between items-center mb-1.5">
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 font-sans">
-                                        <span className="font-sans">
-                                            {index + 1}. {field.label}
-                                            {field.required !== false ? (
-                                                <span className="ml-1 text-red-500 font-normal">* (必填)</span>
-                                            ) : (
-                                                <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
-                                            )}
-                                        </span>
-                                    </label>
-                                    {field.maxLength && (
-                                        <span className={`text-[10px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
-                                            {formState[field.id]?.length || 0} / {field.maxLength}
-                                        </span>
+                        {selectedPrompt.fields.map((field, index) => {
+                            if (field.id === 'context' || field.id === 'text') return null; // Hide internal context fields
+                            return (
+                                <div key={field.id} className="font-sans">
+                                    <div className="flex justify-between items-center mb-1.5">
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 font-sans">
+                                            <span className="font-sans">
+                                                {index + 1}. {field.label}
+                                                {field.required !== false ? (
+                                                    <span className="ml-1 text-red-500 font-normal">*</span>
+                                                ) : (
+                                                    <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
+                                                )}
+                                            </span>
+                                        </label>
+                                        {field.maxLength && (
+                                            <span className={`text-[10px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
+                                                {formState[field.id]?.length || 0} / {field.maxLength}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {field.type === 'textarea' ? (
+                                        <textarea 
+                                            rows={3} 
+                                            value={formState[field.id] || ''} 
+                                            onChange={e => handleInputChange(field.id, e.target.value)} 
+                                            placeholder={field.placeholder} 
+                                            maxLength={field.maxLength}
+                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm font-sans" 
+                                        />
+                                    ) : (
+                                        <input 
+                                            type="text" 
+                                            value={formState[field.id] || ''} 
+                                            onChange={e => handleInputChange(field.id, e.target.value)} 
+                                            placeholder={field.placeholder} 
+                                            maxLength={field.maxLength}
+                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" 
+                                        />
                                     )}
+                                    {field.description && <p className="text-[10px] text-gray-400 mt-1 font-sans">{field.description}</p>}
                                 </div>
-                                {field.type === 'textarea' ? (
-                                    <textarea 
-                                        rows={field.id === 'context' || field.id === 'text' ? 5 : 3} 
-                                        value={formState[field.id] || ''} 
-                                        onChange={e => handleInputChange(field.id, e.target.value)} 
-                                        placeholder={field.placeholder} 
-                                        maxLength={field.maxLength}
-                                        className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm font-sans" 
-                                    />
-                                ) : (
-                                    <input 
-                                        type="text" 
-                                        value={formState[field.id] || ''} 
-                                        onChange={e => handleInputChange(field.id, e.target.value)} 
-                                        placeholder={field.placeholder} 
-                                        maxLength={field.maxLength}
-                                        className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" 
-                                    />
-                                )}
-                                {field.description && <p className="text-[10px] text-gray-400 mt-1 font-sans">{field.description}</p>}
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 ) : (
                      <div className="text-sm text-gray-400 italic p-6 text-center border border-dashed border-gray-300 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900/50 font-sans">
-                        请在上方选择“写作要求”或“写作风格”模板
+                        请在上方选择“写作要求”或“写作风格”模板，或直接点击生成。
                      </div>
                 )}
+                
+                {selectedText && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                        <Check className="w-3 h-3" /> 已引用选中正文 ({selectedText.length}字)
+                    </div>
+                )}
 
-                <button onClick={isLoading ? handleStop : handleGenerate} disabled={!selectedPrompt && !isLoading} className={`w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans ${isLoading ? 'bg-red-500 hover:bg-red-600 text-white hover:shadow-red-500/30' : 'bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed'}`}>
+                <button onClick={isLoading ? handleStop : handleGenerate} className={`w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans ${isLoading ? 'bg-red-500 hover:bg-red-600 text-white hover:shadow-red-500/30' : 'bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed'}`}>
                     {isLoading ? <><Stop className="w-5 h-5" />停止生成</> : <><Sparkles className="w-5 h-5" />{activeTab === 'review' ? '开始智能评审' : '立即生成内容'}</>}
                 </button>
                 {error && <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/50 font-sans">{error}</div>}
                 {resultText && (
                     <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-800 animate-fade-in-up font-sans">
                         <div className="flex justify-between items-center font-sans">
-                            <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果 {(lastGeneratedTab === 'expand' || lastGeneratedTab === 'continue') && <span className="text-xs font-normal text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full font-sans">已插入正文</span>}</h4>
+                            <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果 {(lastGeneratedTab === 'expand' || lastGeneratedTab === 'continue') && <span className="text-xs font-normal text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full font-sans">已插入正文 (灰色字体)</span>}</h4>
                             <div className="flex gap-2 font-sans">
                                 <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
                                 <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>

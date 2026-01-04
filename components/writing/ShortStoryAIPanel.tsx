@@ -21,6 +21,22 @@ interface ShortStoryAIPanelProps {
     projectSettings?: NovelSettings;
 }
 
+const CollapsibleSection: React.FC<{ title: string; icon: any; color: string; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, icon: Icon, color, children, defaultOpen = true }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+    return (
+        <div className={`rounded-xl border transition-all ${isOpen ? `bg-${color}-50/30 dark:bg-${color}-900/10 border-${color}-200 dark:border-${color}-800` : `bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800`}`}>
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between p-3">
+                <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isOpen ? `text-${color}-600 dark:text-${color}-400` : 'text-gray-500'}`}>
+                    <Icon className="w-4 h-4" />
+                    {title}
+                </div>
+                <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && <div className="px-3 pb-3">{children}</div>}
+        </div>
+    );
+};
+
 const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream, projectSettings }) => {
     const [activeTab, setActiveTab] = useState<ShortStoryTab>('original');
     const [model, setModel] = useState('deepseek-chat');
@@ -138,6 +154,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 if (activeTab === 'original') basePrompt = `请根据以下要求写一段短篇小说的正文。\n\n【要求】：${promptInput}`;
                 else if (activeTab === 'imitate') basePrompt = `请模仿以下参考文本的风格，并根据新的要求进行创作。\n\n【参考文本风格】：${referenceText}\n\n【新内容要求】：${promptInput}`;
                 else if (activeTab === 'polish') {
+                    // Fix: Use selectedText if available, otherwise context
                     const textToPolish = selectedText || currentContext;
                     basePrompt = `请对以下文本进行润色优化，使其更具文学性，风格要求：${promptInput || '通用文学风格'}。\n\n【待润色文本】：\n${textToPolish}`;
                 } else if (activeTab === 'review') {
@@ -216,24 +233,23 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 {renderTabButton('review', '评审', ClipboardDocumentCheck)}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 font-sans">
-                <div className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 space-y-5 shadow-sm font-sans">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans">
+                <CollapsibleSection title="模型配置" icon={AdjustmentsHorizontal} color="sky">
                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型配置</label>
                         <div className="flex gap-2 font-sans">
                             <div className="relative flex-1">
                                 <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer font-sans">
-                                    <option value="deepseek-chat">奇思版</option>
-                                    <option value="gemini-2.0-flash">妙写版</option>
-                                    <option value="doubao-flash">速写版</option>
+                                    <option value="deepseek-chat">奇思版 (DeepSeek)</option>
+                                    <option value="gemini-2.0-flash">妙写版 (Gemini)</option>
+                                    <option value="doubao-flash">速写版 (豆包)</option>
                                 </select>
                                 <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
-                            <button onClick={() => setShowConfig(!showConfig)} className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 font-sans ${showConfig ? 'bg-sky-100 text-sky-600 border-sky-200 dark:bg-sky-900/30 dark:border-sky-800' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}><AdjustmentsHorizontal className="w-4 h-4" />参数</button>
+                            <button onClick={() => setShowConfig(!showConfig)} className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 font-sans ${showConfig ? 'bg-sky-100 text-sky-600 border-sky-200 dark:bg-sky-900/30 dark:border-sky-800' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>参数</button>
                         </div>
                     </div>
                     {showConfig && (
-                        <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800 grid grid-cols-1 gap-4 animate-fade-in text-[10px] font-sans">
+                        <div className="mt-3 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800 grid grid-cols-1 gap-4 animate-fade-in text-[10px] font-sans">
                             <div className="space-y-1">
                                 <label className="block font-black text-sky-500 flex justify-between uppercase"><span>随机度 (Temperature): {temperature}</span></label>
                                 <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
@@ -248,12 +264,13 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             </div>
                         </div>
                     )}
-                    
-                    {/* Prompt Selection Area */}
+                </CollapsibleSection>
+                
+                <CollapsibleSection title="写作要求 & 风格" icon={Sparkles} color="purple">
                     <div className="grid grid-cols-2 gap-3 font-sans">
                         <div className="flex flex-col gap-1.5 font-sans">
                             <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">写作要求</label>
-                            <button onClick={() => handleOpenPromptModal('requirements')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? 'bg-sky-50 border-sky-300 text-sky-900 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-400'}`}>
+                            <button onClick={() => handleOpenPromptModal('requirements')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
                                 <div className="flex items-center justify-between relative z-10 font-sans">
                                     <span className="font-semibold truncate text-[11px]">{selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? selectedPrompt.title : '选择要求...'}</span>
                                     <ChevronDown className="w-3 h-3 opacity-50" />
@@ -262,7 +279,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                         </div>
                         <div className="flex flex-col gap-1.5 font-sans">
                             <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">写作风格</label>
-                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
+                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-pink-50 border-pink-300 text-pink-900 dark:bg-pink-900/30 dark:border-pink-700 dark:text-pink-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-pink-400'}`}>
                                 <div className="flex items-center justify-between relative z-10 font-sans">
                                     <span className="font-semibold truncate text-[11px]">{selectedPrompt && selectedPrompt.subCategories.includes('style') ? selectedPrompt.title : '选择风格...'}</span>
                                     <ChevronDown className="w-3 h-3 opacity-50" />
@@ -270,16 +287,15 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             </button>
                         </div>
                     </div>
+                </CollapsibleSection>
 
+                <CollapsibleSection title="关联素材" icon={Database} color="amber">
                     <div className="flex flex-col gap-2 font-sans">
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center justify-between">
-                            关联内容 <span className="text-[10px] font-normal opacity-50 italic">(可选)</span>
-                        </label>
                         <div className="space-y-2">
-                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
+                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-amber-400'}`}>
                                 <div className="flex items-center justify-between font-sans">
                                     <div className="flex items-center gap-2 font-sans overflow-hidden">
-                                        <Database className={`w-4 h-4 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400'}`} />
+                                        <Database className={`w-4 h-4 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}`} />
                                         <span className="font-semibold text-xs truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '关联人物/剧情/设定...'}</span>
                                     </div>
                                     <ChevronDown className="w-4 h-4 opacity-50 flex-shrink-0" />
@@ -288,7 +304,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             
                             <button 
                                 onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} 
-                                className={`w-full p-3 rounded-lg border text-left transition-all font-sans flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-emerald-400'}`}
+                                className={`w-full p-3 rounded-lg border text-left transition-all font-sans flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-emerald-400'}`}
                             >
                                 <div className="flex items-center gap-2 font-sans">
                                     <BookOpen className={`w-4 h-4 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`} />
@@ -298,11 +314,11 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             </button>
                         </div>
                     </div>
-                </div>
+                </CollapsibleSection>
 
                 {selectedPrompt ? (
-                    <div className="space-y-4 animate-fade-in font-sans">
-                        <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-800">
+                    <div className="space-y-4 animate-fade-in font-sans border-t border-gray-100 dark:border-gray-800 pt-4">
+                        <div className="flex items-center justify-between">
                             <span className="text-sm font-bold text-gray-900 dark:text-white">参数配置</span>
                             <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500">重置</button>
                         </div>
@@ -313,7 +329,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                         <span className="font-sans">
                                             {index + 1}. {field.label}
                                             {field.required !== false ? (
-                                                <span className="ml-1 text-red-500 font-normal">* (必填)</span>
+                                                <span className="ml-1 text-red-500 font-normal">*</span>
                                             ) : (
                                                 <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
                                             )}
@@ -350,7 +366,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     </div>
                 ) : (
                      <div className="space-y-4 font-sans">
-                        {activeTab === 'imitate' && (
+                        {(activeTab === 'imitate') && (
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">参考风格文本</label>
                                 <textarea 
@@ -361,6 +377,13 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 />
                             </div>
                         )}
+                        
+                        {(activeTab === 'polish' || activeTab === 'review') && selectedText && (
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2 mb-2">
+                                <Check className="w-3 h-3" /> 已引用选中正文 ({selectedText.length}字)
+                            </div>
+                        )}
+
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">
                                 {activeTab === 'original' ? '创作要求' : activeTab === 'imitate' ? '新内容要求' : activeTab === 'polish' ? '润色要求' : '评审关注点'}
@@ -387,7 +410,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 {resultText && (
                     <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-800 animate-fade-in-up font-sans">
                         <div className="flex justify-between items-center font-sans">
-                            <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果 {(lastGeneratedTab === 'original' || lastGeneratedTab === 'imitate') && <span className="text-xs font-normal text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full font-sans">已插入正文</span>}</h4>
+                            <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果 {(lastGeneratedTab === 'original' || lastGeneratedTab === 'imitate') && <span className="text-xs font-normal text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full font-sans">已插入正文 (灰色字体)</span>}</h4>
                             <div className="flex gap-2 font-sans">
                                 <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
                                 <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>

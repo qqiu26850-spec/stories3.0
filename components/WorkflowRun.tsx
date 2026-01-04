@@ -257,9 +257,9 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                 <div>
                                     <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">模型</label>
                                     <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none cursor-pointer">
-                                        <option value="deepseek-chat">奇思版</option>
-                                        <option value="gemini-2.0-flash">妙写版</option>
-                                        <option value="doubao-flash">速写版</option>
+                                        <option value="deepseek-chat">奇思版 (DeepSeek)</option>
+                                        <option value="gemini-2.0-flash">妙写版 (Gemini)</option>
+                                        <option value="doubao-flash">速写版 (豆包)</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1">
