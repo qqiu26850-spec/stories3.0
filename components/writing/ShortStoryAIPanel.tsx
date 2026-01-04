@@ -159,7 +159,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
             let finalPrompt = '';
             
-            // Define textToProcess logic consistent with AIFunctionPanel
             const textToProcess = (activeTab === 'polish' || activeTab === 'review') 
                 ? polishContent 
                 : (selectedText || contextText.slice(-2000));
@@ -178,7 +177,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     template = template.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
                 }
                 
-                // If textToProcess wasn't injected, append it explicitly
                 if (!textInjected && textToProcess) {
                      template = `${template}\n\n【需处理内容】：\n${textToProcess}`;
                 }
@@ -189,7 +187,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 if (activeTab === 'original') basePrompt = `请根据以下要求写一段短篇小说的正文。\n\n【要求】：${promptInput}`;
                 else if (activeTab === 'imitate') basePrompt = `请模仿以下参考文本的风格，并根据新的要求进行创作。\n\n【参考文本风格】：${referenceText}\n\n【新内容要求】：${promptInput}`;
                 else if (activeTab === 'polish') {
-                    // Combine polish content and prompt input
                     const textToPolish = polishContent; 
                     basePrompt = `请对以下文本进行润色优化。${promptInput ? `【润色要求】：${promptInput}` : '请使其更具文学性。'}\n\n【待润色文本】：\n${textToPolish}`;
                 } else if (activeTab === 'review') {
@@ -200,7 +197,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n` : ''}${basePrompt}`;
             }
 
-            // Stream to panel result
             const stream = generateTextStream(finalPrompt, { 
                 model, 
                 temperature, 
@@ -224,7 +220,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
     const renderTabButton = (type: ShortStoryTab, label: string, Icon: React.ElementType) => (
         <button
-            onClick={() => { setActiveTab(type); setResultText(''); }}
+            onClick={() => setActiveTab(type)}
             className={`flex-1 py-2 flex flex-col items-center justify-center gap-1 transition-colors border-b-2 font-sans ${
                 activeTab === type 
                     ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20' 
@@ -267,11 +263,13 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     </div>
                 </div>
 
+                {/* Content rendered as plain reading text, not markdown */}
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                     <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">{resultText}</div>
                 </div>
 
                 <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-2">
+                    {/* Insert Button */}
                     <button 
                         onClick={() => {
                             if (lastGeneratedTab === 'polish') onReplace(resultText);
@@ -279,9 +277,18 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                         }} 
                         className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
                     >
-                        {lastGeneratedTab === 'polish' ? '替换选中文本' : <><Plus className="w-3 h-3" /> 插入正文</>}
+                        {lastGeneratedTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
                     </button>
-                    {!isGenerating && (
+                    
+                    {/* Stop / Retry Button */}
+                    {isGenerating ? (
+                        <button 
+                            onClick={handleStop}
+                            className="px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center gap-1"
+                        >
+                            <Stop className="w-3 h-3" /> 停止生成
+                        </button>
+                    ) : (
                         <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
                             <ArrowPath className="w-3 h-3" /> 重试
                         </button>
@@ -305,6 +312,23 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
             <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar relative">
                 
+                {/* Full Cover Loading Overlay */}
+                {isGenerating && (
+                    <div className="absolute inset-0 z-50 bg-white/95 dark:bg-gray-900/95 flex flex-col items-center justify-center backdrop-blur-sm animate-fade-in text-center p-6">
+                        <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">AI 正在创作中...</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 italic px-4">
+                            {WRITING_STRATEGIES[strategyIndex]}
+                        </p>
+                        <button 
+                            onClick={handleStop}
+                            className="px-6 py-2 bg-red-50 text-red-600 border border-red-200 rounded-full hover:bg-red-100 transition-colors text-sm font-bold flex items-center gap-2"
+                        >
+                            <Stop className="w-4 h-4" /> 停止生成
+                        </button>
+                    </div>
+                )}
+
                 {/* Module 1: Parameter Config */}
                 <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/30 dark:bg-sky-900/10 overflow-hidden">
                     <button 

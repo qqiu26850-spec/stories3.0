@@ -184,7 +184,7 @@ export const Bold: Icon = (props) => (
 
 export const Italic: Icon = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 19.5h3.75m9-15h-3.75m-6 15l6-15" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 5.25h4.5m-4.5 13.5h4.5m-2.25-13.5l-2.25 13.5" />
     </svg>
 );
 
@@ -365,12 +365,14 @@ export const QuestionMarkCircle: Icon = (props) => (
 
 export const TextIncrease: Icon = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19.5h6m-3-15v15m6-12h2.25m-2.25 0v4.5m2.25-2.25h-4.5" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21l7.5-18 7.5 18M5.25 16.5h10.5" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M18 6h4.5M20.25 3.75v4.5" />
   </svg>
 );
 
 export const TextDecrease: Icon = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19.5h6m-3-15v15m6-10h4.5" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21l7.5-18 7.5 18M5.25 16.5h10.5" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M18 5.25h4.5" />
   </svg>
 );

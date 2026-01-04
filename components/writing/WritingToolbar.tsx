@@ -10,33 +10,24 @@ interface WritingToolbarProps {
 }
 
 const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) => {
-    // Left side group
+    // Left side group - Separators removed as requested
     const formattingButtons = [
         { id: 'bold', icon: Bold, label: '加粗' },
         { id: 'italic', icon: Italic, label: '倾斜' },
-        { id: 'separator' },
         { id: 'font-increase', icon: TextIncrease, label: '增大字号' },
         { id: 'font-decrease', icon: TextDecrease, label: '缩小字号' },
-        { id: 'separator' },
         { id: 'indent-add', icon: IndentIncrease, label: '增加缩进' },
         { id: 'indent-decrease', icon: IndentDecrease, label: '减少缩进' },
-        { id: 'separator' },
         { id: 'align-left', icon: AlignLeft, label: '左对齐' },
         { id: 'align-center', icon: AlignCenter, label: '居中对齐' },
         { id: 'align-right', icon: AlignRight, label: '右对齐' },
         { id: 'align-justify', icon: AlignJustify, label: '两端对齐' },
-        { id: 'separator' },
         { id: 'copy', icon: Copy, label: '复制全文' },
-        { id: 'separator' },
         { id: 'undo', icon: ArrowUturnLeft, label: '撤销' },
         { id: 'redo', icon: ArrowUturnRight, label: '恢复' },
     ];
 
-    const renderButton = (btn: any, index: number) => {
-        if (btn.id === 'separator') {
-            return <div key={`sep-${index}`} className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1 self-center"></div>;
-        }
-
+    const renderButton = (btn: any) => {
         const isActive = btn.id?.startsWith('align-') && btn.id === `align-${alignment}`;
         
         return (
@@ -58,7 +49,7 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
     return (
         <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100 dark:border-gray-800 w-full px-1">
             <div className="flex items-center gap-1">
-                {formattingButtons.map((btn, index) => renderButton(btn, index))}
+                {formattingButtons.map((btn) => renderButton(btn))}
             </div>
         </div>
     );
