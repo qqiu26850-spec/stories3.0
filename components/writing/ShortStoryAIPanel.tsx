@@ -350,6 +350,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     </div>
                     <div className="p-3 space-y-3">
                         <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">提示词选择</label>
                             {activeTab === 'polish' || activeTab === 'review' ? (
                                 <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread' as any)} className="w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
                                     <div className="flex items-center justify-between">
@@ -370,6 +371,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                         </div>
 
                         <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">关联素材</label>
                             <div className="flex flex-col gap-2">
                                 <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2 rounded-lg border text-left transition-all ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
                                     <div className="flex items-center justify-between">

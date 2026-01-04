@@ -68,6 +68,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 setPolishContent(externalAction.text);
             }
         } else if (selectedText) {
+            // Only update if selection is not empty
             setPolishContent(selectedText);
         }
     }, [externalAction, selectedText]);
@@ -246,8 +247,10 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 {renderTabButton('review', '评审', ClipboardDocumentCheck)}
             </div>
 
+            {/* Main Content Area */}
             <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar relative">
                 
+                {/* Full Cover Loading Overlay */}
                 {isGenerating && (
                     <div className="absolute inset-0 z-50 bg-white/95 dark:bg-gray-900/95 flex flex-col items-center justify-center backdrop-blur-sm animate-fade-in text-center p-6">
                         <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
@@ -279,6 +282,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     
                     {!isConfigCollapsed && (
                         <div className="px-3 pb-3 space-y-4">
+                            {/* Model Config */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">模型选择</label>
                                 <div className="flex gap-2 font-sans">
@@ -309,7 +313,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     )}
                 </div>
 
-                {/* Module 2: Text to Process (Polish/Review/Expand/Continue) */}
+                {/* Module 2: Text to Process (Polish/Review/Expand/Continue) - Always visible for these tabs */}
                 <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-100/50 dark:bg-sky-900/30 overflow-hidden animate-fade-in">
                     <div className="p-3 border-b border-sky-100 dark:border-sky-800">
                         <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
@@ -342,6 +346,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     </div>
                     <div className="p-3 space-y-3">
                         <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">提示词选择</label>
                             {activeTab === 'polish' || activeTab === 'review' ? (
                                 <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread' as any)} className="w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
                                     <div className="flex items-center justify-between">
@@ -362,6 +367,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         </div>
 
                         <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">关联素材</label>
                             <div className="flex flex-col gap-2">
                                 <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2 rounded-lg border text-left transition-all ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
                                     <div className="flex items-center justify-between">
