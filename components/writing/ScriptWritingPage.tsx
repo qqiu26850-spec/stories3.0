@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Script, Scene } from '../../types';
 import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check, ChevronLeft, ChevronRight, PanelLeft, PanelRight } from '../Icon';
@@ -155,18 +156,18 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const handleToolbarAction = (action: ToolbarAction) => {
         if (!editorRef.current) return;
 
-        if (action === 'copy') {
+        if (action === 'undo') {
+            document.execCommand('undo', false);
+        } else if (action === 'redo') {
+            document.execCommand('redo', false);
+        } else if (action === 'copy') {
             navigator.clipboard.writeText(editorRef.current.innerText);
             setShowCopyToast(true);
             setTimeout(() => setShowCopyToast(false), 2000);
             return;
-        }
-
-        if (action === 'bold') {
+        } else if (action === 'bold') {
             document.execCommand('bold', false);
-        }
-
-        if (action === 'indent-add') {
+        } else if (action === 'indent-add') {
             document.execCommand('formatBlock', false, 'p');
             const selection = window.getSelection();
             if (selection && selection.rangeCount > 0) {
@@ -178,9 +179,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     }
                 });
             }
-        }
-        
-        if (action.startsWith('align-')) {
+        } else if (action.startsWith('align-')) {
             const align = action.replace('align-', '');
             document.execCommand(`justify${align.charAt(0).toUpperCase() + align.slice(1)}`, false);
             setAlignment(align as any);
@@ -192,7 +191,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const handleAIStream = (chunk: string, isFirst: boolean) => {
         if (!editorRef.current) return;
         if (isFirst) editorRef.current.focus();
-        document.execCommand('insertText', false, chunk);
+        document.execCommand('insertHTML', false, `<span style="color: gray;">${chunk}</span>`);
         handleContentInput();
         if (scrollContainerRef.current) {
             scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
@@ -202,7 +201,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const handleInsertText = (text: string) => {
         if (!editorRef.current) return;
         editorRef.current.focus();
-        document.execCommand('insertText', false, text);
+        document.execCommand('insertHTML', false, `<span style="color: gray;">${text}</span>`);
         handleContentInput();
     };
 

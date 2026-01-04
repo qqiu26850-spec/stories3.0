@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Novel, Chapter, NovelSettings } from '../../types';
-import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight, PanelLeft, PanelRight } from '../Icon';
+import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight, PanelLeft, PanelRight, X } from '../Icon';
 import NovelSettingsPanel from './NovelSettingsPanel';
 import ChapterManager from './ChapterManager';
 import AIFunctionPanel from './AIFunctionPanel';
 import ShortStoryAIPanel from './ShortStoryAIPanel';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, deleteChapterFromDB, updateChapterOrder } from '../../services/supabaseService';
+import { createPortal } from 'react-dom';
 
 interface NovelWritingPageProps {
     novel: Novel;
@@ -18,6 +19,47 @@ interface NovelWritingPageProps {
 
 type SidebarModule = 'settings' | 'chapters';
 type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
+
+const ContextMenu: React.FC<{
+    x: number;
+    y: number;
+    visible: boolean;
+    mode: 'long' | 'short';
+    onClose: () => void;
+    onAction: (action: 'expand' | 'continue' | 'polish' | 'review') => void;
+}> = ({ x, y, visible, mode, onClose, onAction }) => {
+    if (!visible) return null;
+
+    const options = mode === 'long' 
+        ? [
+            { id: 'continue', label: '续写', icon: '📝' },
+            { id: 'expand', label: '扩写', icon: '✨' },
+            { id: 'polish', label: '润色', icon: '🎨' }
+          ]
+        : [
+            { id: 'polish', label: '润色', icon: '🎨' },
+            { id: 'review', label: '评审', icon: '🧐' }
+          ];
+
+    return createPortal(
+        <div 
+            className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 py-1 min-w-[120px] animate-fade-in"
+            style={{ top: y, left: x }}
+            onMouseLeave={onClose}
+        >
+            {options.map((opt) => (
+                <button
+                    key={opt.id}
+                    onClick={() => { onAction(opt.id as any); onClose(); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-sky-50 dark:hover:bg-sky-900/30 hover:text-sky-600 transition-colors flex items-center gap-2"
+                >
+                    <span>{opt.icon}</span> {opt.label}
+                </button>
+            ))}
+        </div>,
+        document.body
+    );
+};
 
 const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel, onBack, pageTitle = '小说管理', mode = 'long' }) => {
     const [novel, setNovel] = useState<Novel>(initialNovel);
@@ -37,6 +79,11 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
+
+    // Context Menu State
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string }>({ x: 0, y: 0, visible: false, text: '' });
+    // State to pass to AI Panels
+    const [aiTrigger, setAiTrigger] = useState<{ type: 'expand' | 'continue' | 'polish' | 'review', text: string } | null>(null);
 
     useEffect(() => {
         const loadInitialChapters = async () => {
@@ -108,7 +155,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         setNovel(prev => ({ ...prev, settings: newSettings }));
         setSaveStatus('saving');
         try {
-            // 将整个设定对象序列化后存入 description 或者单独的设定字段
             await updateProject(novel.id, { description: JSON.stringify(newSettings) });
             setSaveStatus('saved');
         } catch (e) {
@@ -187,16 +233,19 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
 
     const handleToolbarAction = (action: ToolbarAction) => {
         if (!editorRef.current) return;
-        if (action === 'copy') {
+        
+        if (action === 'undo') {
+            document.execCommand('undo', false);
+        } else if (action === 'redo') {
+            document.execCommand('redo', false);
+        } else if (action === 'copy') {
             navigator.clipboard.writeText(editorRef.current.innerText);
             setShowCopyToast(true);
             setTimeout(() => setShowCopyToast(false), 2000);
             return;
-        }
-        if (action === 'bold') {
+        } else if (action === 'bold') {
             document.execCommand('bold', false);
-        }
-        if (action === 'indent-add') {
+        } else if (action === 'indent-add') {
             document.execCommand('formatBlock', false, 'p');
             const selection = window.getSelection();
             if (selection && selection.rangeCount > 0) {
@@ -207,8 +256,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     }
                 });
             }
-        }
-        if (action.startsWith('align-')) {
+        } else if (action.startsWith('align-')) {
             const align = action.replace('align-', '');
             document.execCommand(`justify${align.charAt(0).toUpperCase() + align.slice(1)}`, false);
             setAlignment(align as any);
@@ -219,7 +267,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleAIStream = (chunk: string, isFirst: boolean) => {
         if (!editorRef.current) return;
         if (isFirst) { editorRef.current.focus(); }
-        // Use span with color to distinguish AI text
         document.execCommand('insertHTML', false, `<span style="color: gray;">${chunk}</span>`);
         handleContentInput();
         if (scrollContainerRef.current) {
@@ -230,7 +277,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleInsertText = (text: string) => {
         if (!editorRef.current) return;
         editorRef.current.focus();
-        // Insert as colored span
         document.execCommand('insertHTML', false, `<span style="color: gray;">${text}</span>`);
         handleContentInput();
     };
@@ -242,6 +288,34 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         handleContentInput();
     };
 
+    // Right Click Handler
+    const handleContextMenu = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const selection = window.getSelection();
+        const text = selection?.toString().trim();
+        
+        if (text && text.length > 0) {
+            setContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+                visible: true,
+                text: text
+            });
+        }
+    };
+
+    const handleAIAction = (type: 'expand' | 'continue' | 'polish' | 'review') => {
+        setAiTrigger({ type, text: contextMenu.text });
+        if (!isRightSidebarOpen) setRightSidebarOpen(true);
+    };
+
+    // Close menu on click anywhere
+    useEffect(() => {
+        const closeMenu = () => setContextMenu(prev => ({ ...prev, visible: false }));
+        document.addEventListener('click', closeMenu);
+        return () => document.removeEventListener('click', closeMenu);
+    }, []);
+
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden relative">
             {showCopyToast && (
@@ -250,6 +324,13 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     <span className="text-sm font-bold">已成功复制全文</span>
                 </div>
             )}
+
+            <ContextMenu 
+                {...contextMenu} 
+                mode={mode}
+                onClose={() => setContextMenu(prev => ({ ...prev, visible: false }))} 
+                onAction={handleAIAction}
+            />
 
             <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm h-16">
                 <div className="w-64 flex-shrink-0 flex items-center gap-3 px-4 border-r border-gray-200 dark:border-gray-800">
@@ -348,6 +429,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                         ref={editorRef}
                                         contentEditable 
                                         onInput={handleContentInput}
+                                        onContextMenu={handleContextMenu}
                                         className="w-full bg-transparent focus:outline-none text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[75vh] outline-none pb-32"
                                         style={{ textAlign: alignment }}
                                     ></div>
@@ -380,6 +462,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                 onReplace={handleReplaceText} 
                                 onStream={handleAIStream}
                                 projectSettings={novel.settings}
+                                externalAction={aiTrigger}
                             />
                         ) : (
                             <AIFunctionPanel 
@@ -389,6 +472,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                 onReplace={handleReplaceText} 
                                 onStream={handleAIStream}
                                 projectSettings={novel.settings}
+                                externalAction={aiTrigger}
                             />
                         )}
                     </div>

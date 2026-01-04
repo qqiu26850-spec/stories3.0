@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { Copy, AlignLeft, AlignCenter, AlignRight, IndentIncrease, Bold } from '../Icon';
+import { Copy, AlignLeft, AlignCenter, AlignRight, IndentIncrease, Bold, ArrowUturnLeft, ArrowUturnRight } from '../Icon';
 
-export type ToolbarAction = 'copy' | 'bold' | 'align-left' | 'align-center' | 'align-right' | 'indent-add';
+export type ToolbarAction = 'copy' | 'bold' | 'align-left' | 'align-center' | 'align-right' | 'indent-add' | 'undo' | 'redo';
 
 interface WritingToolbarProps {
     onAction: (action: ToolbarAction) => void;
@@ -11,6 +11,9 @@ interface WritingToolbarProps {
 
 const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) => {
     const buttons = [
+        { id: 'undo', icon: ArrowUturnLeft, label: '撤销' },
+        { id: 'redo', icon: ArrowUturnRight, label: '恢复' },
+        { id: 'separator' }, // Separator
         { id: 'copy', icon: Copy, label: '复制全文' },
         { id: 'bold', icon: Bold, label: '加粗' },
         { id: 'indent-add', icon: IndentIncrease, label: '首行缩进' },
@@ -21,9 +24,13 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
 
     return (
         <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100 dark:border-gray-800 w-full">
-            {buttons.map((btn) => {
+            {buttons.map((btn, index) => {
+                if (btn.id === 'separator') {
+                    return <div key={index} className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1"></div>;
+                }
+
                 // Check if this button is an alignment button and if it matches the current alignment
-                const isActive = btn.id.startsWith('align-') && btn.id === `align-${alignment}`;
+                const isActive = btn.id?.startsWith('align-') && btn.id === `align-${alignment}`;
                 
                 return (
                     <button
@@ -36,7 +43,7 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
                                 : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
                         }`}
                     >
-                        <btn.icon className="w-4 h-4" />
+                        {btn.icon && <btn.icon className="w-4 h-4" />}
                     </button>
                 );
             })}
