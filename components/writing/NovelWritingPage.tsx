@@ -74,9 +74,9 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [tempTitle, setTempTitle] = useState(novel.title);
     const [openModule, setOpenModule] = useState<SidebarModule>('chapters');
-    const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>('left');
+    const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
-    const [fontSize, setFontSize] = useState(18); // Default font size
+    const [fontSize, setFontSize] = useState(18); // Default font size set to 18
     
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
@@ -246,6 +246,8 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             return;
         } else if (action === 'bold') {
             document.execCommand('bold', false);
+        } else if (action === 'italic') {
+            document.execCommand('italic', false);
         } else if (action === 'indent-add') {
             document.execCommand('formatBlock', false, 'p');
             const selection = window.getSelection();
@@ -253,13 +255,26 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 const paragraphs = editorRef.current.querySelectorAll('p');
                 paragraphs.forEach(p => {
                     if (selection.containsNode(p, true)) {
-                        p.style.textIndent = p.style.textIndent === '2em' ? '0' : '2em';
+                        p.style.textIndent = '2em';
+                    }
+                });
+            }
+        } else if (action === 'indent-decrease') {
+            document.execCommand('formatBlock', false, 'p');
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+                const paragraphs = editorRef.current.querySelectorAll('p');
+                paragraphs.forEach(p => {
+                    if (selection.containsNode(p, true)) {
+                        p.style.textIndent = '0';
                     }
                 });
             }
         } else if (action.startsWith('align-')) {
             const align = action.replace('align-', '');
-            document.execCommand(`justify${align.charAt(0).toUpperCase() + align.slice(1)}`, false);
+            // For justify, standard execCommand is justifyFull
+            const command = align === 'justify' ? 'justifyFull' : `justify${align.charAt(0).toUpperCase() + align.slice(1)}`;
+            document.execCommand(command, false);
             setAlignment(align as any);
         } else if (action === 'font-increase') {
             setFontSize(prev => Math.min(prev + 2, 32));

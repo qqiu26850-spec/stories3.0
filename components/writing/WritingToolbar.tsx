@@ -1,32 +1,33 @@
 
 import React from 'react';
-import { Copy, AlignLeft, AlignCenter, AlignRight, IndentIncrease, Bold, ArrowUturnLeft, ArrowUturnRight, TextIncrease, TextDecrease } from '../Icon';
+import { Copy, AlignLeft, AlignCenter, AlignRight, AlignJustify, IndentIncrease, IndentDecrease, Bold, Italic, ArrowUturnLeft, ArrowUturnRight, TextIncrease, TextDecrease } from '../Icon';
 
-export type ToolbarAction = 'copy' | 'bold' | 'align-left' | 'align-center' | 'align-right' | 'indent-add' | 'undo' | 'redo' | 'font-increase' | 'font-decrease';
+export type ToolbarAction = 'copy' | 'bold' | 'italic' | 'align-left' | 'align-center' | 'align-right' | 'align-justify' | 'indent-add' | 'indent-decrease' | 'undo' | 'redo' | 'font-increase' | 'font-decrease';
 
 interface WritingToolbarProps {
     onAction: (action: ToolbarAction) => void;
-    alignment: 'left' | 'center' | 'right';
+    alignment: 'left' | 'center' | 'right' | 'justify';
 }
 
 const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) => {
     // Left side group
     const formattingButtons = [
         { id: 'bold', icon: Bold, label: '加粗' },
-        { id: 'indent-add', icon: IndentIncrease, label: '首行缩进' },
+        { id: 'italic', icon: Italic, label: '倾斜' },
         { id: 'separator' },
-        { id: 'font-decrease', icon: TextDecrease, label: '减小字号' },
         { id: 'font-increase', icon: TextIncrease, label: '增大字号' },
+        { id: 'font-decrease', icon: TextDecrease, label: '缩小字号' },
+        { id: 'separator' },
+        { id: 'indent-add', icon: IndentIncrease, label: '增加缩进' },
+        { id: 'indent-decrease', icon: IndentDecrease, label: '减少缩进' },
         { id: 'separator' },
         { id: 'align-left', icon: AlignLeft, label: '左对齐' },
         { id: 'align-center', icon: AlignCenter, label: '居中对齐' },
         { id: 'align-right', icon: AlignRight, label: '右对齐' },
+        { id: 'align-justify', icon: AlignJustify, label: '两端对齐' },
         { id: 'separator' },
         { id: 'copy', icon: Copy, label: '复制全文' },
-    ];
-
-    // Right side group
-    const historyButtons = [
+        { id: 'separator' },
         { id: 'undo', icon: ArrowUturnLeft, label: '撤销' },
         { id: 'redo', icon: ArrowUturnRight, label: '恢复' },
     ];
@@ -58,9 +59,6 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
         <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100 dark:border-gray-800 w-full px-1">
             <div className="flex items-center gap-1">
                 {formattingButtons.map((btn, index) => renderButton(btn, index))}
-            </div>
-            <div className="flex items-center gap-1">
-                {historyButtons.map((btn, index) => renderButton(btn, index))}
             </div>
         </div>
     );

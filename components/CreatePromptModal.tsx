@@ -141,10 +141,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             setError('请先填写基础提示词模板，AI 才能进行润色。');
             return;
         }
-        if (!polishRequirements.trim()) {
-            // Optional: allow empty requirements for generic polish
-        }
-
+        
         setIsPolishing(true);
         setPolishedResult('');
         const controller = new AbortController();
@@ -162,7 +159,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
         try {
             const stream = generateTextStream(promptText, {
-                model: 'deepseek-chat', // Or gemini-3-flash-preview based on preferences
+                model: 'deepseek-chat', 
                 temperature: 0.7,
                 topP: 0.9,
                 signal: controller.signal
