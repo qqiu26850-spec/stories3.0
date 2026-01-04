@@ -1,6 +1,4 @@
 
-import { GoogleGenAI } from "@google/genai";
-
 interface GenerationOptions {
     model: string;
     temperature: number;
@@ -9,36 +7,41 @@ interface GenerationOptions {
     signal?: AbortSignal;
 }
 
-// Removed PLAIN_TEXT_INSTRUCTION to allow Markdown headers (#) for hierarchical numbering in UI
-
 export const generateText = async (prompt: string, options: GenerationOptions): Promise<string> => {
   // Default to a higher token limit if not specified to prevent short responses
   const maxOutputTokens = options.maxOutputTokens || 4096;
 
   if (options.model.startsWith('gemini')) {
-    // Fix: Always use named parameter for apiKey and obtain it exclusively from process.env.API_KEY.
-    // Create the instance inside the function to ensure it uses the most up-to-date environment variable.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
-        if (options.signal?.aborted) throw new Error("Aborted");
-        
-        const response = await ai.models.generateContent({
-            model: options.model,
-            contents: prompt,
-            config: {
+        const response = await fetch("/api/gemini", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                model: options.model,
+                contents: prompt,
                 temperature: options.temperature,
-                topP: options.topP,
-                maxOutputTokens: maxOutputTokens,
-            }
+                top_p: options.topP,
+                max_tokens: maxOutputTokens,
+                stream: false
+            }),
+            signal: options.signal
         });
-        // Fix: Use the .text property directly as per latest SDK guidelines
-        return response.text || "";
-    } catch (error) {
-        console.error("Error generating text with Gemini:", error);
-        if (error instanceof Error) {
-            return `Gemini 生成内容时出错：${error.message}`;
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Server Error: ${response.status}`);
         }
-        return "Gemini 生成内容时发生未知错误。";
+
+        const data = await response.json();
+        return data.text || "";
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            throw new Error("Aborted");
+        }
+        console.error("Error generating text with Gemini:", error);
+        return `Gemini 生成内容时出错：${error.message}`;
     }
   } else if (options.model.startsWith('deepseek') || options.model.startsWith('doubao')) {
     const endpoint = options.model.startsWith('doubao') ? "/api/doubao" : "/api/deepseek";
@@ -80,6 +83,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         return `${options.model} 生成出错: ${error.message}`;
     }
   } else {
+    // Simulation fallback
     if (options.signal?.aborted) throw new Error("Aborted");
     await new Promise((resolve, reject) => {
         const timer = setTimeout(resolve, 1500);
@@ -93,33 +97,51 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 };
 
 export const generateTextStream = async function* (prompt: string, options: GenerationOptions): AsyncGenerator<string, void, unknown> {
-    // Default to a higher token limit if not specified
     const maxOutputTokens = options.maxOutputTokens || 4096;
 
     if (options.model.startsWith('gemini')) {
-        // Fix: Use process.env.API_KEY and create instance locally to follow GenAI guidelines.
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         try {
-            const responseStream = await ai.models.generateContentStream({
-                model: options.model,
-                contents: prompt,
-                config: {
+            const response = await fetch("/api/gemini", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model: options.model,
+                    contents: prompt,
                     temperature: options.temperature,
-                    topP: options.topP,
-                    maxOutputTokens: maxOutputTokens,
-                }
+                    top_p: options.topP,
+                    max_tokens: maxOutputTokens,
+                    stream: true
+                }),
+                signal: options.signal
             });
 
-            for await (const chunk of responseStream) {
-                if (options.signal?.aborted) throw new Error("Aborted");
-                // Fix: Access .text property directly instead of calling .text()
-                const text = chunk.text;
-                if (text) {
-                    yield text;
-                }
+            if (!response.ok) {
+                 const errorText = await response.text().catch(() => '');
+                 throw new Error(`Server Error: ${response.status} ${errorText}`);
             }
+            
+            if (!response.body) throw new Error("No response body");
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+
+            while (true) {
+                if (options.signal?.aborted) {
+                    reader.cancel();
+                    break;
+                }
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                // The API sends raw text chunks in the stream
+                const textChunk = decoder.decode(value, { stream: true });
+                yield textChunk;
+            }
+
         } catch (error: any) {
-            if (error.message === 'Aborted' || options.signal?.aborted) {
+            if (error.name === 'AbortError' || options.signal?.aborted) {
                 return; 
             }
             console.error("Error generating text stream with Gemini:", error);
@@ -184,7 +206,6 @@ export const generateTextStream = async function* (prompt: string, options: Gene
 
                         const content = delta.content;
                         if (content) {
-                            // Filter logic for <think> blocks in R1 (DeepSeek)
                             if (content.includes('<think>')) {
                                 inThinkingBlock = true;
                                 const afterThink = content.split('<think>')[1];

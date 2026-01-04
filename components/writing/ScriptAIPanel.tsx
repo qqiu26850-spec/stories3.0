@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
@@ -56,6 +56,13 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
         };
         loadAssets();
     }, []);
+
+    const selectedAssetNames = useMemo(() => {
+        return Array.from(selectedAssetIds)
+            .map(id => assets.find(a => a.id === id)?.name)
+            .filter(Boolean)
+            .join(', ');
+    }, [selectedAssetIds, assets]);
 
     useEffect(() => {
         if (selectedPrompt) {
@@ -181,9 +188,9 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                         <div className="flex gap-2 font-sans">
                             <div className="relative flex-1 font-sans">
                                 <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-medium rounded-lg bg-gray-50 dark:bg-gray-800 border focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer font-sans">
-                                    <option value="deepseek-chat">DeepSeek V3</option>
-                                    <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-                                    <option value="doubao-flash">豆包 Flash (Doubao Flash)</option>
+                                    <option value="deepseek-chat">奇思版</option>
+                                    <option value="gemini-2.0-flash">妙写版</option>
+                                    <option value="doubao-flash">速写版</option>
                                 </select>
                                 <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
@@ -232,11 +239,11 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                         <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">关联素材 (可选)</label>
                         <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 text-gray-500 hover:border-sky-400'}`}>
                             <div className="flex items-center justify-between text-[11px] font-semibold truncate">
-                                <div className="flex items-center gap-1.5">
-                                    <Database className={`w-3.5 h-3.5 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
-                                    <span>{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 项素材` : '点击关联设定...'}</span>
+                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                    <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
+                                    <span className="truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '点击关联设定...'}</span>
                                 </div>
-                                <ChevronDown className="w-3 h-3 opacity-50" />
+                                <ChevronDown className="w-3 h-3 opacity-50 flex-shrink-0" />
                             </div>
                         </button>
                     </div>

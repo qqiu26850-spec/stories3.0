@@ -60,6 +60,13 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         loadAssets();
     }, []);
 
+    const selectedAssetNames = useMemo(() => {
+        return Array.from(selectedAssetIds)
+            .map(id => assets.find(a => a.id === id)?.name)
+            .filter(Boolean)
+            .join(', ');
+    }, [selectedAssetIds, assets]);
+
     const defaultTabPrompts = useMemo(() => {
         return PROMPTS.filter(prompt => {
             const subCats = prompt.subCategories || [];
@@ -221,11 +228,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         <div className="flex gap-2 font-sans">
                             <div className="relative flex-1">
                                 <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer font-sans">
-                                    <option value="deepseek-chat">DeepSeek V3 (通用对话)</option>
-                                    <option value="deepseek-reasoner">DeepSeek R1 (深度推理)</option>
-                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (极速)</option>
-                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (深度)</option>
-                                    <option value="doubao-flash">豆包 Flash (Doubao Flash)</option>
+                                    <option value="deepseek-chat">奇思版</option>
+                                    <option value="gemini-2.0-flash">妙写版</option>
+                                    <option value="doubao-flash">速写版</option>
                                 </select>
                                 <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2.5 top-3 pointer-events-none" />
                             </div>
@@ -277,11 +282,11 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         <div className="space-y-2">
                             <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-sky-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
                                 <div className="flex items-center justify-between font-sans">
-                                    <div className="flex items-center gap-2 font-sans">
+                                    <div className="flex items-center gap-2 font-sans overflow-hidden">
                                         <Database className={`w-4 h-4 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400'}`} />
-                                        <span className="font-semibold text-xs">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 个素材` : '关联人物/剧情/设定...'}</span>
+                                        <span className="font-semibold text-xs truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '关联人物/剧情/设定...'}</span>
                                     </div>
-                                    <ChevronDown className="w-4 h-4 opacity-50" />
+                                    <ChevronDown className="w-4 h-4 opacity-50 flex-shrink-0" />
                                 </div>
                             </button>
                             

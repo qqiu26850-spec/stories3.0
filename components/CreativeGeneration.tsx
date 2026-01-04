@@ -4,7 +4,7 @@ import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown, Check, Stop, InformationCircle } from './Icon';
+import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown, Check, Stop, InformationCircle, ArrowPath } from './Icon';
 import PromptSelectionModal from './PromptSelectionModal';
 import AssetSelectionModal from './AssetSelectionModal'; 
 import { saveMaterial, incrementPromptHeat, fetchMaterials } from '../services/supabaseService';
@@ -80,7 +80,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
     const [showConfig, setShowConfig] = useState(false);
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
-    // Fix: Replaced undefined PromptFormState with Record<string, string>
     const [formState, setFormState] = useState<Record<string, string>>({});
     const [freeInput, setFreeInput] = useState('');
     const [generatedText, setGeneratedText] = useState('');
@@ -205,11 +204,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                 <div className="flex gap-2">
                                     <div className="relative flex-1">
                                         <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-bold bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 rounded-lg text-gray-700 dark:text-gray-200 outline-none appearance-none cursor-pointer font-sans">
-                                            <option value="deepseek-chat">深思通用 (DeepSeek V3)</option>
-                                            <option value="deepseek-reasoner">深思推理 (DeepSeek R1)</option>
-                                            <option value="gemini-3-flash-preview">谷歌极速 (Gemini 3 Flash)</option>
-                                            <option value="gemini-3-pro-preview">谷歌深度 (Gemini 3 Pro)</option>
-                                            <option value="doubao-flash">豆包 Flash (Doubao Flash)</option>
+                                            <option value="deepseek-chat">奇思版</option>
+                                            <option value="gemini-2.0-flash">妙写版</option>
+                                            <option value="doubao-flash">速写版</option>
                                         </select>
                                         <ChevronDown className="w-3 h-3 text-sky-400 absolute right-2.5 top-3 pointer-events-none" />
                                     </div>
