@@ -164,7 +164,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 for (const field of selectedPrompt.fields) {
                     let val = formState[field.id] || '';
                     if (!val && (field.id === 'context' || field.id === 'text')) {
-                        // Use polishContent if in polish/review mode, otherwise context
+                        // Use polishContent ONLY, do not fallback to context slice.
                         val = (activeTab === 'polish' || activeTab === 'review') ? polishContent : contextText.slice(-2000);
                     }
                     template = template.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
@@ -176,11 +176,12 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 if (activeTab === 'original') basePrompt = `请根据以下要求写一段短篇小说的正文。\n\n【要求】：${promptInput}`;
                 else if (activeTab === 'imitate') basePrompt = `请模仿以下参考文本的风格，并根据新的要求进行创作。\n\n【参考文本风格】：${referenceText}\n\n【新内容要求】：${promptInput}`;
                 else if (activeTab === 'polish') {
-                    const textToPolish = polishContent || currentContext;
-                    basePrompt = `请对以下文本进行润色优化，使其更具文学性，风格要求：${promptInput || '通用文学风格'}。\n\n【待润色文本】：\n${textToPolish}`;
+                    // Combine polish content and prompt input
+                    const textToPolish = polishContent; 
+                    basePrompt = `请对以下文本进行润色优化。${promptInput ? `【润色要求】：${promptInput}` : '请使其更具文学性。'}\n\n【待润色文本】：\n${textToPolish}`;
                 } else if (activeTab === 'review') {
-                     const textToReview = polishContent || currentContext;
-                     basePrompt = `请作为一名专业的文学编辑，对以下文本进行评审，指出优缺点并给出修改建议。关注点：${promptInput || '情节逻辑、人物塑造'}。\n\n【待评审文本】：\n${textToReview}`;
+                     const textToReview = polishContent;
+                     basePrompt = `请作为一名专业的文学编辑，对以下文本进行评审。${promptInput ? `【关注点】：${promptInput}` : '指出优缺点并给出修改建议。'}\n\n【待评审文本】：\n${textToReview}`;
                 }
                 
                 finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n` : ''}${basePrompt}`;
@@ -223,27 +224,45 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     );
 
     return (
-        <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 font-sans">
+        <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 font-sans relative">
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
 
-            <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans">
+            <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans flex-shrink-0">
                 {renderTabButton('original', '原创', Sparkles)}
                 {renderTabButton('imitate', '仿写', DocumentPlus)}
                 {renderTabButton('polish', '润色', Pencil)}
                 {renderTabButton('review', '评审', ClipboardDocumentCheck)}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar">
-                {/* Unified Collapsible Container - Lighter Blue */}
-                <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/10 dark:bg-sky-900/5 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar relative">
+                
+                {/* Full Cover Loading Overlay */}
+                {isGenerating && (
+                    <div className="absolute inset-0 z-50 bg-white/95 dark:bg-gray-900/95 flex flex-col items-center justify-center backdrop-blur-sm animate-fade-in text-center p-6">
+                        <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">AI 正在创作中...</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 italic px-4">
+                            {WRITING_STRATEGIES[strategyIndex]}
+                        </p>
+                        <button 
+                            onClick={handleStop}
+                            className="px-6 py-2 bg-red-50 text-red-600 border border-red-200 rounded-full hover:bg-red-100 transition-colors text-sm font-bold flex items-center gap-2"
+                        >
+                            <Stop className="w-4 h-4" /> 停止生成
+                        </button>
+                    </div>
+                )}
+
+                {/* Module 1: Parameter Config */}
+                <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/30 dark:bg-sky-900/10 overflow-hidden">
                     <button 
                         onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} 
                         className="w-full flex items-center justify-between p-3 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors"
                     >
                         <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                            <AdjustmentsHorizontal className="w-4 h-4 text-sky-500" />
-                            参数填写
+                            <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">1</span>
+                            参数配置
                         </span>
                         <ChevronDown className={`w-3 h-3 text-sky-400 transition-transform ${isConfigCollapsed ? 'rotate-180' : ''}`} />
                     </button>
@@ -255,7 +274,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">模型配置</label>
                                 <div className="flex gap-2 font-sans">
                                     <div className="relative flex-1">
-                                        <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-1.5 pl-2 pr-6 text-xs font-medium bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
+                                        <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-1.5 pl-2 pr-6 text-xs font-medium rounded-lg bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
                                             <option value="deepseek-chat">奇思版 (DeepSeek)</option>
                                             <option value="gemini-2.0-flash">妙写版 (Gemini)</option>
                                             <option value="doubao-flash">速写版 (豆包)</option>
@@ -284,24 +303,42 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
                             {/* Writing Requirements & Style - Stacked */}
                             <div className="flex flex-col gap-3">
-                                <div className="flex flex-col gap-1.5 font-sans">
-                                    <label className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">写作要求</label>
-                                    <button onClick={() => handleOpenPromptModal('requirements')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
-                                        <div className="flex items-center justify-between relative z-10 font-sans">
-                                            <span className="font-semibold truncate text-[11px]">{selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? selectedPrompt.title : '选择要求模板...'}</span>
-                                            <ChevronDown className="w-3 h-3 opacity-50" />
+                                {activeTab === 'polish' || activeTab === 'review' ? (
+                                    <div className="flex flex-col gap-1.5 font-sans">
+                                        <label className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                                            {activeTab === 'polish' ? '润色规则' : '评审标准'}
+                                        </label>
+                                        <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread' as any)} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
+                                            <div className="flex items-center justify-between relative z-10 font-sans">
+                                                <span className="font-semibold truncate text-[11px]">
+                                                    {selectedPrompt ? selectedPrompt.title : (activeTab === 'polish' ? '选择润色提示词...' : '选择评审提示词...')}
+                                                </span>
+                                                <ChevronDown className="w-3 h-3 opacity-50" />
+                                            </div>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex flex-col gap-1.5 font-sans">
+                                            <label className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">写作要求</label>
+                                            <button onClick={() => handleOpenPromptModal('requirements')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? 'bg-purple-50 border-purple-300 text-purple-900 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-400'}`}>
+                                                <div className="flex items-center justify-between relative z-10 font-sans">
+                                                    <span className="font-semibold truncate text-[11px]">{selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? selectedPrompt.title : '选择要求模板...'}</span>
+                                                    <ChevronDown className="w-3 h-3 opacity-50" />
+                                                </div>
+                                            </button>
                                         </div>
-                                    </button>
-                                </div>
-                                <div className="flex flex-col gap-1.5 font-sans">
-                                    <label className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">写作风格</label>
-                                    <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-rose-50 border-rose-300 text-rose-900 dark:bg-rose-900/30 dark:border-rose-700 dark:text-rose-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-rose-400'}`}>
-                                        <div className="flex items-center justify-between relative z-10 font-sans">
-                                            <span className="font-semibold truncate text-[11px]">{selectedPrompt && selectedPrompt.subCategories.includes('style') ? selectedPrompt.title : '选择风格模板...'}</span>
-                                            <ChevronDown className="w-3 h-3 opacity-50" />
+                                        <div className="flex flex-col gap-1.5 font-sans">
+                                            <label className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">写作风格</label>
+                                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2.5 rounded-lg border text-left transition-all group relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-rose-50 border-rose-300 text-rose-900 dark:bg-rose-900/30 dark:border-rose-700 dark:text-rose-100' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-rose-400'}`}>
+                                                <div className="flex items-center justify-between relative z-10 font-sans">
+                                                    <span className="font-semibold truncate text-[11px]">{selectedPrompt && selectedPrompt.subCategories.includes('style') ? selectedPrompt.title : '选择风格模板...'}</span>
+                                                    <ChevronDown className="w-3 h-3 opacity-50" />
+                                                </div>
+                                            </button>
                                         </div>
-                                    </button>
-                                </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* Associated Content (Amber Title) */}
@@ -334,120 +371,155 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     )}
                 </div>
 
-                {selectedPrompt ? (
-                    <div className="space-y-4 animate-fade-in font-sans border-t border-gray-100 dark:border-gray-800 pt-4">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold text-gray-900 dark:text-white">模板参数填写</span>
-                            <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500">重置</button>
+                {/* Module 2: Content Entry (Prompt Fields) */}
+                {selectedPrompt && (
+                    <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-900/20 overflow-hidden animate-fade-in">
+                        <div className="p-3 border-b border-sky-100 dark:border-sky-800">
+                            <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">2</span>
+                                内容填写
+                            </span>
                         </div>
-                        {selectedPrompt.fields.map((field, index) => {
-                            if (field.id === 'context' || field.id === 'text') return null; // Hide internal context fields
-                            return (
-                                <div key={field.id} className="font-sans">
-                                    <div className="flex justify-between items-center mb-1.5">
-                                        <label className="block text-[10px] font-bold text-gray-700 dark:text-gray-300 font-sans">
-                                            <span className="font-sans">
-                                                {index + 1}. {field.label}
-                                                {field.required !== false ? (
-                                                    <span className="ml-1 text-red-500 font-normal">*</span>
-                                                ) : (
-                                                    <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
-                                                )}
-                                            </span>
-                                        </label>
-                                        {field.maxLength && (
-                                            <span className={`text-[10px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
-                                                {formState[field.id]?.length || 0} / {field.maxLength}
-                                            </span>
+                        <div className="p-3 space-y-4 font-sans">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">请填写模板参数</span>
+                                <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500">重置</button>
+                            </div>
+                            {selectedPrompt.fields.map((field, index) => {
+                                if (field.id === 'context' || field.id === 'text') return null; // Hide internal context fields
+                                return (
+                                    <div key={field.id} className="font-sans">
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label className="block text-[10px] font-bold text-gray-700 dark:text-gray-300 font-sans">
+                                                <span className="font-sans">
+                                                    {index + 1}. {field.label}
+                                                    {field.required !== false ? (
+                                                        <span className="ml-1 text-red-500 font-normal">*</span>
+                                                    ) : (
+                                                        <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
+                                                    )}
+                                                </span>
+                                            </label>
+                                            {field.maxLength && (
+                                                <span className={`text-[10px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
+                                                    {formState[field.id]?.length || 0} / {field.maxLength}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {field.type === 'textarea' ? (
+                                            <textarea 
+                                                rows={3} 
+                                                value={formState[field.id] || ''} 
+                                                onChange={e => handleInputChange(field.id, e.target.value)} 
+                                                placeholder={field.placeholder} 
+                                                maxLength={field.maxLength}
+                                                className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm font-sans" 
+                                            />
+                                        ) : (
+                                            <input 
+                                                type="text" 
+                                                value={formState[field.id] || ''} 
+                                                onChange={e => handleInputChange(field.id, e.target.value)} 
+                                                placeholder={field.placeholder} 
+                                                maxLength={field.maxLength}
+                                                className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" 
+                                            />
                                         )}
+                                        {field.description && <p className="text-[10px] text-gray-400 mt-1 font-sans">{field.description}</p>}
                                     </div>
-                                    {field.type === 'textarea' ? (
-                                        <textarea 
-                                            rows={3} 
-                                            value={formState[field.id] || ''} 
-                                            onChange={e => handleInputChange(field.id, e.target.value)} 
-                                            placeholder={field.placeholder} 
-                                            maxLength={field.maxLength}
-                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm font-sans" 
-                                        />
-                                    ) : (
-                                        <input 
-                                            type="text" 
-                                            value={formState[field.id] || ''} 
-                                            onChange={e => handleInputChange(field.id, e.target.value)} 
-                                            placeholder={field.placeholder} 
-                                            maxLength={field.maxLength}
-                                            className="w-full p-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm font-sans" 
-                                        />
-                                    )}
-                                    {field.description && <p className="text-[10px] text-gray-400 mt-1 font-sans">{field.description}</p>}
-                                </div>
-                            );
-                        })}
-                    </div>
-                ) : (
-                     <div className="text-sm text-gray-400 italic p-6 text-center border border-dashed border-gray-300 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900/50 font-sans">
-                        请在上方选择“写作要求”或“写作风格”模板，或直接点击生成。
-                     </div>
-                )}
-                
-                {(externalAction?.text || selectedText) && (
-                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2">
-                        <Check className="w-3 h-3" /> 已引用选中正文 ({(externalAction?.text || selectedText).length}字)
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 
+                {/* Module 3: Input Text (Polish/Review Context) */}
+                {['polish', 'review'].includes(activeTab) && (
+                    <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-100/50 dark:bg-sky-900/30 overflow-hidden animate-fade-in">
+                        <div className="p-3 border-b border-sky-100 dark:border-sky-800">
+                            <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">3</span>
+                                需修改的正文内容
+                            </span>
+                        </div>
+                        <div className="p-3">
+                            <textarea 
+                                value={polishContent} 
+                                onChange={(e) => setPolishContent(e.target.value)} 
+                                placeholder="请在正文中选择一段文本，内容将自动填充至此..."
+                                className="w-full h-32 p-3 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
+                            />
+                            {polishContent.length === 0 && (
+                                <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1">
+                                    <InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Module 3: Manual Input if NO prompt is selected and NOT in polish/review */}
+                {!selectedPrompt && !['polish', 'review'].includes(activeTab) && (
+                    <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-100/50 dark:bg-sky-900/30 overflow-hidden animate-fade-in">
+                        <div className="p-3 border-b border-sky-100 dark:border-sky-800">
+                            <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">2</span>
+                                自定义要求
+                            </span>
+                        </div>
+                        <div className="p-3 space-y-3">
+                            <textarea 
+                                value={promptInput} 
+                                onChange={(e) => setPromptInput(e.target.value)} 
+                                placeholder="请输入具体的创作要求..."
+                                className="w-full h-24 p-3 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
+                            />
+                            {activeTab === 'imitate' && (
+                                <textarea 
+                                    value={referenceText} 
+                                    onChange={(e) => setReferenceText(e.target.value)} 
+                                    placeholder="请输入需要模仿的文本片段..."
+                                    className="w-full h-24 p-3 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
+                                />
+                            )}
+                        </div>
+                    </div>
+                )}
+                
                 {!isGenerating && !resultText && (
                     <button onClick={handleGenerate} className={`w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed`}>
                         <Sparkles className="w-5 h-5" />{activeTab === 'review' ? '开始智能评审' : '立即生成内容'}
                     </button>
                 )}
 
-                {/* Loading & Result View */}
-                {(isGenerating || resultText) && (
+                {/* Result View */}
+                {resultText && !isGenerating && (
                     <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in-up">
-                        {isGenerating && !resultText && (
-                            <div className="p-6 bg-white dark:bg-gray-900 rounded-xl border border-sky-100 dark:border-sky-800 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
-                                <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
-                                <div className="text-sm font-bold text-gray-800 dark:text-gray-200 animate-pulse">AI 正在思考...</div>
-                                <div className="text-[10px] text-sky-600 dark:text-sky-400 font-medium italic transition-opacity duration-500 px-4">
-                                    {WRITING_STRATEGIES[strategyIndex]}
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center font-sans">
+                                <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果</h4>
+                                <div className="flex gap-2 font-sans">
+                                    <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
+                                    <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>
                                 </div>
-                                <button onClick={handleStop} className="mt-2 text-xs text-red-500 hover:text-red-600 flex items-center gap-1 font-bold">
-                                    <Stop className="w-3 h-3" /> 停止生成
+                            </div>
+                            <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">{resultText}</div>
+                            
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => {
+                                        if (lastGeneratedTab === 'polish') onReplace(resultText);
+                                        else onInsert(resultText);
+                                    }} 
+                                    className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
+                                >
+                                    {lastGeneratedTab === 'polish' ? '替换选中文本' : <><Plus className="w-3 h-3" /> 插入正文</>}
+                                </button>
+                                <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
+                                    <ArrowPath className="w-3 h-3" /> 重试
                                 </button>
                             </div>
-                        )}
-
-                        {resultText && (
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center font-sans">
-                                    <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果</h4>
-                                    <div className="flex gap-2 font-sans">
-                                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
-                                        <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>
-                                    </div>
-                                </div>
-                                <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">{resultText}</div>
-                                
-                                <div className="flex gap-2">
-                                    <button 
-                                        onClick={() => {
-                                            if (lastGeneratedTab === 'polish') onReplace(resultText);
-                                            else onInsert(resultText);
-                                        }} 
-                                        className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
-                                    >
-                                        {lastGeneratedTab === 'polish' ? '替换选中文本' : <><Plus className="w-3 h-3" /> 插入正文</>}
-                                    </button>
-                                    {!isGenerating && (
-                                        <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
-                                            <ArrowPath className="w-3 h-3" /> 重试
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                        </div>
                     </div>
                 )}
             </div>

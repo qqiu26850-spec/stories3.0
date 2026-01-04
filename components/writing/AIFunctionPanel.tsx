@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt, NovelSettings } from '../../types';
-import { generateText, generateTextStream } from '../../services/geminiService';
+import { generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
-import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, ClipboardDocumentCheck, Check, ArrowPath, Plus } from '../Icon';
+import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, ClipboardDocumentCheck, Check, ArrowPath, Plus, X, InformationCircle } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 
@@ -67,6 +66,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 setPolishContent(externalAction.text);
             }
         } else if (selectedText) {
+            // Only update if selection is not empty
             setPolishContent(selectedText);
         }
     }, [externalAction, selectedText]);
@@ -165,6 +165,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
             }
 
             let finalPrompt = '';
+            
+            // Only use polishContent (user selected text), do NOT fallback to context history.
+            // If polishContent is empty, the variable in prompt will be empty.
             const textToProcess = (activeTab === 'polish' || activeTab === 'review') 
                 ? polishContent 
                 : (selectedText || contextText.slice(-2000));
@@ -186,8 +189,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 finalPrompt = `${instruction}。\n${settingsContext ? `${settingsContext}\n\n` : ''}当前上下文/选中文本：\n${textToProcess}\n\n${assetContext ? `关联素材：\n${assetContext}` : ''}`;
             }
 
-            // We do NOT call onStream to insert directly into editor anymore.
-            // We stream to the sidebar result area.
             const stream = generateTextStream(finalPrompt, { 
                 model, 
                 temperature, 
@@ -224,27 +225,46 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     );
 
     return (
-        <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 font-sans">
+        <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 font-sans relative">
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
 
-            <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans">
+            <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans flex-shrink-0">
                 {renderTabButton('expand', '扩写', Sparkles)}
                 {renderTabButton('continue', '续写', DocumentPlus)}
                 {renderTabButton('polish', '润色', Pencil)}
                 {renderTabButton('review', '评审', ClipboardDocumentCheck)}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar">
-                {/* Unified Collapsible Container - Lighter Blue */}
-                <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/10 dark:bg-sky-900/5 overflow-hidden">
+            {/* Main Content Area */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar relative">
+                
+                {/* Full Cover Loading Overlay */}
+                {isGenerating && (
+                    <div className="absolute inset-0 z-50 bg-white/95 dark:bg-gray-900/95 flex flex-col items-center justify-center backdrop-blur-sm animate-fade-in text-center p-6">
+                        <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">AI 正在创作中...</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 italic px-4">
+                            {WRITING_STRATEGIES[strategyIndex]}
+                        </p>
+                        <button 
+                            onClick={handleStop}
+                            className="px-6 py-2 bg-red-50 text-red-600 border border-red-200 rounded-full hover:bg-red-100 transition-colors text-sm font-bold flex items-center gap-2"
+                        >
+                            <Stop className="w-4 h-4" /> 停止生成
+                        </button>
+                    </div>
+                )}
+
+                {/* Module 1: Parameter Config */}
+                <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/30 dark:bg-sky-900/10 overflow-hidden">
                     <button 
                         onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} 
                         className="w-full flex items-center justify-between p-3 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors"
                     >
                         <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                            <AdjustmentsHorizontal className="w-4 h-4 text-sky-500" />
-                            参数填写
+                            <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">1</span>
+                            参数配置
                         </span>
                         <ChevronDown className={`w-3 h-3 text-sky-400 transition-transform ${isConfigCollapsed ? 'rotate-180' : ''}`} />
                     </button>
@@ -253,7 +273,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         <div className="px-3 pb-3 space-y-4">
                             {/* Model Config */}
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">模型配置</label>
+                                <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">模型选择</label>
                                 <div className="flex gap-2 font-sans">
                                     <div className="relative flex-1">
                                         <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-1.5 pl-2 pr-6 text-xs font-medium bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
@@ -279,9 +299,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 )}
                             </div>
 
-                            {activeTab === 'polish' ? (
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">润色提示词</label>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">提示词选择</label>
+                                {activeTab === 'polish' ? (
                                     <button onClick={() => handleOpenPromptModal('polish')} className="w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
                                         <div className="flex items-center justify-between">
                                             <span className="font-semibold text-xs text-gray-700 dark:text-gray-200 truncate">
@@ -290,29 +310,17 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                             <ChevronDown className="w-3 h-3 text-sky-400 opacity-50" />
                                         </div>
                                     </button>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col gap-2">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">写作要求</label>
+                                ) : (
+                                    <div className="flex flex-col gap-2">
                                         <button onClick={() => handleOpenPromptModal('requirements')} className="w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all hover:border-sky-300">
                                             <div className="flex items-center justify-between">
-                                                <span className="font-semibold text-xs text-gray-700 dark:text-gray-200 truncate">{selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? selectedPrompt.title : '选择要求...'}</span>
+                                                <span className="font-semibold text-xs text-gray-700 dark:text-gray-200 truncate">{selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? selectedPrompt.title : '选择写作要求...'}</span>
                                                 <ChevronDown className="w-3 h-3 text-sky-400 opacity-50" />
                                             </div>
                                         </button>
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">写作风格</label>
-                                        <button onClick={() => handleOpenPromptModal('style')} className="w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all hover:border-sky-300">
-                                            <div className="flex items-center justify-between">
-                                                <span className="font-semibold text-xs text-gray-700 dark:text-gray-200 truncate">{selectedPrompt && selectedPrompt.subCategories.includes('style') ? selectedPrompt.title : '选择风格...'}</span>
-                                                <ChevronDown className="w-3 h-3 text-sky-400 opacity-50" />
-                                            </div>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
 
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">关联素材</label>
@@ -343,68 +351,91 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     )}
                 </div>
 
-                {activeTab === 'polish' && (
-                    <div className="space-y-2 mt-2">
-                        <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">待润色/评审文本</label>
-                        <textarea 
-                            value={polishContent} 
-                            onChange={(e) => setPolishContent(e.target.value)} 
-                            placeholder="请选中正文内容或在此粘贴..."
-                            className="w-full h-32 p-3 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
-                        />
+                {/* Module 2: Prompt Fields (Content Entry) */}
+                {selectedPrompt && (
+                    <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-900/20 overflow-hidden animate-fade-in">
+                        <div className="p-3 border-b border-sky-100 dark:border-sky-800">
+                            <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">2</span>
+                                内容填写
+                            </span>
+                        </div>
+                        <div className="p-3 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">请填写模板参数</span>
+                                <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500">重置模板</button>
+                            </div>
+                            {selectedPrompt.fields.map((field, index) => {
+                                if (field.id === 'context' || field.id === 'text') return null;
+                                return (
+                                    <div key={field.id}>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="block text-[10px] font-medium text-gray-700 dark:text-gray-300">
+                                                {index + 1}. {field.label}
+                                                {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
+                                            </label>
+                                            {field.maxLength && (
+                                                <span className={`text-[9px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
+                                                    {formState[field.id]?.length || 0}/{field.maxLength}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {field.type === 'textarea' ? (
+                                            <textarea 
+                                                rows={2}
+                                                value={formState[field.id] || ''} 
+                                                onChange={e => handleInputChange(field.id, e.target.value)} 
+                                                placeholder={field.placeholder} 
+                                                maxLength={field.maxLength}
+                                                className="w-full p-2 text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm" 
+                                            />
+                                        ) : (
+                                            <input 
+                                                type="text" 
+                                                value={formState[field.id] || ''} 
+                                                onChange={e => handleInputChange(field.id, e.target.value)} 
+                                                placeholder={field.placeholder} 
+                                                maxLength={field.maxLength}
+                                                className="w-full p-2 text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm" 
+                                            />
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 
-                {selectedPrompt ? (
-                    <div className="space-y-3 animate-fade-in border-t border-gray-100 dark:border-gray-800 pt-3">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-gray-900 dark:text-white">参数填写</span>
-                            <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500">重置</button>
+                {/* Module 3: Input Text (Polish/Review Context) */}
+                {['polish', 'review'].includes(activeTab) && (
+                    <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-100/50 dark:bg-sky-900/30 overflow-hidden animate-fade-in">
+                        <div className="p-3 border-b border-sky-100 dark:border-sky-800">
+                            <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">3</span>
+                                需修改的正文内容
+                            </span>
                         </div>
-                        {selectedPrompt.fields.map((field, index) => {
-                            if (field.id === 'context' || field.id === 'text') return null;
-                            return (
-                                <div key={field.id}>
-                                    <div className="flex justify-between items-center mb-1">
-                                        <label className="block text-[10px] font-medium text-gray-700 dark:text-gray-300">
-                                            {index + 1}. {field.label}
-                                            {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
-                                        </label>
-                                        {field.maxLength && (
-                                            <span className={`text-[9px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
-                                                {formState[field.id]?.length || 0}/{field.maxLength}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {field.type === 'textarea' ? (
-                                        <textarea 
-                                            rows={2}
-                                            value={formState[field.id] || ''} 
-                                            onChange={e => handleInputChange(field.id, e.target.value)} 
-                                            placeholder={field.placeholder} 
-                                            maxLength={field.maxLength}
-                                            className="w-full p-2 text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm" 
-                                        />
-                                    ) : (
-                                        <input 
-                                            type="text" 
-                                            value={formState[field.id] || ''} 
-                                            onChange={e => handleInputChange(field.id, e.target.value)} 
-                                            placeholder={field.placeholder} 
-                                            maxLength={field.maxLength}
-                                            className="w-full p-2 text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-sm" 
-                                        />
-                                    )}
-                                </div>
-                            );
-                        })}
+                        <div className="p-3">
+                            <textarea 
+                                value={polishContent} 
+                                onChange={(e) => setPolishContent(e.target.value)} 
+                                placeholder="请在正文中选择一段文本，内容将自动填充至此..."
+                                className="w-full h-32 p-3 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
+                            />
+                            {polishContent.length === 0 && (
+                                <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1">
+                                    <InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本
+                                </p>
+                            )}
+                        </div>
                     </div>
-                ) : (
-                     !['polish', 'review'].includes(activeTab) && (
-                        <div className="text-xs text-gray-400 italic p-4 text-center border border-dashed border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50/50">
-                            请在上方选择模板，或直接点击生成。
-                        </div>
-                     )
+                )}
+
+                {/* Info Box if no prompt selected */}
+                {!selectedPrompt && !['polish', 'review'].includes(activeTab) && (
+                    <div className="text-xs text-gray-400 italic p-4 text-center border border-dashed border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50/50">
+                        请在上方“参数配置”中选择提示词模板，或直接点击下方生成。
+                    </div>
                 )}
                 
                 {!isGenerating && !resultText && (
@@ -413,52 +444,35 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     </button>
                 )}
 
-                {/* Loading / Result Area */}
-                {(isGenerating || resultText) && (
+                {/* Result Area */}
+                {resultText && !isGenerating && (
                     <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 animate-fade-in-up">
-                        {isGenerating && !resultText && (
-                            <div className="p-6 bg-white dark:bg-gray-900 rounded-xl border border-sky-100 dark:border-sky-800 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
-                                <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
-                                <div className="text-sm font-bold text-gray-800 dark:text-gray-200 animate-pulse">AI 正在思考...</div>
-                                <div className="text-[10px] text-sky-600 dark:text-sky-400 font-medium italic transition-opacity duration-500 px-4">
-                                    {WRITING_STRATEGIES[strategyIndex]}
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                                <h4 className="text-xs font-bold text-gray-800 dark:text-white flex items-center gap-2">生成结果</h4>
+                                <div className="flex gap-1">
+                                    <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1 text-gray-500 hover:text-sky-600 bg-gray-100 hover:bg-sky-50 rounded transition-colors"><Copy className="w-3.5 h-3.5" /></button>
+                                    <button onClick={() => setResultText('')} className="p-1 text-gray-500 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded transition-colors"><Trash className="w-3.5 h-3.5" /></button>
                                 </div>
-                                <button onClick={handleStop} className="mt-2 text-xs text-red-500 hover:text-red-600 flex items-center gap-1 font-bold">
-                                    <Stop className="w-3 h-3" /> 停止生成
+                            </div>
+                            <div className="p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-xs leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">
+                                {resultText}
+                            </div>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => {
+                                        if (activeTab === 'polish') onReplace(resultText);
+                                        else onInsert(resultText);
+                                    }} 
+                                    className="flex-1 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-xs flex items-center justify-center gap-1"
+                                >
+                                    {activeTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
+                                </button>
+                                <button onClick={handleGenerate} className="px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-xs flex items-center gap-1">
+                                    <ArrowPath className="w-3 h-3" /> 重试
                                 </button>
                             </div>
-                        )}
-
-                        {resultText && (
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="text-xs font-bold text-gray-800 dark:text-white flex items-center gap-2">生成结果</h4>
-                                    <div className="flex gap-1">
-                                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1 text-gray-500 hover:text-sky-600 bg-gray-100 hover:bg-sky-50 rounded transition-colors"><Copy className="w-3.5 h-3.5" /></button>
-                                        <button onClick={() => setResultText('')} className="p-1 text-gray-500 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded transition-colors"><Trash className="w-3.5 h-3.5" /></button>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-xs leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">
-                                    {resultText}
-                                </div>
-                                <div className="flex gap-2">
-                                    <button 
-                                        onClick={() => {
-                                            if (activeTab === 'polish') onReplace(resultText);
-                                            else onInsert(resultText);
-                                        }} 
-                                        className="flex-1 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-xs flex items-center justify-center gap-1"
-                                    >
-                                        {activeTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
-                                    </button>
-                                    {!isGenerating && (
-                                        <button onClick={handleGenerate} className="px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-xs flex items-center gap-1">
-                                            <ArrowPath className="w-3 h-3" /> 重试
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                        </div>
                     </div>
                 )}
 
