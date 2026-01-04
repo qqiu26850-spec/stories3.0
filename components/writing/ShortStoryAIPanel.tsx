@@ -317,34 +317,38 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     )}
                 </div>
 
-                {/* Module 2: Text to Process (Polish/Review/Imitate) */}
-                <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-100/50 dark:bg-sky-900/30 overflow-hidden animate-fade-in">
-                    <div className="p-3 border-b border-sky-100 dark:border-sky-800">
-                        <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">2</span>
-                            需修改的正文内容
-                        </span>
+                {/* Module 2: Text to Process (Only for Polish/Review) */}
+                {['polish', 'review'].includes(activeTab) && (
+                    <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-100/50 dark:bg-sky-900/30 overflow-hidden animate-fade-in">
+                        <div className="p-3 border-b border-sky-100 dark:border-sky-800">
+                            <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">2</span>
+                                需修改的正文内容
+                            </span>
+                        </div>
+                        <div className="p-3">
+                            <textarea 
+                                value={polishContent} 
+                                onChange={(e) => setPolishContent(e.target.value)} 
+                                placeholder="请在正文中选择一段文本，内容将自动填充至此..."
+                                className="w-full h-32 p-3 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
+                            />
+                            {polishContent.length === 0 && (
+                                <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1">
+                                    <InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本
+                                </p>
+                            )}
+                        </div>
                     </div>
-                    <div className="p-3">
-                        <textarea 
-                            value={activeTab === 'imitate' ? referenceText : polishContent} 
-                            onChange={(e) => activeTab === 'imitate' ? setReferenceText(e.target.value) : setPolishContent(e.target.value)} 
-                            placeholder={activeTab === 'imitate' ? "请输入需要模仿的文本片段..." : "请在正文中选择一段文本，内容将自动填充至此..."}
-                            className="w-full h-32 p-3 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
-                        />
-                        {activeTab !== 'original' && activeTab !== 'imitate' && polishContent.length === 0 && (
-                            <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1">
-                                <InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本
-                            </p>
-                        )}
-                    </div>
-                </div>
+                )}
 
                 {/* Module 3: Prompt Selection & Associated Assets & Form */}
                 <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-900/20 overflow-hidden animate-fade-in">
                     <div className="p-3 border-b border-sky-100 dark:border-sky-800">
                         <span className="text-sm font-black text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">3</span>
+                            <span className="w-5 h-5 rounded-full bg-sky-200 text-sky-700 flex items-center justify-center text-[10px]">
+                                {['polish', 'review'].includes(activeTab) ? '3' : '2'}
+                            </span>
                             提示词选择 & 关联素材
                         </span>
                     </div>
@@ -450,6 +454,17 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                     placeholder="请输入具体的创作要求..."
                                     className="w-full h-24 p-3 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
                                 />
+                                {activeTab === 'imitate' && (
+                                    <>
+                                        <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mt-2 block">参考文本片段</label>
+                                        <textarea 
+                                            value={referenceText} 
+                                            onChange={(e) => setReferenceText(e.target.value)} 
+                                            placeholder="请输入需要模仿的文本片段..."
+                                            className="w-full h-24 p-3 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
+                                        />
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>
