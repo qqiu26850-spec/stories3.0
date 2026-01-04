@@ -1,26 +1,32 @@
 
 import React from 'react';
 import { Project } from '../types';
-import { Trash, Photograph, Pencil } from './Icon';
+import { Trash, Pencil } from './Icon';
 
 interface ProjectCardProps {
     project: Project;
     onDelete: (id: string) => void;
-    onEdit?: (project: Project) => void; // New optional prop
+    onEdit?: (project: Project) => void;
     onSelect?: () => void;
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete, onEdit, onSelect }) => {
     return (
         <div className="group relative flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-md border border-gray-200 dark:border-gray-800 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 h-full">
-            <div onClick={onSelect} className="cursor-pointer relative group/image aspect-[2/1] w-full bg-gray-100 dark:bg-gray-800 overflow-hidden border-b border-gray-100 dark:border-gray-800">
-                {project.coverImage ? (
-                    <img src={project.coverImage} alt={`${project.title} cover`} className="w-full h-full object-cover transition-transform duration-500 group-hover/image:scale-105" />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-800">
-                        <Photograph className="w-12 h-12 text-gray-300 dark:text-gray-700" />
+            <div onClick={onSelect} className="cursor-pointer relative group/image aspect-[2/1] w-full overflow-hidden border-b border-gray-100 dark:border-gray-800">
+                {/* Fixed Cover Design - Branded */}
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-sky-400 via-sky-500 to-indigo-500 dark:from-sky-700 dark:via-sky-800 dark:to-indigo-900 p-4 transition-transform duration-700 group-hover/image:scale-105">
+                    <div className="flex flex-col items-center justify-center border-4 border-white/20 p-4 rounded-xl w-full h-full">
+                        <div className="text-white font-black text-2xl tracking-[0.3em] ml-1 drop-shadow-md">
+                            奇思妙写
+                        </div>
+                        <div className="w-8 h-1 bg-white/40 rounded-full mt-3 mb-2"></div>
+                        <div className="text-white/70 text-[10px] font-bold uppercase tracking-widest">
+                            AI Creative Studio
+                        </div>
                     </div>
-                )}
+                </div>
+                
                 <div className="absolute inset-0 bg-black/0 group-hover/image:bg-black/10 transition-colors" />
                 
                 {/* Floating Actions */}
@@ -32,7 +38,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete, onEdit, on
                                 onEdit(project);
                             }}
                             className="p-2 bg-white/90 dark:bg-black/70 text-gray-600 dark:text-gray-300 rounded-full hover:bg-sky-500 hover:text-white dark:hover:bg-sky-500 transition-colors shadow-sm backdrop-blur-sm"
-                            title="编辑封面与标题"
+                            title="重命名"
                         >
                             <Pencil className="w-4 h-4" />
                         </button>

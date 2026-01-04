@@ -2,106 +2,25 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Project } from '../types';
-import { X, Photograph } from './Icon';
+import { X } from './Icon';
 
 interface EditProjectModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (id: string, title: string, coverFile: File | null) => void;
+    onSave: (id: string, title: string) => void;
     project: Project | null;
 }
 
 const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, onSave, project }) => {
     const [title, setTitle] = useState('');
-    const [coverPreview, setCoverPreview] = useState<string | null>(null);
-    const [coverFile, setCoverFile] = useState<File | null>(null);
     const [error, setError] = useState('');
 
     useEffect(() => {
         if (isOpen && project) {
             setTitle(project.title);
-            setCoverPreview(project.coverImage);
-            setCoverFile(null); // Reset file input
             setError('');
         }
     }, [isOpen, project]);
-
-    // Client-side image compression
-    const compressImage = (file: File): Promise<File> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target?.result as string;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    // Aggressive compression for web display
-                    const MAX_WIDTH = 400; 
-                    const MAX_HEIGHT = 400;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_WIDTH) {
-                            height *= MAX_WIDTH / width;
-                            width = MAX_WIDTH;
-                        }
-                    } else {
-                        if (height > MAX_HEIGHT) {
-                            width *= MAX_HEIGHT / height;
-                            height = MAX_HEIGHT;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx?.drawImage(img, 0, 0, width, height);
-
-                    canvas.toBlob((blob) => {
-                        if (blob) {
-                            // Ensure extension is .jpg
-                            const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
-                            const compressedFile = new File([blob], newName, {
-                                type: 'image/jpeg',
-                                lastModified: Date.now(),
-                            });
-                            resolve(compressedFile);
-                        } else {
-                            reject(new Error('Canvas is empty'));
-                        }
-                    }, 'image/jpeg', 0.5); // 50% quality JPEG
-                };
-                img.onerror = (err) => reject(err);
-            };
-            reader.onerror = (err) => reject(err);
-        });
-    };
-
-    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            try {
-                const compressedFile = await compressImage(file);
-                setCoverFile(compressedFile);
-                
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    setCoverPreview(reader.result as string);
-                };
-                reader.readAsDataURL(compressedFile);
-            } catch (err) {
-                console.error("Compression failed", err);
-                setCoverFile(file);
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    setCoverPreview(reader.result as string);
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -110,7 +29,7 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
             return;
         }
         if (project) {
-            onSave(project.id, title, coverFile);
+            onSave(project.id, title);
         }
     };
 
@@ -123,32 +42,8 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
                     <X className="w-5 h-5" />
                 </button>
 
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">编辑作品信息</h3>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">重命名作品</h3>
                 <form onSubmit={handleSubmit} className="space-y-5">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">封面预览</label>
-                        <div className="flex items-start gap-4">
-                            <div className="w-28 aspect-[2/1] bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 flex-shrink-0 overflow-hidden shadow-sm relative group">
-                                {coverPreview ? (
-                                    <img src={coverPreview} alt="封面预览" className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                        <Photograph className="w-8 h-8" />
-                                    </div>
-                                )}
-                            </div>
-                            <div className="flex-1">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
-                                    支持 JPG, PNG 格式。<br/>会自动压缩以优化加载。
-                                </p>
-                                <label htmlFor="edit-cover-upload" className="inline-block cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
-                                    <span>更换封面</span>
-                                    <input id="edit-cover-upload" name="edit-cover-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageChange} />
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
                     <div>
                         <label htmlFor="edit-project-title" className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">作品名称</label>
                         <input
@@ -157,6 +52,7 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition"
+                            autoFocus
                         />
                     </div>
                     
@@ -167,7 +63,7 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ isOpen, onClose, on
                             取消
                         </button>
                         <button type="submit" className="px-6 py-2.5 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors shadow-lg shadow-sky-500/20">
-                            保存修改
+                            确认修改
                         </button>
                     </div>
                 </form>

@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Prompt, PromptCategory, PromptField, PromptSubCategory } from '../types';
-import { Trash, Sparkles, Check, Bars2, DocumentText, ChevronDown, ChevronUp, X, InformationCircle, Tag, Bolt, Plus, BookOpen } from './Icon';
+import { Trash, Sparkles, Check, ChevronDown, ChevronUp, X, InformationCircle, Tag, Bolt, Plus, BookOpen, DocumentText, ArrowPath, Stop } from './Icon';
 import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
+import { generateTextStream } from '../services/geminiService';
 
 type NewPromptData = Omit<Prompt, 'id' | 'heat' | 'content'>;
 
@@ -36,6 +37,13 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
     const [error, setError] = useState('');
     const [fieldIndexToDelete, setFieldIndexToDelete] = useState<number | null>(null);
 
+    // Polish Feature States
+    const [showPolishUI, setShowPolishUI] = useState(false);
+    const [polishRequirements, setPolishRequirements] = useState('');
+    const [polishedResult, setPolishedResult] = useState('');
+    const [isPolishing, setIsPolishing] = useState(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
+
     useEffect(() => {
         if (isOpen) {
             if (promptToEdit) {
@@ -45,7 +53,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 setTemplate(promptToEdit.template || promptToEdit.content);
                 setCategory(promptToEdit.category);
                 setSubCategories(promptToEdit.subCategories && promptToEdit.subCategories.length > 0 ? promptToEdit.subCategories : []);
-                // Add stable keys to existing fields
                 setFields((promptToEdit.fields || []).map(f => ({ ...f, _key: generateKey() })));
             } else {
                 setTitle('');
@@ -58,6 +65,12 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             }
             setError('');
             setFieldIndexToDelete(null);
+            
+            // Reset Polish State
+            setShowPolishUI(false);
+            setPolishRequirements('');
+            setPolishedResult('');
+            setIsPolishing(false);
         }
     }, [isOpen, promptToEdit]);
 
@@ -71,7 +84,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             required: true,
             description: '',
             maxLength: undefined,
-            _key: generateKey() // Generate stable key
+            _key: generateKey()
         }]);
     };
 
@@ -79,10 +92,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
         setFields(prev => {
             const next = [...prev];
             const fieldToUpdate = { ...next[index] };
-            
-            // Special handling for ID to allow English words (letters, numbers, underscore)
             if (key === 'id') {
-                // Remove invalid characters to ensure clean variable names
                 const sanitized = String(value).replace(/[^a-zA-Z0-9_]/g, '');
                 // @ts-ignore
                 fieldToUpdate[key] = sanitized;
@@ -90,7 +100,6 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 // @ts-ignore
                 fieldToUpdate[key] = value;
             }
-
             if (key === 'label' && !fieldToUpdate.placeholder) {
                 fieldToUpdate.placeholder = `请输入${value}...`;
             }
@@ -121,10 +130,70 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
             if (prev.includes(tag)) {
                 return prev.filter(t => t !== tag);
             } else {
-                if (prev.length >= 5) return prev; // Limit changed to 5
+                if (prev.length >= 5) return prev;
                 return [...prev, tag];
             }
         });
+    };
+
+    const handlePolishPrompt = async () => {
+        if (!template.trim()) {
+            setError('请先填写基础提示词模板，AI 才能进行润色。');
+            return;
+        }
+        if (!polishRequirements.trim()) {
+            // Optional: allow empty requirements for generic polish
+        }
+
+        setIsPolishing(true);
+        setPolishedResult('');
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        const promptText = `你是一个专业的 Prompt Engineer。请根据以下要求润色用户的提示词模板。
+        
+        【原始提示词】：
+        ${template}
+
+        【润色要求】：
+        ${polishRequirements || '请优化语言表达，使其更加精准、逻辑更清晰，适合大语言模型理解。'}
+
+        请直接输出润色后的内容（Markdown格式），不需要包含开场白或结束语。`;
+
+        try {
+            const stream = generateTextStream(promptText, {
+                model: 'deepseek-chat', // Or gemini-3-flash-preview based on preferences
+                temperature: 0.7,
+                topP: 0.9,
+                signal: controller.signal
+            });
+
+            for await (const chunk of stream) {
+                setPolishedResult(prev => prev + chunk);
+            }
+        } catch (e: any) {
+            if (e.message !== 'Aborted') {
+                setPolishedResult(`润色失败: ${e.message}`);
+            }
+        } finally {
+            setIsPolishing(false);
+            abortControllerRef.current = null;
+        }
+    };
+
+    const stopPolishing = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsPolishing(false);
+    };
+
+    const applyPolished = () => {
+        setTemplate(polishedResult);
+        setShowPolishUI(false);
+        setPolishedResult('');
+        setPolishRequirements('');
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -133,9 +202,19 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
         if (!title.trim()) { setError('请填写标题'); return; }
         if (!description.trim()) { setError('请填写简介'); return; }
         if (!template.trim()) { setError('请填写模板'); return; }
-        if (subCategories.length === 0) { setError('请至少选择一个标签（功能或题材）'); return; }
+        
+        // Tag Validation
+        const functionalTags = FUNCTIONAL_TAGS.map(t => t.id);
+        const genreTags = GENRE_TAGS.map(t => t.id);
+        
+        const hasFunctional = subCategories.some(t => functionalTags.includes(t as any));
+        const hasGenre = subCategories.some(t => genreTags.includes(t as any));
 
-        // Remove the internal _key before saving
+        if (!hasFunctional || !hasGenre) {
+            setError('请至少选择一种“功能类型”和一种“题材属性”标签');
+            return;
+        }
+
         const cleanFields = fields.map(({ _key, ...rest }) => rest);
 
         onSave({
@@ -175,7 +254,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                 
                 <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
                     <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 [scrollbar-gutter:stable]">
-                        {/* 基本信息 - 字体变大 */}
+                        {/* 基本信息 */}
                         <div className="p-6 bg-blue-50/40 dark:bg-blue-900/10 rounded-xl space-y-4 border border-blue-100 dark:border-blue-900/30">
                             <h4 className="text-sm font-bold text-blue-600 flex items-center gap-2"><InformationCircle className="w-4 h-4"/>基本信息</h4>
                             <div className="grid grid-cols-2 gap-6">
@@ -192,30 +271,37 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             </div>
                         </div>
 
-                        {/* 标签选择区域 - Changed from grid to flex-col to stack vertically */}
-                        <div className="flex flex-col gap-6">
-                            {/* 功能属性 */}
-                            <div className="p-6 bg-emerald-50/40 dark:bg-emerald-900/10 rounded-xl space-y-4 border border-emerald-100 dark:border-emerald-900/30">
-                                <h4 className="text-sm font-bold text-emerald-600 flex items-center gap-2"><Bolt className="w-4 h-4"/>功能类型 (可多选，总限5个)</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {FUNCTIONAL_TAGS.filter(t => t.id !== 'all').map(tag => (
-                                        <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id as PromptSubCategory)} className={`px-4 py-1.5 text-xs rounded-full border transition-all ${subCategories.includes(tag.id as any) ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-emerald-300'}`}>{tag.label}</button>
-                                    ))}
-                                </div>
+                        {/* 标签选择区域 - Combined */}
+                        <div className="p-6 bg-purple-50/40 dark:bg-purple-900/10 rounded-xl space-y-5 border border-purple-100 dark:border-purple-900/30">
+                            <div className="flex justify-between items-center">
+                                <h4 className="text-sm font-bold text-purple-600 flex items-center gap-2"><Tag className="w-4 h-4"/> 标签配置</h4>
+                                <span className={`text-xs font-medium ${subCategories.length >= 5 ? 'text-red-500' : 'text-gray-400'}`}>
+                                    已选 {subCategories.length}/5 (需各选至少一个)
+                                </span>
                             </div>
-
-                            {/* 题材属性 */}
-                            <div className="p-6 bg-purple-50/40 dark:bg-purple-900/10 rounded-xl space-y-4 border border-purple-100 dark:border-purple-900/30">
-                                <h4 className="text-sm font-bold text-purple-600 flex items-center gap-2"><Tag className="w-4 h-4"/>题材属性 (可多选，总限5个)</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {GENRE_TAGS.filter(t => t.id !== 'all').map(tag => (
-                                        <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id as PromptSubCategory)} className={`px-4 py-1.5 text-xs rounded-full border transition-all ${subCategories.includes(tag.id as any) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}>{tag.label}</button>
-                                    ))}
+                            
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">功能类型 (至少选1个)</span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {FUNCTIONAL_TAGS.filter(t => t.id !== 'all').map(tag => (
+                                            <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id as PromptSubCategory)} className={`px-4 py-1.5 text-xs rounded-full border transition-all ${subCategories.includes(tag.id as any) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}>{tag.label}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="w-full h-px bg-purple-100 dark:bg-purple-900/30"></div>
+                                <div className="space-y-2">
+                                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">题材属性 (至少选1个)</span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {GENRE_TAGS.filter(t => t.id !== 'all').map(tag => (
+                                            <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id as PromptSubCategory)} className={`px-4 py-1.5 text-xs rounded-full border transition-all ${subCategories.includes(tag.id as any) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}>{tag.label}</button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* 简介与预览 - 橙色主题 */}
+                        {/* 简介与预览 */}
                         <div className="p-6 bg-orange-50/40 dark:bg-orange-900/10 rounded-xl space-y-4 border border-orange-100 dark:border-orange-900/30">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
@@ -229,13 +315,70 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             </div>
                         </div>
 
-                        {/* 提示词模板 - 保持 Indigo */}
+                        {/* 提示词模板 + 润色功能 */}
                         <div className="p-6 bg-indigo-50/40 dark:bg-indigo-900/10 rounded-xl space-y-4 border border-indigo-100 dark:border-indigo-900/30">
-                            <h4 className="text-sm font-bold text-indigo-600 flex items-center gap-2"><DocumentText className="w-4 h-4"/>AI 提示词模板</h4>
+                            <div className="flex justify-between items-center">
+                                <h4 className="text-sm font-bold text-indigo-600 flex items-center gap-2"><DocumentText className="w-4 h-4"/>AI 提示词模板</h4>
+                                <button 
+                                    type="button" 
+                                    onClick={() => setShowPolishUI(!showPolishUI)} 
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 ${showPolishUI ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}
+                                >
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    {showPolishUI ? '收起润色' : '润色提示词'}
+                                </button>
+                            </div>
+
+                            {/* Polish UI Overlay */}
+                            {showPolishUI && (
+                                <div className="p-4 bg-indigo-100/50 dark:bg-indigo-900/30 rounded-xl border border-indigo-200 dark:border-indigo-800 space-y-3 animate-fade-in">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-indigo-700 dark:text-indigo-300">润色要求 (可选)</label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                type="text" 
+                                                value={polishRequirements}
+                                                onChange={e => setPolishRequirements(e.target.value)}
+                                                placeholder="例如：请让语气更专业，结构更清晰，增加对细节的描述要求..." 
+                                                className="flex-1 p-2 bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                            {isPolishing ? (
+                                                <button type="button" onClick={stopPolishing} className="px-4 py-2 bg-red-500 text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1">
+                                                    <Stop className="w-3.5 h-3.5" /> 停止
+                                                </button>
+                                            ) : (
+                                                <button type="button" onClick={handlePolishPrompt} className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-500 transition-colors flex items-center gap-1 shadow-sm">
+                                                    <Sparkles className="w-3.5 h-3.5" /> 开始润色
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {polishedResult && (
+                                        <div className="mt-3 space-y-2">
+                                            <div className="text-xs font-bold text-indigo-700 dark:text-indigo-300">润色结果预览：</div>
+                                            <div className="p-3 bg-white dark:bg-gray-900 rounded-lg border border-indigo-200 dark:border-indigo-800 text-sm max-h-48 overflow-y-auto whitespace-pre-wrap font-mono">
+                                                {polishedResult}
+                                            </div>
+                                            {!isPolishing && (
+                                                <div className="flex gap-2 justify-end">
+                                                    <button type="button" onClick={handlePolishPrompt} className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-1">
+                                                        <ArrowPath className="w-3.5 h-3.5" /> 重新润色
+                                                    </button>
+                                                    <button type="button" onClick={applyPolished} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-500 transition-colors flex items-center gap-1 shadow-sm">
+                                                        <Check className="w-3.5 h-3.5" /> 替换原有提示词
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <textarea value={template} onChange={e => setTemplate(e.target.value)} placeholder="使用 ${变量名} 引用下方定义的字段..." className="w-full h-48 p-4 bg-white text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl font-mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm resize-y" />
                         </div>
 
-                        {/* 动态表单 - 玫瑰色主题 */}
+                        {/* 动态表单 */}
                         <div className="p-6 bg-rose-50/40 dark:bg-rose-900/10 rounded-xl border border-rose-100 dark:border-rose-900/30 space-y-4">
                             <div className="flex justify-between items-center">
                                 <h4 className="text-sm font-bold text-rose-600 dark:text-rose-400 flex items-center gap-2"><Bolt className="w-4 h-4"/>动态表单字段配置</h4>

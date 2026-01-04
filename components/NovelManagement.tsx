@@ -7,7 +7,7 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
 import NovelWritingPage from './writing/NovelWritingPage';
 import { BookOpen, Sparkles, Check } from './Icon';
-import { createProject, fetchProjects, deleteProject, uploadCoverImage, updateProject } from '../services/supabaseService';
+import { createProject, fetchProjects, deleteProject, updateProject } from '../services/supabaseService';
 
 interface NovelManagementProps {
     mode?: 'long' | 'short';
@@ -48,7 +48,7 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                     const mappedNovels: Novel[] = filtered.map((p: any) => ({
                         id: p.id,
                         title: p.title,
-                        coverImage: p.cover_image || null, // Map from DB column
+                        coverImage: null, // Fixed cover handled by UI
                         wordCount: p.word_count || 0, // Use real-time word count from DB
                         creationDate: p.created_at || new Date().toISOString(),
                         settings: { 
@@ -70,30 +70,22 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
         loadProjects();
     }, [mode, editingNovel]); // Reload when closing editor to update word count
 
-    const handleCreateNovel = async (title: string, coverFile: File | null) => {
+    const handleCreateNovel = async (title: string) => {
         setIsProcessing(true);
         try {
-            let coverUrl: string | null = null;
-            
-            // 1. Upload cover if exists
-            if (coverFile) {
-                coverUrl = await uploadCoverImage(coverFile);
-            }
-
-            // 2. Call Supabase to create project with coverUrl
+            // Call Supabase to create project with null coverUrl
             const type = mode === 'long' ? 'novel' : 'short_story';
-            const { id: dbId, error } = await createProject(title, "Created via Web App", type, coverUrl);
+            const { id: dbId, error } = await createProject(title, "Created via Web App", type, null);
 
             if (error) {
                 alert(`创建失败: ${error.message || '未知错误'}`);
                 return;
             }
 
-            // Only update UI if DB insert was successful
             const newNovel: Novel = {
                 id: dbId || `novel-${Date.now()}`,
                 title,
-                coverImage: coverUrl,
+                coverImage: null,
                 wordCount: 0,
                 creationDate: new Date().toISOString(),
                 settings: { typeElements: '', theme: '', targetAudience: '', synopsis: '', worldview: '', characterSettings: '' },
@@ -111,29 +103,18 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
         }
     };
 
-    const handleUpdateNovel = async (id: string, newTitle: string, newCoverFile: File | null) => {
+    const handleUpdateNovel = async (id: string, newTitle: string) => {
         setIsProcessing(true);
         try {
-            let coverUrl = itemToEdit?.coverImage || null;
-
-            // 1. If new file uploaded, upload it and get new URL
-            if (newCoverFile) {
-                const uploadedUrl = await uploadCoverImage(newCoverFile);
-                if (uploadedUrl) {
-                    coverUrl = uploadedUrl;
-                }
-            }
-
-            // 2. Update DB
+            // Update DB
             await updateProject(id, { 
-                title: newTitle, 
-                cover_image: coverUrl || undefined 
+                title: newTitle
             });
 
-            // 3. Update Local State
+            // Update Local State
             setNovels(prev => prev.map(n => 
                 n.id === id 
-                ? { ...n, title: newTitle, coverImage: coverUrl } 
+                ? { ...n, title: newTitle } 
                 : n
             ));
 

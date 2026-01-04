@@ -7,7 +7,7 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
 import { Film, BookOpen, DocumentPlus, Check } from './Icon';
 import ScriptWritingPage from './writing/ScriptWritingPage';
-import { createProject, fetchProjects, deleteProject, uploadCoverImage, updateProject } from '../services/supabaseService';
+import { createProject, fetchProjects, deleteProject, updateProject } from '../services/supabaseService';
 
 type ScriptType = 'original' | 'adaptation';
 type ViewState = 'selection' | 'list';
@@ -40,7 +40,7 @@ const ScriptManagement: React.FC = () => {
                     const mappedScripts: Script[] = filtered.map((p: any) => ({
                         id: p.id,
                         title: p.title,
-                        coverImage: p.cover_image || null,
+                        coverImage: null, // Fixed cover
                         wordCount: p.word_count || 0, // Real-time word count from DB
                         type: p.description?.includes('Adaptation') ? 'adaptation' : 'original', // Simple heuristic or store in DB
                         creationDate: p.created_at || new Date().toISOString(),
@@ -60,21 +60,14 @@ const ScriptManagement: React.FC = () => {
         setView('list');
     };
 
-    const handleCreateScript = async (title: string, coverFile: File | null) => {
+    const handleCreateScript = async (title: string) => {
         if (!scriptType) return;
         setIsProcessing(true);
         
         try {
-            let coverUrl: string | null = null;
-            
-            // 1. Upload cover if exists
-            if (coverFile) {
-                coverUrl = await uploadCoverImage(coverFile);
-            }
-
-            // 2. Call Supabase
+            // Call Supabase with null cover
             const description = scriptType === 'adaptation' ? "Adaptation Project" : "Original Script";
-            const { id: dbId, error } = await createProject(title, description, 'script', coverUrl);
+            const { id: dbId, error } = await createProject(title, description, 'script', null);
 
             if (error) {
                 throw error;
@@ -83,7 +76,7 @@ const ScriptManagement: React.FC = () => {
             const newScript: Script = {
                 id: dbId || `script-${Date.now()}`,
                 title,
-                coverImage: coverUrl,
+                coverImage: null,
                 wordCount: 0,
                 type: scriptType,
                 creationDate: new Date().toISOString(),
@@ -101,26 +94,16 @@ const ScriptManagement: React.FC = () => {
         }
     };
 
-    const handleUpdateScript = async (id: string, newTitle: string, newCoverFile: File | null) => {
+    const handleUpdateScript = async (id: string, newTitle: string) => {
         setIsProcessing(true);
         try {
-            let coverUrl = itemToEdit?.coverImage || null;
-
-            if (newCoverFile) {
-                const uploadedUrl = await uploadCoverImage(newCoverFile);
-                if (uploadedUrl) {
-                    coverUrl = uploadedUrl;
-                }
-            }
-
             await updateProject(id, { 
-                title: newTitle, 
-                cover_image: coverUrl || undefined 
+                title: newTitle
             });
 
             setScripts(prev => prev.map(s => 
                 s.id === id 
-                ? { ...s, title: newTitle, coverImage: coverUrl } 
+                ? { ...s, title: newTitle } 
                 : s
             ));
 
