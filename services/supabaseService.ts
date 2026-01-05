@@ -468,20 +468,52 @@ export async function updateWorkflow(id: string, updates: { title?: string, desc
 
 export async function fetchWorkflows() {
     try {
-        // First try with profiles join - fetching only username and avatar_url to prevent missing column errors
-        // IMPORTANT: Ensure 'profiles' table has read permissions enabled for authenticated users
-        let { data, error } = await supabase.from('workflows').select(`*, profiles(username, avatar_url)`).order('usage_count', { ascending: false });
+        // 1. Fetch workflows first (independent of profiles)
+        const { data: workflows, error: wfError } = await withRetry(async () => 
+            await supabase.from('workflows').select('*').order('usage_count', { ascending: false })
+        );
         
-        // Fallback if join fails (e.g., RLS issues)
-        if (error) {
-             console.warn("Fetch workflows with profile join failed, falling back to simple fetch", error);
-             const fallback = await supabase.from('workflows').select(`*`).order('usage_count', { ascending: false });
-             data = fallback.data;
-             error = fallback.error;
+        if (wfError) {
+            console.error("Fetch workflows failed", wfError);
+            return [];
         }
         
-        return error ? [] : data;
-    } catch (e) { return []; }
+        if (!workflows || workflows.length === 0) return [];
+
+        // 2. Extract unique user IDs to fetch profiles manually
+        // This bypasses potential Foreign Key join issues or strict Join RLS behavior
+        const userIds = Array.from(new Set(workflows.map((w: any) => w.user_id).filter(Boolean)));
+
+        if (userIds.length === 0) return workflows;
+
+        // 3. Fetch profiles
+        const { data: profiles, error: profError } = await supabase
+            .from('profiles')
+            .select('id, username, nickname, full_name, avatar_url')
+            .in('id', userIds);
+
+        if (profError) {
+            console.warn("Fetch profiles failed (likely RLS)", profError);
+            // Return workflows without profiles rather than failing completely
+            return workflows;
+        }
+
+        // 4. Create a lookup map
+        const profileMap: Record<string, any> = {};
+        profiles?.forEach((p: any) => {
+            profileMap[p.id] = p;
+        });
+
+        // 5. Attach profile data to workflows
+        return workflows.map((w: any) => ({
+            ...w,
+            profiles: profileMap[w.user_id] || null
+        }));
+
+    } catch (e) {
+        console.error("fetchWorkflows exception", e);
+        return [];
+    }
 }
 
 export async function deleteWorkflow(id: string) {
