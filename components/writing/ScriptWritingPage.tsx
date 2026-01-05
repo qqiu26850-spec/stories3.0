@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Script, Scene } from '../../types';
-import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check, ChevronLeft, ChevronRight, PanelLeft, PanelRight } from '../Icon';
+import { Film, ChevronDoubleLeft, Pencil, ArrowPath, Check, ChevronLeft, ChevronRight, PanelLeft, PanelRight, X } from '../Icon';
 import ScriptEpisodeManager from './ScriptEpisodeManager';
 import ScriptAIPanel from './ScriptAIPanel';
 import ScriptAdaptationPanel from './ScriptAdaptationPanel';
@@ -18,13 +18,15 @@ type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialScript, onBack }) => {
     const [script, setScript] = useState<Script>(initialScript);
     const [activeScene, setActiveScene] = useState<Scene | null>(null);
-    const [editorHTML, setEditorHTML] = useState('');
     const [sceneTitle, setSceneTitle] = useState('');
+    // Remove synchronous editorHTML state to prevent lag
     const [wordCount, setWordCount] = useState(0);
     const [showCopyToast, setShowCopyToast] = useState(false);
 
     const editorRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const updateTimeoutRef = useRef<any>(null); // Debounce ref
+
     const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
     const [fontSize, setFontSize] = useState(18); // Default font size 18
     const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -52,33 +54,41 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         loadInitialScenes();
     }, [script.id]);
 
+    // Optimize Scene Switching - Direct DOM update
     useEffect(() => {
         if (activeScene) {
             setSceneTitle(activeScene.title);
             const content = activeScene.content || '';
-            const html = content.split('\n').map(p => `<p>${p}</p>`).join('');
-            setEditorHTML(html);
+            
             if (editorRef.current) {
+                const html = content.includes('<p>') ? content : content.split('\n').map(p => `<p>${p || '<br>'}</p>`).join('');
                 editorRef.current.innerHTML = html;
             }
-            const count = content.replace(/\s/g, '').length;
+            
+            const count = content.replace(/<[^>]*>/g, '').replace(/\s/g, '').length;
             setWordCount(count);
             setSaveStatus('saved');
         }
-    }, [activeScene]);
+    }, [activeScene?.id]);
 
-    const handleSaveToCloud = async () => {
-        if (activeScene && editorRef.current) {
-            const content = editorRef.current.innerText;
+    const handleSaveToCloud = async (currentContent: string) => {
+        if (activeScene) {
             const orderIndex = script.scenes.findIndex(s => s.id === activeScene.id) + 1;
-            const newId = await saveChapterToDB(script.id, activeScene.id, sceneTitle, content, orderIndex);
+            const newId = await saveChapterToDB(script.id, activeScene.id, sceneTitle, currentContent, orderIndex);
 
             if (newId) {
-                const updatedScene = { ...activeScene, id: newId, title: sceneTitle, content: content };
+                // Update local state without re-rendering editor
+                const updatedScene = { ...activeScene, id: newId, title: sceneTitle, content: currentContent };
                 setScript(prev => ({
                     ...prev,
                     scenes: prev.scenes.map(s => s.id === activeScene.id ? updatedScene : s)
                 }));
+                
+                // Silent update of ID if new
+                if (activeScene.id !== newId) {
+                    setActiveScene(prev => prev ? { ...prev, id: newId } : null);
+                }
+                
                 setSaveStatus('saved');
             } else {
                 setSaveStatus('error');
@@ -137,25 +147,41 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         }
     };
 
-    useEffect(() => {
-        if (!activeScene) return;
-        const timer = setTimeout(async () => {
-            setSaveStatus('saving');
-            await handleSaveToCloud();
-        }, 2000);
-        return () => clearTimeout(timer);
-    }, [sceneTitle, editorHTML]);
+    // Performance Optimized Input Handler with Debounce
+    const handleContentInput = useCallback(() => {
+        if (!editorRef.current) return;
+        
+        setSaveStatus('saving');
 
-    const handleContentInput = () => {
-        if (editorRef.current) {
-            setEditorHTML(editorRef.current.innerHTML);
-            const count = editorRef.current.innerText.replace(/\s/g, '').length;
-            setWordCount(count);
+        if (updateTimeoutRef.current) {
+            clearTimeout(updateTimeoutRef.current);
         }
+
+        updateTimeoutRef.current = setTimeout(() => {
+            if (editorRef.current) {
+                const text = editorRef.current.innerText || '';
+                const html = editorRef.current.innerHTML;
+                
+                // Update Word Count
+                const count = text.replace(/\s/g, '').length;
+                setWordCount(count);
+                
+                // Trigger Save
+                handleSaveToCloud(html);
+            }
+        }, 1000);
+    }, [activeScene, sceneTitle]);
+
+    // Force Plain Text Paste
+    const handlePaste = (e: React.ClipboardEvent) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text/plain');
+        document.execCommand('insertText', false, text);
     };
 
     const handleToolbarAction = (action: ToolbarAction) => {
         if (!editorRef.current) return;
+        editorRef.current.focus();
 
         if (action === 'undo') {
             document.execCommand('undo', false);
@@ -172,26 +198,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             document.execCommand('italic', false);
         } else if (action === 'indent-add') {
             document.execCommand('formatBlock', false, 'p');
-            const selection = window.getSelection();
-            if (selection && selection.rangeCount > 0) {
-                const paragraphs = editorRef.current.querySelectorAll('p');
-                paragraphs.forEach(p => {
-                    if (selection.containsNode(p, true)) {
-                        p.style.textIndent = '2em';
-                    }
-                });
-            }
+            document.execCommand('indent', false);
         } else if (action === 'indent-decrease') {
-            document.execCommand('formatBlock', false, 'p');
-            const selection = window.getSelection();
-            if (selection && selection.rangeCount > 0) {
-                const paragraphs = editorRef.current.querySelectorAll('p');
-                paragraphs.forEach(p => {
-                    if (selection.containsNode(p, true)) {
-                        p.style.textIndent = '0';
-                    }
-                });
-            }
+            document.execCommand('outdent', false);
         } else if (action.startsWith('align-')) {
             const align = action.replace('align-', '');
             const command = align === 'justify' ? 'justifyFull' : `justify${align.charAt(0).toUpperCase() + align.slice(1)}`;
@@ -209,19 +218,33 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const handleAIStream = (chunk: string, isFirst: boolean) => {
         if (!editorRef.current) return;
         if (isFirst) editorRef.current.focus();
-        document.execCommand('insertHTML', false, `<span style="color: gray;">${chunk}</span>`);
-        handleContentInput();
+        document.execCommand('insertText', false, chunk);
+        
         if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+            const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+            if (scrollHeight - scrollTop - clientHeight < 100) {
+                scrollContainerRef.current.scrollTop = scrollHeight;
+            }
         }
+        
+        handleContentInput();
     };
 
     const handleInsertText = (text: string) => {
         if (!editorRef.current) return;
         editorRef.current.focus();
-        document.execCommand('insertHTML', false, `<span style="color: gray;">${text}</span>`);
+        document.execCommand('insertText', false, text);
         handleContentInput();
     };
+
+    // Save title when changed
+    useEffect(() => {
+        if (!activeScene) return;
+        const timer = setTimeout(() => {
+             handleSaveToCloud(editorRef.current?.innerHTML || '');
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [sceneTitle]);
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden relative">
@@ -238,7 +261,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     <span className="font-bold text-xl tracking-wider text-gray-900 dark:text-white truncate">{script.type === 'original' ? '原创剧本' : '剧本改编'}</span>
                 </div>
                 
-                {/* Header Center - 作品标题放置于此 */}
                 <div className="flex-1 flex items-center justify-center p-2">
                     {isEditingTitle ? (
                         <input 
@@ -257,7 +279,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     )}
                 </div>
                 
-                {/* Right Header Section */}
                 <div className="w-[29%] flex-shrink-0 flex items-center justify-end px-4 border-l border-gray-200 dark:border-gray-800 gap-3">
                     <div className="flex items-center gap-2 mr-2">
                          {saveStatus === 'saving' && (
@@ -272,10 +293,16 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 <span className="text-sm font-bold">已实时保存</span>
                             </div>
                         )}
+                        {saveStatus === 'error' && (
+                            <div className="flex flex-row items-center gap-1.5 text-red-500 whitespace-nowrap">
+                                <X className="w-5 h-5" />
+                                <span className="text-sm font-bold">保存失败</span>
+                            </div>
+                        )}
                     </div>
 
                     <button 
-                        onClick={handleSaveToCloud} 
+                        onClick={() => handleSaveToCloud(editorRef.current?.innerHTML || '')} 
                         className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all shadow-sm"
                         title="同步数据"
                     >
@@ -288,7 +315,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             </header>
 
             <div className="flex-1 flex overflow-hidden relative">
-                {/* Left Sidebar Toggle Button */}
                 <button 
                     onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
                     className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-64' : 'left-0'}`}
@@ -323,6 +349,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         ref={editorRef}
                                         contentEditable 
                                         onInput={handleContentInput}
+                                        onPaste={handlePaste}
+                                        suppressContentEditableWarning={true}
                                         className="w-full bg-transparent focus:outline-none leading-relaxed text-gray-800 dark:text-gray-200 font-mono min-h-[75vh] outline-none pb-32"
                                         style={{ textAlign: alignment, fontSize: `${fontSize}px` }}
                                     ></div>
@@ -338,7 +366,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                      </div>
                 </main>
 
-                {/* Right Sidebar Toggle Button */}
                 <button 
                     onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
                     className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isRightSidebarOpen ? 'right-[29%]' : 'right-0'}`}

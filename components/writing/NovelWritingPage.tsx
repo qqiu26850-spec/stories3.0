@@ -65,12 +65,17 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const [novel, setNovel] = useState<Novel>(initialNovel);
     const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
     const [chapterTitle, setChapterTitle] = useState('');
-    const [editorHTML, setEditorHTML] = useState('');
+    // Remove synchronous editorHTML state to prevent lag
     const [wordCount, setWordCount] = useState(0);
     const [showCopyToast, setShowCopyToast] = useState(false);
     
+    // Debounced context for AI panels to avoid re-rendering them on every keystroke
+    const [debouncedContextText, setDebouncedContextText] = useState(''); 
+    
     const editorRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const updateTimeoutRef = useRef<any>(null); // For debouncing saves and stats
+
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [tempTitle, setTempTitle] = useState(novel.title);
     const [openModule, setOpenModule] = useState<SidebarModule>('chapters');
@@ -106,44 +111,45 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         loadInitialChapters();
     }, [novel.id]);
 
+    // Handle Chapter Switching - Direct DOM manipulation for performance
     useEffect(() => {
         if (activeChapter) {
             setChapterTitle(activeChapter.title);
             const content = activeChapter.content || '';
-            const html = content.split('\n').map(p => `<p>${p}</p>`).join('');
-            setEditorHTML(html);
+            
+            // Only update DOM if editor is present and content is different to avoid cursor jump issues (though activeChapter check usually handles switching)
             if (editorRef.current) {
+                // If content is plain text coming from DB, wrap in P tags for display if needed, 
+                // but usually contentEditable handles HTML.
+                // Assuming content stored is HTML-like or plain text with newlines.
+                // For massive text, direct innerHTML set is faster than React render.
+                const html = content.includes('<p>') ? content : content.split('\n').map(p => `<p>${p || '<br>'}</p>`).join('');
                 editorRef.current.innerHTML = html;
             }
-            updateWordCount(content);
+            
+            setWordCount(content.replace(/<[^>]*>/g, '').replace(/\s/g, '').length);
+            setDebouncedContextText(content);
             setSaveStatus('saved');
         }
-    }, [activeChapter]);
+    }, [activeChapter?.id]); // Only trigger on ID change, not content updates
 
-    const updateWordCount = (text: string) => {
-        const count = text.replace(/\s/g, '').length;
-        setWordCount(count);
-    };
-
-    const handleSaveToCloud = async () => {
-        if (activeChapter && editorRef.current) {
-            const content = editorRef.current.innerText;
+    const handleSaveToCloud = async (currentContent: string) => {
+        if (activeChapter) {
             const orderIndex = novel.chapters.findIndex(c => c.id === activeChapter.id) + 1;
-            const newId = await saveChapterToDB(novel.id, activeChapter.id, chapterTitle, content, orderIndex);
+            const newId = await saveChapterToDB(novel.id, activeChapter.id, chapterTitle, currentContent, orderIndex);
 
             if (newId) {
-                const updatedChapter = { 
-                    ...activeChapter, 
-                    id: newId, 
-                    title: chapterTitle, 
-                    content: content,
-                    wordCount: content.length,
-                    lastModified: new Date().toISOString()
-                };
+                // Update local state without triggering full re-render of editor
                 setNovel(prev => ({
                     ...prev,
-                    chapters: prev.chapters.map(c => c.id === activeChapter.id ? updatedChapter : c)
+                    chapters: prev.chapters.map(c => c.id === activeChapter.id ? { ...c, content: currentContent, id: newId } : c)
                 }));
+                
+                // Silent update of activeChapter id if it changed (new creation)
+                if (activeChapter.id !== newId) {
+                    setActiveChapter(prev => prev ? { ...prev, id: newId } : null);
+                }
+                
                 setSaveStatus('saved');
             } else {
                 setSaveStatus('error');
@@ -216,24 +222,46 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }
     };
 
-    useEffect(() => {
-        if (!activeChapter) return;
-        const timer = setTimeout(async () => {
-            setSaveStatus('saving');
-            await handleSaveToCloud();
-        }, 2000);
-        return () => clearTimeout(timer);
-    }, [chapterTitle, editorHTML]);
+    // Performance Optimized Input Handler
+    const handleContentInput = useCallback(() => {
+        if (!editorRef.current) return;
+        
+        setSaveStatus('saving');
 
-    const handleContentInput = () => {
-        if (editorRef.current) {
-            setEditorHTML(editorRef.current.innerHTML);
-            updateWordCount(editorRef.current.innerText);
+        if (updateTimeoutRef.current) {
+            clearTimeout(updateTimeoutRef.current);
         }
+
+        // Debounce heavy operations (word count, AI context update, cloud save)
+        // Wait 1 second after user stops typing
+        updateTimeoutRef.current = setTimeout(() => {
+            if (editorRef.current) {
+                const text = editorRef.current.innerText || '';
+                const html = editorRef.current.innerHTML;
+                
+                // Update Word Count
+                const count = text.replace(/\s/g, '').length;
+                setWordCount(count);
+                
+                // Update AI Context
+                setDebouncedContextText(text);
+
+                // Trigger Save
+                handleSaveToCloud(html);
+            }
+        }, 1000);
+    }, [activeChapter, chapterTitle]); // Include dependencies needed for save
+
+    // Force Plain Text Paste
+    const handlePaste = (e: React.ClipboardEvent) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text/plain');
+        document.execCommand('insertText', false, text);
     };
 
     const handleToolbarAction = (action: ToolbarAction) => {
         if (!editorRef.current) return;
+        editorRef.current.focus();
         
         if (action === 'undo') {
             document.execCommand('undo', false);
@@ -250,29 +278,13 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             document.execCommand('italic', false);
         } else if (action === 'indent-add') {
             document.execCommand('formatBlock', false, 'p');
-            const selection = window.getSelection();
-            if (selection && selection.rangeCount > 0) {
-                const paragraphs = editorRef.current.querySelectorAll('p');
-                paragraphs.forEach(p => {
-                    if (selection.containsNode(p, true)) {
-                        p.style.textIndent = '2em';
-                    }
-                });
-            }
+            // Basic indentation simulation via blockquote or style if execCommand not sufficient, 
+            // but standard 'indent' works on some browsers. For stability we stick to simple commands.
+            document.execCommand('indent', false);
         } else if (action === 'indent-decrease') {
-            document.execCommand('formatBlock', false, 'p');
-            const selection = window.getSelection();
-            if (selection && selection.rangeCount > 0) {
-                const paragraphs = editorRef.current.querySelectorAll('p');
-                paragraphs.forEach(p => {
-                    if (selection.containsNode(p, true)) {
-                        p.style.textIndent = '0';
-                    }
-                });
-            }
+            document.execCommand('outdent', false);
         } else if (action.startsWith('align-')) {
             const align = action.replace('align-', '');
-            // For justify, standard execCommand is justifyFull
             const command = align === 'justify' ? 'justifyFull' : `justify${align.charAt(0).toUpperCase() + align.slice(1)}`;
             document.execCommand(command, false);
             setAlignment(align as any);
@@ -286,36 +298,47 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
 
     const handleAIStream = (chunk: string, isFirst: boolean) => {
         if (!editorRef.current) return;
-        if (isFirst) { editorRef.current.focus(); }
-        // Ensure inserted text can be undone by user
-        document.execCommand('insertHTML', false, `<span style="color: gray;">${chunk}</span>`);
-        handleContentInput();
-        if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+        if (isFirst) { 
+            editorRef.current.focus(); 
+            // Move cursor to end if needed, or insertion point
         }
+        // Insert plain text to avoid messing up DOM with AI markdown
+        document.execCommand('insertText', false, chunk);
+        
+        // Scroll to bottom if near end
+        if (scrollContainerRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+            if (scrollHeight - scrollTop - clientHeight < 100) {
+                scrollContainerRef.current.scrollTop = scrollHeight;
+            }
+        }
+        
+        // Trigger save logic (debounced)
+        handleContentInput();
     };
 
     const handleInsertText = (text: string) => {
         if (!editorRef.current) return;
         editorRef.current.focus();
-        document.execCommand('insertHTML', false, `<span style="color: gray;">${text}</span>`);
+        document.execCommand('insertText', false, text);
         handleContentInput();
     };
 
     const handleReplaceText = (text: string) => {
         if (!editorRef.current) return;
         editorRef.current.focus();
-        document.execCommand('insertHTML', false, `<span style="color: gray;">${text}</span>`);
+        document.execCommand('insertText', false, text);
         handleContentInput();
     };
 
     // Right Click Handler
     const handleContextMenu = (e: React.MouseEvent) => {
-        e.preventDefault();
+        // Only prevent default if we have a selection
         const selection = window.getSelection();
         const text = selection?.toString().trim();
         
         if (text && text.length > 0) {
+            e.preventDefault();
             setContextMenu({
                 x: e.clientX,
                 y: e.clientY,
@@ -336,6 +359,16 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         document.addEventListener('click', closeMenu);
         return () => document.removeEventListener('click', closeMenu);
     }, []);
+
+    // Save title when changed
+    useEffect(() => {
+        if (!activeChapter) return;
+        // Don't auto save title on every keystroke, wait for blur or delay (handled in handleContentInput largely, but title is separate)
+        const timer = setTimeout(() => {
+             handleSaveToCloud(editorRef.current?.innerHTML || '');
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [chapterTitle]);
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden relative">
@@ -394,6 +427,12 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                 <span className="text-sm font-bold">云端已同步</span>
                             </div>
                         )}
+                        {saveStatus === 'error' && (
+                            <div className="flex flex-row items-center gap-1.5 text-red-500 whitespace-nowrap">
+                                <X className="w-5 h-5" />
+                                <span className="text-sm font-bold">同步失败</span>
+                            </div>
+                        )}
                     </div>
                     <button onClick={onBack} className="px-5 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-sm">返回管理</button>
                 </div>
@@ -441,7 +480,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                         value={chapterTitle} 
                                         onChange={(e) => setChapterTitle(e.target.value)} 
                                         placeholder="请输入章节标题..." 
-                                        maxLength={15}
+                                        maxLength={30}
                                         className="w-full py-1 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-1.5" 
                                     />
                                     <div className="border-b border-gray-100 dark:border-gray-800 mb-6" />
@@ -450,14 +489,16 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                         ref={editorRef}
                                         contentEditable 
                                         onInput={handleContentInput}
+                                        onPaste={handlePaste}
                                         onContextMenu={handleContextMenu}
+                                        suppressContentEditableWarning={true}
                                         className="w-full bg-transparent focus:outline-none leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[75vh] outline-none pb-32"
                                         style={{ textAlign: alignment, fontSize: `${fontSize}px` }}
                                     ></div>
                                 </div>
 
                                 <div className="absolute bottom-6 right-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-4 py-1.5 rounded-full text-xs text-gray-400 font-mono border border-gray-100 dark:border-gray-800 shadow-sm z-20">
-                                    <span className="text-sky-500 font-black">{wordCount}</span> 字
+                                    <span className="text-sky-500 font-black">{wordCount.toLocaleString()}</span> 字
                                 </div>
                             </>
                         ) : (
@@ -477,7 +518,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     <div className="flex-1 overflow-hidden min-w-[300px]">
                         {mode === 'short' ? (
                             <ShortStoryAIPanel 
-                                contextText={editorRef.current?.innerText || ''} 
+                                contextText={debouncedContextText} 
                                 selectedText={window.getSelection()?.toString() || ''} 
                                 onInsert={handleInsertText} 
                                 onReplace={handleReplaceText} 
@@ -487,7 +528,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                             />
                         ) : (
                             <AIFunctionPanel 
-                                contextText={editorRef.current?.innerText || ''} 
+                                contextText={debouncedContextText} 
                                 selectedText={window.getSelection()?.toString() || ''} 
                                 onInsert={handleInsertText} 
                                 onReplace={handleReplaceText} 
