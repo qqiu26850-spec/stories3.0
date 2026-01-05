@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Prompt } from './types';
 import Sidebar from './components/Sidebar';
 import AuthModal from './components/AuthModal';
+import VersionUpdateModal from './components/VersionUpdateModal'; // Import VersionUpdateModal
 import { getCurrentUserId, signOut } from './services/supabaseService';
 
 // --- Static Imports for Instant Access & Data Persistence ---
@@ -85,6 +86,7 @@ const App: React.FC = () => {
       
       {isAuthenticated && (
           <>
+            <VersionUpdateModal /> {/* Add VersionUpdateModal here */}
             <Sidebar 
                 activeView={activeView} 
                 setActiveView={setActiveView} 

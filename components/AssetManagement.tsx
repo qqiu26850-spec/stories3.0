@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { View, Asset, AssetFormData } from '../types';
 import CreateAssetModal from './CreateAssetModal';
@@ -262,35 +263,35 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                             <div 
                                 key={asset.id} 
                                 onClick={() => handleOpenEdit(asset)} 
-                                className={`group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col h-[380px] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${getAccentBorderClass()}`}
+                                className={`group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col h-[260px] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${getAccentBorderClass()}`}
                             >
                                 <div className="flex flex-col h-full">
-                                    {/* 顶部标题栏，保持显著的分隔线 */}
-                                    <div className="px-5 py-3.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/40">
+                                    {/* 顶部标题栏，去掉了 border-b */}
+                                    <div className="px-5 py-3 bg-gray-50/50 dark:bg-gray-800/40">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" title={asset.name}>
                                             {asset.name.length > 20 ? asset.name.substring(0, 20) + '...' : asset.name}
                                         </h3>
                                     </div>
                                     
                                     {/* 正文区域 */}
-                                    <div className="relative flex-grow overflow-hidden p-5">
-                                        <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap line-clamp-[10]">
+                                    <div className="relative flex-grow overflow-hidden px-5 py-3">
+                                        <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap line-clamp-6">
                                             {asset.content.trim() || "暂无内容..."}
                                         </p>
-                                        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-90" />
+                                        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-gray-900 to-transparent opacity-90" />
                                     </div>
 
-                                    {/* 底部栏，分割线改为较浅的颜色 */}
-                                    <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3 bg-gray-50/30 dark:bg-gray-900/20">
+                                    {/* 底部栏 */}
+                                    <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3 bg-white dark:bg-gray-900">
                                         <div className="flex flex-wrap gap-1 flex-1 min-w-0">
-                                            {asset.tags.length > 0 ? asset.tags.slice(0, 4).map((tag, i) => (
+                                            {asset.tags.length > 0 ? asset.tags.slice(0, 3).map((tag, i) => (
                                                 <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded-md border truncate max-w-[60px] ${getTagStyle(tag)} font-normal`}>
                                                     {tag}
                                                 </span>
                                             )) : (
                                                 <span className="text-[10px] text-gray-300 dark:text-gray-600 font-normal italic">未分类</span>
                                             )}
-                                            {asset.tags.length > 4 && <span className="text-[10px] text-gray-400 shrink-0 font-normal">+{asset.tags.length - 4}</span>}
+                                            {asset.tags.length > 3 && <span className="text-[10px] text-gray-400 shrink-0 font-normal">...</span>}
                                         </div>
 
                                         <div className="flex gap-1 shrink-0">

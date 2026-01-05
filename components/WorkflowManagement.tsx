@@ -68,13 +68,17 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                 else if(wf.main_category === 'general') mainCat = 'general';
                 else if(wf.main_category === 'short') mainCat = 'short-story';
                 
-                // 智能解析作者名称
+                // 智能解析作者名称 - Enhanced Robustness
                 let authorName = '匿名用户';
-                if (wf.profiles && wf.profiles.username) {
-                    // 优先使用数据库关联查询到的昵称
-                    authorName = wf.profiles.username;
+                
+                // Handle both object and array return types from Supabase joins
+                const profileData = Array.isArray(wf.profiles) ? wf.profiles[0] : wf.profiles;
+                
+                if (profileData && (profileData.username || profileData.full_name || profileData.nickname)) {
+                    // Use database profile data if available
+                    authorName = profileData.username || profileData.nickname || profileData.full_name;
                 } else if (wf.user_id === userId && currentUserProfile.nickname) {
-                    // 如果关联失败但这是我自己的工作流，使用当前会话昵称
+                    // Fallback to current session profile if it matches current user
                     authorName = currentUserProfile.nickname;
                 }
 
