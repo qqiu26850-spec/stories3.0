@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Sparkles, Film, UserCircle, Plus, Play, Fire, Heart, Box, Search, BookOpen, Pencil, Trash, InformationCircle, Check } from './Icon';
+import { Sparkles, Film, UserCircle, Plus, Play, Fire, Heart, Box, Search, BookOpen, Pencil, Trash, InformationCircle, Check, ArrowPath } from './Icon';
 import CreateWorkflow from './CreateWorkflow';
 import WorkflowRun from './WorkflowRun';
 import WorkflowDetailModal from './WorkflowDetailModal';
@@ -75,8 +75,8 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                 const profileData = Array.isArray(wf.profiles) ? wf.profiles[0] : wf.profiles;
                 
                 if (profileData) {
-                    // Prioritize nickname as it is the main display name in the app
-                    authorName = profileData.nickname || profileData.full_name || profileData.username || '匿名用户';
+                    // 优先使用 username (Supabase upsert 将昵称存入 username 字段)
+                    authorName = profileData.username || profileData.nickname || profileData.full_name || '匿名用户';
                 } else if (wf.user_id === userId && currentUserProfile.nickname) {
                     // Fallback to current session profile if it matches current user and DB join failed
                     authorName = currentUserProfile.nickname;
@@ -234,6 +234,10 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                     <input type="text" placeholder="搜索工作流..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 text-sm rounded-xl border border-transparent focus:bg-white dark:focus:bg-black focus:border-blue-500 outline-none transition-all" />
                 </div>
 
+                <button onClick={loadData} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="刷新列表">
+                    <ArrowPath className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                </button>
+
                 <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'my-workflows' ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><UserCircle className="w-4 h-4" />我的</button>
                 <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><Heart className="w-4 h-4" />收藏</button>
                 <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-5 py-2 rounded-xl font-black bg-blue-100 text-blue-600 hover:bg-blue-200 shadow-lg shadow-blue-500/10 text-sm flex items-center gap-2 whitespace-nowrap active:scale-95 transition-all">
@@ -244,7 +248,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
         <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-hide">
             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0 uppercase tracking-wider">题材分类:</span>
-            {/* Removed font-bold from genre tabs */}
             <button onClick={() => setActiveSubCategory('all')} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>全部</button>
             {GENRE_TAGS.map(cat => (
                 <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>{cat.label}</button>
@@ -259,7 +262,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         )}
       </div>
 
-      {/* Reduced top padding for content area */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 custom-scrollbar bg-gray-50/50 dark:bg-black/50">
           {isLoading ? (
               <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-t-blue-500 rounded-full animate-spin"></div></div>
@@ -281,7 +283,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                               </div>
                               <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
                               
-                              {/* Display Author Name - Slightly widened max-width */}
                               <div className="flex items-center gap-1 text-xs text-gray-400 shrink-0" title={`创建者: ${workflow.author}`}>
                                 <UserCircle className="w-3.5 h-3.5" />
                                 <span className="max-w-[80px] truncate">{workflow.author}</span>
