@@ -367,9 +367,6 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
         let query = supabase.from('prompts').select('*, profiles(username)').order('usage_count', { ascending: false });
         let shouldCache = false;
 
-        // If requesting a specific category via DB (not via cache filtering), modify query
-        // However, for best caching strategy, we typically fetch 'all' first.
-        // We'll trust the 'all' request from PromptLibrary.
         if (!mainCategory || mainCategory === 'all') {
             shouldCache = true;
         } else {
@@ -379,7 +376,7 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
 
         let { data, error } = await query;
 
-        // Fallback Mechanism: If profiles join fails (e.g. no FK or RLS issue), fetch without join
+        // Fallback Mechanism
         if (error) {
             console.warn("fetchPrompts: fetching with profile failed, trying fallback...", error);
             let fallbackQuery = supabase.from('prompts').select('*').order('usage_count', { ascending: false });
@@ -397,7 +394,6 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
             return [];
         }
 
-        // Only update cache if we fetched the full dataset
         if (shouldCache) {
             promptsCache = data;
             lastFetchTime = now;
@@ -472,11 +468,13 @@ export async function updateWorkflow(id: string, updates: { title?: string, desc
 
 export async function fetchWorkflows() {
     try {
-        // First try with profiles join
-        let { data, error } = await supabase.from('workflows').select(`*, profiles(username)`).order('usage_count', { ascending: false });
+        // First try with profiles join - fetching ALL potential name fields
+        // IMPORTANT: Ensure 'profiles' table has read permissions enabled for authenticated users
+        let { data, error } = await supabase.from('workflows').select(`*, profiles(username, nickname, full_name)`).order('usage_count', { ascending: false });
         
-        // Fallback if join fails
+        // Fallback if join fails (e.g., RLS issues)
         if (error) {
+             console.warn("Fetch workflows with profile join failed, falling back to simple fetch", error);
              const fallback = await supabase.from('workflows').select(`*`).order('usage_count', { ascending: false });
              data = fallback.data;
              error = fallback.error;

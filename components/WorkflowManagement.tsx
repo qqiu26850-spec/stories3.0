@@ -74,11 +74,11 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                 // Handle both object and array return types from Supabase joins
                 const profileData = Array.isArray(wf.profiles) ? wf.profiles[0] : wf.profiles;
                 
-                if (profileData && (profileData.username || profileData.full_name || profileData.nickname)) {
-                    // Use database profile data if available
-                    authorName = profileData.username || profileData.nickname || profileData.full_name;
+                if (profileData) {
+                    // Prioritize nickname as it is the main display name in the app
+                    authorName = profileData.nickname || profileData.full_name || profileData.username || '匿名用户';
                 } else if (wf.user_id === userId && currentUserProfile.nickname) {
-                    // Fallback to current session profile if it matches current user
+                    // Fallback to current session profile if it matches current user and DB join failed
                     authorName = currentUserProfile.nickname;
                 }
 
