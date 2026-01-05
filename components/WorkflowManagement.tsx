@@ -51,35 +51,41 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         const userId = await getCurrentUserId();
         setCurrentUserId(userId);
         
-        // 获取当前用户资料，用于回退显示（如果 DB 关联查询延迟或失败）
+        // 获取当前用户资料，作为回退方案
         const currentUserProfile = await fetchUserProfile();
         
-        // 使用 service 中的统一获取方法（包含 profiles 关联查询）
+        // 使用 service 中的统一获取方法（包含 profiles 手动关联查询）
         const data = await fetchWorkflows();
 
         if (data) {
             const mapped: Workflow[] = data.map((wf: any) => {
                 let content: any = {};
-                try { content = typeof wf.content === 'string' ? JSON.parse(wf.content) : wf.content; } catch(e) {}
+                try { 
+                    content = typeof wf.content === 'string' ? JSON.parse(wf.content) : wf.content; 
+                } catch(e) {
+                    console.error("Content parse error", e);
+                }
                 
+                // 映射分类
                 let mainCat: PromptCategory = 'short-story';
                 if(wf.main_category === 'long') mainCat = 'long-story';
                 else if(wf.main_category === 'script') mainCat = 'script';
                 else if(wf.main_category === 'general') mainCat = 'general';
                 else if(wf.main_category === 'short') mainCat = 'short-story';
+                else if(wf.main_category) mainCat = wf.main_category as PromptCategory;
                 
-                // 智能解析作者名称 - Enhanced Robustness
+                // 智能解析作者名称
                 let authorName = '匿名用户';
                 
-                // Handle both object and array return types from Supabase joins
-                const profileData = Array.isArray(wf.profiles) ? wf.profiles[0] : wf.profiles;
+                // fetchWorkflows 在 service 层手动拼装了 profiles 对象
+                // 检查 wf.profiles 是否存在且有效
+                const profile = wf.profiles; 
                 
-                if (profileData) {
-                    // 优先使用 username (Supabase upsert 将昵称存入 username 字段)
-                    authorName = profileData.username || profileData.nickname || profileData.full_name || '匿名用户';
-                } else if (wf.user_id === userId && currentUserProfile.nickname) {
-                    // Fallback to current session profile if it matches current user and DB join failed
-                    authorName = currentUserProfile.nickname;
+                if (profile && (profile.username || profile.nickname || profile.full_name)) {
+                    authorName = profile.username || profile.nickname || profile.full_name;
+                } else if (wf.user_id === userId) {
+                    // 如果没有关联到 profile 但 ID 匹配当前用户，使用当前 session 信息
+                    authorName = currentUserProfile.nickname || '我';
                 }
 
                 return {
@@ -103,6 +109,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         setFavoritedIds(new Set(favs));
     } catch(e) {
         console.error("Workflow load error", e);
+        triggerNotification('数据加载出现异常');
     } finally { 
         setIsLoading(false); 
     }
@@ -118,7 +125,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
           else next.add(id);
           return next;
       });
-      // Optimistic update, but fire off DB request
+      // Optimistic update
       await toggleWorkflowFavoriteDB(id, isFav);
   };
 
@@ -175,7 +182,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         }
         setView('list');
         setWorkflowToEdit(null);
-        // Force reload to sync changes to cards immediately
         await loadData();
     } catch (e) {
         triggerNotification('操作失败，请重试');
@@ -187,11 +193,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       setSelectedWorkflow(wf);
       incrementWorkflowUsage(wf.id);
       setView('run');
-  };
-
-  const getSubCategoryLabel = (id: string) => {
-      const found = GENRE_TAGS.find(t => t.id === id);
-      return found ? found.label : id;
   };
 
   if (view === 'create') return <CreateWorkflow onBack={() => { setView('list'); setWorkflowToEdit(null); }} onSave={handleSaveWorkflow} workflowToEdit={workflowToEdit} />;
@@ -207,7 +208,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       />
       <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
 
-      {/* Top Bar: Height reduced by adjusting padding and gap */}
+      {/* Top Bar */}
       <div className="flex flex-col gap-3 px-6 py-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <div className="flex flex-col xl:flex-row justify-between xl:items-center gap-4">
             <div className="flex items-center gap-4 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide">
