@@ -48,6 +48,40 @@ async function withRetry<T>(operation: () => Promise<T>, retries = 3): Promise<T
     }
 }
 
+/**
+ * 关键修复：确保当前用户在 public.profiles 表中有记录。
+ * 如果缺少记录，其他用户无法通过 RLS 读取到昵称，导致显示"匿名用户"。
+ */
+async function ensureUserProfileExists() {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // 检查 Profile 是否存在
+        const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle();
+        
+        if (!profile) {
+            // 从 Auth Metadata 恢复数据
+            const metadata = user.user_metadata || {};
+            // 优先使用 metadata 中的 info，如果没有则生成默认值
+            const nickname = metadata.full_name || metadata.name || metadata.nickname || `用户${user.id.substring(0, 6)}`;
+            const avatarUrl = metadata.avatar_url || null;
+
+            console.log("Profile missing, auto-creating for:", nickname);
+
+            // 插入 profiles 表
+            await supabase.from('profiles').upsert({
+                id: user.id,
+                username: nickname,
+                avatar_url: avatarUrl,
+                updated_at: new Date().toISOString()
+            });
+        }
+    } catch (e) {
+        console.warn("Ensure profile failed, ignoring:", e);
+    }
+}
+
 export async function signUp(email: string, password: string) {
     return await supabase.auth.signUp({ 
         email, 
@@ -78,11 +112,10 @@ export async function fetchUserProfile() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return { nickname: '未登录用户', avatarUrl: null, email: '' };
         
-        // 尝试获取 profile 表数据，但优先使用 metadata
+        // 尝试获取 profile 表数据
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         
-        // 优先使用 session 中的 metadata，因为它在 updateUser 后是即时更新的
-        // 如果 metadata 中没有，再回退到 profile 表，最后是默认值
+        // 优先使用 session 中的 metadata (反应更快)，回退使用 profile 表
         const nickname = session.user.user_metadata?.full_name || profile?.username || '奇思妙想家';
         const avatarUrl = session.user.user_metadata?.avatar_url || profile?.avatar_url || null;
 
@@ -107,10 +140,9 @@ export async function updateUserProfile(nickname: string, avatarUrl: string | nu
 
         // 1. 更新 Auth 元数据 (Session)
         const { data, error: authError } = await supabase.auth.updateUser(updates);
-        
         if (authError) throw authError;
 
-        // 2. 更新 Profiles 表 (即使失败也不阻塞返回，确保 Session 更新成功即可)
+        // 2. 更新 Profiles 表 (即使失败也不阻塞返回)
         const { error } = await supabase.from('profiles').upsert({ 
             id: userId, 
             username: nickname, 
@@ -118,13 +150,9 @@ export async function updateUserProfile(nickname: string, avatarUrl: string | nu
             updated_at: new Date().toISOString()
         });
 
-        if (error) {
-            console.warn("Profiles table update failed, but Auth metadata updated.", error);
-        }
+        if (error) console.warn("Profiles table update failed", error);
 
-        // 关键修改：更新个人资料成功后，清除提示词缓存，确保列表页显示最新昵称
-        promptsCache = null;
-
+        promptsCache = null; // 清除缓存以刷新昵称显示
         return { error: null, data };
     } catch (e: any) {
         return { error: e };
@@ -310,6 +338,9 @@ export async function savePrompt(title: string, content: string, mainCat: string
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("未登录");
+        
+        await ensureUserProfileExists(); // 确保用户档案存在
+
         const dbMainCat = mapPromptCategory(mainCat);
         let description = '';
         try {
@@ -352,8 +383,6 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
 export async function fetchPrompts(mainCategory?: string, forceRefresh = false) {
     try {
         const now = Date.now();
-        
-        // Cache Check
         if (!forceRefresh && promptsCache && (now - lastFetchTime < CACHE_DURATION)) {
             let data = promptsCache;
             if (mainCategory && mainCategory !== 'all') {
@@ -363,7 +392,6 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
             return data;
         }
 
-        // DB Fetch - Try with profiles join first
         let query = supabase.from('prompts').select('*, profiles(username)').order('usage_count', { ascending: false });
         let shouldCache = false;
 
@@ -376,9 +404,9 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
 
         let { data, error } = await query;
 
-        // Fallback Mechanism
+        // Fallback Mechanism if join fails
         if (error) {
-            console.warn("fetchPrompts: fetching with profile failed, trying fallback...", error);
+            console.warn("fetchPrompts join failed, fallback", error);
             let fallbackQuery = supabase.from('prompts').select('*').order('usage_count', { ascending: false });
             if (!shouldCache && mainCategory) {
                 const dbCat = mapPromptCategory(mainCategory);
@@ -389,10 +417,7 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
             error = res.error;
         }
 
-        if (error) {
-            console.error("fetchPrompts failed", error);
-            return [];
-        }
+        if (error) return [];
 
         if (shouldCache) {
             promptsCache = data;
@@ -401,7 +426,6 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
         
         return data || [];
     } catch (e) {
-        console.error("fetchPrompts exception", e);
         return [];
     }
 }
@@ -429,6 +453,9 @@ export async function saveWorkflow(title: string, description: string, category:
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("未登录");
+        
+        await ensureUserProfileExists(); // 关键：保存前确保有 Profile
+
         const content = JSON.stringify({ fields, steps });
         const { error } = await supabase.from('workflows').insert([{ 
             user_id: userId, title, description, content, main_category: mapPromptCategory(category), sub_categories: subCategories, usage_count: 0 
@@ -443,14 +470,12 @@ export async function updateWorkflow(id: string, updates: { title?: string, desc
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("未登录");
         
-        // Construct valid DB updates
         const dbUpdates: any = {};
         if (updates.title) dbUpdates.title = updates.title;
         if (updates.description) dbUpdates.description = updates.description;
         if (updates.category) dbUpdates.main_category = mapPromptCategory(updates.category);
         if (updates.subCategories) dbUpdates.sub_categories = updates.subCategories;
         
-        // Serialize content fields if provided
         if (updates.fields || updates.steps) {
             dbUpdates.content = JSON.stringify({ 
                 fields: updates.fields || [], 
@@ -466,9 +491,10 @@ export async function updateWorkflow(id: string, updates: { title?: string, desc
     } catch (err: any) { return { success: false, error: err }; }
 }
 
+// 核心修复：更健壮的 fetchWorkflows，解决关联查询不到作者名的问题
 export async function fetchWorkflows() {
     try {
-        // 1. Fetch workflows first (independent of profiles)
+        // 1. 获取工作流列表
         const { data: workflows, error: wfError } = await withRetry(async () => 
             await supabase.from('workflows').select('*').order('usage_count', { ascending: false })
         );
@@ -480,35 +506,35 @@ export async function fetchWorkflows() {
         
         if (!workflows || workflows.length === 0) return [];
 
-        // 2. Extract unique user IDs to fetch profiles manually
-        // This bypasses potential Foreign Key join issues or strict Join RLS behavior
+        // 2. 提取所有作者 ID
         const userIds = Array.from(new Set(workflows.map((w: any) => w.user_id).filter(Boolean)));
 
         if (userIds.length === 0) return workflows;
 
-        // 3. Fetch profiles
+        // 3. 手动查询 profiles 表（规避直接 Join 可能存在的 RLS 限制问题）
         const { data: profiles, error: profError } = await supabase
             .from('profiles')
-            .select('id, username, nickname, full_name, avatar_url')
+            .select('id, username, avatar_url')
             .in('id', userIds);
 
         if (profError) {
-            console.warn("Fetch profiles failed (likely RLS)", profError);
-            // Return workflows without profiles rather than failing completely
-            return workflows;
+            console.warn("Fetch profiles for workflows failed", profError);
         }
 
-        // 4. Create a lookup map
+        // 4. 建立 ID -> Profile 映射
         const profileMap: Record<string, any> = {};
         profiles?.forEach((p: any) => {
             profileMap[p.id] = p;
         });
 
-        // 5. Attach profile data to workflows
-        return workflows.map((w: any) => ({
-            ...w,
-            profiles: profileMap[w.user_id] || null
-        }));
+        // 5. 组合数据
+        return workflows.map((w: any) => {
+            const profile = profileMap[w.user_id];
+            return {
+                ...w,
+                profiles: profile // 将 profile 对象挂载上去，组件层会解析 username
+            };
+        });
 
     } catch (e) {
         console.error("fetchWorkflows exception", e);
@@ -545,10 +571,8 @@ export async function toggleWorkflowFavoriteDB(workflowId: string, isFavorite: b
     if (!userId) return;
     try {
         if (isFavorite) {
-            // Remove
             await supabase.from('workflow_favorites').delete().eq('user_id', userId).eq('workflow_id', workflowId);
         } else {
-            // Add
             await supabase.from('workflow_favorites').insert({ user_id: userId, workflow_id: workflowId });
         }
     } catch (e) { console.error("Toggle favorite failed", e); }
