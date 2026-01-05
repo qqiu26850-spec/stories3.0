@@ -4,7 +4,7 @@ import { Asset, Prompt, NovelSettings } from '../../types';
 import { generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
-import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, ClipboardDocumentCheck, Check, ArrowPath, Plus, X, InformationCircle } from '../Icon';
+import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, ClipboardDocumentCheck, Check, ArrowPath, Plus, X, InformationCircle, Play } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 
@@ -221,6 +221,38 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         }
     };
 
+    const handleContinue = async () => {
+        if (isGenerating) return;
+        setIsGenerating(true);
+        setError('');
+        
+        const tail = resultText.slice(-3000); 
+        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        try {
+            const stream = generateTextStream(continuePrompt, { 
+                model, 
+                temperature, 
+                topP, 
+                maxOutputTokens, 
+                signal: controller.signal 
+            });
+            for await (const chunk of stream) {
+                setResultText(prev => prev + chunk);
+            }
+        } catch (err: any) {
+            if (err.message !== 'Aborted') {
+                setError(err.message || '生成失败');
+            }
+        } finally {
+            setIsGenerating(false);
+            abortControllerRef.current = null;
+        }
+    };
+
     const renderTabButton = (type: TabType, label: string, Icon: React.ElementType) => (
         <button
             onClick={() => { setActiveTab(type); setResultText(''); }}
@@ -290,9 +322,14 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             <Stop className="w-3 h-3" /> 停止生成
                         </button>
                     ) : (
-                        <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
-                            <ArrowPath className="w-3 h-3" /> 重试
-                        </button>
+                        <div className="flex gap-2">
+                            <button onClick={handleContinue} className="px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm font-sans flex items-center gap-1" title="续写更多内容">
+                                <Play className="w-3 h-3" /> 继续生成
+                            </button>
+                            <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
+                                <ArrowPath className="w-3 h-3" /> 重试
+                            </button>
+                        </div>
                     )}
                 </div>
             </div>
@@ -447,7 +484,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                     <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500">重置模板</button>
                                 </div>
                                 {selectedPrompt.fields.map((field, index) => {
-                                    if (field.id === 'context' || field.id === 'text') return null;
+                                    if (field.id === 'context' || field.id === 'text' || field.id === 'content' || field.id === 'selection') return null;
                                     return (
                                         <div key={field.id}>
                                             <div className="flex justify-between items-center mb-1">
@@ -539,18 +576,27 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                             if (activeTab === 'polish') onReplace(resultText);
                                             else onInsert(resultText);
                                         }} 
-                                        className="flex-1 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-xs flex items-center justify-center gap-1"
+                                        className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-xs flex items-center justify-center gap-1"
                                     >
                                         {activeTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
                                     </button>
+                                    
                                     {isGenerating ? (
-                                        <button onClick={handleStop} className="px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-xs flex items-center gap-1">
+                                        <button 
+                                            onClick={handleStop}
+                                            className="px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center gap-1"
+                                        >
                                             <Stop className="w-3 h-3" /> 停止生成
                                         </button>
                                     ) : (
-                                        <button onClick={handleGenerate} className="px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-xs flex items-center gap-1">
-                                            <ArrowPath className="w-3 h-3" /> 重试
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleContinue} className="px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-xs flex items-center gap-1" title="续写更多内容">
+                                                <Play className="w-3 h-3" /> 继续生成
+                                            </button>
+                                            <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-xs flex items-center gap-1">
+                                                <ArrowPath className="w-3 h-3" /> 重试
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             </div>

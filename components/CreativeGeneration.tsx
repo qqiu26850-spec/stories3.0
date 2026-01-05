@@ -4,7 +4,7 @@ import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
 import { CreativeModule, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown, Check, Stop, InformationCircle, ArrowPath } from './Icon';
+import { ChevronDoubleLeft, Sparkles, Copy, Database, AdjustmentsHorizontal, Search, DocumentText, X, BookOpen, ChevronDown, Check, Stop, InformationCircle, ArrowPath, Play } from './Icon';
 import PromptSelectionModal from './PromptSelectionModal';
 import AssetSelectionModal from './AssetSelectionModal'; 
 import { saveMaterial, incrementPromptHeat, fetchMaterials } from '../services/supabaseService';
@@ -156,6 +156,35 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             setShowInlineSuccess(true);
             setTimeout(() => setShowInlineSuccess(false), 3000);
         } catch (e) {} finally { setIsGenerating(false); setIsWaitingForFirstChunk(false); setShowLoadingOverlay(false); }
+    };
+
+    const handleContinue = async () => {
+        if (isGenerating) return;
+        setIsGenerating(true);
+        
+        // Take the last portion of text to serve as context
+        const tail = generatedText.slice(-3000); 
+        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
+
+        const controller = new AbortController(); 
+        abortControllerRef.current = controller;
+
+        try {
+            const stream = generateTextStream(continuePrompt, { 
+                model, 
+                temperature, 
+                topP, 
+                maxOutputTokens, 
+                signal: controller.signal 
+            });
+            for await (const chunk of stream) {
+                setGeneratedText(prev => prev + chunk);
+            }
+        } catch (e) {
+            console.error("Continue generation failed", e);
+        } finally { 
+            setIsGenerating(false); 
+        }
     };
 
     const handleImportAsset = (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => {
@@ -352,7 +381,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         <button onClick={() => setImportModalOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors font-sans"><Database className="w-4 h-4" /> 导入素材库</button>
                                     </div>
                                 </div>
-                                <div className="flex-1 overflow-y-auto px-10 py-8 relative font-sans" ref={scrollContainerRef}>
+                                <div className="flex-1 overflow-y-auto px-10 py-8 relative font-sans scroll-smooth" ref={scrollContainerRef}>
                                     {isWaitingForFirstChunk && (
                                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 animate-fade-in font-sans">
                                             <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
@@ -360,6 +389,17 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         </div>
                                     )}
                                     <FormattedText text={generatedText} />
+                                    {/* Continue Button */}
+                                    {!isGenerating && generatedText && (
+                                        <div className="mt-8 mb-4 flex justify-center animate-fade-in">
+                                            <button 
+                                                onClick={handleContinue}
+                                                className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-full shadow-lg hover:shadow-sky-500/30 flex items-center gap-2 transition-all active:scale-95 text-sm"
+                                            >
+                                                <Play className="w-4 h-4" /> 继续生成
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         )}

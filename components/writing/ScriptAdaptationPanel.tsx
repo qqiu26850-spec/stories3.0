@@ -5,7 +5,7 @@ import { Asset, Prompt, Workflow } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS } from '../../constants';
-import { Film, Sparkles, Workflow as WorkflowIcon, ChevronDown, Database, Copy, X, Stop, AdjustmentsHorizontal, Search, InformationCircle, Check, ArrowPath, Plus, Trash } from '../Icon';
+import { Film, Sparkles, Workflow as WorkflowIcon, ChevronDown, Database, Copy, X, Stop, AdjustmentsHorizontal, Search, InformationCircle, Check, ArrowPath, Plus, Trash, Play } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 
@@ -182,6 +182,38 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
         }
     };
 
+    const handleContinue = async () => {
+        if (isGenerating) return;
+        setIsGenerating(true);
+        setError('');
+        
+        const tail = generatedText.slice(-3000); 
+        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        try {
+            const stream = generateTextStream(continuePrompt, { 
+                model, 
+                temperature, 
+                topP, 
+                maxOutputTokens, 
+                signal: controller.signal 
+            });
+            for await (const chunk of stream) {
+                setGeneratedText(prev => prev + chunk);
+            }
+        } catch (err: any) {
+            if (err.message !== 'Aborted') {
+                setError(err.message || '生成失败');
+            }
+        } finally {
+            setIsGenerating(false);
+            abortControllerRef.current = null;
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full font-sans">
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
@@ -190,6 +222,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
             <div className="p-4 border-b border-gray-200 bg-white dark:bg-gray-900 flex items-center gap-2 font-bold font-sans"><Film className="w-5 h-5 text-sky-500" />分集改编</div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar">
+                {/* ... existing config ... */}
                 <div className="rounded-xl border border-sky-100 dark:border-sky-900 bg-sky-50/10 dark:bg-sky-900/5 overflow-hidden">
                     <button 
                         onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} 
@@ -286,7 +319,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                     <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in-up">
                         {isGenerating && !generatedText && (
                             <div className="p-6 bg-white dark:bg-gray-900 rounded-xl border border-sky-100 dark:border-sky-800 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
-                                <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                                 <div className="text-sm font-bold text-gray-800 dark:text-gray-200 animate-pulse">AI 正在创作...</div>
                                 <div className="text-[10px] text-sky-600 dark:text-sky-400 font-medium italic transition-opacity duration-500 px-4">
                                     {WRITING_STRATEGIES[strategyIndex]}
@@ -316,9 +349,14 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                                         <Plus className="w-3 h-3" /> 插入剧本
                                     </button>
                                     {!isGenerating && (
-                                        <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
-                                            <ArrowPath className="w-3 h-3" /> 重试
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleContinue} className="px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-xs flex items-center gap-1" title="续写更多内容">
+                                                <Play className="w-3 h-3" /> 继续生成
+                                            </button>
+                                            <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
+                                                <ArrowPath className="w-3 h-3" /> 重试
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             </div>
