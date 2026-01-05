@@ -468,9 +468,9 @@ export async function updateWorkflow(id: string, updates: { title?: string, desc
 
 export async function fetchWorkflows() {
     try {
-        // First try with profiles join - fetching ALL potential name fields
+        // First try with profiles join - fetching only username and avatar_url to prevent missing column errors
         // IMPORTANT: Ensure 'profiles' table has read permissions enabled for authenticated users
-        let { data, error } = await supabase.from('workflows').select(`*, profiles(username, nickname, full_name)`).order('usage_count', { ascending: false });
+        let { data, error } = await supabase.from('workflows').select(`*, profiles(username, avatar_url)`).order('usage_count', { ascending: false });
         
         // Fallback if join fails (e.g., RLS issues)
         if (error) {
