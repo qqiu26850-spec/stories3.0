@@ -16,74 +16,74 @@ const HelpSection: React.FC<{
     children: React.ReactNode;
     color?: string;
 }> = ({ title, target, icon: Icon, onNavigate, steps, children, color = 'sky' }) => (
-    <section className={`bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 shadow-sm transition-all hover:shadow-xl hover:border-${color}-200 dark:hover:border-${color}-900/50`}>
+    <section className={`bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm transition-all hover:shadow-xl hover:border-${color}-200 dark:hover:border-${color}-900/50`}>
         <div 
             onClick={() => target && onNavigate && onNavigate(target)}
-            className={`flex items-center justify-between ${target ? 'cursor-pointer group' : ''} mb-6`}
+            className={`flex items-center justify-between ${target ? 'cursor-pointer group' : ''} mb-4`}
         >
-            <div className="flex items-center gap-4">
-                <div className={`p-3 bg-${color}-50 dark:bg-${color}-900/20 rounded-2xl text-${color}-600 dark:text-${color}-400 shadow-inner ${target ? 'group-hover:scale-110' : ''} transition-transform`}>
-                    <Icon className="w-7 h-7" />
+            <div className="flex items-center gap-3">
+                <div className={`p-2.5 bg-${color}-50 dark:bg-${color}-900/20 rounded-xl text-${color}-600 dark:text-${color}-400 shadow-inner ${target ? 'group-hover:scale-110' : ''} transition-transform`}>
+                    <Icon className="w-6 h-6" />
                 </div>
-                <h2 className={`text-2xl font-black text-gray-900 dark:text-white tracking-tight ${target ? `group-hover:text-${color}-600` : ''} transition-colors`}>{title}</h2>
+                <h2 className={`text-xl font-black text-gray-900 dark:text-white tracking-tight ${target ? `group-hover:text-${color}-600` : ''} transition-colors`}>{title}</h2>
             </div>
             {target && (
-                <div className={`flex items-center gap-2 text-${color}-500 font-bold text-sm transition-all opacity-80 group-hover:opacity-100`}>
-                    立即前往 <ChevronRight className="w-4 h-4" />
+                <div className={`flex items-center gap-1 text-${color}-500 font-bold text-xs transition-all opacity-80 group-hover:opacity-100`}>
+                    立即前往 <ChevronRight className="w-3.5 h-3.5" />
                 </div>
             )}
         </div>
 
         {steps && (
-            <div className={`mb-6 p-5 bg-${color}-50/50 dark:bg-${color}-900/10 rounded-2xl border border-${color}-100 dark:border-${color}-800`}>
-                <h4 className={`text-xs font-bold text-${color}-600 dark:text-${color}-400 mb-3 flex items-center gap-2 uppercase tracking-widest`}>
+            <div className={`mb-4 p-4 bg-${color}-50/50 dark:bg-${color}-900/10 rounded-xl border border-${color}-100 dark:border-${color}-800`}>
+                <h4 className={`text-xs font-bold text-${color}-600 dark:text-${color}-400 mb-2 flex items-center gap-2 uppercase tracking-widest`}>
                     <Check className="w-3.5 h-3.5" /> 使用步骤
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {steps.map((step, i) => (
-                        <div key={i} className="flex gap-3">
-                            <span className={`flex-shrink-0 w-5 h-5 bg-white dark:bg-gray-800 border border-${color}-200 dark:border-${color}-700 rounded-full flex items-center justify-center text-[10px] font-bold text-${color}-500 shadow-sm`}>{i+1}</span>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{step}</p>
+                        <div key={i} className="flex gap-2">
+                            <span className={`flex-shrink-0 w-4 h-4 bg-white dark:bg-gray-800 border border-${color}-200 dark:border-${color}-700 rounded-full flex items-center justify-center text-[9px] font-bold text-${color}-500 shadow-sm`}>{i+1}</span>
+                            <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">{step}</p>
                         </div>
                     ))}
                 </div>
             </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {children}
         </div>
     </section>
 );
 
 const SubModule: React.FC<{ name: string; children: React.ReactNode; icon?: React.ReactNode }> = ({ name, children, icon }) => (
-    <div className="bg-gray-50/50 dark:bg-black/20 p-5 rounded-2xl border border-gray-100 dark:border-gray-800/50 hover:bg-white dark:hover:bg-gray-800 transition-colors group">
-        <h4 className="text-base font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-            {icon || <div className="w-1.5 h-3.5 bg-sky-500 rounded-full group-hover:h-5 transition-all"></div>}
+    <div className="bg-gray-50/50 dark:bg-black/20 p-4 rounded-xl border border-gray-100 dark:border-gray-800/50 hover:bg-white dark:hover:bg-gray-800 transition-colors group">
+        <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-1.5 flex items-center gap-2">
+            {icon || <div className="w-1 h-3 bg-sky-500 rounded-full group-hover:h-4 transition-all"></div>}
             {name}
         </h4>
-        <div className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed space-y-2">
+        <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed space-y-1">
             {children}
         </div>
     </div>
 );
 
 const VersionItem: React.FC<{ version: string; date: string; features: string[]; isLatest?: boolean }> = ({ version, date, features, isLatest }) => (
-    <div className="relative pl-8 pb-8 last:pb-0">
-        <div className="absolute left-[11px] top-2 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-800 last:hidden"></div>
-        <div className={`absolute left-0 top-1.5 w-6 h-6 rounded-full border-2 flex items-center justify-center shadow-sm z-10 ${isLatest ? 'bg-sky-100 dark:bg-sky-900 border-sky-500' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700'}`}>
-            <div className={`w-2 h-2 rounded-full ${isLatest ? 'bg-sky-500' : 'bg-gray-400'}`}></div>
+    <div className="relative pl-6 pb-6 last:pb-0">
+        <div className="absolute left-[9px] top-2 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-800 last:hidden"></div>
+        <div className={`absolute left-0 top-1.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shadow-sm z-10 ${isLatest ? 'bg-sky-100 dark:bg-sky-900 border-sky-500' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700'}`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${isLatest ? 'bg-sky-500' : 'bg-gray-400'}`}></div>
         </div>
         <div>
             <div className="flex items-center gap-3 mb-2">
-                <span className={`text-lg font-black ${isLatest ? 'text-sky-600 dark:text-sky-400' : 'text-gray-900 dark:text-white'}`}>{version}</span>
-                <span className="text-xs font-medium text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">{date}</span>
-                {isLatest && <span className="text-[10px] font-bold text-white bg-sky-500 px-2 py-0.5 rounded-full">最新</span>}
+                <span className={`text-base font-black ${isLatest ? 'text-sky-600 dark:text-sky-400' : 'text-gray-900 dark:text-white'}`}>{version}</span>
+                <span className="text-[10px] font-medium text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">{date}</span>
+                {isLatest && <span className="text-[9px] font-bold text-white bg-sky-500 px-1.5 py-0.5 rounded-full">最新</span>}
             </div>
-            <ul className="space-y-2">
+            <ul className="space-y-1.5">
                 {features.map((feature, i) => (
-                    <li key={i} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
-                        <span className="text-sky-500 mt-1">•</span>
+                    <li key={i} className="text-xs text-gray-600 dark:text-gray-400 flex items-start gap-2">
+                        <span className="text-sky-500 mt-0.5">•</span>
                         {feature}
                     </li>
                 ))}
@@ -96,11 +96,8 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
     const [activeTab, setActiveTab] = useState<'guide' | 'updates'>('guide');
 
     return (
-        <div className="p-4 sm:p-8 h-full max-w-6xl mx-auto animate-fade-in flex flex-col font-sans">
-            <header className="mb-8 text-center flex-shrink-0">
-                <h1 className="text-4xl font-black text-gray-900 dark:text-white mb-4 tracking-tighter">奇思妙写 <span className="text-sky-500 text-2xl">·</span> 创作宝典</h1>
-                <p className="text-gray-500 dark:text-gray-400 mb-6">从入门到精通，解锁 AI 创作无限可能</p>
-                
+        <div className="p-2 sm:p-4 h-full max-w-6xl mx-auto animate-fade-in flex flex-col font-sans">
+            <div className="mb-4 text-center flex-shrink-0">
                 <div className="flex justify-center">
                     <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-xl inline-flex">
                         <button 
@@ -117,11 +114,11 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                         </button>
                     </div>
                 </div>
-            </header>
+            </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar pb-20">
+            <div className="flex-1 overflow-y-auto custom-scrollbar pb-4">
                 {activeTab === 'guide' ? (
-                    <div className="flex flex-col gap-10 animate-fade-in">
+                    <div className="flex flex-col gap-4 animate-fade-in">
                         {/* Section: Creative Generation */}
                         <HelpSection 
                             title="创意生成" 
@@ -162,7 +159,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                             <SubModule name="分集管理">无论是章节还是剧本集数，都可以通过左侧侧边栏进行快速切换、排序和重命名。</SubModule>
                         </HelpSection>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             {/* Section: Asset Management */}
                             <HelpSection 
                                 title="素材管理" 
@@ -197,15 +194,15 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                         </div>
                     </div>
                 ) : (
-                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-3xl p-8 border border-gray-200 dark:border-gray-800 animate-fade-in">
-                        <div className="flex items-center gap-4 mb-8">
-                            <div className="p-3 bg-gray-200 dark:bg-gray-800 rounded-2xl text-gray-600 dark:text-gray-300">
-                                <ArrowPath className="w-7 h-7" />
+                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 animate-fade-in">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2.5 bg-gray-200 dark:bg-gray-800 rounded-xl text-gray-600 dark:text-gray-300">
+                                <ArrowPath className="w-6 h-6" />
                             </div>
-                            <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">更新日志</h2>
+                            <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">更新日志</h2>
                         </div>
                         
-                        <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 border border-gray-100 dark:border-gray-800 shadow-sm">
+                        <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
                             <VersionItem 
                                 version="v1.5.0" 
                                 date="2026.01.06"
@@ -250,8 +247,8 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                 )}
             </div>
             
-            <footer className="mt-4 py-6 text-center border-t border-gray-100 dark:border-gray-800">
-                <p className="text-xs text-gray-400">© 2026 奇思妙写 - 让每一份创意都不被辜负</p>
+            <footer className="mt-1 py-1 text-center border-t border-gray-100 dark:border-gray-800">
+                <p className="text-[10px] text-gray-400">© 2026 奇思妙写 - 让每一份创意都不被辜负</p>
             </footer>
         </div>
     );

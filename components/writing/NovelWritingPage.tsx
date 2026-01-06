@@ -65,36 +65,29 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const [novel, setNovel] = useState<Novel>(initialNovel);
     const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
     const [chapterTitle, setChapterTitle] = useState('');
-    // Remove synchronous editorHTML state to prevent lag
     const [wordCount, setWordCount] = useState(0);
     const [showCopyToast, setShowCopyToast] = useState(false);
     
-    // Debounced context for AI panels to avoid re-rendering them on every keystroke
     const [debouncedContextText, setDebouncedContextText] = useState(''); 
-    
-    // Track current text selection
     const [currentSelection, setCurrentSelection] = useState('');
 
     const editorRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const updateTimeoutRef = useRef<any>(null); // For debouncing saves and stats
+    const updateTimeoutRef = useRef<any>(null);
 
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [tempTitle, setTempTitle] = useState(novel.title);
     
-    // In short mode, default to 'settings'. In long mode, default to 'chapters'.
     const [openModule, setOpenModule] = useState<SidebarModule>(mode === 'short' ? 'settings' : 'chapters');
     
     const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
-    const [fontSize, setFontSize] = useState(18); // Default font size set to 18
+    const [fontSize, setFontSize] = useState(18); 
     
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
 
-    // Context Menu State
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string }>({ x: 0, y: 0, visible: false, text: '' });
-    // State to pass to AI Panels
     const [aiTrigger, setAiTrigger] = useState<{ type: 'expand' | 'continue' | 'polish' | 'review', text: string } | null>(null);
 
     useEffect(() => {
@@ -113,7 +106,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 if (mapped.length > 0) {
                     setActiveChapter(mapped[0]);
                 } else if (mode === 'short') {
-                    // For short stories, auto-create the first "chapter" if it doesn't exist
                     handleCreateChapter(true);
                 } else if (!activeChapter && mapped.length > 0) {
                     setActiveChapter(mapped[0]);
@@ -125,16 +117,18 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         loadInitialChapters();
     }, [novel.id, mode]);
 
-    // Handle Chapter Switching - Direct DOM manipulation for performance
+    // Handle Chapter Switching
     useEffect(() => {
         if (activeChapter) {
             setChapterTitle(activeChapter.title);
             const content = activeChapter.content || '';
             
-            // Only update DOM if editor is present and content is different to avoid cursor jump issues (though activeChapter check usually handles switching)
             if (editorRef.current) {
                 const html = content.includes('<p>') ? content : content.split('\n').map(p => `<p>${p || '<br>'}</p>`).join('');
-                editorRef.current.innerHTML = html;
+                // Direct DOM manipulation only when switching chapter context
+                if (editorRef.current.innerHTML !== html) {
+                    editorRef.current.innerHTML = html;
+                }
             }
             
             setWordCount(content.replace(/<[^>]*>/g, '').replace(/\s/g, '').length);
@@ -142,7 +136,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             setSaveStatus('saved');
             setCurrentSelection('');
         }
-    }, [activeChapter?.id]); // Only trigger on ID change, not content updates
+    }, [activeChapter?.id]); 
 
     const handleSaveToCloud = async (currentContent: string) => {
         if (activeChapter) {
@@ -150,17 +144,14 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             const newId = await saveChapterToDB(novel.id, activeChapter.id, chapterTitle, currentContent, orderIndex);
 
             if (newId) {
-                // Update local state without triggering full re-render of editor
                 setNovel(prev => ({
                     ...prev,
                     chapters: prev.chapters.map(c => c.id === activeChapter.id ? { ...c, content: currentContent, id: newId } : c)
                 }));
                 
-                // Silent update of activeChapter id if it changed (new creation)
                 if (activeChapter.id !== newId) {
                     setActiveChapter(prev => prev ? { ...prev, id: newId } : null);
                 }
-                
                 setSaveStatus('saved');
             } else {
                 setSaveStatus('error');
@@ -233,46 +224,33 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }
     };
 
-    // Performance Optimized Input Handler
     const handleContentInput = useCallback(() => {
         if (!editorRef.current) return;
-        
         setSaveStatus('saving');
 
         if (updateTimeoutRef.current) {
             clearTimeout(updateTimeoutRef.current);
         }
 
-        // Debounce heavy operations (word count, AI context update, cloud save)
         updateTimeoutRef.current = setTimeout(() => {
             if (editorRef.current) {
                 const text = editorRef.current.innerText || '';
                 const html = editorRef.current.innerHTML;
-                
-                // Update Word Count
-                const count = text.replace(/\s/g, '').length;
-                setWordCount(count);
-                
-                // Update AI Context
+                setWordCount(text.replace(/\s/g, '').length);
                 setDebouncedContextText(text);
-
-                // Trigger Save
                 handleSaveToCloud(html);
             }
         }, 1000);
     }, [activeChapter, chapterTitle]); 
 
-    // Update selection state when user interacts with editor
     const updateSelection = () => {
         const selection = window.getSelection();
         const text = selection?.toString() || '';
-        // Only update if selection length is meaningful or cleared
         if (text !== currentSelection) {
             setCurrentSelection(text);
         }
     };
 
-    // Force Plain Text Paste
     const handlePaste = (e: React.ClipboardEvent) => {
         e.preventDefault();
         const text = e.clipboardData.getData('text/plain');
@@ -312,7 +290,37 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             setFontSize(prev => Math.max(prev - 2, 12));
         }
         handleContentInput();
-        updateSelection(); // Also check selection after toolbar action
+        updateSelection(); 
+    };
+
+    // Optimization: Insert text without immediate heavy save
+    const handleInsertText = (text: string) => {
+        if (!editorRef.current) return;
+        
+        // Use requestAnimationFrame to avoid blocking the main thread during heavy insertions
+        requestAnimationFrame(() => {
+            if (editorRef.current) {
+                editorRef.current.focus();
+                
+                // If text is very large, consider chunking or direct HTML manipulation if execCommand is slow,
+                // but execCommand is usually safest for undo history.
+                document.execCommand('insertText', false, text);
+                
+                // Trigger save logic (debounced)
+                handleContentInput();
+            }
+        });
+    };
+
+    const handleReplaceText = (text: string) => {
+        if (!editorRef.current) return;
+        requestAnimationFrame(() => {
+            if (editorRef.current) {
+                editorRef.current.focus();
+                document.execCommand('insertText', false, text);
+                handleContentInput();
+            }
+        });
     };
 
     const handleAIStream = (chunk: string, isFirst: boolean) => {
@@ -332,26 +340,9 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         handleContentInput();
     };
 
-    const handleInsertText = (text: string) => {
-        if (!editorRef.current) return;
-        editorRef.current.focus();
-        document.execCommand('insertText', false, text);
-        handleContentInput();
-    };
-
-    const handleReplaceText = (text: string) => {
-        if (!editorRef.current) return;
-        editorRef.current.focus();
-        document.execCommand('insertText', false, text);
-        handleContentInput();
-    };
-
-    // Right Click Handler
     const handleContextMenu = (e: React.MouseEvent) => {
         const selection = window.getSelection();
         const text = selection?.toString().trim();
-        
-        // Update state immediately for context menu
         setCurrentSelection(text || '');
 
         if (text && text.length > 0) {
@@ -370,14 +361,12 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         if (!isRightSidebarOpen) setRightSidebarOpen(true);
     };
 
-    // Close menu on click anywhere
     useEffect(() => {
         const closeMenu = () => setContextMenu(prev => ({ ...prev, visible: false }));
         document.addEventListener('click', closeMenu);
         return () => document.removeEventListener('click', closeMenu);
     }, []);
 
-    // Save title when changed
     useEffect(() => {
         if (!activeChapter) return;
         const timer = setTimeout(() => {
@@ -516,8 +505,8 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                         ref={editorRef}
                                         contentEditable 
                                         onInput={handleContentInput}
-                                        onKeyUp={updateSelection} // Track selection updates via key
-                                        onMouseUp={updateSelection} // Track selection updates via mouse
+                                        onKeyUp={updateSelection} 
+                                        onMouseUp={updateSelection} 
                                         onPaste={handlePaste}
                                         onContextMenu={handleContextMenu}
                                         suppressContentEditableWarning={true}

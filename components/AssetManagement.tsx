@@ -273,8 +273,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                 className={`group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col h-[260px] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${getAccentBorderClass()}`}
                             >
                                 <div className="flex flex-col h-full">
-                                    {/* 顶部标题栏 */}
-                                    <div className="px-5 py-3 bg-gray-50/50 dark:bg-gray-800/40 flex justify-between items-start">
+                                    {/* 顶部标题栏 - Updated to Light Blue */}
+                                    <div className="px-5 py-3 bg-sky-50 dark:bg-sky-900/20 flex justify-between items-start">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors pr-6" title={asset.name}>
                                             {asset.name.length > 15 ? asset.name.substring(0, 15) + '...' : asset.name}
                                         </h3>

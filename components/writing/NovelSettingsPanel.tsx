@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { NovelSettings } from '../../types';
 import { createPortal } from 'react-dom';
-import { X, Plus, Pencil, Trash, UserCircle, Tag, Globe, BookOpen, ListBullet, ChevronRight, InformationCircle } from '../Icon';
+import { X, Plus, Pencil, Trash, UserCircle, Tag, Globe, BookOpen, ListBullet } from '../Icon';
 
 interface NovelSettingsPanelProps {
     settings: NovelSettings;
@@ -103,22 +103,22 @@ const TextModal: React.FC<{
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-gray-900 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center p-5 border-b border-gray-100 dark:border-gray-800">
                     <div>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{description}</p>
                     </div>
                     <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="p-5">
+                <div className="p-6">
                     <textarea 
                         value={localValue}
                         onChange={e => setLocalValue(e.target.value)}
                         placeholder={placeholder}
-                        className="w-full h-64 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none text-sm leading-relaxed custom-scrollbar"
+                        className="w-full h-96 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none text-base leading-relaxed custom-scrollbar"
                         autoFocus
                     />
                 </div>
@@ -185,36 +185,37 @@ const ListModal: React.FC<{
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            {/* Sub-modal for editing individual items */}
-            {editingItem && (
-                <div className="absolute inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-[1px]" onClick={() => setEditingItem(null)}>
-                    <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-xl shadow-2xl p-5 space-y-4 animate-fade-in-up" onClick={e => e.stopPropagation()}>
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-white">{editingItem.id.startsWith('new') ? '新建条目' : '编辑条目'}</h4>
+            {/* Sub-modal for editing individual items - Moved to top level via Portal */}
+            {editingItem && createPortal(
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setEditingItem(null)}>
+                    <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-xl shadow-2xl p-6 space-y-5 animate-fade-in-up border border-gray-200 dark:border-gray-700" onClick={e => e.stopPropagation()}>
+                        <h4 className="text-xl font-bold text-gray-900 dark:text-white">{editingItem.id.startsWith('new') ? '新建条目' : '编辑条目'}</h4>
                         <input 
-                            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold"
+                            className="w-full p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold text-lg"
                             placeholder="名称 / 标题"
                             value={editingItem.title}
                             onChange={e => setEditingItem({...editingItem, title: e.target.value})}
                             autoFocus
                         />
                         <textarea 
-                            className="w-full h-40 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 resize-none text-sm"
+                            className="w-full h-64 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 resize-none text-base leading-relaxed"
                             placeholder="详细设定内容..."
                             value={editingItem.content}
                             onChange={e => setEditingItem({...editingItem, content: e.target.value})}
                         />
-                        <div className="flex justify-end gap-2">
-                            <button onClick={() => setEditingItem(null)} className="px-4 py-2 text-sm text-gray-500 font-bold hover:bg-gray-100 rounded-lg">取消</button>
-                            <button onClick={() => handleSaveItem(editingItem)} className="px-4 py-2 text-sm bg-sky-600 text-white font-bold rounded-lg hover:bg-sky-500 shadow-lg shadow-sky-500/20">保存</button>
+                        <div className="flex justify-end gap-3 pt-2">
+                            <button onClick={() => setEditingItem(null)} className="px-5 py-2 text-sm text-gray-500 font-bold hover:bg-gray-100 rounded-lg">取消</button>
+                            <button onClick={() => handleSaveItem(editingItem)} className="px-6 py-2 text-sm bg-sky-600 text-white font-bold rounded-lg hover:bg-sky-500 shadow-lg shadow-sky-500/20">保存</button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
-            <div className="bg-white dark:bg-gray-900 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-gray-900 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
                 <div className="flex-shrink-0 flex justify-between items-center p-5 border-b border-gray-100 dark:border-gray-800">
                     <div>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{description}</p>
                     </div>
                     <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 transition-colors">
@@ -222,24 +223,24 @@ const ListModal: React.FC<{
                     </button>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-gray-50 dark:bg-black/20">
-                    <div className="space-y-3">
+                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-gray-50 dark:bg-black/20">
+                    <div className="space-y-4">
                         {items.map(item => (
-                            <div key={item.id} className="group flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm hover:border-sky-300 dark:hover:border-sky-600 transition-all cursor-pointer" onClick={() => setEditingItem(item)}>
-                                <div className="flex-1 min-w-0 pr-4">
-                                    <h5 className="font-bold text-gray-800 dark:text-gray-100 truncate">{item.title}</h5>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">{item.content}</p>
+                            <div key={item.id} className="group flex items-center justify-between bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:border-sky-300 dark:hover:border-sky-600 transition-all cursor-pointer" onClick={() => setEditingItem(item)}>
+                                <div className="flex-1 min-w-0 pr-6">
+                                    <h5 className="font-bold text-base text-gray-800 dark:text-gray-100 truncate mb-1">{item.title}</h5>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">{item.content}</p>
                                 </div>
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={(e) => { e.stopPropagation(); setEditingItem(item); }} className="p-1.5 text-gray-400 hover:text-sky-500 rounded"><Pencil className="w-4 h-4" /></button>
-                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }} className="p-1.5 text-gray-400 hover:text-red-500 rounded"><Trash className="w-4 h-4" /></button>
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={(e) => { e.stopPropagation(); setEditingItem(item); }} className="p-2 text-gray-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash className="w-4 h-4" /></button>
                                 </div>
                             </div>
                         ))}
                         
                         <button 
                             onClick={() => setEditingItem({ id: `new-${Date.now()}`, title: '', content: '' })}
-                            className="w-full py-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-gray-400 hover:text-sky-500 hover:border-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/10 transition-all flex flex-col items-center justify-center gap-1"
+                            className="w-full py-5 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl text-gray-400 hover:text-sky-500 hover:border-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/10 transition-all flex flex-col items-center justify-center gap-1"
                         >
                             <Plus className="w-6 h-6" />
                             <span className="text-xs font-bold">添加新条目</span>
@@ -257,11 +258,42 @@ const ListModal: React.FC<{
     );
 };
 
+// Helper function to clean JSON for display
+const formatPreviewText = (text: string): string => {
+    if (!text) return "暂未设定";
+    
+    // Check if it's a JSON array of items (List mode)
+    if (text.startsWith('[') && text.endsWith(']')) {
+        try {
+            const list = JSON.parse(text);
+            if (Array.isArray(list)) {
+                return `${list.length} 个条目: ` + list.map((i: any) => i.title).join(', ');
+            }
+        } catch { }
+    }
+
+    // Check if it looks like a JSON object (Legacy settings sometimes stored as JSON)
+    if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
+        try {
+            const obj = JSON.parse(text);
+            // Collect values only, ignoring keys like "typeElements" etc.
+            const values = Object.values(obj).filter(v => v && typeof v === 'string' && v.trim() !== '');
+            if (values.length > 0) {
+                return values.join(', ');
+            }
+        } catch (e) {
+            // If parse fails, fall through to raw text
+        }
+    }
+    
+    return text;
+};
+
 const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpdate }) => {
     const [activeSetting, setActiveSetting] = useState<SettingConfig | null>(null);
 
     return (
-        <div className="p-4 space-y-6 animate-fade-in pb-20">
+        <div className="p-4 space-y-4 animate-fade-in pb-20">
             {/* Modal Dispatcher */}
             {activeSetting?.mode === 'text' && (
                 <TextModal 
@@ -286,30 +318,14 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
                 />
             )}
 
-            <div className="bg-sky-50/50 dark:bg-sky-900/10 p-3 rounded-xl border border-sky-100 dark:border-sky-900/30 flex gap-2 items-start">
-                <InformationCircle className="w-4 h-4 text-sky-500 mt-0.5 shrink-0" />
-                <p className="text-xs text-sky-600 dark:text-sky-400 font-medium leading-relaxed">
-                    完善作品设定可让 AI 在创作时更精准地把控剧情走向与人物性格。点击下方模块即可编辑。
-                </p>
-            </div>
+            {/* Removed the blue info box */}
 
             <div className="grid grid-cols-1 gap-3">
                 {SETTING_TYPES.map(config => {
-                    const hasValue = !!settings[config.id] && settings[config.id] !== '[]';
+                    const rawValue = settings[config.id];
+                    const hasValue = !!rawValue && rawValue !== '[]' && rawValue !== '{}';
                     const Icon = config.icon;
-                    
-                    // Simple parser for preview
-                    let previewText = "暂未设定";
-                    if (hasValue) {
-                        if (config.mode === 'list') {
-                            try {
-                                const list = JSON.parse(settings[config.id] || '[]');
-                                previewText = Array.isArray(list) ? `${list.length} 个条目: ` + list.map((i: any) => i.title).join(', ') : (settings[config.id] || '');
-                            } catch { previewText = settings[config.id] || ''; }
-                        } else {
-                            previewText = settings[config.id] || '';
-                        }
-                    }
+                    const previewText = formatPreviewText(rawValue || '');
 
                     return (
                         <button 

@@ -249,7 +249,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     };
 
     return (
-        <div className="p-4 h-full animate-fade-in flex flex-col font-sans bg-gray-50/30 dark:bg-black/20 relative">
+        <div className="p-4 h-full animate-fade-in flex flex-col font-sans bg-gray-50 dark:bg-black/20 relative">
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={importContent} onSave={handleImportAsset} />
             <LoadingOverlay isVisible={showOverlay} onClose={() => setShowOverlay(false)} />
             
@@ -259,16 +259,14 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 </div>
             )}
 
-            {/* Header: Compact, Title Left, Progress Right */}
-            {/* Removed bottom margin (mb-0) to connect with bottom panels */}
-            <div className="flex items-center justify-between mb-0 bg-white dark:bg-gray-900 p-3 rounded-t-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-shrink-0 h-16 z-10 relative">
+            {/* Header: Light Blue Background */}
+            <div className="flex items-center justify-between mb-4 bg-sky-50/80 dark:bg-sky-900/10 p-3 rounded-2xl shadow-sm border border-sky-100 dark:border-sky-800 flex-shrink-0 h-16 z-10 relative">
                  <div className="flex items-center gap-3">
-                    <button onClick={onBack} className="p-1.5 text-gray-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-full transition-all">
+                    <button onClick={onBack} className="p-1.5 text-sky-600 hover:text-sky-700 hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-900/30 rounded-full transition-all">
                         <ChevronDoubleLeft className="w-5 h-5" />
                     </button>
                     <div>
-                        {/* Title changed to blue */}
-                        <h1 className="text-lg font-black text-blue-600 dark:text-blue-400 tracking-tight leading-tight">{workflow.title}</h1>
+                        <h1 className="text-lg font-black text-sky-700 dark:text-sky-400 tracking-tight leading-tight">{workflow.title}</h1>
                     </div>
                  </div>
                  
@@ -282,20 +280,20 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                             <span className={`text-[10px] font-bold whitespace-nowrap hidden md:inline ${currentStepIndex === idx ? 'text-sky-600' : 'text-gray-400'}`}>
                                 {step.name}
                             </span>
-                            {idx < (workflow.steps?.length || 0) - 1 && <div className="w-3 h-0.5 bg-gray-100 dark:bg-gray-800" />}
+                            {idx < (workflow.steps?.length || 0) - 1 && <div className="w-3 h-0.5 bg-gray-200 dark:bg-gray-700" />}
                         </div>
                     ))}
                  </div>
             </div>
 
-            {/* Content Area with Gap 0 (gap-0) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 flex-1 overflow-hidden border-t border-gray-100 dark:border-gray-800">
-                {/* Left Form Panel: Light Blue Background, Hidden Scrollbar */}
-                <div className="lg:col-span-4 flex flex-col overflow-y-auto pr-1 space-y-4 [&::-webkit-scrollbar]:hidden bg-sky-50/50 dark:bg-sky-900/10 border-r border-gray-100 dark:border-gray-800 p-4 rounded-bl-2xl" style={{ scrollbarWidth: 'none' }}>
+            {/* Content Area with Gap */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 overflow-hidden">
+                {/* Left Form Panel: White Background, Rounded */}
+                <div className="lg:col-span-4 flex flex-col overflow-y-auto pr-1 space-y-4 [&::-webkit-scrollbar]:hidden bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-4 rounded-2xl shadow-sm" style={{ scrollbarWidth: 'none' }}>
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between border-b border-sky-100 dark:border-sky-800 pb-2">
-                            <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                                <AdjustmentsHorizontal className="w-4 h-4 text-sky-500" />
+                        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+                            <h3 className="text-base font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                <AdjustmentsHorizontal className="w-5 h-5 text-sky-500" />
                                 参数配置
                             </h3>
                             <button onClick={() => setShowConfig(!showConfig)} className="text-[10px] font-bold text-sky-500 hover:underline">
@@ -304,7 +302,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                         </div>
 
                         {showConfig && (
-                            <div className="space-y-3 animate-fade-in p-3 bg-white/50 dark:bg-gray-800/50 rounded-xl border border-sky-100 dark:border-sky-800">
+                            <div className="space-y-3 animate-fade-in p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
                                 <div>
                                     <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">模型</label>
                                     <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none cursor-pointer">
@@ -352,7 +350,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                             value={formState[field.variable] || ''}
                                             onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}
                                             placeholder={`请输入${field.label}...`}
-                                            className="w-full p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all resize-none h-24 shadow-sm"
+                                            className="w-full p-3 text-xs bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all resize-none h-24 shadow-sm"
                                         />
                                     ) : (
                                         <input
@@ -360,7 +358,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                             value={formState[field.variable] || ''}
                                             onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}
                                             placeholder={`请输入${field.label}...`}
-                                            className="w-full p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all shadow-sm"
+                                            className="w-full p-3 text-xs bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all shadow-sm"
                                         />
                                     )}
                                     {field.description && <p className="text-[10px] text-blue-500 dark:text-blue-400 ml-1 leading-tight">{field.description}</p>}
@@ -396,11 +394,11 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                     </div>
                 </div>
 
-                {/* Right Result Panel: Light Blue Background */}
-                <div className="lg:col-span-8 bg-sky-50/30 dark:bg-sky-900/5 rounded-br-2xl flex flex-col overflow-hidden relative">
-                     <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center h-12">
-                        <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-sky-500" />
+                {/* Right Result Panel: White Background, Rounded */}
+                <div className="lg:col-span-8 bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden relative">
+                     <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center h-14">
+                        <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
+                            <Sparkles className="w-5 h-5 text-sky-500" />
                             文本生成
                             {isLoading && <span className="text-[10px] font-normal text-sky-500 animate-pulse ml-2 flex items-center gap-1"><ArrowPath className="w-3 h-3 animate-spin" /> AI 正在思考...</span>}
                         </h3>
@@ -419,7 +417,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                         navigator.clipboard.writeText(fullText); 
                                         triggerSuccess('全文已复制');
                                     }}
-                                    className="px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
+                                    className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
                                 >
                                     <Copy className="w-3.5 h-3.5" /> 复制全文
                                 </button>
@@ -441,16 +439,16 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                         <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
                                     </div>
                                     {result ? (
-                                        <div className="p-5 bg-white dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm">
+                                        <div className="p-5 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm">
                                             {/* Step Toolbar */}
-                                            <div className="flex justify-end gap-2 mb-2 pb-2 border-b border-gray-100 dark:border-gray-700 opacity-80">
+                                            <div className="flex justify-end gap-2 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 opacity-80">
                                                 <button 
                                                     onClick={() => {
                                                         const plain = stripMarkdown(result);
                                                         setImportContent(plain);
                                                         setImportModalOpen(true);
                                                     }}
-                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded transition-colors"
+                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-purple-500 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-colors"
                                                 >
                                                     <Database className="w-3 h-3" /> 导入素材
                                                 </button>
@@ -459,14 +457,14 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                         navigator.clipboard.writeText(stripMarkdown(result));
                                                         triggerSuccess('内容已复制');
                                                     }}
-                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded transition-colors"
+                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
                                                 >
                                                     <Copy className="w-3 h-3" /> 复制
                                                 </button>
                                                 {(executionStatus === 'paused' && idx === nextStepIndex - 1) || executionStatus === 'completed' ? (
                                                     <button 
                                                         onClick={() => handleRegenerateStep(idx)} 
-                                                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded transition-colors"
+                                                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
                                                         title="重新生成此步骤"
                                                     >
                                                         <ArrowPath className="w-3 h-3" /> 重试
