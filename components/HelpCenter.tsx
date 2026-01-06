@@ -185,8 +185,18 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                     
                     <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 border border-gray-100 dark:border-gray-800 shadow-sm">
                         <VersionItem 
+                            version="v1.5.0" 
+                            date="2026.01.06"
+                            features={[
+                                "短篇模式重构：移除章节列表与标题，打造沉浸式单页创作环境。",
+                                "设定管理升级：作品设定改为卡片式管理 + 弹窗录入，界面更清爽。",
+                                "精准选区交互：AI 面板内容填充逻辑优化，仅在选中时触发，减少误操作。",
+                                "视觉体验优化：更新了功能栏配色与布局，并增加了模型参数的详细说明。"
+                            ]}
+                        />
+                        <VersionItem 
                             version="v1.4.0" 
-                            date="2025.02.19"
+                            date="2026.02.19"
                             features={[
                                 "新增「智能续写」功能：在生成内容被截断时，支持一键无缝续写。",
                                 "优化了长文本的渲染性能，大幅减少粘贴大量文字时的卡顿。",
@@ -196,7 +206,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                         />
                         <VersionItem 
                             version="v1.3.0" 
-                            date="2025.02.01"
+                            date="2026.02.01"
                             features={[
                                 "上线「工作流」引擎：支持多步骤、链式 AI 创作任务。",
                                 "新增「剧本改编」模式：支持小说自动转剧本格式。",
@@ -205,7 +215,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                         />
                         <VersionItem 
                             version="v1.2.0" 
-                            date="2025.01.15"
+                            date="2026.01.15"
                             features={[
                                 "新增「素材库」：支持角色、剧情、灵光碎片的管理与关联。",
                                 "集成了 DeepSeek-V3 与 Gemini 2.0 模型。",
@@ -217,7 +227,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
             </div>
             
             <footer className="mt-10 py-8 text-center border-t border-gray-100 dark:border-gray-800">
-                <p className="text-xs text-gray-400">© 2025 奇思妙写 - 让每一份创意都不被辜负</p>
+                <p className="text-xs text-gray-400">© 2026 奇思妙写 - 让每一份创意都不被辜负</p>
             </footer>
         </div>
     );
