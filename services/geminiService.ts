@@ -1,4 +1,6 @@
 
+import { GoogleGenAI } from "@google/genai";
+
 interface GenerationOptions {
     model: string;
     temperature: number;
@@ -45,6 +47,12 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
     }
   } else if (options.model.startsWith('deepseek') || options.model.startsWith('doubao')) {
     const endpoint = options.model.startsWith('doubao') ? "/api/doubao" : "/api/deepseek";
+    
+    // DeepSeek API limit: max_tokens must be <= 8192
+    const effectiveMaxTokens = options.model.startsWith('deepseek') 
+        ? Math.min(maxOutputTokens, 8192) 
+        : maxOutputTokens;
+
     try {
         const response = await fetch(endpoint, {
             method: "POST",
@@ -59,7 +67,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
                 ],
                 temperature: options.temperature,
                 top_p: options.topP,
-                max_tokens: maxOutputTokens, 
+                max_tokens: effectiveMaxTokens, 
                 stream: false
             }),
             signal: options.signal
@@ -149,6 +157,12 @@ export const generateTextStream = async function* (prompt: string, options: Gene
         }
     } else if (options.model.startsWith('deepseek') || options.model.startsWith('doubao')) {
         const endpoint = options.model.startsWith('doubao') ? "/api/doubao" : "/api/deepseek";
+        
+        // DeepSeek API limit: max_tokens must be <= 8192
+        const effectiveMaxTokens = options.model.startsWith('deepseek') 
+            ? Math.min(maxOutputTokens, 8192) 
+            : maxOutputTokens;
+
         try {
             const response = await fetch(endpoint, {
                 method: "POST",
@@ -163,7 +177,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                     ],
                     temperature: options.temperature,
                     top_p: options.topP,
-                    max_tokens: maxOutputTokens,
+                    max_tokens: effectiveMaxTokens,
                     stream: true
                 }),
                 signal: options.signal
