@@ -1,34 +1,101 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NovelSettings } from '../../types';
 import { createPortal } from 'react-dom';
-import { X, Plus, Pencil, Trash } from '../Icon';
+import { X, Plus, Pencil, Trash, UserCircle, Tag, Globe, BookOpen, ListBullet, ChevronRight, InformationCircle } from '../Icon';
 
 interface NovelSettingsPanelProps {
     settings: NovelSettings;
     onUpdate: (key: keyof NovelSettings, value: string) => void;
 }
 
-const SETTING_TYPES: { id: keyof NovelSettings; label: string; placeholder: string }[] = [
-    { id: 'typeElements', label: '类型元素', placeholder: '例如：科幻、赛博朋克、反乌托邦' },
-    { id: 'theme', label: '核心主题', placeholder: '例如：探讨科技与人性的边界，关于救赎与牺牲' },
-    { id: 'targetAudience', label: '目标读者', placeholder: '例如：青少年、科幻迷、悬疑爱好者' },
-    { id: 'synopsis', label: '作品梗概', placeholder: '故事发生在2077年的新东京，主角是一名非法义体医生...' },
-    { id: 'worldview', label: '世界观设定', placeholder: '详细描述世界规则、地理环境、社会体系、力量体系...' },
-    { id: 'characterSettings', label: '人物设定', placeholder: '主角：林恩，性格冷静... \n反派：K，极度疯狂...' },
+type SettingMode = 'text' | 'list';
+
+interface SettingConfig {
+    id: keyof NovelSettings;
+    label: string;
+    icon: any;
+    placeholder: string;
+    description: string;
+    mode: SettingMode;
+    color: string;
+}
+
+const SETTING_TYPES: SettingConfig[] = [
+    { 
+        id: 'typeElements', 
+        label: '题材类型', 
+        icon: Tag,
+        mode: 'text',
+        color: 'text-purple-600',
+        placeholder: '例如：科幻 / 赛博朋克 / 反乌托邦', 
+        description: '定义作品的流派与核心元素，帮助保持风格统一。'
+    },
+    { 
+        id: 'theme', 
+        label: '核心主题', 
+        icon: BookOpen,
+        mode: 'text',
+        color: 'text-rose-600',
+        placeholder: '例如：探讨科技与人性的边界，关于救赎与牺牲',
+        description: '作品想要传达的思想内核或中心主旨。'
+    },
+    { 
+        id: 'synopsis', 
+        label: '故事梗概', 
+        icon: ListBullet,
+        mode: 'text',
+        color: 'text-amber-600',
+        placeholder: '起承转合：故事发生在2077年的新东京，主角是一名非法义体医生...',
+        description: '简要概括故事的主要情节发展脉络。'
+    },
+    { 
+        id: 'worldview', 
+        label: '世界观背景', 
+        icon: Globe,
+        mode: 'text',
+        color: 'text-emerald-600',
+        placeholder: '详细描述世界规则、地理环境、社会体系、力量体系...',
+        description: '故事发生的舞台背景、法则与社会形态。'
+    },
+    { 
+        id: 'characterSettings', 
+        label: '人物设定', 
+        icon: UserCircle,
+        mode: 'list',
+        color: 'text-blue-600',
+        placeholder: '',
+        description: '主要角色的性格、外貌、背景故事。支持创建多个人物卡片。'
+    },
+    { 
+        id: 'specificTerms', 
+        label: '特定词条', 
+        icon: Tag,
+        mode: 'list',
+        color: 'text-cyan-600',
+        placeholder: '',
+        description: '作品中专有的名词、术语、道具或组织设定。'
+    },
 ];
 
-const SettingModal: React.FC<{
+interface ListItem {
+    id: string;
+    title: string;
+    content: string;
+}
+
+const TextModal: React.FC<{
     isOpen: boolean;
     title: string;
     value: string;
     placeholder: string;
+    description: string;
     onClose: () => void;
     onSave: (val: string) => void;
-}> = ({ isOpen, title, value, placeholder, onClose, onSave }) => {
+}> = ({ isOpen, title, value, placeholder, description, onClose, onSave }) => {
     const [localValue, setLocalValue] = useState(value);
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (isOpen) setLocalValue(value);
     }, [isOpen, value]);
 
@@ -38,7 +105,10 @@ const SettingModal: React.FC<{
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center p-5 border-b border-gray-100 dark:border-gray-800">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{description}</p>
+                    </div>
                     <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 transition-colors">
                         <X className="w-5 h-5" />
                     </button>
@@ -48,7 +118,7 @@ const SettingModal: React.FC<{
                         value={localValue}
                         onChange={e => setLocalValue(e.target.value)}
                         placeholder={placeholder}
-                        className="w-full h-48 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none text-sm leading-relaxed custom-scrollbar"
+                        className="w-full h-64 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none text-sm leading-relaxed custom-scrollbar"
                         autoFocus
                     />
                 </div>
@@ -62,78 +132,209 @@ const SettingModal: React.FC<{
     );
 };
 
-const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpdate }) => {
-    const [editingId, setEditingId] = useState<keyof NovelSettings | null>(null);
+const ListModal: React.FC<{
+    isOpen: boolean;
+    title: string;
+    itemsJson: string;
+    description: string;
+    onClose: () => void;
+    onSave: (val: string) => void;
+}> = ({ isOpen, title, itemsJson, description, onClose, onSave }) => {
+    const [items, setItems] = useState<ListItem[]>([]);
+    const [editingItem, setEditingItem] = useState<ListItem | null>(null); // For sub-modal
+    
+    // Parse JSON or legacy string on open
+    useEffect(() => {
+        if (isOpen) {
+            try {
+                const parsed = JSON.parse(itemsJson);
+                if (Array.isArray(parsed)) {
+                    setItems(parsed);
+                } else {
+                    // Legacy string support
+                    setItems(itemsJson ? [{ id: 'legacy', title: '默认', content: itemsJson }] : []);
+                }
+            } catch (e) {
+                // Not JSON, treat as legacy string
+                setItems(itemsJson ? [{ id: 'legacy', title: '默认', content: itemsJson }] : []);
+            }
+        }
+    }, [isOpen, itemsJson]);
 
-    const activeSetting = editingId ? SETTING_TYPES.find(t => t.id === editingId) : null;
+    const handleSaveItem = (item: ListItem) => {
+        setItems(prev => {
+            const exists = prev.find(p => p.id === item.id);
+            if (exists) {
+                return prev.map(p => p.id === item.id ? item : p);
+            }
+            return [...prev, item];
+        });
+        setEditingItem(null);
+    };
+
+    const handleDeleteItem = (id: string) => {
+        setItems(prev => prev.filter(p => p.id !== id));
+    };
+
+    const handleSaveAll = () => {
+        onSave(JSON.stringify(items));
+        onClose();
+    };
+
+    if (!isOpen) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+            {/* Sub-modal for editing individual items */}
+            {editingItem && (
+                <div className="absolute inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-[1px]" onClick={() => setEditingItem(null)}>
+                    <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-xl shadow-2xl p-5 space-y-4 animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                        <h4 className="text-lg font-bold text-gray-900 dark:text-white">{editingItem.id.startsWith('new') ? '新建条目' : '编辑条目'}</h4>
+                        <input 
+                            className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 font-bold"
+                            placeholder="名称 / 标题"
+                            value={editingItem.title}
+                            onChange={e => setEditingItem({...editingItem, title: e.target.value})}
+                            autoFocus
+                        />
+                        <textarea 
+                            className="w-full h-40 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-sky-500 resize-none text-sm"
+                            placeholder="详细设定内容..."
+                            value={editingItem.content}
+                            onChange={e => setEditingItem({...editingItem, content: e.target.value})}
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button onClick={() => setEditingItem(null)} className="px-4 py-2 text-sm text-gray-500 font-bold hover:bg-gray-100 rounded-lg">取消</button>
+                            <button onClick={() => handleSaveItem(editingItem)} className="px-4 py-2 text-sm bg-sky-600 text-white font-bold rounded-lg hover:bg-sky-500 shadow-lg shadow-sky-500/20">保存</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="bg-white dark:bg-gray-900 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                <div className="flex-shrink-0 flex justify-between items-center p-5 border-b border-gray-100 dark:border-gray-800">
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{description}</p>
+                    </div>
+                    <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-gray-50 dark:bg-black/20">
+                    <div className="space-y-3">
+                        {items.map(item => (
+                            <div key={item.id} className="group flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm hover:border-sky-300 dark:hover:border-sky-600 transition-all cursor-pointer" onClick={() => setEditingItem(item)}>
+                                <div className="flex-1 min-w-0 pr-4">
+                                    <h5 className="font-bold text-gray-800 dark:text-gray-100 truncate">{item.title}</h5>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">{item.content}</p>
+                                </div>
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={(e) => { e.stopPropagation(); setEditingItem(item); }} className="p-1.5 text-gray-400 hover:text-sky-500 rounded"><Pencil className="w-4 h-4" /></button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }} className="p-1.5 text-gray-400 hover:text-red-500 rounded"><Trash className="w-4 h-4" /></button>
+                                </div>
+                            </div>
+                        ))}
+                        
+                        <button 
+                            onClick={() => setEditingItem({ id: `new-${Date.now()}`, title: '', content: '' })}
+                            className="w-full py-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-gray-400 hover:text-sky-500 hover:border-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/10 transition-all flex flex-col items-center justify-center gap-1"
+                        >
+                            <Plus className="w-6 h-6" />
+                            <span className="text-xs font-bold">添加新条目</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex-shrink-0 flex justify-end gap-3 p-5 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
+                    <button onClick={onClose} className="px-5 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">取消</button>
+                    <button onClick={handleSaveAll} className="px-5 py-2 text-sm font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-lg shadow-sky-500/20 transition-all active:scale-95">确认保存</button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpdate }) => {
+    const [activeSetting, setActiveSetting] = useState<SettingConfig | null>(null);
 
     return (
         <div className="p-4 space-y-6 animate-fade-in pb-20">
-            <SettingModal 
-                isOpen={!!editingId}
-                title={activeSetting?.label || ''}
-                value={editingId ? settings[editingId] : ''}
-                placeholder={activeSetting?.placeholder || ''}
-                onClose={() => setEditingId(null)}
-                onSave={(val) => editingId && onUpdate(editingId, val)}
-            />
+            {/* Modal Dispatcher */}
+            {activeSetting?.mode === 'text' && (
+                <TextModal 
+                    isOpen={!!activeSetting}
+                    title={activeSetting.label}
+                    value={settings[activeSetting.id] || ''}
+                    placeholder={activeSetting.placeholder}
+                    description={activeSetting.description}
+                    onClose={() => setActiveSetting(null)}
+                    onSave={(val) => onUpdate(activeSetting.id, val)}
+                />
+            )}
+            
+            {activeSetting?.mode === 'list' && (
+                <ListModal 
+                    isOpen={!!activeSetting}
+                    title={activeSetting.label}
+                    itemsJson={settings[activeSetting.id] || '[]'}
+                    description={activeSetting.description}
+                    onClose={() => setActiveSetting(null)}
+                    onSave={(val) => onUpdate(activeSetting.id, val)}
+                />
+            )}
 
-            <div className="bg-sky-50/50 dark:bg-sky-900/10 p-3 rounded-xl border border-sky-100 dark:border-sky-900/30">
-                <p className="text-xs text-sky-600 dark:text-sky-400 font-medium">
-                    ✨ 完善设定可让 AI 更精准地辅助您创作。
+            <div className="bg-sky-50/50 dark:bg-sky-900/10 p-3 rounded-xl border border-sky-100 dark:border-sky-900/30 flex gap-2 items-start">
+                <InformationCircle className="w-4 h-4 text-sky-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-sky-600 dark:text-sky-400 font-medium leading-relaxed">
+                    完善作品设定可让 AI 在创作时更精准地把控剧情走向与人物性格。点击下方模块即可编辑。
                 </p>
             </div>
 
-            <div className="space-y-4">
-                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">已添加的设定</h4>
-                <div className="grid grid-cols-1 gap-3">
-                    {SETTING_TYPES.map(type => {
-                        const hasValue = !!settings[type.id];
-                        if (!hasValue) return null;
-                        
-                        return (
-                            <div key={type.id} className="group relative bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:border-sky-300 dark:hover:border-sky-700 transition-colors">
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className="text-xs font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20 px-2 py-0.5 rounded-md">{type.label}</span>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => setEditingId(type.id)} className="p-1.5 text-gray-400 hover:text-sky-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                                        <button onClick={() => onUpdate(type.id, '')} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><Trash className="w-3.5 h-3.5" /></button>
-                                    </div>
-                                </div>
-                                <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3 leading-relaxed whitespace-pre-wrap">
-                                    {settings[type.id]}
-                                </p>
-                            </div>
-                        );
-                    })}
+            <div className="grid grid-cols-1 gap-3">
+                {SETTING_TYPES.map(config => {
+                    const hasValue = !!settings[config.id] && settings[config.id] !== '[]';
+                    const Icon = config.icon;
                     
-                    {!Object.values(settings).some(v => !!v) && (
-                        <div className="text-center py-8 text-gray-400 text-xs italic border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl">
-                            暂无设定，请从下方选择添加
-                        </div>
-                    )}
-                </div>
-            </div>
+                    // Simple parser for preview
+                    let previewText = "暂未设定";
+                    if (hasValue) {
+                        if (config.mode === 'list') {
+                            try {
+                                const list = JSON.parse(settings[config.id] || '[]');
+                                previewText = Array.isArray(list) ? `${list.length} 个条目: ` + list.map((i: any) => i.title).join(', ') : (settings[config.id] || '');
+                            } catch { previewText = settings[config.id] || ''; }
+                        } else {
+                            previewText = settings[config.id] || '';
+                        }
+                    }
 
-            <div className="space-y-3">
-                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">添加新设定</h4>
-                <div className="grid grid-cols-2 gap-3">
-                    {SETTING_TYPES.map(type => {
-                        const hasValue = !!settings[type.id];
-                        if (hasValue) return null;
-
-                        return (
-                            <button 
-                                key={type.id}
-                                onClick={() => setEditingId(type.id)}
-                                className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-sky-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-900/10 transition-all group"
-                            >
-                                <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                <span className="text-xs font-bold">{type.label}</span>
-                            </button>
-                        );
-                    })}
-                </div>
+                    return (
+                        <button 
+                            key={config.id}
+                            onClick={() => setActiveSetting(config)}
+                            className={`group relative w-full text-left p-4 rounded-xl border transition-all duration-300 flex flex-col gap-2 ${hasValue ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm hover:border-sky-400 hover:shadow-md' : 'bg-gray-50 dark:bg-gray-900/30 border-dashed border-gray-300 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800 hover:border-sky-400'}`}
+                        >
+                            <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center gap-2">
+                                    <div className={`p-1.5 rounded-lg ${hasValue ? 'bg-gray-100 dark:bg-gray-700' : 'bg-transparent'}`}>
+                                        <Icon className={`w-4 h-4 ${config.color} ${!hasValue && 'opacity-50'}`} />
+                                    </div>
+                                    <span className={`text-sm font-bold ${hasValue ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>{config.label}</span>
+                                </div>
+                                {hasValue ? <Pencil className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" /> : <Plus className="w-4 h-4 text-gray-400" />}
+                            </div>
+                            
+                            {hasValue && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed pl-1">
+                                    {previewText}
+                                </p>
+                            )}
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );

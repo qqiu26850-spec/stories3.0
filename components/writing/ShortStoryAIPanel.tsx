@@ -7,6 +7,7 @@ import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
 import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle, Check, Database, ArrowPath, Plus, Play } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
+import { createPortal } from 'react-dom';
 
 type ShortStoryTab = 'original' | 'imitate' | 'polish' | 'review';
 
@@ -27,6 +28,19 @@ interface ShortStoryAIPanelProps {
     projectSettings?: NovelSettings;
     externalAction?: { type: 'polish' | 'review' | 'expand' | 'continue'; text: string } | null;
 }
+
+const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
+    if (!isVisible) return null;
+    return createPortal(
+        <div className="fixed top-20 right-8 z-[100] animate-fade-in-up">
+            <div className="bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-xs font-bold flex items-center gap-2">
+                <InformationCircle className="w-4 h-4 text-yellow-400" />
+                {message}
+            </div>
+        </div>,
+        document.body
+    );
+};
 
 const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream, projectSettings, externalAction }) => {
     const [activeTab, setActiveTab] = useState<ShortStoryTab>('original');
@@ -58,6 +72,8 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const [error, setError] = useState('');
     const [lastGeneratedTab, setLastGeneratedTab] = useState<ShortStoryTab | null>(null);
     const [strategyIndex, setStrategyIndex] = useState(0);
+    const [toastMsg, setToastMsg] = useState('');
+    
     const abortControllerRef = useRef<AbortController | null>(null);
 
     // Handle external trigger and selection updates
@@ -141,6 +157,11 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const handleOpenPromptModal = (filter: 'requirements' | 'style' | 'polish') => {
         setPromptFilterType(filter);
         setPromptModalOpen(true);
+    };
+
+    const showToast = (msg: string) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(''), 3000);
     };
 
     const handleGenerate = async () => {
@@ -252,6 +273,12 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         }
     };
 
+    const handleInsertCheck = () => {
+        showToast(lastGeneratedTab === 'polish' ? '将替换选中的文本...' : '请确保光标定位在您想插入的地方');
+        if (lastGeneratedTab === 'polish') onReplace(resultText);
+        else onInsert(resultText);
+    };
+
     const renderTabButton = (type: ShortStoryTab, label: string, Icon: React.ElementType) => (
         <button
             onClick={() => setActiveTab(type)}
@@ -270,6 +297,8 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     if (resultText || isGenerating) {
         return (
             <div className="flex flex-col h-full bg-white dark:bg-gray-900 relative">
+                <Toast message={toastMsg} isVisible={!!toastMsg} />
+
                 {isGenerating && !resultText && (
                     <div className="absolute inset-0 z-50 bg-white/95 dark:bg-gray-900/95 flex flex-col items-center justify-center text-center p-6">
                         <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
@@ -286,14 +315,16 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     </div>
                 )}
 
-                <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex justify-between items-center p-4 border-b border-sky-100 dark:border-sky-900 bg-sky-50/50 dark:bg-sky-900/20">
                     <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-sky-500" />
                         生成结果
+                        {isGenerating && <ArrowPath className="w-3.5 h-3.5 text-sky-500 animate-spin" />}
+                        {!isGenerating && resultText && <span className="text-xs text-green-500 font-bold ml-1">已完成</span>}
                     </h3>
                     <div className="flex gap-2">
-                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors" title="复制"><Copy className="w-4 h-4" /></button>
-                        <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors" title="关闭"><X className="w-4 h-4" /></button>
+                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-white rounded transition-colors" title="复制"><Copy className="w-4 h-4" /></button>
+                        <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-white rounded transition-colors" title="关闭"><X className="w-4 h-4" /></button>
                     </div>
                 </div>
 
@@ -305,10 +336,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-2">
                     {/* Insert Button */}
                     <button 
-                        onClick={() => {
-                            if (lastGeneratedTab === 'polish') onReplace(resultText);
-                            else onInsert(resultText);
-                        }} 
+                        onClick={handleInsertCheck} 
                         className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
                     >
                         {lastGeneratedTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
@@ -318,19 +346,19 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     {isGenerating ? (
                         <button 
                             onClick={handleStop}
-                            className="px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center gap-1"
+                            className="flex-1 px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
                         >
                             <Stop className="w-3 h-3" /> 停止生成
                         </button>
                     ) : (
-                        <div className="flex gap-2">
-                            <button onClick={handleContinue} className="px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm font-sans flex items-center gap-1" title="续写更多内容">
+                        <>
+                            <button onClick={handleContinue} className="flex-1 px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm font-sans flex items-center justify-center gap-1" title="续写更多内容">
                                 <Play className="w-3 h-3" /> 继续生成
                             </button>
-                            <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
+                            <button onClick={handleGenerate} className="flex-1 px-3 py-2.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold rounded-lg hover:bg-orange-200 transition-colors text-sm font-sans flex items-center justify-center gap-1">
                                 <ArrowPath className="w-3 h-3" /> 重试
                             </button>
-                        </div>
+                        </>
                     )}
                 </div>
             </div>
@@ -507,7 +535,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                     return (
                                         <div key={field.id} className="space-y-1.5">
                                             <div className="flex justify-between items-center">
-                                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
                                                     {index + 1}. {field.label}
                                                     {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
                                                 </label>
@@ -524,7 +552,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
                                                     placeholder={field.placeholder} 
                                                     maxLength={field.maxLength}
-                                                    className="w-full p-2.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner" 
+                                                    className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" 
                                                 />
                                             ) : (
                                                 <input 
@@ -533,7 +561,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
                                                     placeholder={field.placeholder} 
                                                     maxLength={field.maxLength}
-                                                    className="w-full p-2.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" 
+                                                    className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" 
                                                 />
                                             )}
                                             {field.description && (

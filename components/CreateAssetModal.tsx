@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { Asset, AssetFormData } from '../types';
-import { DocumentText, Sparkles, ChevronLeft, X } from './Icon';
+import { DocumentText, Sparkles, ChevronLeft, X, Plus } from './Icon';
+import { getTagStyle } from './AssetManagement';
 
 interface CreateAssetModalProps {
     isOpen: boolean;
@@ -8,6 +10,7 @@ interface CreateAssetModalProps {
     onSave: (data: AssetFormData) => void;
     assetType: Asset['type'];
     assetToEdit?: Asset | null;
+    existingTags?: string[];
 }
 
 type CreationMode = 'choice' | 'template' | 'custom';
@@ -42,7 +45,7 @@ const MODAL_CONFIG: Record<Asset['type'], { title: string; fields: { id: keyof A
     }
 };
 
-const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, onSave, assetType, assetToEdit }) => {
+const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, onSave, assetType, assetToEdit, existingTags = [] }) => {
     const config = MODAL_CONFIG[assetType];
     const [creationMode, setCreationMode] = useState<CreationMode>('choice');
     
@@ -73,6 +76,16 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
 
     const handleChange = (id: keyof AssetFormData, value: string) => {
         setFormData(prev => ({ ...prev, [id]: value }));
+    };
+
+    const handleAddExistingTag = (tag: string) => {
+        setFormData(prev => {
+            const currentTags = prev.tags ? prev.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) : [];
+            if (!currentTags.includes(tag)) {
+                return { ...prev, tags: [...currentTags, tag].join(', ') };
+            }
+            return prev;
+        });
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -195,6 +208,22 @@ const CreateAssetModal: React.FC<CreateAssetModalProps> = ({ isOpen, onClose, on
                             placeholder="逗号或空格分隔，例如：主角 重要 伏笔"
                             className="w-full p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition-all shadow-sm"
                         />
+                        {/* Existing tags selection */}
+                        {existingTags.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                                {existingTags.map(tag => (
+                                    <button 
+                                        key={tag}
+                                        type="button"
+                                        onClick={() => handleAddExistingTag(tag)}
+                                        className={`px-2 py-1 text-xs rounded-md border transition-all hover:opacity-80 flex items-center gap-1 ${getTagStyle(tag)}`}
+                                    >
+                                        <Plus className="w-3 h-3" />
+                                        {tag}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {error && <p className="text-red-500 font-bold text-sm px-2">⚠️ {error}</p>}

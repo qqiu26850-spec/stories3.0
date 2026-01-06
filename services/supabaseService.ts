@@ -307,6 +307,17 @@ export async function updateMaterial(id: string, updates: { name?: string, conte
     }
 }
 
+// Added toggleMaterialFavorite
+export async function toggleMaterialFavorite(id: string, isFavorite: boolean) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+        await supabase.from('materials').update({ is_favorite: isFavorite }).eq('id', id).eq('user_id', userId);
+    } catch (e) {
+        console.error("Toggle material favorite failed", e);
+    }
+}
+
 export async function fetchMaterials(type?: string) {
     try {
         const userId = await getCurrentUserId();
@@ -317,7 +328,8 @@ export async function fetchMaterials(type?: string) {
             query = query.eq('type', dbType);
         }
         const { data, error } = await query;
-        return error ? [] : data;
+        // Map is_favorite property correctly if database column exists
+        return error ? [] : data.map((item: any) => ({ ...item, isFavorite: item.is_favorite }));
     } catch (e) { return []; }
 }
 

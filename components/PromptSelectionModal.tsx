@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Prompt, PromptCategory, PromptSubCategory } from '../types';
-import { Sparkles, Search, X } from './Icon';
+import { Sparkles, Search, X, Heart } from './Icon';
 import SelectablePromptCard from './SelectablePromptCard';
-import { fetchPrompts } from '../services/supabaseService';
+import { fetchPrompts, fetchWorkflowFavorites, getCurrentUserId } from '../services/supabaseService';
 import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
 
 interface PromptSelectionModalProps {
@@ -13,7 +14,7 @@ interface PromptSelectionModalProps {
     initialSubCategory?: PromptSubCategory;
 }
 
-const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
+const CATEGORY_TABS: { id: PromptCategory | 'all' | 'favorites'; label: string }[] = [
   { id: 'all', label: '全部' },
   { id: 'short-story', label: '短篇小说' },
   { id: 'long-story', label: '长篇小说' },
@@ -22,11 +23,14 @@ const CATEGORY_TABS: { id: PromptCategory | 'all'; label: string }[] = [
 ];
 
 const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onClose, onSelect, initialSubCategory }) => {
-    const [activeTab, setActiveTab] = useState<PromptCategory | 'all'>('all');
+    const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites'>('all');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [allPrompts, setAllPrompts] = useState<Prompt[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    
+    // Favorites handling inside modal
+    const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
 
     // Reset filter when opened with a specific subcategory
     useEffect(() => {
@@ -37,6 +41,16 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                 setActiveSubCategory('all');
             }
             setSearchTerm('');
+            
+            // Load favorites from local storage to sync state (since PromptLibrary handles writes)
+            // Ideally should fetch from DB but for now syncing with LS used in Library
+            const stored = localStorage.getItem('qisimiaoxie_prompt_favorites_v2');
+            if(stored) {
+                try {
+                    const parsed = JSON.parse(stored);
+                    setFavoritedIds(new Set(parsed));
+                } catch(e) {}
+            }
         }
     }, [isOpen, initialSubCategory]);
 
@@ -91,18 +105,28 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
 
     const filteredPrompts = useMemo(() => {
         return allPrompts.filter(prompt => {
-            const categoryMatch = activeTab === 'all' || prompt.category === activeTab;
+            // Filter by Tab (Category or Favorites)
+            if (activeTab === 'favorites') {
+                if (!favoritedIds.has(prompt.id)) return false;
+            } else if (activeTab !== 'all') {
+                if (prompt.category !== activeTab) return false;
+            }
             
+            // Filter by SubCategory Tag
             const subCategoryMatch = activeSubCategory === 'all' || 
                 (prompt.subCategories && prompt.subCategories.includes(activeSubCategory as PromptSubCategory));
 
-            const searchMatch = !searchTerm || 
-                prompt.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                prompt.description.includes(searchTerm);
+            // Enhanced Search: Title, Description, Author, Tags
+            const term = searchTerm.toLowerCase();
+            const searchMatch = !term || 
+                prompt.title.toLowerCase().includes(term) || 
+                prompt.description.includes(term) ||
+                prompt.authorName?.toLowerCase().includes(term) ||
+                (prompt.subCategories && prompt.subCategories.some(tag => tag.toLowerCase().includes(term)));
             
-            return categoryMatch && subCategoryMatch && searchMatch;
+            return subCategoryMatch && searchMatch;
         });
-    }, [activeTab, activeSubCategory, searchTerm, allPrompts]);
+    }, [activeTab, activeSubCategory, searchTerm, allPrompts, favoritedIds]);
 
     if (!isOpen) return null;
 
@@ -131,7 +155,7 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                                 <Sparkles className="w-7 h-7 text-sky-500" />
                                 选择提示词模板
                             </h3>
-                            {/* Category Tabs */}
+                            {/* Category Tabs with Favorites */}
                             <div className="flex bg-gray-200 dark:bg-gray-800 rounded-lg p-1">
                                 {CATEGORY_TABS.map(tab => (
                                     <button
@@ -143,9 +167,19 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                         }`}
                                     >
-                                        {tab.label}
+                                        {tab.id === 'favorites' ? '我的收藏' : tab.label}
                                     </button>
                                 ))}
+                                <button
+                                    onClick={() => setActiveTab('favorites')}
+                                    className={`px-3 py-1.5 text-sm font-bold rounded-md transition-all flex items-center gap-1 ${
+                                        activeTab === 'favorites'
+                                        ? 'bg-white dark:bg-gray-700 text-red-500 shadow-sm'
+                                        : 'text-gray-500 dark:text-gray-400 hover:text-red-500'
+                                    }`}
+                                >
+                                    <Heart className="w-3.5 h-3.5" />
+                                </button>
                             </div>
                         </div>
                         
@@ -154,7 +188,7 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                             <div className="relative w-64">
                                 <input 
                                     type="text" 
-                                    placeholder="搜索模板..." 
+                                    placeholder="搜索标题、作者、标签..." 
                                     value={searchTerm}
                                     onChange={e => setSearchTerm(e.target.value)}
                                     className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none transition-shadow text-sm"
@@ -209,7 +243,7 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                                 <div className="col-span-full flex flex-col items-center justify-center py-32 text-gray-400">
                                     <Sparkles className="w-20 h-20 mb-6 opacity-20" />
                                     <p className="text-xl font-medium">未找到匹配的模板</p>
-                                    <button onClick={() => { setActiveTab('all'); setActiveSubCategory('all'); }} className="mt-4 text-sky-500 hover:underline">
+                                    <button onClick={() => { setActiveTab('all'); setActiveSubCategory('all'); setSearchTerm(''); }} className="mt-4 text-sky-500 hover:underline">
                                         清除筛选
                                     </button>
                                 </div>

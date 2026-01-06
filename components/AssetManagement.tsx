@@ -4,8 +4,8 @@ import { View, Asset, AssetFormData } from '../types';
 import CreateAssetModal from './CreateAssetModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import AssetDetailModal from './AssetDetailModal';
-import { Pencil, Trash, Check, Tag, Search, UserCircle, BookOpen, Sparkles, Plus, X, Bars2, AdjustmentsHorizontal } from './Icon';
-import { saveMaterial, fetchMaterials, deleteMaterial } from '../services/supabaseService';
+import { Pencil, Trash, Check, Tag, Search, UserCircle, BookOpen, Sparkles, Plus, X, Bars2, AdjustmentsHorizontal, Heart } from './Icon';
+import { saveMaterial, fetchMaterials, deleteMaterial, toggleMaterialFavorite } from '../services/supabaseService';
 import { createPortal } from 'react-dom';
 
 type AssetLibraryView = 'character-library' | 'plot-library' | 'inspiration-library';
@@ -81,7 +81,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
         try {
             const data = await fetchMaterials(assetType === 'inspiration' ? 'idea' : assetType);
             const mappedAssets = data.map((item: any) => ({
-                id: item.id, name: item.name, type: item.type === 'idea' ? 'inspiration' : item.type, content: item.content, tags: item.tags || []
+                id: item.id, name: item.name, type: item.type === 'idea' ? 'inspiration' : item.type, content: item.content, tags: item.tags || [], isFavorite: item.isFavorite
             }));
             setAssets(mappedAssets);
             
@@ -154,6 +154,13 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
         setDraggingTagIndex(null);
     };
 
+    const handleToggleFavorite = async (e: React.MouseEvent, assetId: string, currentStatus: boolean) => {
+        e.stopPropagation();
+        // Optimistic update
+        setAssets(prev => prev.map(a => a.id === assetId ? { ...a, isFavorite: !currentStatus } : a));
+        await toggleMaterialFavorite(assetId, !currentStatus);
+    };
+
     const getAccentBorderClass = () => {
         if (assetType === 'character') return 'hover:border-sky-400 hover:ring-2 hover:ring-sky-500/10';
         if (assetType === 'plot') return 'hover:border-purple-400 hover:ring-2 hover:ring-purple-500/10';
@@ -163,7 +170,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col font-sans bg-gray-50/50 dark:bg-black/20 overflow-hidden">
             <SuccessToast message={successMessage} isVisible={showToast} />
-            <CreateAssetModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} onSave={handleSaveAsset} assetType={assetType} />
+            <CreateAssetModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} onSave={handleSaveAsset} assetType={assetType} existingTags={customTags} />
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
             <AssetDetailModal isOpen={isDetailModalOpen} onClose={() => setDetailModalOpen(false)} asset={selectedAsset} onSaveSuccess={() => { loadAssets(); triggerToast('内容已更新'); }} />
 
@@ -266,11 +273,17 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                 className={`group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col h-[260px] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${getAccentBorderClass()}`}
                             >
                                 <div className="flex flex-col h-full">
-                                    {/* 顶部标题栏，去掉了 border-b */}
-                                    <div className="px-5 py-3 bg-gray-50/50 dark:bg-gray-800/40">
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" title={asset.name}>
-                                            {asset.name.length > 20 ? asset.name.substring(0, 20) + '...' : asset.name}
+                                    {/* 顶部标题栏 */}
+                                    <div className="px-5 py-3 bg-gray-50/50 dark:bg-gray-800/40 flex justify-between items-start">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors pr-6" title={asset.name}>
+                                            {asset.name.length > 15 ? asset.name.substring(0, 15) + '...' : asset.name}
                                         </h3>
+                                        <button 
+                                            onClick={(e) => handleToggleFavorite(e, asset.id, !!asset.isFavorite)} 
+                                            className={`p-1 transition-colors ${asset.isFavorite ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
+                                        >
+                                            <Heart className={`w-4 h-4 ${asset.isFavorite ? 'fill-current' : ''}`} />
+                                        </button>
                                     </div>
                                     
                                     {/* 正文区域 */}
@@ -294,7 +307,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                             {asset.tags.length > 3 && <span className="text-[10px] text-gray-400 shrink-0 font-normal">...</span>}
                                         </div>
 
-                                        <div className="flex gap-1 shrink-0">
+                                        <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button 
                                                 onClick={e => { e.stopPropagation(); handleOpenEdit(asset); }} 
                                                 className="p-1.5 text-gray-400 hover:text-sky-500 hover:bg-sky-100 dark:hover:bg-sky-900/40 rounded-lg transition-all" 

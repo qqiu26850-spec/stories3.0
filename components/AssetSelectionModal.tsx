@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Asset } from '../types';
-import { X, Search, UserCircle, BookOpen, Sparkles, Check, Tag, Database } from './Icon';
+import { X, Search, UserCircle, BookOpen, Sparkles, Check, Tag, Database, Heart } from './Icon';
 
 interface AssetSelectionModalProps {
     isOpen: boolean;
@@ -12,7 +12,7 @@ interface AssetSelectionModalProps {
     onToggleAsset: (id: string) => void;
 }
 
-type TabType = 'all' | 'character' | 'plot' | 'inspiration';
+type TabType = 'all' | 'character' | 'plot' | 'inspiration' | 'favorites';
 
 const TAG_COLORS = [
   'bg-red-50 text-red-700 border border-red-100 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
@@ -42,7 +42,10 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
     const availableTags = useMemo(() => {
         const tags = new Set<string>();
         assets.forEach(a => {
-            if (activeTab === 'all' || a.type === (activeTab === 'inspiration' ? 'inspiration' : activeTab)) {
+            // Include tag if in 'all', or matching type, or if 'favorites' tab and asset is favorite
+            if (activeTab === 'all' || 
+                (activeTab === 'favorites' && a.isFavorite) || 
+                a.type === (activeTab === 'inspiration' ? 'inspiration' : activeTab)) {
                 a.tags.forEach(t => tags.add(t));
             }
         });
@@ -51,14 +54,22 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
 
     const filteredAssets = useMemo(() => {
         return assets.filter(asset => {
-            // Fix: asset.type can be 'inspiration' or 'idea' in DB, but interface only allows 'character' | 'inspiration' | 'plot'
-            // In AssetManagement.tsx, 'idea' is mapped to 'inspiration'. So we only check 'inspiration' here.
-            const typeMatch = activeTab === 'all' || 
-                              (activeTab === 'inspiration' ? asset.type === 'inspiration' : asset.type === activeTab);
+            // Filter by Tab
+            let typeMatch = false;
+            if (activeTab === 'all') typeMatch = true;
+            else if (activeTab === 'favorites') typeMatch = !!asset.isFavorite;
+            else typeMatch = asset.type === (activeTab === 'inspiration' ? 'inspiration' : activeTab);
+
+            // Filter by Tag
             const tagMatch = selectedTag === 'all' || asset.tags.includes(selectedTag);
-            const searchMatch = !searchTerm || 
-                                asset.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                asset.content.toLowerCase().includes(searchTerm.toLowerCase());
+            
+            // Enhanced Search: Name, Content, Tags
+            const term = searchTerm.toLowerCase();
+            const searchMatch = !term || 
+                                asset.name.toLowerCase().includes(term) || 
+                                asset.content.toLowerCase().includes(term) ||
+                                asset.tags.some(t => t.toLowerCase().includes(term));
+
             return typeMatch && tagMatch && searchMatch;
         });
     }, [assets, activeTab, selectedTag, searchTerm]);
@@ -67,6 +78,7 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
 
     const tabs: { id: TabType; label: string; icon: any }[] = [
         { id: 'all', label: '全部', icon: BookOpen },
+        { id: 'favorites', label: '收藏', icon: Heart },
         { id: 'character', label: '角色', icon: UserCircle },
         { id: 'plot', label: '剧情', icon: BookOpen },
         { id: 'inspiration', label: '灵光', icon: Sparkles },
@@ -75,7 +87,7 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
     return createPortal(
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col relative animate-fade-in-up overflow-hidden font-sans" onClick={e => e.stopPropagation()}>
-                {/* Header - 包含标题、高度集成的分类切换和搜索框 */}
+                {/* Header */}
                 <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50">
                     <div className="flex items-center gap-4 flex-1">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 shrink-0">
@@ -83,10 +95,10 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                             关联素材
                         </h3>
                         
-                        {/* 缩小间距的分类切换 */}
                         <div className="flex bg-gray-200/50 dark:bg-gray-800 rounded-lg p-1 shrink-0 gap-0.5">
                             {tabs.map(tab => {
                                 const Icon = tab.icon;
+                                const isFav = tab.id === 'favorites';
                                 return (
                                     <button
                                         key={tab.id}
@@ -95,22 +107,22 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                                             activeTab === tab.id 
                                             ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' 
                                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                        }`}
+                                        } ${isFav && activeTab === 'favorites' ? '!text-red-500' : ''}`}
                                     >
-                                        <Icon className="w-3 h-3" />
+                                        <Icon className={`w-3 h-3 ${isFav && activeTab !== 'favorites' ? 'text-gray-400 hover:text-red-400' : ''}`} />
                                         {tab.label}
                                     </button>
                                 );
                             })}
                         </div>
 
-                        {/* 搜索框移至顶部 */}
+                        {/* Search Bar */}
                         <div className="relative flex-1 max-w-xs ml-2">
                             <input 
                                 type="text" 
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="搜索名称或内容..."
+                                placeholder="搜索名称、内容或标签..."
                                 className="w-full pl-8 pr-4 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 outline-none transition-all"
                             />
                             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -122,7 +134,7 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                     </button>
                 </div>
 
-                {/* Toolbar - 仅保留标签筛选 */}
+                {/* Toolbar - Tag Filter */}
                 <div className="flex-shrink-0 p-3 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
                     <div className="flex items-center gap-3 overflow-hidden">
                         <span className="text-[10px] font-bold text-gray-400 shrink-0 flex items-center gap-1"><Tag className="w-3 h-3"/> 标签筛选:</span>
@@ -146,7 +158,7 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                     </div>
                 </div>
 
-                {/* List - 保持一行三列布局 */}
+                {/* List */}
                 <div className="flex-1 overflow-y-auto p-5 bg-gray-50 dark:bg-black/20">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                         {filteredAssets.map(asset => {
@@ -163,7 +175,8 @@ const AssetSelectionModal: React.FC<AssetSelectionModalProps> = ({ isOpen, onClo
                                 >
                                     <div className="flex justify-between items-start mb-2 gap-2">
                                         <div className="flex-1 min-w-0">
-                                            <h4 className="font-bold text-gray-900 dark:text-white truncate text-[14px] leading-tight" title={asset.name}>
+                                            <h4 className="font-bold text-gray-900 dark:text-white truncate text-[14px] leading-tight flex items-center gap-1.5" title={asset.name}>
+                                                {asset.isFavorite && <Heart className="w-3 h-3 text-red-500 fill-current shrink-0" />}
                                                 {asset.name}
                                             </h4>
                                             <span className={`text-[8px] font-black px-1.5 py-0.5 rounded inline-block mt-1 whitespace-nowrap uppercase tracking-tighter ${

@@ -32,7 +32,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
 
     if (!isOpen) return null;
 
-    // 校验邮箱格式 - Relaxed validation to allow 123@123 format
+    // 校验邮箱格式 - Relaxed validation
     const validateEmail = (emailStr: string) => {
         return /^[^\s@]+@[^\s@]+$/.test(emailStr);
     };
@@ -42,7 +42,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
         
         // 前端初步校验
         if (!validateEmail(email)) {
-            setError('请输入正确的邮箱格式（例如：user@example.com）');
+            setError('请输入正确的邮箱格式');
             return;
         }
 
@@ -72,7 +72,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
             } else if (mode === 'register') {
                 const { error: signUpError } = await signUp(email, password);
                 if (signUpError) throw signUpError;
-                setMessage('注册成功！请检查邮箱完成验证，然后登录。');
+                setMessage('注册成功！请直接登录。'); 
                 setTimeout(() => {
                     setMode('login');
                 }, 2000);
@@ -118,7 +118,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                             required
                             value={email}
                             onChange={e => setEmail(e.target.value)}
-                            placeholder="例如：user@example.com"
+                            placeholder="例如：QQ邮箱、网易邮箱、谷歌邮箱等"
                             className={`w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border ${error.includes('邮箱') ? 'border-red-400' : 'border-gray-200'} dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition`}
                         />
                     </div>

@@ -7,6 +7,7 @@ import { PROMPTS } from '../../constants';
 import { Sparkles, ChevronDown, Database, BookOpen, DocumentPlus, Pencil, Copy, Trash, Stop, AdjustmentsHorizontal, ClipboardDocumentCheck, Check, ArrowPath, Plus, X, InformationCircle, Play } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
+import { createPortal } from 'react-dom';
 
 type TabType = 'expand' | 'continue' | 'polish' | 'review';
 
@@ -29,6 +30,19 @@ interface AIFunctionPanelProps {
     projectSettings?: NovelSettings;
     externalAction?: { type: TabType; text: string } | null;
 }
+
+const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
+    if (!isVisible) return null;
+    return createPortal(
+        <div className="fixed top-20 right-8 z-[100] animate-fade-in-up">
+            <div className="bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-xs font-bold flex items-center gap-2">
+                <InformationCircle className="w-4 h-4 text-yellow-400" />
+                {message}
+            </div>
+        </div>,
+        document.body
+    );
+};
 
 const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream, projectSettings, externalAction }) => {
     const [activeTab, setActiveTab] = useState<TabType>('expand');
@@ -57,6 +71,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [resultText, setResultText] = useState('');
     const [error, setError] = useState('');
     const [strategyIndex, setStrategyIndex] = useState(0);
+    const [toastMsg, setToastMsg] = useState('');
     
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -153,6 +168,11 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         setPromptModalOpen(true);
     };
 
+    const showToast = (msg: string) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(''), 3000);
+    };
+
     const handleGenerate = async () => {
         setIsGenerating(true);
         setResultText('');
@@ -164,15 +184,12 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
             
             let settingsContext = '';
             if (isProjectSettingsAssociated && projectSettings) {
-                settingsContext = `【作品背景设定】\n题材：${projectSettings.typeElements}\n主题：${projectSettings.theme}\n世界观：${projectSettings.worldview}\n人物基础设定：${projectSettings.characterSettings}\n梗概：${projectSettings.synopsis}`;
+                settingsContext = `【作品背景设定】\n题材：${projectSettings.typeElements}\n主题：${projectSettings.theme}\n世界观：${projectSettings.worldview}\n人物基础设定：${projectSettings.characterSettings}\n梗概：${projectSettings.synopsis}\n特定词条：${projectSettings.specificTerms}`;
             }
 
             let finalPrompt = '';
             
             // Text processing priority:
-            // 1. polishContent (User explicit selection or context menu)
-            // 2. selectedText (Current selection state)
-            // 3. contextText fallback (Only if NOT polish/review, usually for continue)
             const textToProcess = (activeTab === 'polish' || activeTab === 'review') 
                 ? polishContent 
                 : (selectedText || contextText.slice(-2000));
@@ -256,6 +273,15 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         }
     };
 
+    const handleInsertCheck = () => {
+        // If it's polish mode (Replace), we need selected text (which is handled by the polishContent state usually, but let's double check context)
+        // If it's insert mode, we need cursor position. 
+        // Since we can't reliably check cursor position from here, we will just warn user.
+        showToast(activeTab === 'polish' ? '将替换选中的文本...' : '请确保光标定位在您想插入的地方');
+        if (activeTab === 'polish') onReplace(resultText);
+        else onInsert(resultText);
+    };
+
     const renderTabButton = (type: TabType, label: string, Icon: React.ElementType) => (
         <button
             onClick={() => { setActiveTab(type); setResultText(''); }}
@@ -274,6 +300,8 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     if (resultText || isGenerating) {
         return (
             <div className="flex flex-col h-full bg-white dark:bg-gray-900 relative">
+                <Toast message={toastMsg} isVisible={!!toastMsg} />
+                
                 {isGenerating && !resultText && (
                     <div className="absolute inset-0 z-50 bg-white/95 dark:bg-gray-900/95 flex flex-col items-center justify-center text-center p-6">
                         <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
@@ -290,28 +318,30 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     </div>
                 )}
 
-                <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex justify-between items-center p-4 border-b border-sky-100 dark:border-sky-900 bg-sky-50/50 dark:bg-sky-900/20">
                     <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-sky-500" />
                         生成结果
+                        {isGenerating && <ArrowPath className="w-3.5 h-3.5 text-sky-500 animate-spin" />}
+                        {!isGenerating && resultText && <span className="text-xs text-green-500 font-bold ml-1">已完成</span>}
                     </h3>
-                    <div className="flex gap-2">
-                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors" title="复制"><Copy className="w-4 h-4" /></button>
-                        <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors" title="关闭"><X className="w-4 h-4" /></button>
+                    <div className="flex gap-2 items-center">
+                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-white rounded transition-colors flex items-center gap-1" title="复制">
+                            <Copy className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-white rounded transition-colors" title="关闭"><X className="w-4 h-4" /></button>
                     </div>
                 </div>
 
-                {/* Plain Text View */}
+                {/* Plain Text View - No Markdown */}
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                     <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">{resultText}</div>
                 </div>
 
                 <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-2">
+                    {/* Insert / Replace */}
                     <button 
-                        onClick={() => {
-                            if (activeTab === 'polish') onReplace(resultText);
-                            else onInsert(resultText);
-                        }} 
+                        onClick={handleInsertCheck} 
                         className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
                     >
                         {activeTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
@@ -320,19 +350,19 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     {isGenerating ? (
                         <button 
                             onClick={handleStop}
-                            className="px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center gap-1"
+                            className="flex-1 px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
                         >
                             <Stop className="w-3 h-3" /> 停止生成
                         </button>
                     ) : (
-                        <div className="flex gap-2">
-                            <button onClick={handleContinue} className="px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm font-sans flex items-center gap-1" title="续写更多内容">
+                        <>
+                            <button onClick={handleContinue} className="flex-1 px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm font-sans flex items-center justify-center gap-1" title="续写更多内容">
                                 <Play className="w-3 h-3" /> 继续生成
                             </button>
-                            <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
+                            <button onClick={handleGenerate} className="flex-1 px-3 py-2.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold rounded-lg hover:bg-orange-200 transition-colors text-sm font-sans flex items-center justify-center gap-1">
                                 <ArrowPath className="w-3 h-3" /> 重试
                             </button>
-                        </div>
+                        </>
                     )}
                 </div>
             </div>
@@ -354,7 +384,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
             {/* Main Content Area */}
             <div className="flex-1 overflow-y-auto p-3 space-y-4 font-sans dynamic-scrollbar relative">
                 
-                {/* Module 1: Parameter Config - White Background */}
+                {/* Module 1: Parameter Config */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
                     <button 
                         onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} 
@@ -413,7 +443,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     )}
                 </div>
 
-                {/* Module 2: Text to Process (Polish/Review/Expand/Continue) - White Background */}
+                {/* Module 2: Text to Process */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
                     <div className="p-3 border-b border-gray-100 dark:border-gray-800">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
@@ -436,7 +466,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     </div>
                 </div>
 
-                {/* Module 3: Prompt Selection & Associated Assets & Form - White Background */}
+                {/* Module 3: Prompt Selection & Form */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
                     <div className="p-3 border-b border-gray-100 dark:border-gray-800">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
@@ -506,7 +536,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                     return (
                                         <div key={field.id} className="space-y-1.5">
                                             <div className="flex justify-between items-center">
-                                                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
                                                     {index + 1}. {field.label}
                                                     {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
                                                 </label>
@@ -523,7 +553,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
                                                     placeholder={field.placeholder} 
                                                     maxLength={field.maxLength}
-                                                    className="w-full p-2.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner" 
+                                                    className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" 
                                                 />
                                             ) : (
                                                 <input 
@@ -532,7 +562,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
                                                     placeholder={field.placeholder} 
                                                     maxLength={field.maxLength}
-                                                    className="w-full p-2.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" 
+                                                    className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" 
                                                 />
                                             )}
                                             {field.description && (
@@ -583,24 +613,30 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
                         {(resultText || (isGenerating && resultText)) && (
                             <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="text-xs font-bold text-gray-800 dark:text-white flex items-center gap-2">生成结果</h4>
+                                <div className="flex justify-between items-center p-3 rounded-t-xl bg-sky-50/50 border-b border-sky-100/50">
+                                    <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-sky-500" />
+                                        生成结果
+                                        {isGenerating && <ArrowPath className="w-3.5 h-3.5 text-sky-500 animate-spin" />}
+                                        {!isGenerating && resultText && <span className="text-xs text-green-500 font-bold ml-1">已完成</span>}
+                                    </h4>
                                     <div className="flex gap-1">
-                                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1 text-gray-500 hover:text-sky-600 bg-gray-100 hover:bg-sky-50 rounded transition-colors" title="复制"><Copy className="w-3.5 h-3.5" /></button>
-                                        <button onClick={() => setResultText('')} className="p-1 text-gray-500 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded transition-colors" title="关闭"><X className="w-4 h-4" /></button>
+                                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-white rounded transition-colors" title="复制"><Copy className="w-3.5 h-3.5" /></button>
+                                        <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-white rounded transition-colors" title="关闭"><X className="w-4 h-4" /></button>
                                     </div>
                                 </div>
-                                {/* Reading Text Format (No Markdown) */}
-                                <div className="p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-xs leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">
+                                {/* Plain text rendering */}
+                                <div className="p-3 bg-white dark:bg-gray-900 rounded-b-xl border border-t-0 border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">
                                     {resultText}
                                 </div>
                                 <div className="flex gap-2">
                                     <button 
                                         onClick={() => {
+                                            showToast('请确保编辑器中有光标位置或选区');
                                             if (activeTab === 'polish') onReplace(resultText);
                                             else onInsert(resultText);
                                         }} 
-                                        className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-xs flex items-center justify-center gap-1"
+                                        className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm flex items-center justify-center gap-1"
                                     >
                                         {activeTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
                                     </button>
@@ -608,19 +644,19 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                     {isGenerating ? (
                                         <button 
                                             onClick={handleStop}
-                                            className="px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center gap-1"
+                                            className="flex-1 px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
                                         >
                                             <Stop className="w-3 h-3" /> 停止生成
                                         </button>
                                     ) : (
-                                        <div className="flex gap-2">
-                                            <button onClick={handleContinue} className="px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-xs flex items-center gap-1" title="续写更多内容">
+                                        <>
+                                            <button onClick={handleContinue} className="flex-1 px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm flex items-center justify-center gap-1" title="续写更多内容">
                                                 <Play className="w-3 h-3" /> 继续生成
                                             </button>
-                                            <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-xs flex items-center gap-1">
+                                            <button onClick={handleGenerate} className="flex-1 px-3 py-2.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold rounded-lg hover:bg-orange-200 transition-colors text-sm flex items-center justify-center gap-1">
                                                 <ArrowPath className="w-3 h-3" /> 重试
                                             </button>
-                                        </div>
+                                        </>
                                     )}
                                 </div>
                             </div>

@@ -121,6 +121,7 @@ export interface Asset {
   content: string;
   tags: string[];
   data?: AssetFormData;
+  isFavorite?: boolean; // Added field
 }
 
 export interface Chapter {
@@ -138,6 +139,7 @@ export interface NovelSettings {
   synopsis: string;
   worldview: string;
   characterSettings: string;
+  specificTerms?: string; // New field for Specific Terms
 }
 
 export interface Novel {

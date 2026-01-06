@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Workflow, Asset } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database } from './Icon';
+import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X } from './Icon';
 import ImportAssetModal from './ImportAssetModal';
 import { saveMaterial } from '../services/supabaseService';
 
@@ -61,6 +61,53 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
+const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({ isVisible, onClose }) => {
+    const [seconds, setSeconds] = useState(0);
+
+    useEffect(() => {
+        let interval: any;
+        if (isVisible) {
+            setSeconds(0);
+            interval = setInterval(() => {
+                setSeconds(s => s + 1);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [isVisible]);
+
+    useEffect(() => {
+        if (isVisible && seconds >= 10) {
+            onClose();
+        }
+    }, [seconds, isVisible, onClose]);
+
+    if (!isVisible) return null;
+
+    return (
+        <div className="absolute inset-0 z-50 flex items-center justify-center">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-80 text-center mx-4 animate-fade-in-up relative">
+                <button 
+                    onClick={onClose}
+                    className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    title="关闭/取消"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+
+                <div className="relative w-12 h-12 mx-auto mb-4">
+                    <div className="absolute inset-0 border-2 border-gray-100 dark:border-gray-800 rounded-full"></div>
+                    <div className="absolute inset-0 border-2 border-sky-500 rounded-full border-t-transparent animate-spin"></div>
+                    <Sparkles className="absolute inset-0 w-5 h-5 m-auto text-sky-500 animate-pulse" />
+                </div>
+                
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">AI 正在创作...</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-4">已耗时: {seconds} 秒</p>
+                <p className="text-xs text-gray-400">弹窗将在 10 秒后自动关闭</p>
+            </div>
+        </div>
+    );
+};
+
 const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(0.8);
@@ -80,6 +127,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [importContent, setImportContent] = useState('');
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [showOverlay, setShowOverlay] = useState(false);
     
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -100,7 +148,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             setImportContent(text);
             setImportModalOpen(true);
         } else {
-            // If no text selected, try to find text from the active or last result
             const lastKey = Object.keys(stepResults).pop();
             if (lastKey) {
                 setImportContent(stripMarkdown(stepResults[lastKey]));
@@ -204,6 +251,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     return (
         <div className="p-4 h-full animate-fade-in flex flex-col font-sans bg-gray-50/30 dark:bg-black/20 relative">
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={importContent} onSave={handleImportAsset} />
+            <LoadingOverlay isVisible={showOverlay} onClose={() => setShowOverlay(false)} />
             
             {successMessage && (
                 <div className="fixed top-20 right-8 z-50 px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-lg animate-fade-in-up text-sm font-bold flex items-center gap-2">
@@ -212,13 +260,15 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             )}
 
             {/* Header: Compact, Title Left, Progress Right */}
-            <div className="flex items-center justify-between mb-4 bg-white dark:bg-gray-900 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-shrink-0 h-16">
+            {/* Removed bottom margin (mb-0) to connect with bottom panels */}
+            <div className="flex items-center justify-between mb-0 bg-white dark:bg-gray-900 p-3 rounded-t-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-shrink-0 h-16 z-10 relative">
                  <div className="flex items-center gap-3">
                     <button onClick={onBack} className="p-1.5 text-gray-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-full transition-all">
                         <ChevronDoubleLeft className="w-5 h-5" />
                     </button>
                     <div>
-                        <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tight leading-tight">{workflow.title}</h1>
+                        {/* Title changed to blue */}
+                        <h1 className="text-lg font-black text-blue-600 dark:text-blue-400 tracking-tight leading-tight">{workflow.title}</h1>
                     </div>
                  </div>
                  
@@ -238,11 +288,12 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                  </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 overflow-hidden">
-                {/* Left Form Panel */}
-                <div className="lg:col-span-4 flex flex-col overflow-y-auto pr-1 space-y-4 custom-scrollbar">
-                    <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-4">
-                        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+            {/* Content Area with Gap 0 (gap-0) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 flex-1 overflow-hidden border-t border-gray-100 dark:border-gray-800">
+                {/* Left Form Panel: Light Blue Background, Hidden Scrollbar */}
+                <div className="lg:col-span-4 flex flex-col overflow-y-auto pr-1 space-y-4 [&::-webkit-scrollbar]:hidden bg-sky-50/50 dark:bg-sky-900/10 border-r border-gray-100 dark:border-gray-800 p-4 rounded-bl-2xl" style={{ scrollbarWidth: 'none' }}>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between border-b border-sky-100 dark:border-sky-800 pb-2">
                             <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
                                 <AdjustmentsHorizontal className="w-4 h-4 text-sky-500" />
                                 参数配置
@@ -253,10 +304,10 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                         </div>
 
                         {showConfig && (
-                            <div className="space-y-3 animate-fade-in p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                            <div className="space-y-3 animate-fade-in p-3 bg-white/50 dark:bg-gray-800/50 rounded-xl border border-sky-100 dark:border-sky-800">
                                 <div>
                                     <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">模型</label>
-                                    <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none cursor-pointer">
+                                    <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none cursor-pointer">
                                         <option value="deepseek-chat">奇思版 (DeepSeek)</option>
                                         <option value="gemini-2.0-flash">妙写版 (Gemini)</option>
                                         <option value="doubao-flash">速写版 (豆包)</option>
@@ -301,7 +352,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                             value={formState[field.variable] || ''}
                                             onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}
                                             placeholder={`请输入${field.label}...`}
-                                            className="w-full p-3 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all resize-none h-24 shadow-inner"
+                                            className="w-full p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all resize-none h-24 shadow-sm"
                                         />
                                     ) : (
                                         <input
@@ -309,7 +360,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                             value={formState[field.variable] || ''}
                                             onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}
                                             placeholder={`请输入${field.label}...`}
-                                            className="w-full p-3 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all shadow-inner"
+                                            className="w-full p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all shadow-sm"
                                         />
                                     )}
                                     {field.description && <p className="text-[10px] text-blue-500 dark:text-blue-400 ml-1 leading-tight">{field.description}</p>}
@@ -345,12 +396,12 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                     </div>
                 </div>
 
-                {/* Right Result Panel */}
-                <div className="lg:col-span-8 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col overflow-hidden relative">
-                     <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 h-12">
+                {/* Right Result Panel: Light Blue Background */}
+                <div className="lg:col-span-8 bg-sky-50/30 dark:bg-sky-900/5 rounded-br-2xl flex flex-col overflow-hidden relative">
+                     <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center h-12">
                         <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
                             <Sparkles className="w-4 h-4 text-sky-500" />
-                            创作产出
+                            文本生成
                             {isLoading && <span className="text-[10px] font-normal text-sky-500 animate-pulse ml-2 flex items-center gap-1"><ArrowPath className="w-3 h-3 animate-spin" /> AI 正在思考...</span>}
                         </h3>
                         {Object.keys(stepResults).length > 0 && (
@@ -368,7 +419,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                         navigator.clipboard.writeText(fullText); 
                                         triggerSuccess('全文已复制');
                                     }}
-                                    className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1"
+                                    className="px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
                                 >
                                     <Copy className="w-3.5 h-3.5" /> 复制全文
                                 </button>
@@ -385,21 +436,21 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                             return (
                                 <div key={step.id} className="animate-fade-in space-y-2">
                                     <div className="flex items-center gap-3">
-                                        <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
+                                        <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{step.name}</span>
-                                        <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
+                                        <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
                                     </div>
                                     {result ? (
-                                        <div className="p-5 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group">
+                                        <div className="p-5 bg-white dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm">
                                             {/* Step Toolbar */}
-                                            <div className="flex justify-end gap-2 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 opacity-80">
+                                            <div className="flex justify-end gap-2 mb-2 pb-2 border-b border-gray-100 dark:border-gray-700 opacity-80">
                                                 <button 
                                                     onClick={() => {
                                                         const plain = stripMarkdown(result);
                                                         setImportContent(plain);
                                                         setImportModalOpen(true);
                                                     }}
-                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-purple-500 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-colors"
+                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded transition-colors"
                                                 >
                                                     <Database className="w-3 h-3" /> 导入素材
                                                 </button>
@@ -408,14 +459,14 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                         navigator.clipboard.writeText(stripMarkdown(result));
                                                         triggerSuccess('内容已复制');
                                                     }}
-                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded transition-colors"
                                                 >
                                                     <Copy className="w-3 h-3" /> 复制
                                                 </button>
                                                 {(executionStatus === 'paused' && idx === nextStepIndex - 1) || executionStatus === 'completed' ? (
                                                     <button 
                                                         onClick={() => handleRegenerateStep(idx)} 
-                                                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                                                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded transition-colors"
                                                         title="重新生成此步骤"
                                                     >
                                                         <ArrowPath className="w-3 h-3" /> 重试
@@ -426,7 +477,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                             <FormattedText text={result} />
                                         </div>
                                     ) : (
-                                        <div className="py-8 flex flex-col items-center justify-center text-sky-500 animate-pulse bg-gray-50/50 rounded-xl">
+                                        <div className="py-8 flex flex-col items-center justify-center text-sky-500 animate-pulse bg-white/50 rounded-xl border border-dashed border-sky-200">
                                             <div className="w-2 h-2 bg-sky-500 rounded-full animate-ping mb-2"></div>
                                             <p className="text-[10px] font-bold uppercase tracking-widest">AI 正在构思本环节内容...</p>
                                         </div>
