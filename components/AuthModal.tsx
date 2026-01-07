@@ -94,12 +94,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                 if (email === newEmail) {
                     throw new Error("Same email");
                 }
-                const { error: updateError } = await updateUserEmailWithLogin(email, password, newEmail);
+                const { error: updateError, isPending } = await updateUserEmailWithLogin(email, password, newEmail);
                 if (updateError) throw updateError;
-                setMessage('邮箱修改请求已提交！请使用新邮箱重新登录 (如开启验证，请先查收邮件)。');
+                
+                if (isPending) {
+                    setMessage('验证邮件已发送！出于安全原因，Supabase 需要您点击新邮箱（有时也包括旧邮箱）中的链接以完成修改。');
+                } else {
+                    setMessage('邮箱修改成功！请使用新邮箱重新登录。');
+                }
+                
                 setTimeout(() => {
                     setMode('login');
-                    setEmail(newEmail);
+                    setEmail(newEmail); // Pre-fill new email for convenience
                     setPassword('');
                     setNewEmail('');
                     setMessage('');
