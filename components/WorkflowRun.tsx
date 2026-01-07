@@ -372,9 +372,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             const currentContent = prev[activeFollowUp.variable] || '';
             let updatedContent = currentContent;
 
-            // Determine if we are replacing a specific selection or appending to full text
-            // Note: Since the modal allows switching modes, we rely on the action type and activeFollowUp target
-            
             if (type === 'replace' && activeFollowUp.target) {
                 // Replace first occurrence of selection
                 updatedContent = currentContent.replace(activeFollowUp.target, newText);
@@ -442,6 +439,17 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 for await (const chunk of stream) {
                     stepContent += chunk;
                     setStepResults(prev => ({ ...prev, [step.outputVariable]: stepContent }));
+                }
+
+                // Handling for fast streams or empty outputs (Fix for Gemini empty output)
+                if (!stepContent) {
+                    // Wait a tick to see if state update catches up or if it was truly empty
+                    await new Promise(r => setTimeout(r, 100));
+                    if (!stepContent) {
+                        console.warn(`Step ${i + 1} generated empty content. Model might have blocked output or stream failed.`);
+                        stepContent = "[AI未生成有效内容，请检查模型设置或提示词]";
+                        setStepResults(prev => ({ ...prev, [step.outputVariable]: stepContent }));
+                    }
                 }
 
                 currentContext[step.outputVariable] = stepContent;

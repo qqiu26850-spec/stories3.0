@@ -50,14 +50,21 @@ export default async function handler(request: Request) {
             async start(controller) {
                 try {
                     for await (const chunk of responseStream) {
-                        const text = chunk.text;
+                        // Robust text extraction: try getter first, then fallback to candidate parts
+                        let text = chunk.text;
+                        if (!text && chunk.candidates?.[0]?.content?.parts?.[0]?.text) {
+                            text = chunk.candidates[0].content.parts[0].text;
+                        }
+                        
                         if (text) {
                             controller.enqueue(encoder.encode(text));
                         }
                     }
                     controller.close();
                 } catch (e) {
-                    controller.error(e);
+                    console.error("Gemini Stream Error", e);
+                    // Don't error the controller if we already sent data, just close
+                    try { controller.close(); } catch {}
                 }
             }
         });
