@@ -1,116 +1,179 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Helper to safely access environment variables in various environments (Vite, CRA, Next.js)
-const getEnvVar = (key: string, viteKey?: string) => {
-    let value = '';
-    
-    // Try import.meta.env (Vite)
+// Fix: Extremely safe access to import.meta.env
+const getEnvVar = (key: string, defaultValue: string) => {
     try {
         // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env) {
+        if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
             // @ts-ignore
-            value = import.meta.env[viteKey || key] || '';
+            return import.meta.env[key];
         }
-    } catch (e) {}
-
-    if (value) return value;
-
-    // Try process.env
-    try {
-        if (typeof process !== 'undefined' && process.env) {
-            value = process.env[key] || '';
-        }
-    } catch (e) {}
-
-    return value;
+    } catch (e) {
+        // Ignore errors during access
+    }
+    return defaultValue;
 };
 
-// Initialize Supabase client
-// Use a placeholder if variables are missing to prevent immediate crash, though API calls will fail.
-const supabaseUrl = getEnvVar('REACT_APP_SUPABASE_URL', 'VITE_SUPABASE_URL') || getEnvVar('NEXT_PUBLIC_SUPABASE_URL') || 'https://placeholder.supabase.co';
-const supabaseKey = getEnvVar('REACT_APP_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY') || getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY') || 'placeholder';
+const SUPABASE_URL = getEnvVar('VITE_SUPABASE_URL', 'https://kuvfgccoyekvkolkgwby.supabase.co');
+const SUPABASE_ANON_KEY = getEnvVar('VITE_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1dmZnY2NveWVrdmtvbGtnd2J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0NDc5NzIsImV4cCI6MjA4MTAyMzk3Mn0.94-LLSUIN5HSfi4-wq0dhmxAP1T2beyKiR8z7CdWstg');
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+    }
+});
 
-// Cache variables
+// --- Global Cache Variables ---
 let promptsCache: any[] | null = null;
-let workflowsCache: any[] | null = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 60000 * 5;
 
-// --- Auth Services ---
+export async function getCurrentUserId() {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+}
 
-export const getCurrentUserId = async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user?.id || null;
-};
+async function withRetry<T>(operation: () => Promise<T>, retries = 3): Promise<T> {
+    try {
+        return await operation();
+    } catch (err: any) {
+        if (retries > 0 && (err.message?.includes('fetch') || err.status === 500)) {
+            await new Promise(r => setTimeout(r, 1000));
+            return withRetry(operation, retries - 1);
+        }
+        throw err;
+    }
+}
 
-export const signIn = async (email: string, password: string) => {
-  return await supabase.auth.signInWithPassword({ email, password });
-};
+/**
+ * 关键修复：确保当前用户在 public.profiles 表中有记录。
+ * 如果缺少记录，其他用户无法通过 RLS 读取到昵称，导致显示"匿名用户"。
+ */
+async function ensureUserProfileExists() {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-export const signUp = async (email: string, password: string) => {
-  return await supabase.auth.signUp({ email, password });
-};
+        // 检查 Profile 是否存在
+        const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle();
+        
+        if (!profile) {
+            // 从 Auth Metadata 恢复数据
+            const metadata = user.user_metadata || {};
+            // 优先使用 metadata 中的 info，如果没有则生成默认值
+            const nickname = metadata.full_name || metadata.name || metadata.nickname || `用户${user.id.substring(0, 6)}`;
+            const avatarUrl = metadata.avatar_url || null;
 
-export const signOut = async () => {
-  promptsCache = null;
-  workflowsCache = null;
-  return await supabase.auth.signOut();
-};
+            console.log("Profile missing, auto-creating for:", nickname);
 
-export const resetPasswordForEmail = async (email: string) => {
-  return await supabase.auth.resetPasswordForEmail(email);
-};
+            // 插入 profiles 表
+            await supabase.from('profiles').upsert({
+                id: user.id,
+                username: nickname,
+                avatar_url: avatarUrl,
+                updated_at: new Date().toISOString()
+            });
+        }
+    } catch (e) {
+        console.warn("Ensure profile failed, ignoring:", e);
+    }
+}
 
-export const fetchUserProfile = async () => {
-  const userId = await getCurrentUserId();
-  if (!userId) return null;
-  const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-  return data;
-};
+export async function signUp(email: string, password: string) {
+    return await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+            emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined
+        }
+    });
+}
 
-export async function updateUserProfile(nickname: string, avatarUrl: string | null, newEmail?: string, password?: string) {
+export async function signIn(email: string, password: string) {
+    return await supabase.auth.signInWithPassword({ email, password });
+}
+
+export async function signOut() {
+    return await supabase.auth.signOut();
+}
+
+export async function resetPasswordForEmail(email: string) {
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+  });
+  return { data, error };
+}
+
+/**
+ * 通过验证旧账号密码来修改邮箱
+ */
+export async function updateUserEmailWithLogin(oldEmail: string, password: string, newEmail: string) {
+    try {
+        // 1. 验证旧账号密码 (登录)
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: oldEmail,
+            password: password
+        });
+
+        if (signInError) throw signInError;
+
+        // 2. 更新邮箱
+        // 注意：Supabase 默认可能会发送确认邮件到新旧邮箱。
+        // 如果项目设置了 Secure Email Change 为 disabled，则可能直接更新。
+        const { data: updateData, error: updateError } = await supabase.auth.updateUser({
+            email: newEmail
+        });
+
+        if (updateError) throw updateError;
+
+        // 如果需要，可以强制登出，让用户用新邮箱重新登录
+        await supabase.auth.signOut();
+
+        return { data: updateData, error: null };
+    } catch (error: any) {
+        return { data: null, error };
+    }
+}
+
+export async function fetchUserProfile() {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return { nickname: '未登录用户', avatarUrl: null, email: '' };
+        
+        // 尝试获取 profile 表数据
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        
+        // 优先使用 session 中的 metadata (反应更快)，回退使用 profile 表
+        const nickname = session.user.user_metadata?.full_name || profile?.username || '奇思妙想家';
+        const avatarUrl = session.user.user_metadata?.avatar_url || profile?.avatar_url || null;
+
+        return {
+            nickname,
+            avatarUrl,
+            email: session.user.email
+        };
+    } catch (e) {
+        return { nickname: '奇思妙想家', avatarUrl: null, email: '' };
+    }
+}
+
+export async function updateUserProfile(nickname: string, avatarUrl: string | null, email?: string) {
     const userId = await getCurrentUserId();
     if (!userId) return { error: '未登录' };
-    
-    let emailUpdatePending = false;
-
     try {
-        if (newEmail) {
-            const { data: { user } } = await supabase.auth.getUser();
-            const currentEmail = user?.email;
-
-            if (currentEmail && newEmail !== currentEmail) {
-                if (!password) {
-                    return { error: '为了您的账户安全，修改邮箱需要输入当前密码验证身份。' };
-                }
-
-                const { error: signInError } = await supabase.auth.signInWithPassword({
-                    email: currentEmail,
-                    password: password
-                });
-
-                if (signInError) {
-                    return { error: '密码错误，身份验证失败。' };
-                }
-
-                const { error: emailError } = await supabase.auth.updateUser({ email: newEmail });
-                
-                if (emailError) {
-                    return { error: `邮箱更新失败: ${emailError.message}` };
-                }
-                
-                emailUpdatePending = true;
-            }
-        }
-
         const updates: any = {
             data: { full_name: nickname, avatar_url: avatarUrl }
         };
-        
+        if (email) updates.email = email;
+
+        // 1. 更新 Auth 元数据 (Session)
         const { data, error: authError } = await supabase.auth.updateUser(updates);
         if (authError) throw authError;
 
+        // 2. 更新 Profiles 表 (即使失败也不阻塞返回)
         const { error } = await supabase.from('profiles').upsert({ 
             id: userId, 
             username: nickname, 
@@ -120,299 +183,454 @@ export async function updateUserProfile(nickname: string, avatarUrl: string | nu
 
         if (error) console.warn("Profiles table update failed", error);
 
-        promptsCache = null; 
-        
-        return { error: null, data, emailUpdatePending };
+        promptsCache = null; // 清除缓存以刷新昵称显示
+        return { error: null, data };
     } catch (e: any) {
-        return { error: e.message || '更新失败' };
+        return { error: e };
     }
 }
 
-export const deleteUserData = async () => {
-    const userId = await getCurrentUserId();
-    if (!userId) return false;
-    
+export async function deleteUserData(): Promise<boolean> {
     try {
-        // Attempt to delete related data first to avoid FK constraints if not set to cascade
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("User not logged in");
+        await supabase.auth.updateUser({ data: { is_deleted: true } });
         await supabase.from('projects').delete().eq('user_id', userId);
         await supabase.from('materials').delete().eq('user_id', userId);
-        await supabase.from('prompts').delete().eq('user_id', userId);
-        await supabase.from('workflows').delete().eq('user_id', userId);
-        await supabase.from('profiles').delete().eq('id', userId);
-        
-        // Note: Actual user deletion usually requires service role key or RPC function 'delete_user'
-        // Here we just sign out as a simulation of deletion from client perspective if RPC fails or not exists.
-        // In a real app, you would call a backend function.
-        await supabase.auth.signOut();
+        await signOut();
         return true;
-    } catch (e) {
-        console.error(e);
+    } catch (err: any) {
         return false;
     }
-};
+}
 
-// --- Prompt Services ---
-
-export const fetchPrompts = async (category = 'all', forceRefresh = false) => {
-    if (promptsCache && !forceRefresh && category === 'all') return promptsCache;
-    
-    let query = supabase.from('prompts').select('*, profiles(username)');
-    if (category !== 'all') {
-        query = query.eq('main_category', category);
+export async function fetchUserLibrary() {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return { prompts: [], materials: [] };
+        const { data: prompts } = await withRetry(async () => await supabase.from('prompts').select('*').eq('user_id', userId).order('created_at', { ascending: false }));
+        const { data: materials } = await withRetry(async () => await supabase.from('materials').select('*').eq('user_id', userId).order('created_at', { ascending: false }));
+        return { prompts: (prompts as any[]) || [], materials: (materials as any[]) || [] };
+    } catch (e) {
+        return { prompts: [], materials: [] };
     }
-    query = query.order('usage_count', { ascending: false });
+}
 
-    const { data, error } = await query;
-    if (error) {
-        console.error(error);
+export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short' | 'short_story', coverUrl: string | null = null) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("请先登录");
+        const dbType = type === 'short' ? 'short_story' : type;
+        const { data, error } = await withRetry(async () => await supabase.from('projects').insert([{
+            user_id: userId, title, description: desc, type: dbType, cover_image: coverUrl, status: 'draft'
+        }]).select());
+        if (error) throw error;
+        return { id: data?.[0]?.id, error: null };
+    } catch (err: any) {
+        return { id: null, error: err };
+    }
+}
+
+export async function updateProject(projectId: string, updates: { title?: string, description?: string, cover_image?: string }) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        const { error } = await supabase.from('projects').update(updates).eq('id', projectId).eq('user_id', userId);
+        if (error) throw error;
+    } catch (err: any) {
+        console.error('更新项目失败:', err.message);
+    }
+}
+
+export async function fetchProjects() {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return [];
+        const { data, error } = await withRetry(async () => await supabase.from('projects').select('*').eq('user_id', userId).order('created_at', { ascending: false }));
+        if (data && data.length > 0) {
+            const projectIds = data.map(p => p.id);
+            const { data: chapters } = await supabase.from('chapters').select('project_id, content').in('project_id', projectIds);
+            const countMap: Record<string, number> = {};
+            chapters?.forEach((c: any) => {
+                countMap[c.project_id] = (countMap[c.project_id] || 0) + (c.content?.length || 0);
+            });
+            return data.map(p => ({ ...p, word_count: countMap[p.id] || 0 }));
+        }
+        return error ? [] : data;
+    } catch (e) {
         return [];
     }
-    
-    if (category === 'all') promptsCache = data;
-    return data;
-};
+}
 
-export const savePrompt = async (title: string, content: string, category: string, subCategory: string) => {
+export async function deleteProject(id: string) {
     const userId = await getCurrentUserId();
-    if (!userId) return null;
-    const { data, error } = await supabase.from('prompts').insert({
-        user_id: userId,
-        title,
-        content,
-        main_category: category,
-        sub_category: subCategory,
-        usage_count: 0
-    }).select();
-    if (!error) promptsCache = null;
-    return data;
-};
+    if (!userId) return;
+    await supabase.from('projects').delete().eq('id', id).eq('user_id', userId);
+}
 
-export const updatePrompt = async (id: string, updates: any) => {
-    const { error } = await supabase.from('prompts').update(updates).eq('id', id);
-    if (!error) promptsCache = null;
-    return error;
-};
+export async function fetchChapters(projectId: string) {
+    try {
+        const { data, error } = await supabase.from('chapters').select('*').eq('project_id', projectId).order('order_index', { ascending: true });
+        return error ? [] : data;
+    } catch (e) { return []; }
+}
 
-export const deletePrompt = async (id: string) => {
-    const { error } = await supabase.from('prompts').delete().eq('id', id);
-    if (!error) promptsCache = null;
-    return error;
-};
+export async function saveChapterToDB(projectId: string, chapterId: string, title: string, content: string, orderIndex: number) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        const isNew = chapterId.startsWith('ch-') || chapterId.startsWith('scene-') || chapterId.startsWith('new-');
+        if (isNew) {
+            const { data, error } = await supabase.from('chapters').insert([{ project_id: projectId, title, content, order_index: orderIndex }]).select();
+            if (error) throw error;
+            return data[0].id;
+        } else {
+            const { data, error } = await supabase.from('chapters').update({ title, content, order_index: orderIndex }).eq('id', chapterId).select();
+            if (error) throw error;
+            return data[0].id;
+        }
+    } catch (e) {
+        return null;
+    }
+}
 
-export const incrementPromptHeat = async (id: string) => {
-    const { error } = await supabase.rpc('increment_prompt_usage', { prompt_id: id });
-    if (error) {
-        // Fallback
+export async function updateChapterOrder(updates: { id: string, order_index: number }[]) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        const promises = updates.map(update => 
+            supabase.from('chapters').update({ order_index: update.order_index }).eq('id', update.id)
+        );
+        await Promise.all(promises);
+    } catch (e) {
+        console.error("Failed to update order", e);
+        throw e;
+    }
+}
+
+export async function deleteChapterFromDB(chapterId: string) {
+    if (chapterId.startsWith('ch-') || chapterId.startsWith('scene-')) return;
+    await supabase.from('chapters').delete().eq('id', chapterId);
+}
+
+export async function saveMaterial(name: string, content: string, type: 'character' | 'plot' | 'idea' | 'inspiration', tags: string[] = []) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        const dbType = type === 'inspiration' ? 'idea' : type;
+        const { error } = await supabase.from('materials').insert([{ user_id: userId, name, content, type: dbType, tags: tags }]);
+        if (error) throw error;
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err };
+    }
+}
+
+export async function updateMaterial(id: string, updates: { name?: string, content?: string, tags?: string[] }) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        const { error } = await supabase.from('materials').update(updates).eq('id', id).eq('user_id', userId);
+        if (error) throw error;
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err };
+    }
+}
+
+// Added toggleMaterialFavorite
+export async function toggleMaterialFavorite(id: string, isFavorite: boolean) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+        await supabase.from('materials').update({ is_favorite: isFavorite }).eq('id', id).eq('user_id', userId);
+    } catch (e) {
+        console.error("Toggle material favorite failed", e);
+    }
+}
+
+export async function fetchMaterials(type?: string) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return [];
+        let query = supabase.from('materials').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+        if (type) {
+            const dbType = type === 'inspiration' ? 'idea' : type;
+            query = query.eq('type', dbType);
+        }
+        const { data, error } = await query;
+        // Map is_favorite property correctly if database column exists
+        return error ? [] : data.map((item: any) => ({ ...item, isFavorite: item.is_favorite }));
+    } catch (e) { return []; }
+}
+
+export async function deleteMaterial(id: string) {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    await supabase.from('materials').delete().eq('id', id).eq('user_id', userId);
+}
+
+function mapPromptCategory(cat: string) {
+    if (cat === 'short-story') return 'short';
+    if (cat === 'long-story') return 'long';
+    if (cat === 'script') return 'script';
+    return cat;
+}
+
+export async function savePrompt(title: string, content: string, mainCat: string, subCat: string) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        
+        await ensureUserProfileExists(); // 确保用户档案存在
+
+        const dbMainCat = mapPromptCategory(mainCat);
+        let description = '';
+        try {
+            const parsed = JSON.parse(content);
+            if (parsed.description) description = parsed.description;
+            else description = content.substring(0, 50) + '...';
+        } catch (e) {
+            description = content.substring(0, 50) + '...';
+        }
+        const { error } = await supabase.from('prompts').insert([{ user_id: userId, title, content, description, main_category: dbMainCat, sub_category: subCat, usage_count: 0 }]);
+        if (error) throw error;
+        promptsCache = null;
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err };
+    }
+}
+
+export async function updatePrompt(id: string, updates: { title?: string, content?: string, main_category?: string, sub_category?: string }) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        const dbUpdates: any = { ...updates };
+        if (updates.main_category) dbUpdates.main_category = mapPromptCategory(updates.main_category);
+        if (updates.content) {
+             try {
+                const parsed = JSON.parse(updates.content);
+                if (parsed.description) dbUpdates.description = parsed.description;
+             } catch(e) {}
+        }
+        const { error } = await supabase.from('prompts').update(dbUpdates).eq('id', id).eq('user_id', userId);
+        if (error) throw error;
+        promptsCache = null;
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err };
+    }
+}
+
+export async function fetchPrompts(mainCategory?: string, forceRefresh = false) {
+    try {
+        const now = Date.now();
+        if (!forceRefresh && promptsCache && (now - lastFetchTime < CACHE_DURATION)) {
+            let data = promptsCache;
+            if (mainCategory && mainCategory !== 'all') {
+                const dbCat = mapPromptCategory(mainCategory);
+                data = data.filter(p => p.main_category === dbCat);
+            }
+            return data;
+        }
+
+        let query = supabase.from('prompts').select('*, profiles(username)').order('usage_count', { ascending: false });
+        let shouldCache = false;
+
+        if (!mainCategory || mainCategory === 'all') {
+            shouldCache = true;
+        } else {
+            const dbCat = mapPromptCategory(mainCategory);
+            query = query.eq('main_category', dbCat);
+        }
+
+        let { data, error } = await query;
+
+        // Fallback Mechanism if join fails
+        if (error) {
+            console.warn("fetchPrompts join failed, fallback", error);
+            let fallbackQuery = supabase.from('prompts').select('*').order('usage_count', { ascending: false });
+            if (!shouldCache && mainCategory) {
+                const dbCat = mapPromptCategory(mainCategory);
+                fallbackQuery = fallbackQuery.eq('main_category', dbCat);
+            }
+            const res = await fallbackQuery;
+            data = res.data;
+            error = res.error;
+        }
+
+        if (error) return [];
+
+        if (shouldCache) {
+            promptsCache = data;
+            lastFetchTime = now;
+        }
+        
+        return data || [];
+    } catch (e) {
+        return [];
+    }
+}
+
+export async function incrementPromptHeat(id: string) {
+    try {
+        if (!id || id.startsWith('prompt-')) return;
         const { data } = await supabase.from('prompts').select('usage_count').eq('id', id).single();
         if (data) {
-            await supabase.from('prompts').update({ usage_count: (data.usage_count || 0) + 1 }).eq('id', id);
+            const newCount = (data.usage_count || 0) + 1;
+            await supabase.from('prompts').update({ usage_count: newCount }).eq('id', id);
         }
-    }
-};
+    } catch (e) {}
+}
 
-// --- Material (Asset) Services ---
-
-export const fetchMaterials = async (type?: string) => {
-    const userId = await getCurrentUserId();
-    if (!userId) return [];
-    
-    let query = supabase.from('materials').select('*').eq('user_id', userId);
-    if (type) {
-        query = query.eq('type', type);
-    }
-    query = query.order('created_at', { ascending: false });
-    
-    const { data, error } = await query;
-    if (error) return [];
-    return data;
-};
-
-export const saveMaterial = async (name: string, content: string, type: string, tags: string[]) => {
-    const userId = await getCurrentUserId();
-    if (!userId) return null;
-    const { data, error } = await supabase.from('materials').insert({
-        user_id: userId,
-        name,
-        content,
-        type,
-        tags
-    }).select();
-    return data;
-};
-
-export const updateMaterial = async (id: string, updates: any) => {
-    const { error } = await supabase.from('materials').update(updates).eq('id', id);
-    return error;
-};
-
-export const deleteMaterial = async (id: string) => {
-    const { error } = await supabase.from('materials').delete().eq('id', id);
-    return error;
-};
-
-export const toggleMaterialFavorite = async (id: string, isFavorite: boolean) => {
-    await supabase.from('materials').update({ is_favorite: isFavorite }).eq('id', id);
-};
-
-// --- Project (Novel/Script) Services ---
-
-export const fetchProjects = async () => {
-    const userId = await getCurrentUserId();
-    if (!userId) return [];
-    const { data, error } = await supabase.from('projects').select('*').eq('user_id', userId).order('updated_at', { ascending: false });
-    if (error) return [];
-    return data;
-};
-
-export const createProject = async (title: string, description: string, type: string, coverUrl: string | null) => {
-    const userId = await getCurrentUserId();
-    if (!userId) return { error: { message: 'Not logged in' } };
-    
-    const { data, error } = await supabase.from('projects').insert({
-        user_id: userId,
-        title,
-        description,
-        type,
-        cover_url: coverUrl
-    }).select().single();
-    
-    return { id: data?.id, error };
-};
-
-export const updateProject = async (id: string, updates: any) => {
-    await supabase.from('projects').update(updates).eq('id', id);
-};
-
-export const deleteProject = async (id: string) => {
-    await supabase.from('projects').delete().eq('id', id);
-    // Also delete chapters
-    await supabase.from('chapters').delete().eq('project_id', id);
-};
-
-// --- Chapter Services ---
-
-export const fetchChapters = async (projectId: string) => {
-    const { data, error } = await supabase.from('chapters').select('*').eq('project_id', projectId).order('order_index', { ascending: true });
-    if (error) return [];
-    return data;
-};
-
-export const saveChapterToDB = async (projectId: string, chapterId: string, title: string, content: string, orderIndex: number) => {
-    if (chapterId.startsWith('new-')) {
-        // Insert
-        const { data, error } = await supabase.from('chapters').insert({
-            project_id: projectId,
-            title,
-            content,
-            order_index: orderIndex
-        }).select().single();
-        if (error) return null;
-        return data.id;
-    } else {
-        // Update
-        const { error } = await supabase.from('chapters').update({
-            title,
-            content,
-            updated_at: new Date().toISOString()
-        }).eq('id', chapterId);
-        if (error) return null;
-        return chapterId;
-    }
-};
-
-export const deleteChapterFromDB = async (id: string) => {
-    await supabase.from('chapters').delete().eq('id', id);
-};
-
-export const updateChapterOrder = async (updates: { id: string, order_index: number }[]) => {
-    for (const update of updates) {
-        await supabase.from('chapters').update({ order_index: update.order_index }).eq('id', update.id);
-    }
-};
-
-// --- Workflow Services ---
-
-export const fetchWorkflows = async () => {
-    if (workflowsCache) return workflowsCache;
-    
-    const { data, error } = await supabase.from('workflows').select('*, profiles(username)').order('usage_count', { ascending: false });
-    if (error) return [];
-    
-    workflowsCache = data;
-    return data;
-};
-
-export const saveWorkflow = async (title: string, description: string, category: string, subCategories: string[], fields: any[], steps: any[]) => {
+export async function deletePrompt(id: string) {
     const userId = await getCurrentUserId();
     if (!userId) return;
-    
-    const content = JSON.stringify({ fields, steps });
-    const { error } = await supabase.from('workflows').insert({
-        user_id: userId,
-        title,
-        description,
-        main_category: category,
-        sub_categories: subCategories,
-        content,
-        usage_count: 0
-    });
-    if (!error) workflowsCache = null;
-};
+    await supabase.from('prompts').delete().eq('id', id).eq('user_id', userId);
+    promptsCache = null;
+}
 
-export const updateWorkflow = async (id: string, data: any) => {
-    const content = JSON.stringify({ fields: data.fields, steps: data.steps });
-    const { error } = await supabase.from('workflows').update({
-        title: data.title,
-        description: data.description,
-        main_category: data.category,
-        sub_categories: data.subCategories,
-        content
-    }).eq('id', id);
-    if (!error) workflowsCache = null;
-};
+// Workflows Storage
+export async function saveWorkflow(title: string, description: string, category: string, subCategories: string[], fields: any[], steps: any[]) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        
+        await ensureUserProfileExists(); // 关键：保存前确保有 Profile
 
-export const deleteWorkflow = async (id: string) => {
-    const { error } = await supabase.from('workflows').delete().eq('id', id);
-    if (!error) workflowsCache = null;
-};
+        const content = JSON.stringify({ fields, steps });
+        const { error } = await supabase.from('workflows').insert([{ 
+            user_id: userId, title, description, content, main_category: mapPromptCategory(category), sub_categories: subCategories, usage_count: 0 
+        }]);
+        if (error) throw error;
+        return { success: true };
+    } catch (err: any) { return { success: false, error: err }; }
+}
 
-export const incrementWorkflowUsage = async (id: string) => {
-    const { error } = await supabase.rpc('increment_workflow_usage', { workflow_id: id });
-    if (error) {
-         const { data } = await supabase.from('workflows').select('usage_count').eq('id', id).single();
-         if (data) {
-             await supabase.from('workflows').update({ usage_count: (data.usage_count || 0) + 1 }).eq('id', id);
-         }
+export async function updateWorkflow(id: string, updates: { title?: string, description?: string, category?: string, subCategories?: string[], fields?: any[], steps?: any[] }) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        
+        const dbUpdates: any = {};
+        if (updates.title) dbUpdates.title = updates.title;
+        if (updates.description) dbUpdates.description = updates.description;
+        if (updates.category) dbUpdates.main_category = mapPromptCategory(updates.category);
+        if (updates.subCategories) dbUpdates.sub_categories = updates.subCategories;
+        
+        if (updates.fields || updates.steps) {
+            dbUpdates.content = JSON.stringify({ 
+                fields: updates.fields || [], 
+                steps: updates.steps || [] 
+            });
+        }
+        
+        if (Object.keys(dbUpdates).length === 0) return { success: true };
+
+        const { error } = await supabase.from('workflows').update(dbUpdates).eq('id', id).eq('user_id', userId);
+        if (error) throw error;
+        return { success: true };
+    } catch (err: any) { return { success: false, error: err }; }
+}
+
+// 核心修复：更健壮的 fetchWorkflows，解决关联查询不到作者名的问题
+export async function fetchWorkflows() {
+    try {
+        // 1. 获取工作流列表
+        const { data: workflows, error: wfError } = await withRetry(async () => 
+            await supabase.from('workflows').select('*').order('usage_count', { ascending: false })
+        );
+        
+        if (wfError) {
+            console.error("Fetch workflows failed", wfError);
+            return [];
+        }
+        
+        if (!workflows || workflows.length === 0) return [];
+
+        // 2. 提取所有作者 ID
+        const userIds = Array.from(new Set(workflows.map((w: any) => w.user_id).filter(Boolean)));
+
+        if (userIds.length === 0) return workflows;
+
+        // 3. 手动查询 profiles 表（规避直接 Join 可能存在的 RLS 限制问题）
+        const { data: profiles, error: profError } = await supabase
+            .from('profiles')
+            .select('id, username, avatar_url')
+            .in('id', userIds);
+
+        if (profError) {
+            console.warn("Fetch profiles for workflows failed", profError);
+        }
+
+        // 4. 建立 ID -> Profile 映射
+        const profileMap: Record<string, any> = {};
+        profiles?.forEach((p: any) => {
+            profileMap[p.id] = p;
+        });
+
+        // 5. 组合数据
+        return workflows.map((w: any) => {
+            const profile = profileMap[w.user_id];
+            return {
+                ...w,
+                profiles: profile // 将 profile 对象挂载上去，组件层会解析 username
+            };
+        });
+
+    } catch (e) {
+        console.error("fetchWorkflows exception", e);
+        return [];
     }
-};
+}
 
-export const fetchWorkflowFavorites = async () => {
-    const userId = await getCurrentUserId();
-    if (!userId) return [];
-    const { data } = await supabase.from('workflow_favorites').select('workflow_id').eq('user_id', userId);
-    return data?.map(f => f.workflow_id) || [];
-};
-
-export const toggleWorkflowFavoriteDB = async (workflowId: string, isCurrentlyFavorited: boolean) => {
+export async function deleteWorkflow(id: string) {
     const userId = await getCurrentUserId();
     if (!userId) return;
-    
-    if (isCurrentlyFavorited) {
-        await supabase.from('workflow_favorites').delete().eq('user_id', userId).eq('workflow_id', workflowId);
-    } else {
-        await supabase.from('workflow_favorites').insert({ user_id: userId, workflow_id: workflowId });
-    }
-};
+    await supabase.from('workflows').delete().eq('id', id).eq('user_id', userId);
+}
 
-// --- Personal Center ---
+export async function incrementWorkflowUsage(id: string) {
+    try {
+        const { data } = await supabase.from('workflows').select('usage_count').eq('id', id).single();
+        if (data) {
+            await supabase.from('workflows').update({ usage_count: (data.usage_count || 0) + 1 }).eq('id', id);
+        }
+    } catch (e) {}
+}
 
-export const fetchUserLibrary = async () => {
+export async function fetchWorkflowFavorites(): Promise<string[]> {
     const userId = await getCurrentUserId();
-    if (!userId) return { prompts: [], materials: [] };
-    
-    // In a real implementation, you would join tables or fetch by user_id
-    const { data: prompts } = await supabase.from('prompts').select('*').eq('user_id', userId); 
-    const { data: materials } = await supabase.from('materials').select('*').eq('user_id', userId);
-    
-    return { prompts: prompts || [], materials: materials || [] };
-};
+    if (!userId) return [];
+    try {
+        const { data } = await supabase.from('workflow_favorites').select('workflow_id').eq('user_id', userId);
+        return data?.map((d: any) => d.workflow_id) || [];
+    } catch (e) { return []; }
+}
+
+export async function toggleWorkflowFavoriteDB(workflowId: string, isFavorite: boolean) {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    try {
+        if (isFavorite) {
+            await supabase.from('workflow_favorites').delete().eq('user_id', userId).eq('workflow_id', workflowId);
+        } else {
+            await supabase.from('workflow_favorites').insert({ user_id: userId, workflow_id: workflowId });
+        }
+    } catch (e) { console.error("Toggle favorite failed", e); }
+}
+
+export async function uploadCoverImage(file: File) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `${userId}/${fileName}`;
+        const { error } = await supabase.storage.from('covers').upload(filePath, file);
+        if (error) throw error;
+        const { data } = supabase.storage.from('covers').getPublicUrl(filePath);
+        return data.publicUrl;
+    } catch (e) { return null; }
+}
