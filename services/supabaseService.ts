@@ -116,9 +116,7 @@ export async function updateUserEmailWithLogin(oldEmail: string, password: strin
         if (!signInData.session) throw new Error("验证失败，无法创建会话");
 
         // 2. 请求更新 Auth 邮箱
-        // 注意：如果 Supabase 项目设置中开启了 "Confirm Email Change" (默认开启)，
-        // 这里不会立即更新 email，而是发送确认邮件。updateData.user.new_email 会有值。
-        // Fix: Explicitly set emailRedirectTo to current origin to prevent 'localhost' errors in production
+        // 修复：显式设置 emailRedirectTo 为当前域名，防止跳转到 localhost
         const { data: updateData, error: updateError } = await supabase.auth.updateUser(
             { email: newEmail },
             { emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined }

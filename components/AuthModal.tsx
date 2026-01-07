@@ -98,18 +98,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                 if (updateError) throw updateError;
                 
                 if (isPending) {
-                    setMessage('验证邮件已发送！出于安全原因，Supabase 需要您点击新邮箱（有时也包括旧邮箱）中的链接以完成修改。');
+                    setMessage('验证邮件已发送！为了安全，请点击新邮箱（及旧邮箱）中的链接确认。\n验证成功前，旧邮箱仍可正常登录。如验证链接失效或失败，请重新在此提交请求。');
                 } else {
                     setMessage('邮箱修改成功！请使用新邮箱重新登录。');
                 }
                 
+                // Clear inputs but give user time to read the long message
                 setTimeout(() => {
                     setMode('login');
-                    setEmail(newEmail); // Pre-fill new email for convenience
+                    if (!isPending) setEmail(newEmail); 
                     setPassword('');
                     setNewEmail('');
                     setMessage('');
-                }, 3000);
+                }, 6000); 
             }
         } catch (err: any) {
             // 翻译错误信息
@@ -229,7 +230,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     )}
                     
                     {message && (
-                        <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-sm rounded-lg text-center border border-green-100 dark:border-green-900/50">
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-sm rounded-lg text-center border border-green-100 dark:border-green-900/50 whitespace-pre-line">
                             {message}
                         </div>
                     )}
