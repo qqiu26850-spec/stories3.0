@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Workflow, Asset } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight, ExclamationCircle } from './Icon';
+import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight, ExclamationCircle, ChatBubbleOvalLeftEllipsis, Plus } from './Icon';
 import ImportAssetModal from './ImportAssetModal';
 import { saveMaterial } from '../services/supabaseService';
 
@@ -117,11 +117,13 @@ const FollowUpModal: React.FC<{
     targetText: string;
     context: string;
     model: string;
-    mode: 'selection' | 'full';
-}> = ({ isOpen, onClose, targetText, context, model, mode }) => {
+    initialMode: 'selection' | 'full';
+    onApply: (text: string, type: 'insert' | 'replace') => void;
+}> = ({ isOpen, onClose, targetText, context, model, initialMode, onApply }) => {
     const [query, setQuery] = useState('');
     const [result, setResult] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
+    const [activeMode, setActiveMode] = useState<'selection' | 'full'>(initialMode);
     const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
@@ -129,8 +131,10 @@ const FollowUpModal: React.FC<{
             setQuery('');
             setResult('');
             setIsGenerating(false);
+            // If targetText is empty, force full mode even if initial was selection
+            setActiveMode(targetText ? initialMode : 'full');
         }
-    }, [isOpen]);
+    }, [isOpen, targetText, initialMode]);
 
     const handleGenerate = async () => {
         if (!query.trim()) return;
@@ -141,7 +145,7 @@ const FollowUpModal: React.FC<{
         abortControllerRef.current = controller;
 
         let prompt = '';
-        if (mode === 'selection') {
+        if (activeMode === 'selection') {
             prompt = `你是一个专业的创意写作助手。
 请基于下方的【全文背景】和用户【选中的文本片段】，回答用户的【追问/指令】。
 你的回答必须针对选中的内容进行处理，同时不脱离全文设定的背景。
@@ -199,15 +203,19 @@ ${query}
         setIsGenerating(false);
     };
 
+    const handleCopy = () => {
+        navigator.clipboard.writeText(result);
+    };
+
     if (!isOpen) return null;
 
     return createPortal(
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] animate-fade-in-up" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
                 <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <ChatBubbleLeftRight className="w-5 h-5 text-sky-500" />
-                        {mode === 'selection' ? '针对选中片段追问' : '针对本段全文追问'}
+                        <ChatBubbleOvalLeftEllipsis className="w-5 h-5 text-sky-500" />
+                        AI 智能追问
                     </h3>
                     <button type="button" onClick={onClose} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
                         <X className="w-5 h-5" />
@@ -215,7 +223,24 @@ ${query}
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-                    {mode === 'selection' && (
+                    {/* Mode Toggle */}
+                    <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-2">
+                        <button
+                            onClick={() => setActiveMode('full')}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeMode === 'full' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                        >
+                            针对全文/本段内容
+                        </button>
+                        <button
+                            onClick={() => setActiveMode('selection')}
+                            disabled={!targetText}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeMode === 'selection' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'} ${!targetText ? 'opacity-50 cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-white'}`}
+                        >
+                            {targetText ? '针对选中文本' : '未选择文本'}
+                        </button>
+                    </div>
+
+                    {activeMode === 'selection' && (
                         <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
                             <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">已选中文本</div>
                             <div className="text-xs text-gray-600 dark:text-gray-300 line-clamp-3 italic">
@@ -228,7 +253,9 @@ ${query}
                         <textarea 
                             value={query}
                             onChange={e => setQuery(e.target.value)}
-                            placeholder="请输入您的追问或修改指令（例如：把这段改得更悲伤一点，或者解释一下这里的逻辑）..."
+                            placeholder={activeMode === 'selection' 
+                                ? "请输入针对选中文本的追问或修改指令（例如：把这段改得更悲伤一点）..." 
+                                : "请输入针对全文/本段的追问（例如：续写一段情节，或者总结一下当前的故事走向）..."}
                             className="w-full h-24 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-sm resize-none"
                         />
                         <div className="flex justify-end">
@@ -245,16 +272,38 @@ ${query}
                     </div>
 
                     {result && (
-                        <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                        <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
                             <div className="flex justify-between items-center">
                                 <span className="text-xs font-bold text-sky-600 dark:text-sky-400">AI 回复</span>
-                                <button type="button" onClick={() => navigator.clipboard.writeText(result)} className="text-[10px] text-gray-400 hover:text-sky-500 flex items-center gap-1">
-                                    <Copy className="w-3 h-3" /> 复制
-                                </button>
                             </div>
                             <div className="p-4 bg-sky-50/30 dark:bg-sky-900/10 rounded-xl text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
                                 {result}
                             </div>
+                            {/* Action Buttons */}
+                            {!isGenerating && (
+                                <div className="flex gap-2 justify-end pt-1">
+                                    <button 
+                                        onClick={() => { onApply(result, 'insert'); onClose(); }}
+                                        className="px-3 py-1.5 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors flex items-center gap-1"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" /> 插入原文
+                                    </button>
+                                    {activeMode === 'selection' && (
+                                        <button 
+                                            onClick={() => { onApply(result, 'replace'); onClose(); }}
+                                            className="px-3 py-1.5 bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400 rounded-lg text-xs font-bold hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors flex items-center gap-1"
+                                        >
+                                            <ArrowPath className="w-3.5 h-3.5" /> 替换原文
+                                        </button>
+                                    )}
+                                    <button 
+                                        onClick={handleCopy}
+                                        className="px-3 py-1.5 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 rounded-lg text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
+                                    >
+                                        <Copy className="w-3.5 h-3.5" /> 复制
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -287,7 +336,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     
     // Selection & Follow-up State
     const [selectedText, setSelectedText] = useState('');
-    const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; mode: 'selection' | 'full' } | null>(null);
+    const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; variable: string; initialMode: 'selection' | 'full' } | null>(null);
+    const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number; visible: boolean; variable: string; fullContent: string } | null>(null);
     
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -301,27 +351,47 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         triggerSuccess('素材已导入');
     };
 
-    const handleImportSelection = () => {
-        if(selectedText && selectedText.trim().length > 0) {
-            setImportContent(selectedText);
-            setImportModalOpen(true);
-        } else {
-            const lastKey = Object.keys(stepResults).pop();
-            if (lastKey) {
-                setImportContent(stripMarkdown(stepResults[lastKey]));
-                setImportModalOpen(true);
-            }
-        }
-    };
-
-    const handleTriggerFollowUp = (stepContent: string) => {
-        const isSelection = selectedText && selectedText.trim().length > 0;
+    const handleTriggerFollowUp = (stepContent: string, variable: string, mode: 'selection' | 'full' = 'full') => {
+        // Always try to capture selection even if mode is 'full', so user can switch tabs in modal
+        const selection = window.getSelection()?.toString().trim();
+        const effectiveSelection = selection || selectedText; 
         
         setActiveFollowUp({
-            target: isSelection ? selectedText : stepContent,
+            target: effectiveSelection,
             context: stepContent,
-            mode: isSelection ? 'selection' : 'full'
+            variable: variable,
+            initialMode: (mode === 'selection' && effectiveSelection) ? 'selection' : 'full'
         });
+        setSelectionMenu(null);
+    };
+
+    const handleApplyFollowUpResult = (newText: string, type: 'insert' | 'replace') => {
+        if (!activeFollowUp) return;
+
+        setStepResults(prev => {
+            const currentContent = prev[activeFollowUp.variable] || '';
+            let updatedContent = currentContent;
+
+            // Determine if we are replacing a specific selection or appending to full text
+            // Note: Since the modal allows switching modes, we rely on the action type and activeFollowUp target
+            
+            if (type === 'replace' && activeFollowUp.target) {
+                // Replace first occurrence of selection
+                updatedContent = currentContent.replace(activeFollowUp.target, newText);
+            } else {
+                // Insert
+                if (activeFollowUp.target && currentContent.includes(activeFollowUp.target)) {
+                     // Insert after selection
+                     updatedContent = currentContent.replace(activeFollowUp.target, activeFollowUp.target + newText);
+                } else {
+                    // Append to end
+                    updatedContent = currentContent + '\n\n' + newText;
+                }
+            }
+            return { ...prev, [activeFollowUp.variable]: updatedContent };
+        });
+        
+        triggerSuccess('内容已更新');
     };
 
     const handleStop = () => {
@@ -410,16 +480,30 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         handleRunWorkflow(nextStepIndex);
     };
 
-    const handleTextSelection = () => {
+    const handleTextSelection = (variable: string, content: string) => {
         const selection = window.getSelection();
         const text = selection?.toString().trim();
-        if (text) {
-            setSelectedText(text);
-        } else {
-            // Optional: Clear selection if clicked outside, but we might want to keep it
-            // until explicit clear or new selection.
-            // For now, let's keep it until new selection to allow clicking the button.
+        
+        if (text && text.length > 0) {
+            const range = selection?.getRangeAt(0);
+            const rect = range?.getBoundingClientRect();
+            
+            if (rect) {
+                setSelectionMenu({
+                    x: rect.left + rect.width / 2,
+                    y: rect.top - 10,
+                    visible: true,
+                    variable: variable,
+                    fullContent: content
+                });
+                setSelectedText(text);
+                return;
+            }
         }
+        
+        // Clear if no selection
+        setSelectionMenu(null);
+        setSelectedText('');
     };
 
     const getFullContext = () => {
@@ -432,18 +516,48 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         return 'bg-gray-100 dark:bg-gray-800 text-gray-400';
     };
 
+    // Global click listener to close menu
+    useEffect(() => {
+        const closeMenu = () => setSelectionMenu(null);
+        document.addEventListener('mousedown', closeMenu);
+        return () => document.removeEventListener('mousedown', closeMenu);
+    }, []);
+
     return (
         <div className="p-4 h-full animate-fade-in flex flex-col font-sans bg-gray-50 dark:bg-black/20 relative">
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={importContent} onSave={handleImportAsset} />
             <LoadingOverlay isVisible={showOverlay} onClose={() => setShowOverlay(false)} />
+            
+            {/* Follow Up Modal with enhanced capabilities */}
             <FollowUpModal 
                 isOpen={!!activeFollowUp} 
                 onClose={() => setActiveFollowUp(null)} 
                 targetText={activeFollowUp?.target || ''}
                 context={activeFollowUp?.context || ''}
                 model={model}
-                mode={activeFollowUp?.mode || 'full'}
+                initialMode={activeFollowUp?.initialMode || 'full'}
+                onApply={handleApplyFollowUpResult}
             />
+            
+            {/* Floating Selection Menu */}
+            {selectionMenu && selectionMenu.visible && createPortal(
+                <div 
+                    className="fixed z-[9999] transform -translate-x-1/2 -translate-y-full pb-2 animate-fade-in-up"
+                    style={{ top: selectionMenu.y, left: selectionMenu.x }}
+                    onMouseDown={(e) => e.stopPropagation()} // Prevent closing when clicking the menu itself
+                >
+                    <button 
+                        onClick={() => handleTriggerFollowUp(selectionMenu.fullContent, selectionMenu.variable, 'selection')}
+                        className="bg-gray-900 text-white text-xs font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 hover:bg-black transition-transform hover:scale-105"
+                    >
+                        <ChatBubbleOvalLeftEllipsis className="w-4 h-4" />
+                        继续追问
+                    </button>
+                    {/* Tiny triangle pointer */}
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 transform translate-y-1"></div>
+                </div>,
+                document.body
+            )}
             
             {successMessage && (
                 <div className="fixed top-20 right-8 z-50 px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-lg animate-fade-in-up text-sm font-bold flex items-center gap-2">
@@ -596,25 +710,38 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                         </h3>
                         <div className="flex items-center gap-2">
                             {Object.keys(stepResults).length > 0 && (
-                                <button 
-                                    type="button"
-                                    onClick={() => { 
-                                        const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
-                                        navigator.clipboard.writeText(fullText); 
-                                        triggerSuccess('全文已复制');
-                                    }}
-                                    className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
-                                >
-                                    <Copy className="w-3.5 h-3.5" /> 复制全文
-                                </button>
+                                <>
+                                    {/* Header Follow-up Button - Default to Full Context */}
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
+                                            // Variable passed is the last step's, but it's largely symbolic for full text context mode
+                                            handleTriggerFollowUp(fullText, Object.keys(stepResults).pop() || '', 'full');
+                                        }}
+                                        className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
+                                    >
+                                        <ChatBubbleOvalLeftEllipsis className="w-3.5 h-3.5" /> 继续追问
+                                    </button>
+
+                                    <button 
+                                        type="button"
+                                        onClick={() => { 
+                                            const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
+                                            navigator.clipboard.writeText(fullText); 
+                                            triggerSuccess('全文已复制');
+                                        }}
+                                        className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
+                                    >
+                                        <Copy className="w-3.5 h-3.5" /> 复制全文
+                                    </button>
+                                </>
                             )}
                         </div>
                      </div>
 
                      <div 
                         className="flex-1 overflow-y-auto p-6 relative custom-scrollbar space-y-8" 
-                        onMouseUp={handleTextSelection}
-                        onKeyUp={handleTextSelection} // For keyboard selection support
                      >
                         {workflow.steps?.map((step, idx) => {
                             const result = stepResults[step.outputVariable];
@@ -625,11 +752,14 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                 <div key={step.id} className="animate-fade-in space-y-2">
                                     <div className="flex items-center gap-3">
                                         <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{step.name}</span>
+                                        <span className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-[0.1em]">{step.name}</span>
                                         <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
                                     </div>
                                     {result ? (
-                                        <div className="p-5 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm">
+                                        <div 
+                                            className="p-5 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm pb-8"
+                                            onMouseUp={() => handleTextSelection(step.outputVariable, result)}
+                                        >
                                             {/* Step Toolbar - Revised */}
                                             <div className="flex justify-end items-center gap-2 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 opacity-80">
                                                 
@@ -637,20 +767,12 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                 <div className="mr-auto relative group/tooltip">
                                                     <button 
                                                         type="button"
-                                                        onClick={() => handleTriggerFollowUp(result)}
+                                                        onClick={() => handleTriggerFollowUp(result, step.outputVariable, 'full')}
                                                         className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-sky-600 hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-900/30 rounded transition-colors"
                                                     >
-                                                        <ChatBubbleLeftRight className="w-3 h-3" /> 
-                                                        {selectedText ? '追问选中' : '追问'}
+                                                        <ChatBubbleOvalLeftEllipsis className="w-3 h-3" /> 
+                                                        继续追问
                                                     </button>
-                                                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-1 cursor-help text-gray-400 hover:text-sky-500">
-                                                        <ExclamationCircle className="w-3 h-3" />
-                                                    </div>
-                                                    
-                                                    {/* Tooltip */}
-                                                    <div className="hidden group-hover/tooltip:block absolute left-0 bottom-full mb-2 w-48 p-2 bg-gray-800 text-white text-[10px] rounded shadow-lg z-50">
-                                                        选中文字可针对细节追问，未选中则针对本段全文追问。
-                                                    </div>
                                                 </div>
 
                                                 <button 
@@ -687,6 +809,11 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                             </div>
                                             {/* Render formatting text instead of raw markdown */}
                                             <FormattedText text={result} />
+                                            
+                                            {/* Word Count Display */}
+                                            <div className="absolute bottom-3 left-6 text-[10px] text-gray-400 font-mono flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
+                                                <span className="font-bold text-gray-500 dark:text-gray-300">{stripMarkdown(result).length}</span> 字
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="py-8 flex flex-col items-center justify-center text-sky-500 animate-pulse bg-white/50 rounded-xl border border-dashed border-sky-200">
