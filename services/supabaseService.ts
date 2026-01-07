@@ -118,15 +118,16 @@ export async function updateUserEmailWithLogin(oldEmail: string, password: strin
         // 2. 请求更新 Auth 邮箱
         // 注意：如果 Supabase 项目设置中开启了 "Confirm Email Change" (默认开启)，
         // 这里不会立即更新 email，而是发送确认邮件。updateData.user.new_email 会有值。
-        const { data: updateData, error: updateError } = await supabase.auth.updateUser({
-            email: newEmail
-        });
+        // Fix: Explicitly set emailRedirectTo to current origin to prevent 'localhost' errors in production
+        const { data: updateData, error: updateError } = await supabase.auth.updateUser(
+            { email: newEmail },
+            { emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined }
+        );
 
         if (updateError) throw updateError;
 
         // 3. 同步更新 Profiles 表 (如果存在)
         // 即使 Auth 更新处于 pending 状态，我们也可以先更新 Profile 表的 email 字段作为记录
-        // 注意：这取决于 profiles 表是否有 email 列以及 RLS 策略
         try {
             await supabase.from('profiles')
                 .update({ email: newEmail, updated_at: new Date().toISOString() })
