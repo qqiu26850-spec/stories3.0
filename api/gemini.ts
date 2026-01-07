@@ -50,8 +50,15 @@ export default async function handler(request: Request) {
             async start(controller) {
                 try {
                     for await (const chunk of responseStream) {
-                        // Robust text extraction: try getter first, then fallback to candidate parts
-                        let text = chunk.text;
+                        let text = '';
+                        try {
+                            // Try standard property access
+                            text = chunk.text || '';
+                        } catch (e) {
+                            // Property access might throw if candidate is blocked
+                        }
+
+                        // Fallback: manually inspect candidates if property access failed or returned empty
                         if (!text && chunk.candidates?.[0]?.content?.parts?.[0]?.text) {
                             text = chunk.candidates[0].content.parts[0].text;
                         }
@@ -63,7 +70,7 @@ export default async function handler(request: Request) {
                     controller.close();
                 } catch (e) {
                     console.error("Gemini Stream Error", e);
-                    // Don't error the controller if we already sent data, just close
+                    // Attempt to close gracefully even on error to prevent hanging
                     try { controller.close(); } catch {}
                 }
             }

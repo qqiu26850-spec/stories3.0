@@ -131,7 +131,6 @@ const FollowUpModal: React.FC<{
             setQuery('');
             setResult('');
             setIsGenerating(false);
-            // If targetText is empty, force full mode even if initial was selection
             setActiveMode(targetText ? initialMode : 'full');
         }
     }, [isOpen, targetText, initialMode]);
@@ -279,7 +278,6 @@ ${query}
                             <div className="p-4 bg-sky-50/30 dark:bg-sky-900/10 rounded-xl text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
                                 {result}
                             </div>
-                            {/* Action Buttons */}
                             {!isGenerating && (
                                 <div className="flex gap-2 justify-end pt-1">
                                     <button 
@@ -315,6 +313,7 @@ ${query}
 
 const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [model, setModel] = useState('deepseek-chat');
+    const modelRef = useRef(model); // Track latest model for async loops
     const [temperature, setTemperature] = useState(0.8);
     const [topP, setTopP] = useState(0.95);
     const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
@@ -328,18 +327,21 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     
-    // Import Modal State
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [importContent, setImportContent] = useState('');
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [showOverlay, setShowOverlay] = useState(false);
     
-    // Selection & Follow-up State
     const [selectedText, setSelectedText] = useState('');
     const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; variable: string; initialMode: 'selection' | 'full' } | null>(null);
     const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number; visible: boolean; variable: string; fullContent: string } | null>(null);
     
     const abortControllerRef = useRef<AbortController | null>(null);
+
+    // Sync ref when state changes
+    useEffect(() => {
+        modelRef.current = model;
+    }, [model]);
 
     const triggerSuccess = (msg: string) => {
         setSuccessMessage(msg);
@@ -352,7 +354,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     };
 
     const handleTriggerFollowUp = (stepContent: string, variable: string, mode: 'selection' | 'full' = 'full') => {
-        // Always try to capture selection even if mode is 'full', so user can switch tabs in modal
         const selection = window.getSelection()?.toString().trim();
         const effectiveSelection = selection || selectedText; 
         
@@ -373,15 +374,11 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             let updatedContent = currentContent;
 
             if (type === 'replace' && activeFollowUp.target) {
-                // Replace first occurrence of selection
                 updatedContent = currentContent.replace(activeFollowUp.target, newText);
             } else {
-                // Insert
                 if (activeFollowUp.target && currentContent.includes(activeFollowUp.target)) {
-                     // Insert after selection
                      updatedContent = currentContent.replace(activeFollowUp.target, activeFollowUp.target + newText);
                 } else {
-                    // Append to end
                     updatedContent = currentContent + '\n\n' + newText;
                 }
             }
@@ -429,7 +426,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
 
                 let stepContent = '';
                 const stream = generateTextStream(finalPrompt, { 
-                    model, 
+                    model: modelRef.current, // Use ref to ensure latest model is used during chain execution
                     temperature, 
                     topP, 
                     maxOutputTokens, 
@@ -441,15 +438,19 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                     setStepResults(prev => ({ ...prev, [step.outputVariable]: stepContent }));
                 }
 
-                // Handling for fast streams or empty outputs (Fix for Gemini empty output)
-                if (!stepContent) {
-                    // Wait a tick to see if state update catches up or if it was truly empty
-                    await new Promise(r => setTimeout(r, 100));
+                // If content is completely empty or error message, pause chain execution to allow retry
+                if (!stepContent || stepContent.includes("[AI未生成有效内容")) {
+                    console.warn(`Step ${i + 1} generated empty/invalid content.`);
                     if (!stepContent) {
-                        console.warn(`Step ${i + 1} generated empty content. Model might have blocked output or stream failed.`);
                         stepContent = "[AI未生成有效内容，请检查模型设置或提示词]";
                         setStepResults(prev => ({ ...prev, [step.outputVariable]: stepContent }));
                     }
+                    // PAUSE execution here so user can change model/settings and retry this step
+                    setExecutionStatus('paused');
+                    setNextStepIndex(i); // Next start index is CURRENT step (to retry)
+                    setIsLoading(false);
+                    setCurrentStepIndex(null);
+                    return; 
                 }
 
                 currentContext[step.outputVariable] = stepContent;
@@ -471,6 +472,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             if (e.message !== 'Aborted') {
                 setError(e.message || '生成失败');
                 setExecutionStatus('paused');
+                // Ensure we can retry from the failed step
+                setNextStepIndex(startIndex); 
             }
         } finally {
             if (executionStatus !== 'paused') {
@@ -508,14 +511,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 return;
             }
         }
-        
-        // Clear if no selection
         setSelectionMenu(null);
         setSelectedText('');
-    };
-
-    const getFullContext = () => {
-        return Object.values(stepResults).map(stripMarkdown).join('\n\n');
     };
 
     const getStatusColor = (idx: number) => {
@@ -524,7 +521,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         return 'bg-gray-100 dark:bg-gray-800 text-gray-400';
     };
 
-    // Global click listener to close menu
     useEffect(() => {
         const closeMenu = () => setSelectionMenu(null);
         document.addEventListener('mousedown', closeMenu);
@@ -536,7 +532,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={importContent} onSave={handleImportAsset} />
             <LoadingOverlay isVisible={showOverlay} onClose={() => setShowOverlay(false)} />
             
-            {/* Follow Up Modal with enhanced capabilities */}
             <FollowUpModal 
                 isOpen={!!activeFollowUp} 
                 onClose={() => setActiveFollowUp(null)} 
@@ -547,12 +542,11 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 onApply={handleApplyFollowUpResult}
             />
             
-            {/* Floating Selection Menu */}
             {selectionMenu && selectionMenu.visible && createPortal(
                 <div 
                     className="fixed z-[9999] transform -translate-x-1/2 -translate-y-full pb-2 animate-fade-in-up"
                     style={{ top: selectionMenu.y, left: selectionMenu.x }}
-                    onMouseDown={(e) => e.stopPropagation()} // Prevent closing when clicking the menu itself
+                    onMouseDown={(e) => e.stopPropagation()}
                 >
                     <button 
                         onClick={() => handleTriggerFollowUp(selectionMenu.fullContent, selectionMenu.variable, 'selection')}
@@ -561,7 +555,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                         <ChatBubbleOvalLeftEllipsis className="w-4 h-4" />
                         继续追问
                     </button>
-                    {/* Tiny triangle pointer */}
                     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 transform translate-y-1"></div>
                 </div>,
                 document.body
@@ -573,7 +566,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 </div>
             )}
 
-            {/* Header: Light Blue Background */}
             <div className="flex items-center justify-between mb-4 bg-sky-50/80 dark:bg-sky-900/10 p-3 rounded-2xl shadow-sm border border-sky-100 dark:border-sky-800 flex-shrink-0 h-16 z-10 relative">
                  <div className="flex items-center gap-3">
                     <button type="button" onClick={onBack} className="p-1.5 text-sky-600 hover:text-sky-700 hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-900/30 rounded-full transition-all">
@@ -584,7 +576,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                     </div>
                  </div>
                  
-                 {/* Execution Progress in Header */}
                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-2">
                     {workflow.steps?.map((step, idx) => (
                         <div key={step.id} className="flex items-center gap-2">
@@ -600,9 +591,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                  </div>
             </div>
 
-            {/* Content Area with Gap */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 overflow-hidden">
-                {/* Left Form Panel: White Background, Rounded */}
                 <div className="lg:col-span-4 flex flex-col overflow-y-auto pr-1 space-y-4 [&::-webkit-scrollbar]:hidden bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-4 rounded-2xl shadow-sm" style={{ scrollbarWidth: 'none' }}>
                     <div className="space-y-4">
                         <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
@@ -708,7 +697,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                     </div>
                 </div>
 
-                {/* Right Result Panel: White Background, Rounded */}
                 <div className="lg:col-span-8 bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden relative">
                      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center h-14">
                         <h3 className="font-bold text-base text-gray-800 dark:text-white flex items-center gap-2">
@@ -719,12 +707,10 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                         <div className="flex items-center gap-2">
                             {Object.keys(stepResults).length > 0 && (
                                 <>
-                                    {/* Header Follow-up Button - Default to Full Context */}
                                     <button 
                                         type="button"
                                         onClick={() => {
                                             const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
-                                            // Variable passed is the last step's, but it's largely symbolic for full text context mode
                                             handleTriggerFollowUp(fullText, Object.keys(stepResults).pop() || '', 'full');
                                         }}
                                         className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
@@ -748,12 +734,9 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                         </div>
                      </div>
 
-                     <div 
-                        className="flex-1 overflow-y-auto p-6 relative custom-scrollbar space-y-8" 
-                     >
+                     <div className="flex-1 overflow-y-auto p-6 relative custom-scrollbar space-y-8">
                         {workflow.steps?.map((step, idx) => {
                             const result = stepResults[step.outputVariable];
-                            // Only show if we have a result OR it's the current running step
                             if (!result && currentStepIndex !== idx) return null;
 
                             return (
@@ -768,10 +751,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                             className="p-5 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm pb-8"
                                             onMouseUp={() => handleTextSelection(step.outputVariable, result)}
                                         >
-                                            {/* Step Toolbar - Revised */}
                                             <div className="flex justify-end items-center gap-2 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 opacity-80">
-                                                
-                                                {/* Follow Up Button Group */}
                                                 <div className="mr-auto relative group/tooltip">
                                                     <button 
                                                         type="button"
@@ -804,7 +784,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                 >
                                                     <Copy className="w-3 h-3" /> 复制
                                                 </button>
-                                                {(executionStatus === 'paused' && idx === nextStepIndex - 1) || executionStatus === 'completed' ? (
+                                                {((executionStatus === 'paused' || executionStatus === 'completed') && nextStepIndex === idx) || executionStatus === 'completed' ? (
                                                     <button 
                                                         type="button"
                                                         onClick={() => handleRegenerateStep(idx)} 
@@ -815,10 +795,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                     </button>
                                                 ) : null}
                                             </div>
-                                            {/* Render formatting text instead of raw markdown */}
                                             <FormattedText text={result} />
                                             
-                                            {/* Word Count Display */}
                                             <div className="absolute bottom-3 left-6 text-[10px] text-gray-400 font-mono flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
                                                 <span className="font-bold text-gray-500 dark:text-gray-300">{stripMarkdown(result).length}</span> 字
                                             </div>
