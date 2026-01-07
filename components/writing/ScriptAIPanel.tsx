@@ -235,7 +235,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                             <div className="relative flex-1">
                                 <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-1.5 pl-2 pr-6 text-xs font-medium rounded-lg bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
                                     <option value="deepseek-chat">奇思版 (DeepSeek)</option>
-                                    <option value="gemini-2.0-flash">妙写版 (Gemini)</option>
+                                    <option value="gemini-3-flash-preview">妙写版 (Gemini 3.0 Flash)</option>
                                     <option value="doubao-flash">速写版 (豆包)</option>
                                 </select>
                                 <ChevronDown className="w-3 h-3 text-sky-400 absolute right-2 top-2.5 pointer-events-none" />
@@ -352,7 +352,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                                         onClick={() => onInsert(activeTab === 'idea' ? generatedIdeas.join('\n\n') : generatedText)} 
                                         className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
                                     >
-                                        <Plus className="w-3 h-3" /> 插入正文
+                                        <Plus className="w-3 h-3" /> 插入剧本
                                     </button>
                                     {!isGenerating && (
                                         <div className="flex gap-2">

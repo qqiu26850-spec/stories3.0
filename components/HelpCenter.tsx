@@ -204,14 +204,22 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                         
                         <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
                             <VersionItem 
+                                version="v1.6.0" 
+                                date="2026.01.10"
+                                isLatest={true}
+                                features={[
+                                    "新增「工作流选中追问」：在运行结果中选中文字，即可进行上下文感知的定向追问。",
+                                    "模型升级：全面接入 Gemini 3.0 Flash 与 DeepSeek-V3，生成更智能、响应更迅速。",
+                                    "优化了续写生成的连贯性逻辑，减少上下文断层。"
+                                ]}
+                            />
+                            <VersionItem 
                                 version="v1.5.0" 
                                 date="2026.01.06"
-                                isLatest={true}
                                 features={[
                                     "短篇模式重构：移除章节列表与标题，打造沉浸式单页创作环境。",
                                     "设定管理升级：作品设定改为卡片式管理 + 弹窗录入，界面更清爽。",
-                                    "精准选区交互：AI 面板内容填充逻辑优化，仅在选中时触发，减少误操作。",
-                                    "视觉体验优化：更新了功能栏配色与布局，并增加了模型参数的详细说明。"
+                                    "精准选区交互：AI 面板内容填充逻辑优化，仅在选中时触发，减少误操作。"
                                 ]}
                             />
                             <VersionItem 
@@ -220,8 +228,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                                 features={[
                                     "新增「智能续写」功能：在生成内容被截断时，支持一键无缝续写。",
                                     "优化了长文本的渲染性能，大幅减少粘贴大量文字时的卡顿。",
-                                    "优化了提示词库的筛选逻辑，支持按功能和题材双重过滤。",
-                                    "视觉体验升级：更新了版本弹窗与帮助中心的布局设计。"
+                                    "优化了提示词库的筛选逻辑，支持按功能和题材双重过滤。"
                                 ]}
                             />
                             <VersionItem 
@@ -231,15 +238,6 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                                     "上线「工作流」引擎：支持多步骤、链式 AI 创作任务。",
                                     "新增「剧本改编」模式：支持小说自动转剧本格式。",
                                     "个人中心升级：支持修改头像与昵称。"
-                                ]}
-                            />
-                            <VersionItem 
-                                version="v1.2.0" 
-                                date="2025.11.15"
-                                features={[
-                                    "新增「素材库」：支持角色、剧情、灵光碎片的管理与关联。",
-                                    "集成了 DeepSeek-V3 与 Gemini 2.0 模型。",
-                                    "优化了移动端的适配体验。"
                                 ]}
                             />
                         </div>

@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Workflow, Asset } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X } from './Icon';
+import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight } from './Icon';
 import ImportAssetModal from './ImportAssetModal';
 import { saveMaterial } from '../services/supabaseService';
 
@@ -108,6 +109,140 @@ const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({
     );
 };
 
+const FollowUpModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    selection: string;
+    context: string;
+    model: string;
+}> = ({ isOpen, onClose, selection, context, model }) => {
+    const [query, setQuery] = useState('');
+    const [result, setResult] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            setQuery('');
+            setResult('');
+            setIsGenerating(false);
+        }
+    }, [isOpen]);
+
+    const handleGenerate = async () => {
+        if (!query.trim()) return;
+        setIsGenerating(true);
+        setResult('');
+        
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        const prompt = `你是一个专业的创意写作助手。
+请基于下方的【全文背景】和用户【选中的文本】，回答用户的【追问/指令】。
+你的回答不能脱离全文设定的背景，同时必须针对选中的内容进行处理。
+
+【全文背景】：
+${context.slice(0, 3000)}${context.length > 3000 ? '...' : ''}
+
+【选中的文本】：
+${selection}
+
+【用户的追问/指令】：
+${query}
+
+请直接输出结果：`;
+
+        try {
+            const stream = generateTextStream(prompt, {
+                model,
+                temperature: 0.8,
+                topP: 0.95,
+                signal: controller.signal
+            });
+
+            for await (const chunk of stream) {
+                setResult(prev => prev + chunk);
+            }
+        } catch (e: any) {
+            if (e.message !== 'Aborted') {
+                setResult(`生成出错: ${e.message}`);
+            }
+        } finally {
+            setIsGenerating(false);
+            abortControllerRef.current = null;
+        }
+    };
+
+    const handleStop = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsGenerating(false);
+    };
+
+    if (!isOpen) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <ChatBubbleLeftRight className="w-5 h-5 text-sky-500" />
+                        针对选中内容追问
+                    </h3>
+                    <button onClick={onClose} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+                        <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">已选中文本</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-300 line-clamp-3 italic">
+                            “{selection}”
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <textarea 
+                            value={query}
+                            onChange={e => setQuery(e.target.value)}
+                            placeholder="请输入您的追问或修改指令（例如：把这段改得更悲伤一点，或者解释一下这里的逻辑）..."
+                            className="w-full h-24 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-sm resize-none"
+                        />
+                        <div className="flex justify-end">
+                            {isGenerating ? (
+                                <button onClick={handleStop} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors flex items-center gap-1">
+                                    <Stop className="w-3.5 h-3.5" /> 停止
+                                </button>
+                            ) : (
+                                <button onClick={handleGenerate} disabled={!query.trim()} className="px-4 py-2 bg-sky-600 text-white rounded-lg text-xs font-bold hover:bg-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">
+                                    <Sparkles className="w-3.5 h-3.5" /> 发送追问
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {result && (
+                        <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs font-bold text-sky-600 dark:text-sky-400">AI 回复</span>
+                                <button onClick={() => navigator.clipboard.writeText(result)} className="text-[10px] text-gray-400 hover:text-sky-500 flex items-center gap-1">
+                                    <Copy className="w-3 h-3" /> 复制
+                                </button>
+                            </div>
+                            <div className="p-4 bg-sky-50/30 dark:bg-sky-900/10 rounded-xl text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+                                {result}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(0.8);
@@ -129,6 +264,10 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [showOverlay, setShowOverlay] = useState(false);
     
+    // Selection & Follow-up State
+    const [selectedText, setSelectedText] = useState('');
+    const [isFollowUpModalOpen, setFollowUpModalOpen] = useState(false);
+    
     const abortControllerRef = useRef<AbortController | null>(null);
 
     const triggerSuccess = (msg: string) => {
@@ -142,10 +281,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     };
 
     const handleImportSelection = () => {
-        const selection = window.getSelection();
-        const text = selection?.toString();
-        if(text && text.trim().length > 0) {
-            setImportContent(text);
+        if(selectedText && selectedText.trim().length > 0) {
+            setImportContent(selectedText);
             setImportModalOpen(true);
         } else {
             const lastKey = Object.keys(stepResults).pop();
@@ -242,6 +379,22 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         handleRunWorkflow(nextStepIndex);
     };
 
+    const handleTextSelection = () => {
+        const selection = window.getSelection();
+        const text = selection?.toString().trim();
+        if (text) {
+            setSelectedText(text);
+        } else {
+            // Optional: Clear selection if clicked outside, but we might want to keep it
+            // until explicit clear or new selection.
+            // For now, let's keep it until new selection to allow clicking the button.
+        }
+    };
+
+    const getFullContext = () => {
+        return Object.values(stepResults).map(stripMarkdown).join('\n\n');
+    };
+
     const getStatusColor = (idx: number) => {
         if (currentStepIndex === idx) return 'bg-sky-500 text-white animate-pulse ring-2 ring-sky-500/20';
         if (idx < nextStepIndex || executionStatus === 'completed') return 'bg-emerald-500 text-white';
@@ -252,6 +405,13 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         <div className="p-4 h-full animate-fade-in flex flex-col font-sans bg-gray-50 dark:bg-black/20 relative">
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={importContent} onSave={handleImportAsset} />
             <LoadingOverlay isVisible={showOverlay} onClose={() => setShowOverlay(false)} />
+            <FollowUpModal 
+                isOpen={isFollowUpModalOpen} 
+                onClose={() => setFollowUpModalOpen(false)} 
+                selection={selectedText}
+                context={getFullContext()}
+                model={model}
+            />
             
             {successMessage && (
                 <div className="fixed top-20 right-8 z-50 px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-lg animate-fade-in-up text-sm font-bold flex items-center gap-2">
@@ -307,7 +467,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                     <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">模型</label>
                                     <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none cursor-pointer">
                                         <option value="deepseek-chat">奇思版 (DeepSeek)</option>
-                                        <option value="gemini-2.0-flash">妙写版 (Gemini)</option>
+                                        <option value="gemini-3-flash-preview">妙写版 (Gemini 3.0 Flash)</option>
                                         <option value="doubao-flash">速写版 (豆包)</option>
                                     </select>
                                 </div>
@@ -397,35 +557,50 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 {/* Right Result Panel: White Background, Rounded */}
                 <div className="lg:col-span-8 bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden relative">
                      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center h-14">
-                        <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
+                        <h3 className="font-bold text-base text-gray-800 dark:text-white flex items-center gap-2">
                             <Sparkles className="w-5 h-5 text-sky-500" />
                             文本生成
                             {isLoading && <span className="text-[10px] font-normal text-sky-500 animate-pulse ml-2 flex items-center gap-1"><ArrowPath className="w-3 h-3 animate-spin" /> AI 正在思考...</span>}
                         </h3>
-                        {Object.keys(stepResults).length > 0 && (
-                            <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
+                            {selectedText && (
                                 <button 
-                                    onClick={handleImportSelection}
-                                    className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors flex items-center gap-1"
-                                    title="选中内容后点击导入"
+                                    onClick={() => setFollowUpModalOpen(true)}
+                                    className="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-bold hover:bg-sky-500 transition-colors flex items-center gap-1 shadow-md shadow-sky-500/20 animate-fade-in"
+                                    title="针对选中文本进行追问"
                                 >
-                                    <Database className="w-3.5 h-3.5" /> 导入选中文字
+                                    <ChatBubbleLeftRight className="w-3.5 h-3.5" /> 针对选中内容追问
                                 </button>
-                                <button 
-                                    onClick={() => { 
-                                        const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
-                                        navigator.clipboard.writeText(fullText); 
-                                        triggerSuccess('全文已复制');
-                                    }}
-                                    className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
-                                >
-                                    <Copy className="w-3.5 h-3.5" /> 复制全文
-                                </button>
-                            </div>
-                        )}
+                            )}
+                            {Object.keys(stepResults).length > 0 && (
+                                <>
+                                    <button 
+                                        onClick={handleImportSelection}
+                                        className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors flex items-center gap-1"
+                                        title="选中内容后点击导入"
+                                    >
+                                        <Database className="w-3.5 h-3.5" /> 导入选中
+                                    </button>
+                                    <button 
+                                        onClick={() => { 
+                                            const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
+                                            navigator.clipboard.writeText(fullText); 
+                                            triggerSuccess('全文已复制');
+                                        }}
+                                        className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
+                                    >
+                                        <Copy className="w-3.5 h-3.5" /> 复制全文
+                                    </button>
+                                </>
+                            )}
+                        </div>
                      </div>
 
-                     <div className="flex-1 overflow-y-auto p-6 relative custom-scrollbar space-y-8">
+                     <div 
+                        className="flex-1 overflow-y-auto p-6 relative custom-scrollbar space-y-8" 
+                        onMouseUp={handleTextSelection}
+                        onKeyUp={handleTextSelection} // For keyboard selection support
+                     >
                         {workflow.steps?.map((step, idx) => {
                             const result = stepResults[step.outputVariable];
                             // Only show if we have a result OR it's the current running step

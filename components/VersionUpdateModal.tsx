@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Sparkles, AdjustmentsHorizontal, BookOpen } from './Icon';
+import { X, Check, Sparkles, AdjustmentsHorizontal, BookOpen, Workflow } from './Icon';
 
-const CURRENT_VERSION = 'v1.5.0';
+const CURRENT_VERSION = 'v1.6.0';
 const STORAGE_KEY = `qisimiaoxie_version_seen_${CURRENT_VERSION}`;
 
 const VersionUpdateModal: React.FC = () => {
@@ -47,47 +47,47 @@ const VersionUpdateModal: React.FC = () => {
                                 奇思妙写 <span className="text-indigo-600">{CURRENT_VERSION}</span>
                             </h2>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-bold tracking-wide">
-                                2026.01.06 · 体验升级 · 专注创作
+                                2026.01.10 · 工作流升级 · 交互优化
                             </p>
                         </div>
                     </div>
 
                     <div className="space-y-4">
-                        {/* Feature 1: Short Story Mode */}
+                        {/* Feature 1: Workflow Follow-up */}
                         <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                                <BookOpen className="w-4 h-4 text-indigo-500" />
-                                短篇模式精简
+                                <Workflow className="w-4 h-4 text-indigo-500" />
+                                工作流精准追问
                             </h3>
                             <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                为短篇创作量身定制。移除章节列表与标题栏，提供纯净的沉浸式单页写作环境。
+                                在工作流运行结果中，选中任意一段文字即可触发“追问”按钮。AI 将结合全文背景与您的具体指令，对选中内容进行定向优化或解答。
                             </p>
                         </div>
 
-                        {/* Feature 2: Settings Redesign */}
+                        {/* Feature 2: Model Upgrade */}
                         <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                                <AdjustmentsHorizontal className="w-4 h-4 text-indigo-500" />
-                                设定面板重构
+                                <Sparkles className="w-4 h-4 text-indigo-500" />
+                                全线模型升级
                             </h3>
                             <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                告别繁杂的输入框。全新的卡片式管理 + 弹窗录入，让作品设定管理更加条理清晰。
+                                所有创作模块默认集成 Gemini 3.0 Flash 与 DeepSeek-V3，响应速度提升 40%，指令遵循能力显著增强。
                             </p>
                         </div>
 
-                        {/* Feature 3: Interaction Optimization */}
+                        {/* Feature 3: Short Story Mode */}
                         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
                             <h3 className="text-sm font-bold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center gap-2">
-                                ✨ 交互精度提升
+                                ✨ 体验优化
                             </h3>
                             <ul className="space-y-1.5">
                                 <li className="flex items-start gap-2 text-xs text-indigo-900 dark:text-indigo-200">
                                     <span className="text-indigo-500 font-bold">•</span>
-                                    <span>AI 面板的“需修改内容”现仅在<strong>主动选中</strong>文本时自动填充，避免误操作。</span>
+                                    <span>优化了 AI 续写逻辑，确保长文本生成时的上下文连贯性。</span>
                                 </li>
                                 <li className="flex items-start gap-2 text-xs text-indigo-900 dark:text-indigo-200">
                                     <span className="text-indigo-500 font-bold">•</span>
-                                    <span>模型参数（温度、Top P）增加了详细的中文释义。</span>
+                                    <span>修复了流式输出在网络波动时的中断问题。</span>
                                 </li>
                             </ul>
                         </div>

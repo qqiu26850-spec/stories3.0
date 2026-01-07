@@ -406,7 +406,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                     <div className="relative flex-1">
                                         <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-2 pr-6 text-sm font-medium bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
                                             <option value="deepseek-chat">奇思版 (DeepSeek)</option>
-                                            <option value="gemini-2.0-flash">妙写版 (Gemini)</option>
+                                            <option value="gemini-3-flash-preview">妙写版 (Gemini 3.0 Flash)</option>
                                             <option value="doubao-flash">速写版 (豆包)</option>
                                         </select>
                                         <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2 top-3 pointer-events-none" />
