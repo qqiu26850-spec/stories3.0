@@ -2,14 +2,39 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, Asset, Prompt } from '../types';
 import EditProfileModal from './EditProfileModal';
-import { Pencil, UserCircle, Sparkles, BookOpen, Box, ArrowPath } from './Icon';
+import { Pencil, UserCircle, Sparkles, BookOpen, Box, ArrowPath, Check, InformationCircle } from './Icon';
 import { fetchUserLibrary, getCurrentUserId, deleteUserData, updateUserProfile } from '../services/supabaseService';
+import { createPortal } from 'react-dom';
 
 const MOCK_USER_PROFILE: UserProfile = {
     id: 'user-123',
     nickname: '奇思妙想家',
     avatarUrl: 'https://source.unsplash.com/random/200x200?avatar,person',
-    email: 'user@example.com' // Mock email
+    email: 'user@example.com' 
+};
+
+// --- Toast Component ---
+const NotificationToast: React.FC<{ message: string; isVisible: boolean; type?: 'success' | 'error' | 'info' }> = ({ message, isVisible, type = 'success' }) => {
+    if (!isVisible) return null;
+    let bgColor = 'bg-gray-800';
+    let textColor = 'text-white';
+    let icon = <Check className="w-4 h-4 text-green-400" />;
+
+    if (type === 'error') {
+        icon = <div className="w-4 h-4 text-red-400 font-bold">!</div>;
+    } else if (type === 'info') {
+        icon = <InformationCircle className="w-4 h-4 text-sky-400" />;
+    }
+
+    return createPortal(
+        <div className="fixed top-20 right-8 z-[100] animate-fade-in-up">
+            <div className={`${bgColor} ${textColor} px-4 py-3 rounded-xl shadow-2xl text-sm font-bold flex items-center gap-3 border border-gray-700`}>
+                {icon}
+                {message}
+            </div>
+        </div>,
+        document.body
+    );
 };
 
 // --- Retention Modal ---
@@ -96,6 +121,8 @@ const PersonalCenter: React.FC<PersonalCenterProps> = ({ onLogout }) => {
     const [isRetentionModalOpen, setRetentionModalOpen] = useState(false);
     const [isDestroyModalOpen, setDestroyModalOpen] = useState(false);
     
+    const [notification, setNotification] = useState<{msg: string, type: 'success' | 'error' | 'info'} | null>(null);
+
     // Data State
     const [myPrompts, setMyPrompts] = useState<any[]>([]);
     const [myMaterials, setMyMaterials] = useState<any[]>([]);
@@ -125,11 +152,33 @@ const PersonalCenter: React.FC<PersonalCenterProps> = ({ onLogout }) => {
         init();
     }, []);
 
-    const handleProfileUpdate = async (newNickname: string, newAvatarUrl: string | null) => {
-        // Save to Supabase Auth Metadata. We no longer allow email updates here.
-        await updateUserProfile(newNickname, newAvatarUrl);
+    const showNotification = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setNotification({ msg, type });
+        setTimeout(() => setNotification(null), 4000);
+    };
+
+    const handleProfileUpdate = async (newNickname: string, newAvatarUrl: string | null, newEmail?: string, password?: string) => {
+        // Save to Supabase Auth Metadata and Profiles table. Pass new email and password if provided.
+        const { error, emailUpdatePending } = await updateUserProfile(newNickname, newAvatarUrl, newEmail, password);
+        
+        if (error) {
+            showNotification(error as string, 'error');
+            return;
+        }
+
         // Update local state
-        setUserProfile(prev => ({ ...prev, nickname: newNickname, avatarUrl: newAvatarUrl }));
+        setUserProfile(prev => ({ 
+            ...prev, 
+            nickname: newNickname, 
+            avatarUrl: newAvatarUrl
+            // Do not update email locally immediately if pending confirmation
+        }));
+
+        if (emailUpdatePending) {
+            showNotification('确认邮件已发送至新邮箱，请查收以完成更改。', 'info');
+        } else {
+            showNotification('个人资料更新成功');
+        }
     };
 
     const handleDestroyAccount = async () => {
@@ -137,6 +186,8 @@ const PersonalCenter: React.FC<PersonalCenterProps> = ({ onLogout }) => {
         if (success) {
             // Reload page to clear state and show login modal
             window.location.reload();
+        } else {
+            showNotification('注销失败，请稍后重试', 'error');
         }
     };
 
@@ -203,6 +254,8 @@ const PersonalCenter: React.FC<PersonalCenterProps> = ({ onLogout }) => {
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full">
+            <NotificationToast message={notification?.msg || ''} isVisible={!!notification} type={notification?.type} />
+            
             <EditProfileModal
                 isOpen={isEditModalOpen}
                 onClose={() => setEditModalOpen(false)}
@@ -250,7 +303,7 @@ const PersonalCenter: React.FC<PersonalCenterProps> = ({ onLogout }) => {
                             onClick={() => setEditModalOpen(true)}
                             className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs py-1 text-center opacity-0 hover:opacity-100 transition-opacity"
                         >
-                            更换
+                            编辑
                         </button>
                     </div>
                     
@@ -258,12 +311,12 @@ const PersonalCenter: React.FC<PersonalCenterProps> = ({ onLogout }) => {
                         <div className="mb-2">
                             <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center justify-center md:justify-start gap-3">
                                 {userProfile.nickname}
-                                <button onClick={() => setEditModalOpen(true)} className="text-gray-400 hover:text-sky-500 transition-colors">
+                                <button onClick={() => setEditModalOpen(true)} className="text-gray-400 hover:text-sky-500 transition-colors" title="编辑资料">
                                     <Pencil className="w-5 h-5" />
                                 </button>
                             </h1>
                             {userProfile.email && (
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 font-mono">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 font-mono flex items-center justify-center md:justify-start gap-2">
                                     {userProfile.email}
                                 </p>
                             )}

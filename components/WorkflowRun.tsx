@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Workflow, Asset } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight } from './Icon';
+import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight, ExclamationCircle } from './Icon';
 import ImportAssetModal from './ImportAssetModal';
 import { saveMaterial } from '../services/supabaseService';
 
@@ -84,11 +84,12 @@ const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({
 
     if (!isVisible) return null;
 
-    return (
+    return createPortal(
         <div className="absolute inset-0 z-50 flex items-center justify-center">
             <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-80 text-center mx-4 animate-fade-in-up relative">
                 <button 
                     onClick={onClose}
+                    type="button"
                     className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                     title="关闭/取消"
                 >
@@ -105,17 +106,19 @@ const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-4">已耗时: {seconds} 秒</p>
                 <p className="text-xs text-gray-400">弹窗将在 10 秒后自动关闭</p>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
 const FollowUpModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
-    selection: string;
+    targetText: string;
     context: string;
     model: string;
-}> = ({ isOpen, onClose, selection, context, model }) => {
+    mode: 'selection' | 'full';
+}> = ({ isOpen, onClose, targetText, context, model, mode }) => {
     const [query, setQuery] = useState('');
     const [result, setResult] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -137,20 +140,35 @@ const FollowUpModal: React.FC<{
         const controller = new AbortController();
         abortControllerRef.current = controller;
 
-        const prompt = `你是一个专业的创意写作助手。
-请基于下方的【全文背景】和用户【选中的文本】，回答用户的【追问/指令】。
-你的回答不能脱离全文设定的背景，同时必须针对选中的内容进行处理。
+        let prompt = '';
+        if (mode === 'selection') {
+            prompt = `你是一个专业的创意写作助手。
+请基于下方的【全文背景】和用户【选中的文本片段】，回答用户的【追问/指令】。
+你的回答必须针对选中的内容进行处理，同时不脱离全文设定的背景。
 
 【全文背景】：
 ${context.slice(0, 3000)}${context.length > 3000 ? '...' : ''}
 
-【选中的文本】：
-${selection}
+【选中的文本片段】：
+${targetText}
 
 【用户的追问/指令】：
 ${query}
 
 请直接输出结果：`;
+        } else {
+            prompt = `你是一个专业的创意写作助手。
+请基于下方的【当前内容】，回答用户的【追问/指令】。
+你的回答应当是对当前内容的补充、解释或修改建议。
+
+【当前内容】：
+${context.slice(0, 3000)}${context.length > 3000 ? '...' : ''}
+
+【用户的追问/指令】：
+${query}
+
+请直接输出结果：`;
+        }
 
         try {
             const stream = generateTextStream(prompt, {
@@ -189,20 +207,22 @@ ${query}
                 <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <ChatBubbleLeftRight className="w-5 h-5 text-sky-500" />
-                        针对选中内容追问
+                        {mode === 'selection' ? '针对选中片段追问' : '针对本段全文追问'}
                     </h3>
-                    <button onClick={onClose} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
+                    <button type="button" onClick={onClose} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-                    <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
-                        <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">已选中文本</div>
-                        <div className="text-xs text-gray-600 dark:text-gray-300 line-clamp-3 italic">
-                            “{selection}”
+                    {mode === 'selection' && (
+                        <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+                            <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">已选中文本</div>
+                            <div className="text-xs text-gray-600 dark:text-gray-300 line-clamp-3 italic">
+                                “{targetText}”
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="space-y-2">
                         <textarea 
@@ -213,11 +233,11 @@ ${query}
                         />
                         <div className="flex justify-end">
                             {isGenerating ? (
-                                <button onClick={handleStop} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors flex items-center gap-1">
+                                <button type="button" onClick={handleStop} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors flex items-center gap-1">
                                     <Stop className="w-3.5 h-3.5" /> 停止
                                 </button>
                             ) : (
-                                <button onClick={handleGenerate} disabled={!query.trim()} className="px-4 py-2 bg-sky-600 text-white rounded-lg text-xs font-bold hover:bg-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">
+                                <button type="button" onClick={handleGenerate} disabled={!query.trim()} className="px-4 py-2 bg-sky-600 text-white rounded-lg text-xs font-bold hover:bg-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">
                                     <Sparkles className="w-3.5 h-3.5" /> 发送追问
                                 </button>
                             )}
@@ -228,7 +248,7 @@ ${query}
                         <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
                             <div className="flex justify-between items-center">
                                 <span className="text-xs font-bold text-sky-600 dark:text-sky-400">AI 回复</span>
-                                <button onClick={() => navigator.clipboard.writeText(result)} className="text-[10px] text-gray-400 hover:text-sky-500 flex items-center gap-1">
+                                <button type="button" onClick={() => navigator.clipboard.writeText(result)} className="text-[10px] text-gray-400 hover:text-sky-500 flex items-center gap-1">
                                     <Copy className="w-3 h-3" /> 复制
                                 </button>
                             </div>
@@ -239,7 +259,8 @@ ${query}
                     )}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
@@ -266,7 +287,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     
     // Selection & Follow-up State
     const [selectedText, setSelectedText] = useState('');
-    const [isFollowUpModalOpen, setFollowUpModalOpen] = useState(false);
+    const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; mode: 'selection' | 'full' } | null>(null);
     
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -291,6 +312,16 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 setImportModalOpen(true);
             }
         }
+    };
+
+    const handleTriggerFollowUp = (stepContent: string) => {
+        const isSelection = selectedText && selectedText.trim().length > 0;
+        
+        setActiveFollowUp({
+            target: isSelection ? selectedText : stepContent,
+            context: stepContent,
+            mode: isSelection ? 'selection' : 'full'
+        });
     };
 
     const handleStop = () => {
@@ -406,11 +437,12 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={importContent} onSave={handleImportAsset} />
             <LoadingOverlay isVisible={showOverlay} onClose={() => setShowOverlay(false)} />
             <FollowUpModal 
-                isOpen={isFollowUpModalOpen} 
-                onClose={() => setFollowUpModalOpen(false)} 
-                selection={selectedText}
-                context={getFullContext()}
+                isOpen={!!activeFollowUp} 
+                onClose={() => setActiveFollowUp(null)} 
+                targetText={activeFollowUp?.target || ''}
+                context={activeFollowUp?.context || ''}
                 model={model}
+                mode={activeFollowUp?.mode || 'full'}
             />
             
             {successMessage && (
@@ -422,7 +454,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             {/* Header: Light Blue Background */}
             <div className="flex items-center justify-between mb-4 bg-sky-50/80 dark:bg-sky-900/10 p-3 rounded-2xl shadow-sm border border-sky-100 dark:border-sky-800 flex-shrink-0 h-16 z-10 relative">
                  <div className="flex items-center gap-3">
-                    <button onClick={onBack} className="p-1.5 text-sky-600 hover:text-sky-700 hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-900/30 rounded-full transition-all">
+                    <button type="button" onClick={onBack} className="p-1.5 text-sky-600 hover:text-sky-700 hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-900/30 rounded-full transition-all">
                         <ChevronDoubleLeft className="w-5 h-5" />
                     </button>
                     <div>
@@ -456,7 +488,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                 <AdjustmentsHorizontal className="w-5 h-5 text-sky-500" />
                                 参数配置
                             </h3>
-                            <button onClick={() => setShowConfig(!showConfig)} className="text-[10px] font-bold text-sky-500 hover:underline">
+                            <button type="button" onClick={() => setShowConfig(!showConfig)} className="text-[10px] font-bold text-sky-500 hover:underline">
                                 {showConfig ? '收起配置' : '模型设置'}
                             </button>
                         </div>
@@ -465,7 +497,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                             <div className="space-y-3 animate-fade-in p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
                                 <div>
                                     <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">模型</label>
-                                    <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none cursor-pointer">
+                                    <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
                                         <option value="deepseek-chat">奇思版 (DeepSeek)</option>
                                         <option value="gemini-3-flash-preview">妙写版 (Gemini 3.0 Flash)</option>
                                         <option value="doubao-flash">速写版 (豆包)</option>
@@ -563,35 +595,18 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                             {isLoading && <span className="text-[10px] font-normal text-sky-500 animate-pulse ml-2 flex items-center gap-1"><ArrowPath className="w-3 h-3 animate-spin" /> AI 正在思考...</span>}
                         </h3>
                         <div className="flex items-center gap-2">
-                            {selectedText && (
-                                <button 
-                                    onClick={() => setFollowUpModalOpen(true)}
-                                    className="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-bold hover:bg-sky-500 transition-colors flex items-center gap-1 shadow-md shadow-sky-500/20 animate-fade-in"
-                                    title="针对选中文本进行追问"
-                                >
-                                    <ChatBubbleLeftRight className="w-3.5 h-3.5" /> 针对选中内容追问
-                                </button>
-                            )}
                             {Object.keys(stepResults).length > 0 && (
-                                <>
-                                    <button 
-                                        onClick={handleImportSelection}
-                                        className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors flex items-center gap-1"
-                                        title="选中内容后点击导入"
-                                    >
-                                        <Database className="w-3.5 h-3.5" /> 导入选中
-                                    </button>
-                                    <button 
-                                        onClick={() => { 
-                                            const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
-                                            navigator.clipboard.writeText(fullText); 
-                                            triggerSuccess('全文已复制');
-                                        }}
-                                        className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
-                                    >
-                                        <Copy className="w-3.5 h-3.5" /> 复制全文
-                                    </button>
-                                </>
+                                <button 
+                                    type="button"
+                                    onClick={() => { 
+                                        const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
+                                        navigator.clipboard.writeText(fullText); 
+                                        triggerSuccess('全文已复制');
+                                    }}
+                                    className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
+                                >
+                                    <Copy className="w-3.5 h-3.5" /> 复制全文
+                                </button>
                             )}
                         </div>
                      </div>
@@ -615,9 +630,31 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                     </div>
                                     {result ? (
                                         <div className="p-5 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm">
-                                            {/* Step Toolbar */}
-                                            <div className="flex justify-end gap-2 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 opacity-80">
+                                            {/* Step Toolbar - Revised */}
+                                            <div className="flex justify-end items-center gap-2 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 opacity-80">
+                                                
+                                                {/* Follow Up Button Group */}
+                                                <div className="mr-auto relative group/tooltip">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => handleTriggerFollowUp(result)}
+                                                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-sky-600 hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-900/30 rounded transition-colors"
+                                                    >
+                                                        <ChatBubbleLeftRight className="w-3 h-3" /> 
+                                                        {selectedText ? '追问选中' : '追问'}
+                                                    </button>
+                                                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-1 cursor-help text-gray-400 hover:text-sky-500">
+                                                        <ExclamationCircle className="w-3 h-3" />
+                                                    </div>
+                                                    
+                                                    {/* Tooltip */}
+                                                    <div className="hidden group-hover/tooltip:block absolute left-0 bottom-full mb-2 w-48 p-2 bg-gray-800 text-white text-[10px] rounded shadow-lg z-50">
+                                                        选中文字可针对细节追问，未选中则针对本段全文追问。
+                                                    </div>
+                                                </div>
+
                                                 <button 
+                                                    type="button"
                                                     onClick={() => {
                                                         const plain = stripMarkdown(result);
                                                         setImportContent(plain);
@@ -628,6 +665,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                     <Database className="w-3 h-3" /> 导入素材
                                                 </button>
                                                 <button 
+                                                    type="button"
                                                     onClick={() => {
                                                         navigator.clipboard.writeText(stripMarkdown(result));
                                                         triggerSuccess('内容已复制');
@@ -638,6 +676,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                 </button>
                                                 {(executionStatus === 'paused' && idx === nextStepIndex - 1) || executionStatus === 'completed' ? (
                                                     <button 
+                                                        type="button"
                                                         onClick={() => handleRegenerateStep(idx)} 
                                                         className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
                                                         title="重新生成此步骤"
