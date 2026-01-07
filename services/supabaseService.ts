@@ -50,19 +50,26 @@ async function withRetry<T>(operation: () => Promise<T>, retries = 3): Promise<T
 
 /**
  * 关键修复：确保当前用户在 public.profiles 表中有记录。
+ * 如果缺少记录，其他用户无法通过 RLS 读取到昵称，导致显示"匿名用户"。
  */
 async function ensureUserProfileExists() {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        // 检查 Profile 是否存在
         const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle();
         
         if (!profile) {
+            // 从 Auth Metadata 恢复数据
             const metadata = user.user_metadata || {};
+            // 优先使用 metadata 中的 info，如果没有则生成默认值
             const nickname = metadata.full_name || metadata.name || metadata.nickname || `用户${user.id.substring(0, 6)}`;
             const avatarUrl = metadata.avatar_url || null;
 
+            console.log("Profile missing, auto-creating for:", nickname);
+
+            // 插入 profiles 表
             await supabase.from('profiles').upsert({
                 id: user.id,
                 username: nickname,
@@ -100,63 +107,15 @@ export async function resetPasswordForEmail(email: string) {
   return { data, error };
 }
 
-/**
- * 通过验证旧账号密码来修改邮箱
- * @returns { isPending: boolean } 如果 Supabase 开启了 Secure Email Change，isPending 为 true，表示需要去邮件确认。
- */
-export async function updateUserEmailWithLogin(oldEmail: string, password: string, newEmail: string) {
-    try {
-        // 1. 验证旧账号密码 (登录以获取会话)
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email: oldEmail,
-            password: password
-        });
-
-        if (signInError) throw signInError;
-        if (!signInData.session) throw new Error("验证失败，无法创建会话");
-
-        // 2. 请求更新 Auth 邮箱
-        // 修复：显式设置 emailRedirectTo 为当前域名，防止跳转到 localhost
-        const { data: updateData, error: updateError } = await supabase.auth.updateUser(
-            { email: newEmail },
-            { emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined }
-        );
-
-        if (updateError) throw updateError;
-
-        // 3. 同步更新 Profiles 表 (如果存在)
-        // 即使 Auth 更新处于 pending 状态，我们也可以先更新 Profile 表的 email 字段作为记录
-        try {
-            await supabase.from('profiles')
-                .update({ email: newEmail, updated_at: new Date().toISOString() })
-                .eq('id', signInData.session.user.id);
-        } catch (e) {
-            console.warn("Sync email to profiles failed", e);
-        }
-
-        // 4. 检查是否需要验证 (Pending 状态)
-        // 如果 new_email 存在，说明变更需要验证，当前 email 尚未改变
-        const isPending = !!updateData.user?.new_email;
-
-        // 5. 强制登出
-        // 无论是否成功，为了安全和流程完整性，要求用户重新登录 (使用新邮箱或旧邮箱)
-        await supabase.auth.signOut();
-
-        return { data: updateData, error: null, isPending };
-    } catch (error: any) {
-        // 出错时也尝试登出清理状态
-        await supabase.auth.signOut();
-        return { data: null, error, isPending: false };
-    }
-}
-
 export async function fetchUserProfile() {
     try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return { nickname: '未登录用户', avatarUrl: null, email: '' };
         
+        // 尝试获取 profile 表数据
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         
+        // 优先使用 session 中的 metadata (反应更快)，回退使用 profile 表
         const nickname = session.user.user_metadata?.full_name || profile?.username || '奇思妙想家';
         const avatarUrl = session.user.user_metadata?.avatar_url || profile?.avatar_url || null;
 
@@ -177,12 +136,13 @@ export async function updateUserProfile(nickname: string, avatarUrl: string | nu
         const updates: any = {
             data: { full_name: nickname, avatar_url: avatarUrl }
         };
-        // 注意：在 updateUserProfile 中通常只更新元数据，不处理 Auth Email 修改
-        // Email 修改走 updateUserEmailWithLogin 流程
+        if (email) updates.email = email;
 
+        // 1. 更新 Auth 元数据 (Session)
         const { data, error: authError } = await supabase.auth.updateUser(updates);
         if (authError) throw authError;
 
+        // 2. 更新 Profiles 表 (即使失败也不阻塞返回)
         const { error } = await supabase.from('profiles').upsert({ 
             id: userId, 
             username: nickname, 
@@ -192,7 +152,7 @@ export async function updateUserProfile(nickname: string, avatarUrl: string | nu
 
         if (error) console.warn("Profiles table update failed", error);
 
-        promptsCache = null;
+        promptsCache = null; // 清除缓存以刷新昵称显示
         return { error: null, data };
     } catch (e: any) {
         return { error: e };
@@ -347,6 +307,7 @@ export async function updateMaterial(id: string, updates: { name?: string, conte
     }
 }
 
+// Added toggleMaterialFavorite
 export async function toggleMaterialFavorite(id: string, isFavorite: boolean) {
     try {
         const userId = await getCurrentUserId();
@@ -367,6 +328,7 @@ export async function fetchMaterials(type?: string) {
             query = query.eq('type', dbType);
         }
         const { data, error } = await query;
+        // Map is_favorite property correctly if database column exists
         return error ? [] : data.map((item: any) => ({ ...item, isFavorite: item.is_favorite }));
     } catch (e) { return []; }
 }
@@ -389,7 +351,7 @@ export async function savePrompt(title: string, content: string, mainCat: string
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("未登录");
         
-        await ensureUserProfileExists();
+        await ensureUserProfileExists(); // 确保用户档案存在
 
         const dbMainCat = mapPromptCategory(mainCat);
         let description = '';
@@ -454,6 +416,7 @@ export async function fetchPrompts(mainCategory?: string, forceRefresh = false) 
 
         let { data, error } = await query;
 
+        // Fallback Mechanism if join fails
         if (error) {
             console.warn("fetchPrompts join failed, fallback", error);
             let fallbackQuery = supabase.from('prompts').select('*').order('usage_count', { ascending: false });
@@ -497,12 +460,13 @@ export async function deletePrompt(id: string) {
     promptsCache = null;
 }
 
+// Workflows Storage
 export async function saveWorkflow(title: string, description: string, category: string, subCategories: string[], fields: any[], steps: any[]) {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("未登录");
         
-        await ensureUserProfileExists();
+        await ensureUserProfileExists(); // 关键：保存前确保有 Profile
 
         const content = JSON.stringify({ fields, steps });
         const { error } = await supabase.from('workflows').insert([{ 
@@ -539,8 +503,10 @@ export async function updateWorkflow(id: string, updates: { title?: string, desc
     } catch (err: any) { return { success: false, error: err }; }
 }
 
+// 核心修复：更健壮的 fetchWorkflows，解决关联查询不到作者名的问题
 export async function fetchWorkflows() {
     try {
+        // 1. 获取工作流列表
         const { data: workflows, error: wfError } = await withRetry(async () => 
             await supabase.from('workflows').select('*').order('usage_count', { ascending: false })
         );
@@ -552,10 +518,12 @@ export async function fetchWorkflows() {
         
         if (!workflows || workflows.length === 0) return [];
 
+        // 2. 提取所有作者 ID
         const userIds = Array.from(new Set(workflows.map((w: any) => w.user_id).filter(Boolean)));
 
         if (userIds.length === 0) return workflows;
 
+        // 3. 手动查询 profiles 表（规避直接 Join 可能存在的 RLS 限制问题）
         const { data: profiles, error: profError } = await supabase
             .from('profiles')
             .select('id, username, avatar_url')
@@ -565,16 +533,18 @@ export async function fetchWorkflows() {
             console.warn("Fetch profiles for workflows failed", profError);
         }
 
+        // 4. 建立 ID -> Profile 映射
         const profileMap: Record<string, any> = {};
         profiles?.forEach((p: any) => {
             profileMap[p.id] = p;
         });
 
+        // 5. 组合数据
         return workflows.map((w: any) => {
             const profile = profileMap[w.user_id];
             return {
                 ...w,
-                profiles: profile
+                profiles: profile // 将 profile 对象挂载上去，组件层会解析 username
             };
         });
 

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { signIn, signUp, resetPasswordForEmail, signOut, updateUserEmailWithLogin } from '../services/supabaseService';
+import { signIn, signUp, resetPasswordForEmail, signOut } from '../services/supabaseService';
 import { BookSolid, X, Eye, EyeSlash } from './Icon';
 
 interface AuthModalProps {
@@ -18,15 +18,13 @@ const ERROR_MAP: Record<string, string> = {
     'User already registered': '该邮箱已被注册',
     'Email link expired': '链接已失效，请重新发送',
     'Requested entity was not found.': 'API 配置错误，请检查您的 Key',
-    'Network request failed': '网络连接失败，请检查网络设置',
-    'Same email': '新邮箱不能与旧邮箱相同'
+    'Network request failed': '网络连接失败，请检查网络设置'
 };
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
-    const [mode, setMode] = useState<'login' | 'register' | 'forgot-password' | 'change-email'>('login');
+    const [mode, setMode] = useState<'login' | 'register' | 'forgot-password'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [newEmail, setNewEmail] = useState(''); // Added for change-email mode
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -45,11 +43,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
         // 前端初步校验
         if (!validateEmail(email)) {
             setError('请输入正确的邮箱格式');
-            return;
-        }
-
-        if (mode === 'change-email' && !validateEmail(newEmail)) {
-            setError('请输入正确的新邮箱格式');
             return;
         }
 
@@ -90,55 +83,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                 setTimeout(() => {
                     setMode('login');
                 }, 3000);
-            } else if (mode === 'change-email') {
-                if (email === newEmail) {
-                    throw new Error("Same email");
-                }
-                const { error: updateError, isPending } = await updateUserEmailWithLogin(email, password, newEmail);
-                if (updateError) throw updateError;
-                
-                if (isPending) {
-                    setMessage('验证邮件已发送！为了安全，请点击新邮箱（及旧邮箱）中的链接确认。\n验证成功前，旧邮箱仍可正常登录。如验证链接失效或失败，请重新在此提交请求。');
-                } else {
-                    setMessage('邮箱修改成功！请使用新邮箱重新登录。');
-                }
-                
-                // Clear inputs but give user time to read the long message
-                setTimeout(() => {
-                    setMode('login');
-                    if (!isPending) setEmail(newEmail); 
-                    setPassword('');
-                    setNewEmail('');
-                    setMessage('');
-                }, 6000); 
             }
         } catch (err: any) {
             // 翻译错误信息
             const rawMessage = err.message || '';
-            const translatedMessage = ERROR_MAP[Object.keys(ERROR_MAP).find(key => rawMessage.includes(key)) || ''] || rawMessage || '操作失败，请重试';
+            const translatedMessage = ERROR_MAP[Object.keys(ERROR_MAP).find(key => rawMessage.includes(key)) || ''] || '操作失败，请重试';
             setError(translatedMessage);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const getTitle = () => {
-        switch(mode) {
-            case 'login': return '登录';
-            case 'register': return '注册';
-            case 'forgot-password': return '找回密码';
-            case 'change-email': return '修改邮箱';
-            default: return '登录';
-        }
-    };
-
-    const getSubtitle = () => {
-        switch(mode) {
-            case 'login': return '登录以同步您的创作数据';
-            case 'register': return '创建账号，开启您的 AI 创作之旅';
-            case 'forgot-password': return '输入邮箱找回密码';
-            case 'change-email': return '验证原账号以更换绑定邮箱';
-            default: return '';
         }
     };
 
@@ -153,22 +105,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     </div>
                     <h1 className="text-3xl font-bold text-sky-600 dark:text-sky-400 tracking-wider mb-2">奇思妙写</h1>
                     <p className="text-gray-500 dark:text-gray-400 text-sm">
-                        {getSubtitle()}
+                        {mode === 'login' ? '登录以同步您的创作数据' : (mode === 'register' ? '创建账号，开启您的 AI 创作之旅' : '找回密码')}
                     </p>
                 </div>
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="p-8 space-y-5">
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">
-                            {mode === 'change-email' ? '原邮箱' : '邮箱'}
-                        </label>
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">邮箱</label>
                         <input 
                             type="text" 
                             required
                             value={email}
                             onChange={e => setEmail(e.target.value)}
-                            placeholder="例如：user@example.com"
+                            placeholder="例如：QQ邮箱、网易邮箱、谷歌邮箱等"
                             className={`w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border ${error.includes('邮箱') ? 'border-red-400' : 'border-gray-200'} dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition`}
                         />
                     </div>
@@ -197,20 +147,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                         </div>
                     )}
 
-                    {mode === 'change-email' && (
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5">新邮箱</label>
-                            <input 
-                                type="text" 
-                                required
-                                value={newEmail}
-                                onChange={e => setNewEmail(e.target.value)}
-                                placeholder="请输入新的邮箱地址"
-                                className={`w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border ${error.includes('邮箱') ? 'border-red-400' : 'border-gray-200'} dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none transition`}
-                            />
-                        </div>
-                    )}
-
                     {mode === 'login' && (
                         <div className="flex justify-end">
                             <button 
@@ -230,7 +166,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                     )}
                     
                     {message && (
-                        <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-sm rounded-lg text-center border border-green-100 dark:border-green-900/50 whitespace-pre-line">
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-sm rounded-lg text-center border border-green-100 dark:border-green-900/50">
                             {message}
                         </div>
                     )}
@@ -246,13 +182,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                                 请稍候...
                             </div>
                         ) : (
-                            mode === 'login' ? '登 录' : (mode === 'register' ? '立 即 注 册' : (mode === 'change-email' ? '确 认 修 改' : '发 送 重 置 链 接'))
+                            mode === 'login' ? '登 录' : (mode === 'register' ? '立 即 注 册' : '发 送 重 置 链 接')
                         )}
                     </button>
                 </form>
 
                 {/* Footer */}
-                <div className="p-6 bg-gray-50 dark:bg-gray-800/50 text-center border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
+                <div className="p-6 bg-gray-50 dark:bg-gray-800/50 text-center border-t border-gray-100 dark:border-gray-800">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                         {mode === 'login' ? '还没有账号？' : '已有账号？'}
                         <button 
@@ -260,43 +196,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                                 setMode(mode === 'login' ? 'register' : 'login');
                                 setError('');
                                 setMessage('');
-                                setNewEmail('');
                             }}
                             className="ml-1 font-bold text-sky-600 dark:text-sky-400 hover:underline"
                         >
                             {mode === 'login' ? '立即注册' : '直接登录'}
                         </button>
                     </p>
-                    
-                    {/* Change Email Toggle */}
-                    {mode !== 'change-email' && (
-                        <button 
-                            onClick={() => {
-                                setMode('change-email');
-                                setError('');
-                                setMessage('');
-                                setEmail('');
-                                setPassword('');
-                            }}
-                            className="text-xs text-gray-400 hover:text-sky-600 dark:hover:text-sky-400 underline transition-colors mt-2"
-                        >
-                            修改邮箱账号
-                        </button>
-                    )}
-                    
-                    {mode === 'change-email' && (
-                        <button 
-                            onClick={() => {
-                                setMode('login');
-                                setError('');
-                                setMessage('');
-                                setNewEmail('');
-                            }}
-                            className="text-xs text-gray-400 hover:text-sky-600 dark:hover:text-sky-400 underline transition-colors mt-2"
-                        >
-                            返回登录
-                        </button>
-                    )}
                 </div>
             </div>
         </div>
