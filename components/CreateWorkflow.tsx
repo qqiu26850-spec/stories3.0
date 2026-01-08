@@ -114,7 +114,8 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                             variable: pf.id,
                             type: pf.type,
                             required: pf.required,
-                            description: pf.description
+                            description: pf.description,
+                            maxLength: pf.maxLength
                         });
                         existingVars.add(pf.id);
                     }
@@ -190,7 +191,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                         </div>
                     </div>
 
-                    {/* 2. 运行步骤 (Swapped to be Module 2) */}
+                    {/* 2. 运行步骤 */}
                     <div className="bg-purple-50/40 dark:bg-purple-900/10 p-8 rounded-3xl border border-purple-100 dark:border-purple-900/30 space-y-6 shadow-sm">
                         <div className="flex justify-between items-center">
                             <h2 className="text-lg font-black text-purple-700 dark:text-purple-300 flex items-center gap-3">
@@ -201,7 +202,6 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                             </button>
                         </div>
 
-                        {/* Note about auto-importing forms and chaining */}
                         <div className="px-5 py-4 bg-white/60 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl space-y-3 shadow-sm">
                             <div className="flex items-start gap-3">
                                 <InformationCircle className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
@@ -272,7 +272,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                             ))}
                             {steps.length === 0 && <div className="text-center py-16 text-gray-400 flex flex-col items-center gap-4 bg-white dark:bg-gray-900 rounded-3xl border border-dashed"><Sparkles className="w-12 h-12 opacity-10" /><p className="text-sm font-medium">尚未定义任何运行步骤，点击右上方“增加步骤”开始构建链路</p></div>}
                             
-                            {/* NEW: Bottom Continue Adding Button */}
+                            {/* Continue Adding Button */}
                             {steps.length > 0 && (
                                 <div className="pl-12 mt-4">
                                     <button 
@@ -287,7 +287,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                         </div>
                     </div>
 
-                    {/* 3. 用户输入表单 (Color scheme changed to match Module 1 - Blue) */}
+                    {/* 3. 输入表单定义 - Refined UI for Single/Multi line & Word Limit */}
                     <div className="bg-blue-50/40 dark:bg-blue-900/10 p-8 rounded-3xl border border-blue-100 dark:border-blue-900/30 space-y-6 shadow-sm">
                         <div className="flex justify-between items-center">
                             <h2 className="text-lg font-black text-blue-700 dark:text-blue-300 flex items-center gap-3">
@@ -302,65 +302,81 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                 <div className="text-center py-10 text-gray-400 text-sm italic border-2 border-dashed border-blue-200 dark:border-blue-900/50 rounded-2xl">请添加字段以获取用户输入的初始参数</div>
                             ) : (
                                 fields.map((field, index) => (
-                                    <div key={field.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4 relative group">
-                                        {/* 排序按钮 */}
+                                    <div key={field.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4 relative group hover:border-blue-300 transition-colors">
+                                        {/* Controls */}
                                         <div className="absolute right-4 top-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button 
-                                                onClick={() => moveField(index, 'up')} 
-                                                disabled={index === 0}
-                                                className="p-1.5 bg-gray-50 dark:bg-gray-700 rounded-lg text-gray-400 hover:text-sky-500 disabled:opacity-30"
-                                                title="上移"
-                                            >
-                                                <ChevronUp className="w-4 h-4" />
-                                            </button>
-                                            <button 
-                                                onClick={() => moveField(index, 'down')} 
-                                                disabled={index === fields.length - 1}
-                                                className="p-1.5 bg-gray-50 dark:bg-gray-700 rounded-lg text-gray-400 hover:text-sky-500 disabled:opacity-30"
-                                                title="下移"
-                                            >
-                                                <ChevronDown className="w-4 h-4" />
-                                            </button>
-                                            <button onClick={() => removeField(index)} className="p-1.5 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-400 hover:text-red-600" title="删除">
-                                                <Trash className="w-4 h-4" />
-                                            </button>
+                                            <button onClick={() => moveField(index, 'up')} disabled={index === 0} className="p-1.5 bg-gray-50 dark:bg-gray-700 rounded-lg text-gray-400 hover:text-sky-500 disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
+                                            <button onClick={() => moveField(index, 'down')} disabled={index === fields.length - 1} className="p-1.5 bg-gray-50 dark:bg-gray-700 rounded-lg text-gray-400 hover:text-sky-500 disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>
+                                            <button onClick={() => removeField(index)} className="p-1.5 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-400 hover:text-red-600"><Trash className="w-4 h-4" /></button>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pr-24">
-                                            <div className="space-y-1.5 w-full">
-                                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">显示名称</label>
-                                                <input type="text" value={field.label} onChange={e => updateField(index, 'label', e.target.value)} className="w-full p-2.5 text-sm font-medium bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-1 focus:ring-blue-500" placeholder="如：主角性格" />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pr-20">
+                                            {/* Basic Info */}
+                                            <div className="space-y-4">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">显示名称</label>
+                                                    <input type="text" value={field.label} onChange={e => updateField(index, 'label', e.target.value)} className="w-full p-2.5 text-sm font-medium bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-1 focus:ring-blue-500" placeholder="如：主角性格" />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">变量名 (ID)</label>
+                                                    <input type="text" value={field.variable} onChange={e => updateField(index, 'variable', e.target.value)} className="w-full p-2.5 text-sm font-medium bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none font-mono focus:ring-1 focus:ring-blue-500" placeholder="如：trait" />
+                                                </div>
                                             </div>
-                                            <div className="space-y-1.5 w-full">
-                                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">变量名 (ID)</label>
-                                                <input type="text" value={field.variable} onChange={e => updateField(index, 'variable', e.target.value)} className="w-full p-2.5 text-sm font-medium bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none font-mono focus:ring-1 focus:ring-blue-500" placeholder="如：trait" />
-                                            </div>
-                                            <div className="space-y-1.5 w-full">
-                                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">必填选项</label>
-                                                <div className="flex items-center h-10 px-2 gap-4">
-                                                    <label className="flex items-center gap-2 cursor-pointer">
+
+                                            {/* Configuration Options */}
+                                            <div className="space-y-4 bg-gray-50/50 dark:bg-gray-900/30 p-3 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">输入类型</label>
+                                                        <select 
+                                                            value={field.type} 
+                                                            onChange={e => updateField(index, 'type', e.target.value)} 
+                                                            className="w-full p-2 text-xs font-bold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                                        >
+                                                            <option value="text">单行文本 (Input)</option>
+                                                            <option value="textarea">多行文本 (Textarea)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">字数限制 (Max Length)</label>
                                                         <input 
-                                                            type="radio" 
-                                                            checked={field.required !== false} 
-                                                            onChange={() => updateField(index, 'required', true)} 
-                                                            className="accent-blue-500" 
+                                                            type="number" 
+                                                            value={field.maxLength || ''} 
+                                                            onChange={e => updateField(index, 'maxLength', e.target.value ? parseInt(e.target.value) : undefined)} 
+                                                            placeholder="无限制" 
+                                                            className="w-full p-2 text-xs font-bold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-1 focus:ring-blue-500" 
                                                         />
-                                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">必填</span>
-                                                    </label>
-                                                    <label className="flex items-center gap-2 cursor-pointer">
-                                                        <input 
-                                                            type="radio" 
-                                                            checked={field.required === false} 
-                                                            onChange={() => updateField(index, 'required', false)} 
-                                                            className="accent-blue-500" 
-                                                        />
-                                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">选填</span>
-                                                    </label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="flex items-center gap-4 pt-1">
+                                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">是否必填:</label>
+                                                    <div className="flex items-center gap-4">
+                                                        <label className="flex items-center gap-1.5 cursor-pointer">
+                                                            <input 
+                                                                type="radio" 
+                                                                checked={field.required !== false} 
+                                                                onChange={() => updateField(index, 'required', true)} 
+                                                                className="accent-blue-500" 
+                                                            />
+                                                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">是</span>
+                                                        </label>
+                                                        <label className="flex items-center gap-1.5 cursor-pointer">
+                                                            <input 
+                                                                type="radio" 
+                                                                checked={field.required === false} 
+                                                                onChange={() => updateField(index, 'required', false)} 
+                                                                className="accent-blue-500" 
+                                                            />
+                                                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">否</span>
+                                                        </label>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
+                                        
                                         <div className="space-y-1.5 w-full">
-                                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">补充说明 (输入提示内容)</label>
+                                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">补充说明 (Placeholder/Hint)</label>
                                             <input 
                                                 type="text" 
                                                 value={field.description || ''} 

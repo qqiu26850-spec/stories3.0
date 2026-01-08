@@ -45,22 +45,40 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                     // Filter by type
                     const filtered = data.filter((p: any) => p.type === targetType);
                     
-                    const mappedNovels: Novel[] = filtered.map((p: any) => ({
-                        id: p.id,
-                        title: p.title,
-                        coverImage: null, // Fixed cover handled by UI
-                        wordCount: p.word_count || 0, // Use real-time word count from DB
-                        creationDate: p.created_at || new Date().toISOString(),
-                        settings: { 
-                            typeElements: '', 
-                            theme: '', 
-                            targetAudience: '', 
-                            synopsis: p.description || '', 
-                            worldview: '', 
-                            characterSettings: '' 
-                        },
-                        chapters: [] // Chapters are not fetched in list view
-                    }));
+                    const mappedNovels: Novel[] = filtered.map((p: any) => {
+                        // Correctly parse settings from description
+                        let parsedSettings: any = {};
+                        try {
+                            // Try parsing description as JSON settings object
+                            const raw = p.description || '{}';
+                            if (raw.trim().startsWith('{')) {
+                                parsedSettings = JSON.parse(raw);
+                            } else {
+                                // If not JSON, treat entire string as synopsis (legacy support)
+                                parsedSettings = { synopsis: raw };
+                            }
+                        } catch (e) {
+                            parsedSettings = { synopsis: p.description || '' };
+                        }
+
+                        return {
+                            id: p.id,
+                            title: p.title,
+                            coverImage: null, // Fixed cover handled by UI
+                            wordCount: p.word_count || 0, // Use real-time word count from DB
+                            creationDate: p.created_at || new Date().toISOString(),
+                            settings: { 
+                                typeElements: parsedSettings.typeElements || '', 
+                                theme: parsedSettings.theme || '', 
+                                targetAudience: parsedSettings.targetAudience || '', 
+                                synopsis: parsedSettings.synopsis || '', 
+                                worldview: parsedSettings.worldview || '', 
+                                characterSettings: parsedSettings.characterSettings || '',
+                                specificTerms: parsedSettings.specificTerms || ''
+                            },
+                            chapters: [] // Chapters are not fetched in list view
+                        };
+                    });
                     setNovels(mappedNovels);
                 }
             } catch (error) {
@@ -75,7 +93,11 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
         try {
             // Call Supabase to create project with null coverUrl
             const type = mode === 'long' ? 'novel' : 'short_story';
-            const { id: dbId, error } = await createProject(title, "Created via Web App", type, null);
+            // Initial settings as JSON string
+            const initialSettings = JSON.stringify({ 
+                typeElements: '', theme: '', targetAudience: '', synopsis: '', worldview: '', characterSettings: '' 
+            });
+            const { id: dbId, error } = await createProject(title, initialSettings, type, null);
 
             if (error) {
                 alert(`创建失败: ${error.message || '未知错误'}`);

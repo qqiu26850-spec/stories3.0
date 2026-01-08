@@ -75,6 +75,7 @@ export interface WorkflowField {
     type: 'text' | 'textarea';
     required?: boolean;
     description?: string;
+    maxLength?: number;
 }
 
 export interface WorkflowStep {

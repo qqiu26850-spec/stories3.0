@@ -551,7 +551,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                                     rows={3}
                                                     value={formState[field.id] || ''} 
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
-                                                    placeholder={field.placeholder} 
+                                                    placeholder={field.placeholder || "请输入..."} 
                                                     maxLength={field.maxLength}
                                                     className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" 
                                                 />
@@ -560,7 +560,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                                     type="text" 
                                                     value={formState[field.id] || ''} 
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
-                                                    placeholder={field.placeholder} 
+                                                    placeholder={field.placeholder || "请输入..."} 
                                                     maxLength={field.maxLength}
                                                     className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" 
                                                 />

@@ -122,7 +122,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                                             value={formState[field.id] || ''}
                                             onChange={e => handleInputChange(field.id, e.target.value)}
                                             className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none resize-none transition-all shadow-sm"
-                                            placeholder={field.placeholder || "此处填写内容..."}
+                                            placeholder={field.placeholder || "请输入..."}
                                             maxLength={field.maxLength}
                                         />
                                     ) : (
@@ -131,7 +131,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({ isOpen, onClose, 
                                             value={formState[field.id] || ''}
                                             onChange={e => handleInputChange(field.id, e.target.value)}
                                             className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500 outline-none transition-all shadow-sm"
-                                            placeholder={field.placeholder || "此处填写内容..."}
+                                            placeholder={field.placeholder || "请输入..."}
                                             maxLength={field.maxLength}
                                         />
                                     )}

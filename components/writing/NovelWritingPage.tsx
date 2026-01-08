@@ -86,12 +86,14 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
+    const [isLoadingChapters, setIsLoadingChapters] = useState(true);
 
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string }>({ x: 0, y: 0, visible: false, text: '' });
     const [aiTrigger, setAiTrigger] = useState<{ type: 'expand' | 'continue' | 'polish' | 'review', text: string } | null>(null);
 
     useEffect(() => {
         const loadInitialChapters = async () => {
+             setIsLoadingChapters(true);
              const data = await fetchChapters(novel.id);
              if (data) {
                 const mapped = data.map((c: any) => ({
@@ -113,6 +115,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
              } else if (mode === 'short') {
                  handleCreateChapter(true);
              }
+             setIsLoadingChapters(false);
         };
         loadInitialChapters();
     }, [novel.id, mode]);
@@ -481,7 +484,12 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
 
                 <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden px-1.5 py-0">
                      <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 shadow-sm border-x border-gray-100 dark:border-gray-800 w-full h-full overflow-hidden relative">
-                        {activeChapter ? (
+                        {isLoadingChapters ? (
+                            <div className="flex-1 flex items-center justify-center text-gray-400 flex-col">
+                                <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin mb-4"></div>
+                                <p className="text-sm font-medium">正在加载章节...</p>
+                            </div>
+                        ) : activeChapter ? (
                             <>
                                 <div className="pt-1.5 px-8 pb-1 flex-shrink-0 bg-white dark:bg-gray-900 z-10 flex flex-col gap-1">
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
