@@ -317,7 +317,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [temperature, setTemperature] = useState(0.8);
     const [topP, setTopP] = useState(0.95);
     const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
-    const [showConfig, setShowConfig] = useState(false);
+    // Updated default state: showConfig is now true by default
+    const [showConfig, setShowConfig] = useState(true);
 
     const [formState, setFormState] = useState<Record<string, string>>({});
     const [stepResults, setStepResults] = useState<Record<string, string>>({});
