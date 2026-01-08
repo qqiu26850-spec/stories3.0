@@ -151,7 +151,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const handleContentInput = useCallback(() => {
         if (!editorRef.current) return;
         
-        setSaveStatus('saving');
+        // Prevent redundant state updates
+        setSaveStatus(prev => prev === 'saving' ? prev : 'saving');
 
         if (updateTimeoutRef.current) {
             clearTimeout(updateTimeoutRef.current);
@@ -351,6 +352,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         onInput={handleContentInput}
                                         onPaste={handlePaste}
                                         suppressContentEditableWarning={true}
+                                        spellCheck={false}
+                                        autoCorrect="off"
+                                        autoCapitalize="off"
                                         className="w-full bg-transparent focus:outline-none leading-relaxed text-gray-800 dark:text-gray-200 font-mono min-h-[75vh] outline-none pb-32"
                                         style={{ textAlign: alignment, fontSize: `${fontSize}px` }}
                                     ></div>

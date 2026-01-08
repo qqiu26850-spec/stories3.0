@@ -229,7 +229,9 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
 
     const handleContentInput = useCallback(() => {
         if (!editorRef.current) return;
-        setSaveStatus('saving');
+        
+        // Performance Optimization: Prevent re-rendering if status is already saving
+        setSaveStatus(prev => prev === 'saving' ? prev : 'saving');
 
         if (updateTimeoutRef.current) {
             clearTimeout(updateTimeoutRef.current);
@@ -518,6 +520,9 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                         onPaste={handlePaste}
                                         onContextMenu={handleContextMenu}
                                         suppressContentEditableWarning={true}
+                                        spellCheck={false}
+                                        autoCorrect="off"
+                                        autoCapitalize="off"
                                         className="w-full bg-transparent focus:outline-none leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[75vh] outline-none pb-32"
                                         style={{ textAlign: alignment, fontSize: `${fontSize}px` }}
                                     ></div>
