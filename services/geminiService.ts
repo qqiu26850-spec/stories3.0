@@ -11,7 +11,8 @@ interface GenerationOptions {
 
 export const generateText = async (prompt: string, options: GenerationOptions): Promise<string> => {
   // Default to a higher token limit if not specified to prevent short responses
-  const maxOutputTokens = options.maxOutputTokens || 4096;
+  // Increased default to 8192 for Gemini/DeepSeek V3 support
+  const maxOutputTokens = options.maxOutputTokens || 8192;
 
   if (options.model.startsWith('gemini')) {
     try {
@@ -48,10 +49,9 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
   } else if (options.model.startsWith('deepseek') || options.model.startsWith('doubao')) {
     const endpoint = options.model.startsWith('doubao') ? "/api/doubao" : "/api/deepseek";
     
-    // DeepSeek API limit: max_tokens must be <= 8192
-    const effectiveMaxTokens = options.model.startsWith('deepseek') 
-        ? Math.min(maxOutputTokens, 8192) 
-        : maxOutputTokens;
+    // DeepSeek API limit: max_tokens must be <= 8192. 
+    // Ensure we don't send more than 8192 even if requested (e.g. if user forces via slider in future updates)
+    const effectiveMaxTokens = Math.min(maxOutputTokens, 8192);
 
     try {
         const response = await fetch(endpoint, {
@@ -105,7 +105,8 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 };
 
 export const generateTextStream = async function* (prompt: string, options: GenerationOptions): AsyncGenerator<string, void, unknown> {
-    const maxOutputTokens = options.maxOutputTokens || 4096;
+    // Increased default to 8192
+    const maxOutputTokens = options.maxOutputTokens || 8192;
 
     if (options.model.startsWith('gemini')) {
         try {
@@ -159,9 +160,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
         const endpoint = options.model.startsWith('doubao') ? "/api/doubao" : "/api/deepseek";
         
         // DeepSeek API limit: max_tokens must be <= 8192
-        const effectiveMaxTokens = options.model.startsWith('deepseek') 
-            ? Math.min(maxOutputTokens, 8192) 
-            : maxOutputTokens;
+        const effectiveMaxTokens = Math.min(maxOutputTokens, 8192);
 
         try {
             const response = await fetch(endpoint, {

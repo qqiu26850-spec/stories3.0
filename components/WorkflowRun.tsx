@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Workflow, Asset } from '../types';
+import { Workflow, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight, ExclamationCircle, ChatBubbleOvalLeftEllipsis, Plus } from './Icon';
+import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight, ExclamationCircle, ChatBubbleOvalLeftEllipsis, Plus, Box } from './Icon';
 import ImportAssetModal from './ImportAssetModal';
+import PromptSelectionModal from './PromptSelectionModal';
 import { saveMaterial } from '../services/supabaseService';
 
 interface WorkflowRunProps {
@@ -22,44 +23,6 @@ const stripMarkdown = (text: string) => {
         .replace(/`{1,3}.*?`{1,3}/gs, '')
         .replace(/<think>[\s\S]*?<\/think>/g, '')
         .trim();
-};
-
-const FormattedText: React.FC<{ text: string }> = ({ text }) => {
-    const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-
-    return (
-        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
-            {cleanedText.split('\n').map((line, index) => {
-                const trimmedLine = line.trim();
-                const isMarkdownHeader = trimmedLine.startsWith('#');
-                
-                if (isMarkdownHeader) {
-                    const match = trimmedLine.match(/^(#+)\s*(.*)/);
-                    if (match) {
-                        const level = Math.min(match[1].length, 6);
-                        const content = match[2];
-                        let className = "font-bold text-gray-900 dark:text-white ";
-                        if (level === 1) className += "text-lg mt-4 mb-2";
-                        else if (level === 2) className += "text-base mt-3 mb-1.5";
-                        else className += "text-sm mt-2 mb-1";
-                        return <div key={index} className={className}>{content}</div>;
-                    }
-                }
-                
-                const parts = line.split(/(\*\*.*?\*\*)/g);
-                return (
-                    <div key={index} className="min-h-[1.5em] mb-1">
-                        {parts.map((part, i) => {
-                            if (part.startsWith('**') && part.endsWith('**')) {
-                                return <span key={i} className="font-bold text-gray-900 dark:text-white">{part.slice(2, -2)}</span>;
-                            }
-                            return <span key={i}>{part}</span>;
-                        })}
-                    </div>
-                );
-            })}
-        </div>
-    );
 };
 
 const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({ isVisible, onClose }) => {
@@ -116,14 +79,18 @@ const FollowUpModal: React.FC<{
     onClose: () => void;
     targetText: string;
     context: string;
-    model: string;
     initialMode: 'selection' | 'full';
     onApply: (text: string, type: 'insert' | 'replace') => void;
-}> = ({ isOpen, onClose, targetText, context, model, initialMode, onApply }) => {
+}> = ({ isOpen, onClose, targetText, context, initialMode, onApply }) => {
     const [query, setQuery] = useState('');
     const [result, setResult] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [activeMode, setActiveMode] = useState<'selection' | 'full'>(initialMode);
+    
+    // Modal specific model settings
+    const [modalModel, setModalModel] = useState('deepseek-chat');
+    const [isPromptModalOpen, setPromptModalOpen] = useState(false);
+    
     const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
@@ -136,7 +103,9 @@ const FollowUpModal: React.FC<{
     }, [isOpen, targetText, initialMode]);
 
     const handleGenerate = async () => {
-        if (!query.trim()) return;
+        // Allow generation if query is present OR prompt template is used (handled by inserting into query for now)
+        if (!query.trim()) return; 
+        
         setIsGenerating(true);
         setResult('');
         
@@ -175,7 +144,7 @@ ${query}
 
         try {
             const stream = generateTextStream(prompt, {
-                model,
+                model: modalModel,
                 temperature: 0.8,
                 topP: 0.95,
                 signal: controller.signal
@@ -206,10 +175,21 @@ ${query}
         navigator.clipboard.writeText(result);
     };
 
+    const handlePromptSelect = (prompt: Prompt) => {
+        setQuery(prev => prev + (prev ? '\n' : '') + (prompt.template || prompt.content));
+        setPromptModalOpen(false);
+    }
+
     if (!isOpen) return null;
 
     return createPortal(
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
+            {isPromptModalOpen && (
+                <div style={{zIndex: 110}}>
+                    <PromptSelectionModal isOpen={true} onClose={() => setPromptModalOpen(false)} onSelect={handlePromptSelect} />
+                </div>
+            )}
+            
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
                 <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -222,21 +202,33 @@ ${query}
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-                    {/* Mode Toggle */}
-                    <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-2">
-                        <button
-                            onClick={() => setActiveMode('full')}
-                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeMode === 'full' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                    {/* Model & Mode Toggle */}
+                    <div className="flex gap-2">
+                        <select 
+                            value={modalModel} 
+                            onChange={(e) => setModalModel(e.target.value)}
+                            className="p-2 text-xs font-bold rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-sky-500 outline-none"
                         >
-                            针对全文/本段内容
-                        </button>
-                        <button
-                            onClick={() => setActiveMode('selection')}
-                            disabled={!targetText}
-                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeMode === 'selection' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'} ${!targetText ? 'opacity-50 cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-white'}`}
-                        >
-                            {targetText ? '针对选中文本' : '未选择文本'}
-                        </button>
+                            <option value="deepseek-chat">DeepSeek V3</option>
+                            <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+                            <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
+                        </select>
+
+                        <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-lg flex-1">
+                            <button
+                                onClick={() => setActiveMode('full')}
+                                className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${activeMode === 'full' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                            >
+                                全文/本段
+                            </button>
+                            <button
+                                onClick={() => setActiveMode('selection')}
+                                disabled={!targetText}
+                                className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${activeMode === 'selection' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'} ${!targetText ? 'opacity-50 cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-white'}`}
+                            >
+                                针对选中
+                            </button>
+                        </div>
                     </div>
 
                     {activeMode === 'selection' && (
@@ -253,11 +245,14 @@ ${query}
                             value={query}
                             onChange={e => setQuery(e.target.value)}
                             placeholder={activeMode === 'selection' 
-                                ? "请输入针对选中文本的追问或修改指令（例如：把这段改得更悲伤一点）..." 
-                                : "请输入针对全文/本段的追问（例如：续写一段情节，或者总结一下当前的故事走向）..."}
+                                ? "请输入针对选中文本的追问或修改指令..." 
+                                : "请输入针对全文/本段的追问..."}
                             className="w-full h-24 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-sm resize-none"
                         />
-                        <div className="flex justify-end">
+                        <div className="flex justify-between items-center">
+                            <button onClick={() => setPromptModalOpen(true)} className="text-xs text-sky-600 hover:text-sky-500 font-bold flex items-center gap-1">
+                                <Box className="w-3.5 h-3.5" /> 引用提示词
+                            </button>
                             {isGenerating ? (
                                 <button type="button" onClick={handleStop} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors flex items-center gap-1">
                                     <Stop className="w-3.5 h-3.5" /> 停止
@@ -283,8 +278,9 @@ ${query}
                                     <button 
                                         onClick={() => { onApply(result, 'insert'); onClose(); }}
                                         className="px-3 py-1.5 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors flex items-center gap-1"
+                                        title="在光标处插入"
                                     >
-                                        <Plus className="w-3.5 h-3.5" /> 插入原文
+                                        <Plus className="w-3.5 h-3.5" /> 插入正文
                                     </button>
                                     {activeMode === 'selection' && (
                                         <button 
@@ -313,11 +309,10 @@ ${query}
 
 const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [model, setModel] = useState('deepseek-chat');
-    const modelRef = useRef(model); // Track latest model for async loops
+    const modelRef = useRef(model); // Track latest model
     const [temperature, setTemperature] = useState(0.8);
     const [topP, setTopP] = useState(0.95);
-    const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
-    // Updated default state: showConfig is now true by default
+    const [maxOutputTokens, setMaxOutputTokens] = useState(8192); // Fixed default to max supported
     const [showConfig, setShowConfig] = useState(true);
 
     const [formState, setFormState] = useState<Record<string, string>>({});
@@ -334,12 +329,13 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [showOverlay, setShowOverlay] = useState(false);
     
     const [selectedText, setSelectedText] = useState('');
+    const [cursorPosition, setCursorPosition] = useState<number | null>(null); // Track cursor for insertion
     const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; variable: string; initialMode: 'selection' | 'full' } | null>(null);
     const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number; visible: boolean; variable: string; fullContent: string } | null>(null);
     
     const abortControllerRef = useRef<AbortController | null>(null);
+    const textareasRef = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
-    // Sync ref when state changes
     useEffect(() => {
         modelRef.current = model;
     }, [model]);
@@ -377,8 +373,16 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             if (type === 'replace' && activeFollowUp.target) {
                 updatedContent = currentContent.replace(activeFollowUp.target, newText);
             } else {
-                if (activeFollowUp.target && currentContent.includes(activeFollowUp.target)) {
-                     updatedContent = currentContent.replace(activeFollowUp.target, activeFollowUp.target + newText);
+                // Insert at cursor if available, otherwise append or replace target
+                if (cursorPosition !== null && textareasRef.current[activeFollowUp.variable]) {
+                     const before = currentContent.substring(0, cursorPosition);
+                     const after = currentContent.substring(cursorPosition);
+                     updatedContent = before + newText + after;
+                } else if (activeFollowUp.target && currentContent.includes(activeFollowUp.target)) {
+                     // Fallback: replace target if no cursor (conceptually wrong for insert but safe fallback)
+                     // Actually better: append after target
+                     const parts = currentContent.split(activeFollowUp.target);
+                     updatedContent = parts[0] + activeFollowUp.target + newText + parts.slice(1).join(activeFollowUp.target);
                 } else {
                     updatedContent = currentContent + '\n\n' + newText;
                 }
@@ -427,7 +431,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
 
                 let stepContent = '';
                 const stream = generateTextStream(finalPrompt, { 
-                    model: modelRef.current, // Use ref to ensure latest model is used during chain execution
+                    model: modelRef.current, 
                     temperature, 
                     topP, 
                     maxOutputTokens, 
@@ -439,16 +443,14 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                     setStepResults(prev => ({ ...prev, [step.outputVariable]: stepContent }));
                 }
 
-                // If content is completely empty or error message, pause chain execution to allow retry
                 if (!stepContent || stepContent.includes("[AI未生成有效内容")) {
                     console.warn(`Step ${i + 1} generated empty/invalid content.`);
                     if (!stepContent) {
-                        stepContent = "[AI未生成有效内容，请检查模型设置或提示词]";
+                        stepContent = ""; // Empty string allows user to fill it or retry
                         setStepResults(prev => ({ ...prev, [step.outputVariable]: stepContent }));
                     }
-                    // PAUSE execution here so user can change model/settings and retry this step
                     setExecutionStatus('paused');
-                    setNextStepIndex(i); // Next start index is CURRENT step (to retry)
+                    setNextStepIndex(i); 
                     setIsLoading(false);
                     setCurrentStepIndex(null);
                     return; 
@@ -473,7 +475,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             if (e.message !== 'Aborted') {
                 setError(e.message || '生成失败');
                 setExecutionStatus('paused');
-                // Ensure we can retry from the failed step
                 setNextStepIndex(startIndex); 
             }
         } finally {
@@ -496,24 +497,23 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         const selection = window.getSelection();
         const text = selection?.toString().trim();
         
-        if (text && text.length > 0) {
-            const range = selection?.getRangeAt(0);
-            const rect = range?.getBoundingClientRect();
-            
-            if (rect) {
-                setSelectionMenu({
-                    x: rect.left + rect.width / 2,
-                    y: rect.top - 10,
-                    visible: true,
-                    variable: variable,
-                    fullContent: content
-                });
-                setSelectedText(text);
-                return;
-            }
+        // Capture cursor position for simple insertions even without text selection
+        const textarea = textareasRef.current[variable];
+        if (textarea) {
+            setCursorPosition(textarea.selectionStart);
         }
-        setSelectionMenu(null);
-        setSelectedText('');
+
+        if (text && text.length > 0) {
+            // Since we are using textarea, getSelection().getRangeAt(0) might be tricky for UI positioning relative to viewport
+            // We use a simplified menu position near the mouse or centered for textarea
+            // Note: Textarea selection doesn't expose client rects easily for range.
+            // Fallback: fixed position or logic. 
+            // However, native context menu works. For custom menu, we'd rely on mouse event which isn't passed here.
+            // Simplified: We removed the floating menu for Textarea, rely on the "Follow Up" button in toolbar.
+            setSelectedText(text);
+        } else {
+            setSelectedText('');
+        }
     };
 
     const getStatusColor = (idx: number) => {
@@ -522,14 +522,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         return 'bg-gray-100 dark:bg-gray-800 text-gray-400';
     };
 
-    useEffect(() => {
-        const closeMenu = () => setSelectionMenu(null);
-        document.addEventListener('mousedown', closeMenu);
-        return () => document.removeEventListener('mousedown', closeMenu);
-    }, []);
-
     return (
-        <div className="p-4 h-full animate-fade-in flex flex-col font-sans bg-gray-50 dark:bg-black/20 relative">
+        <div className="flex flex-col h-full bg-gray-50 dark:bg-black/20 font-sans relative">
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={importContent} onSave={handleImportAsset} />
             <LoadingOverlay isVisible={showOverlay} onClose={() => setShowOverlay(false)} />
             
@@ -538,28 +532,9 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 onClose={() => setActiveFollowUp(null)} 
                 targetText={activeFollowUp?.target || ''}
                 context={activeFollowUp?.context || ''}
-                model={model}
                 initialMode={activeFollowUp?.initialMode || 'full'}
                 onApply={handleApplyFollowUpResult}
             />
-            
-            {selectionMenu && selectionMenu.visible && createPortal(
-                <div 
-                    className="fixed z-[9999] transform -translate-x-1/2 -translate-y-full pb-2 animate-fade-in-up"
-                    style={{ top: selectionMenu.y, left: selectionMenu.x }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                >
-                    <button 
-                        onClick={() => handleTriggerFollowUp(selectionMenu.fullContent, selectionMenu.variable, 'selection')}
-                        className="bg-gray-900 text-white text-xs font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 hover:bg-black transition-transform hover:scale-105"
-                    >
-                        <ChatBubbleOvalLeftEllipsis className="w-4 h-4" />
-                        继续追问
-                    </button>
-                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 transform translate-y-1"></div>
-                </div>,
-                document.body
-            )}
             
             {successMessage && (
                 <div className="fixed top-20 right-8 z-50 px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-lg animate-fade-in-up text-sm font-bold flex items-center gap-2">
@@ -567,13 +542,14 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 </div>
             )}
 
-            <div className="flex items-center justify-between mb-4 bg-sky-50/80 dark:bg-sky-900/10 p-3 rounded-2xl shadow-sm border border-sky-100 dark:border-sky-800 flex-shrink-0 h-16 z-10 relative">
+            {/* Top Bar - No gap above */}
+            <div className="flex items-center justify-between px-4 py-2 bg-sky-50/80 dark:bg-sky-900/10 border-b border-sky-100 dark:border-sky-800 flex-shrink-0 h-14 z-10">
                  <div className="flex items-center gap-3">
                     <button type="button" onClick={onBack} className="p-1.5 text-sky-600 hover:text-sky-700 hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-900/30 rounded-full transition-all">
                         <ChevronDoubleLeft className="w-5 h-5" />
                     </button>
                     <div>
-                        <h1 className="text-lg font-black text-sky-700 dark:text-sky-400 tracking-tight leading-tight">{workflow.title}</h1>
+                        <h1 className="text-base font-black text-sky-700 dark:text-sky-400 tracking-tight leading-tight">{workflow.title}</h1>
                     </div>
                  </div>
                  
@@ -592,96 +568,102 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                  </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 overflow-hidden">
-                <div className="lg:col-span-4 flex flex-col overflow-y-auto pr-1 space-y-4 [&::-webkit-scrollbar]:hidden bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-4 rounded-2xl shadow-sm" style={{ scrollbarWidth: 'none' }}>
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-                            <h3 className="text-base font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                                <AdjustmentsHorizontal className="w-5 h-5 text-sky-500" />
-                                参数配置
-                            </h3>
-                            <button type="button" onClick={() => setShowConfig(!showConfig)} className="text-[10px] font-bold text-sky-500 hover:underline">
-                                {showConfig ? '收起配置' : '模型设置'}
-                            </button>
-                        </div>
-
-                        {showConfig && (
-                            <div className="space-y-3 animate-fade-in p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
-                                <div>
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">模型</label>
-                                    <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
-                                        <option value="deepseek-chat">奇思版 (DeepSeek)</option>
-                                        <option value="gemini-3-flash-preview">妙写版 (Gemini 3.0 Flash)</option>
-                                        <option value="doubao-flash">速写版 (豆包)</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="block text-[10px] font-black text-sky-500 flex justify-between">
-                                        <span>随机度: {temperature}</span>
-                                    </label>
-                                    <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="block text-[10px] font-black text-sky-500 flex justify-between">
-                                        <span>核采样: {topP}</span>
-                                    </label>
-                                    <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="block text-[10px] font-black text-sky-500 flex justify-between">
-                                        <span>最大长度: {maxOutputTokens}</span>
-                                    </label>
-                                    <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                </div>
-                            </div>
-                        )}
-                        
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 overflow-hidden p-2">
+                {/* Left Column: Config & Form */}
+                <div className="lg:col-span-4 flex flex-col bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden h-full">
+                    {/* Scrollable Area */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
                         <div className="space-y-4">
-                            {workflow.fields?.map((field, idx) => (
-                                <div key={field.id} className="space-y-1">
-                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 ml-1 flex items-center justify-between">
-                                        <span>
-                                            <span className="opacity-50 mr-1">{idx + 1}.</span> 
-                                            {field.label}
-                                            {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
-                                        </span>
-                                        <span className="text-[10px] text-gray-400 font-normal scale-90 origin-right">
-                                            {field.required !== false ? '必填' : '选填'}
-                                        </span>
-                                    </label>
-                                    {field.type === 'textarea' ? (
-                                        <textarea
-                                            value={formState[field.variable] || ''}
-                                            onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}
-                                            placeholder={`请输入${field.label}...`}
-                                            className="w-full p-3 text-xs bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all resize-none h-24 shadow-sm"
-                                        />
-                                    ) : (
-                                        <input
-                                            type="text"
-                                            value={formState[field.variable] || ''}
-                                            onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}
-                                            placeholder={`请输入${field.label}...`}
-                                            className="w-full p-3 text-xs bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all shadow-sm"
-                                        />
-                                    )}
-                                    {field.description && <p className="text-[10px] text-blue-500 dark:text-blue-400 ml-1 leading-tight">{field.description}</p>}
+                            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+                                <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                    <AdjustmentsHorizontal className="w-4 h-4 text-sky-500" />
+                                    参数配置
+                                </h3>
+                                <button type="button" onClick={() => setShowConfig(!showConfig)} className="text-[10px] font-bold text-sky-500 hover:underline">
+                                    {showConfig ? '收起' : '展开'}
+                                </button>
+                            </div>
+
+                            {showConfig && (
+                                <div className="space-y-3 animate-fade-in p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">模型</label>
+                                        <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
+                                            <option value="deepseek-chat">DeepSeek V3 (Recommended)</option>
+                                            <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+                                            <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
+                                            <option value="doubao-flash">豆包 Flash</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="block text-[10px] font-black text-sky-500 flex justify-between">
+                                            <span>最大长度: {maxOutputTokens}</span>
+                                        </label>
+                                        {/* Slider increased to 8192 */}
+                                        <input type="range" min="1024" max="8192" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="block text-[10px] font-black text-sky-500 flex justify-between">
+                                            <span>随机度: {temperature}</span>
+                                        </label>
+                                        <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                    </div>
                                 </div>
-                            ))}
+                            )}
+                            
+                            <div className="space-y-4">
+                                {workflow.fields?.map((field, idx) => (
+                                    <div key={field.id} className="space-y-1">
+                                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 ml-1 flex items-center justify-between">
+                                            <span>
+                                                <span className="opacity-50 mr-1">{idx + 1}.</span> 
+                                                {field.label}
+                                                {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
+                                            </span>
+                                        </label>
+                                        {field.type === 'textarea' ? (
+                                            <textarea
+                                                value={formState[field.variable] || ''}
+                                                onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}
+                                                placeholder={`请输入${field.label}...`}
+                                                className="w-full p-3 text-xs bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all resize-none h-24 shadow-sm"
+                                            />
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                value={formState[field.variable] || ''}
+                                                onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}
+                                                placeholder={`请输入${field.label}...`}
+                                                className="w-full p-3 text-xs bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none transition-all shadow-sm"
+                                            />
+                                        )}
+                                        {field.description && <p className="text-[10px] text-blue-500 dark:text-blue-400 ml-1 leading-tight">{field.description}</p>}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        
+                    </div>
+
+                    {/* Fixed Bottom Button Area */}
+                    <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex-shrink-0">
                         {isLoading ? (
                              <button 
                                 onClick={handleStop}
                                 className="w-full py-3 bg-red-500 text-white font-black rounded-xl hover:bg-red-600 transition-all shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 active:scale-95"
                             >
-                                <Stop className="w-4 h-4" /> 停止生成
+                                <Stop className="w-4 h-4" /> 暂停生成
                             </button>
                         ) : executionStatus === 'paused' ? (
                             <div className="flex gap-2">
                                 <button 
+                                    onClick={() => handleRunWorkflow(0)} // Reset
+                                    className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center gap-2 active:scale-95"
+                                >
+                                    <ArrowPath className="w-4 h-4" /> 重新开始
+                                </button>
+                                <button 
                                     onClick={handleContinue}
-                                    className="flex-1 py-3 bg-emerald-600 text-white font-black rounded-xl hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 active:scale-95"
+                                    className="flex-[2] py-3 bg-emerald-600 text-white font-black rounded-xl hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 active:scale-95"
                                 >
                                     <Play className="w-4 h-4" /> 继续执行
                                 </button>
@@ -692,50 +674,38 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                 className="w-full py-3 bg-sky-600 text-white font-black rounded-xl hover:bg-sky-500 transition-all shadow-lg shadow-sky-500/30 flex items-center justify-center gap-2 active:scale-95"
                             >
                                 <Sparkles className="w-4 h-4" />
-                                {executionStatus === 'completed' ? '重新开始' : '开始运行'}
+                                {executionStatus === 'completed' ? '重新生成' : '开始运行'}
                             </button>
                         )}
+                        {error && <div className="mt-2 p-2 bg-red-50 text-red-600 text-xs rounded-lg text-center">{error}</div>}
                     </div>
                 </div>
 
-                <div className="lg:col-span-8 bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden relative">
-                     <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center h-14">
+                {/* Right Column: Output Results */}
+                <div className="lg:col-span-8 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden h-full">
+                     <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center h-12 bg-gray-50/30">
                         <h3 className="font-bold text-base text-gray-800 dark:text-white flex items-center gap-2">
                             <Sparkles className="w-5 h-5 text-sky-500" />
                             文本生成
                             {isLoading && <span className="text-[10px] font-normal text-sky-500 animate-pulse ml-2 flex items-center gap-1"><ArrowPath className="w-3 h-3 animate-spin" /> AI 正在思考...</span>}
                         </h3>
-                        <div className="flex items-center gap-2">
-                            {Object.keys(stepResults).length > 0 && (
-                                <>
-                                    <button 
-                                        type="button"
-                                        onClick={() => {
-                                            const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
-                                            handleTriggerFollowUp(fullText, Object.keys(stepResults).pop() || '', 'full');
-                                        }}
-                                        className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
-                                    >
-                                        <ChatBubbleOvalLeftEllipsis className="w-3.5 h-3.5" /> 继续追问
-                                    </button>
-
-                                    <button 
-                                        type="button"
-                                        onClick={() => { 
-                                            const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
-                                            navigator.clipboard.writeText(fullText); 
-                                            triggerSuccess('全文已复制');
-                                        }}
-                                        className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:text-sky-500 transition-colors flex items-center gap-1 shadow-sm"
-                                    >
-                                        <Copy className="w-3.5 h-3.5" /> 复制全文
-                                    </button>
-                                </>
-                            )}
-                        </div>
+                        {Object.keys(stepResults).length > 0 && (
+                            <button 
+                                type="button"
+                                onClick={() => { 
+                                    const fullText = Object.values(stepResults).map(stripMarkdown).join('\n\n---\n\n');
+                                    navigator.clipboard.writeText(fullText); 
+                                    triggerSuccess('全文已复制');
+                                }}
+                                className="text-gray-400 hover:text-sky-500 transition-colors"
+                                title="复制全文"
+                            >
+                                <Copy className="w-4 h-4" />
+                            </button>
+                        )}
                      </div>
 
-                     <div className="flex-1 overflow-y-auto p-6 relative custom-scrollbar space-y-8">
+                     <div className="flex-1 overflow-y-auto p-4 relative custom-scrollbar space-y-6">
                         {workflow.steps?.map((step, idx) => {
                             const result = stepResults[step.outputVariable];
                             if (!result && currentStepIndex !== idx) return null;
@@ -744,25 +714,35 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                 <div key={step.id} className="animate-fade-in space-y-2">
                                     <div className="flex items-center gap-3">
                                         <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
-                                        <span className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-[0.1em]">{step.name}</span>
+                                        <span className="text-xs font-black text-gray-400 uppercase tracking-[0.1em]">{step.name}</span>
                                         <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
                                     </div>
-                                    {result ? (
-                                        <div 
-                                            className="p-5 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm pb-8"
+                                    
+                                    <div 
+                                        className="bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm overflow-hidden"
+                                    >
+                                        {/* Result Textarea for editing and cursor positioning */}
+                                        <textarea
+                                            ref={(el) => { textareasRef.current[step.outputVariable] = el; }}
+                                            value={result || (currentStepIndex === idx ? "AI 正在构思本环节内容..." : "")}
+                                            onChange={(e) => setStepResults(prev => ({ ...prev, [step.outputVariable]: e.target.value }))}
                                             onMouseUp={() => handleTextSelection(step.outputVariable, result)}
-                                        >
-                                            <div className="flex justify-end items-center gap-2 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 opacity-80">
-                                                <div className="mr-auto relative group/tooltip">
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => handleTriggerFollowUp(result, step.outputVariable, 'full')}
-                                                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-sky-600 hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-900/30 rounded transition-colors"
-                                                    >
-                                                        <ChatBubbleOvalLeftEllipsis className="w-3 h-3" /> 
-                                                        继续追问
-                                                    </button>
-                                                </div>
+                                            onKeyUp={() => handleTextSelection(step.outputVariable, result)}
+                                            className="w-full min-h-[160px] p-5 bg-transparent border-none outline-none text-sm leading-relaxed text-gray-800 dark:text-gray-200 font-sans resize-y block"
+                                            style={{ minHeight: '200px' }} // Ensure height
+                                        />
+
+                                        {/* Toolbar for this step */}
+                                        {result && (
+                                            <div className="flex justify-end items-center gap-2 p-2 border-t border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleTriggerFollowUp(result, step.outputVariable, 'selection')} // Prioritize selection
+                                                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 dark:hover:bg-sky-900/40 rounded-lg transition-colors"
+                                                >
+                                                    <ChatBubbleOvalLeftEllipsis className="w-3.5 h-3.5" /> 
+                                                    追问/修改
+                                                </button>
 
                                                 <button 
                                                     type="button"
@@ -771,43 +751,30 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                         setImportContent(plain);
                                                         setImportModalOpen(true);
                                                     }}
-                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-purple-500 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-colors"
+                                                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
                                                 >
-                                                    <Database className="w-3 h-3" /> 导入素材
+                                                    <Database className="w-3.5 h-3.5" /> 存素材
                                                 </button>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(stripMarkdown(result));
-                                                        triggerSuccess('内容已复制');
-                                                    }}
-                                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
-                                                >
-                                                    <Copy className="w-3 h-3" /> 复制
-                                                </button>
+                                                
                                                 {((executionStatus === 'paused' || executionStatus === 'completed') && nextStepIndex === idx) || executionStatus === 'completed' ? (
                                                     <button 
                                                         type="button"
                                                         onClick={() => handleRegenerateStep(idx)} 
-                                                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
+                                                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-sky-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                                                         title="重新生成此步骤"
                                                     >
-                                                        <ArrowPath className="w-3 h-3" /> 重试
+                                                        <ArrowPath className="w-3.5 h-3.5" /> 重试
                                                     </button>
                                                 ) : null}
                                             </div>
-                                            <FormattedText text={result} />
-                                            
-                                            <div className="absolute bottom-3 left-6 text-[10px] text-gray-400 font-mono flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
-                                                <span className="font-bold text-gray-500 dark:text-gray-300">{stripMarkdown(result).length}</span> 字
+                                        )}
+                                        
+                                        {result && (
+                                            <div className="absolute bottom-14 right-4 text-[10px] text-gray-300 font-mono pointer-events-none">
+                                                {stripMarkdown(result).length} 字
                                             </div>
-                                        </div>
-                                    ) : (
-                                        <div className="py-8 flex flex-col items-center justify-center text-sky-500 animate-pulse bg-white/50 rounded-xl border border-dashed border-sky-200">
-                                            <div className="w-2 h-2 bg-sky-500 rounded-full animate-ping mb-2"></div>
-                                            <p className="text-[10px] font-bold uppercase tracking-widest">AI 正在构思本环节内容...</p>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}
@@ -817,12 +784,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                 <Bolt className="w-20 h-20 mb-4" />
                                 <p className="text-lg font-black italic tracking-tighter">WAITING FOR EXECUTION</p>
                                 <p className="text-xs mt-1 font-medium">填写左侧参数并运行，结果将显示在这里</p>
-                            </div>
-                        )}
-                        
-                        {error && (
-                            <div className="p-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl border border-rose-100 dark:border-rose-900/50 text-xs font-bold animate-shake text-center">
-                                ⚠️ {error}
                             </div>
                         )}
                      </div>
