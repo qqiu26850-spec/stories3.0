@@ -99,13 +99,23 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
         <div className="p-2 sm:p-4 h-full max-w-6xl mx-auto animate-fade-in flex flex-col font-sans">
             <div className="mb-4 text-center flex-shrink-0">
                 <div className="flex justify-center">
-                    <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-xl inline-flex">
+                    <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-xl inline-flex items-center">
                         <button 
                             onClick={() => setActiveTab('guide')}
                             className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'guide' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
                         >
-                            <span className="flex items-center gap-2"><QuestionMarkCircle className="w-4 h-4"/> 使用说明</span>
+                            <span className="flex items-center gap-2"><QuestionMarkCircle className="w-4 h-4"/> 功能简介</span>
                         </button>
+                        
+                        <a 
+                            href="https://my.feishu.cn/wiki/NQcDwXqTLiRAsRk14TCc5y6fnke?from=from_copylink"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-6 py-2 rounded-lg text-sm font-bold transition-all text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700/50"
+                        >
+                            <span className="flex items-center gap-2"><BookOpen className="w-4 h-4"/> 使用教程</span>
+                        </a>
+
                         <button 
                             onClick={() => setActiveTab('updates')}
                             className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'updates' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}

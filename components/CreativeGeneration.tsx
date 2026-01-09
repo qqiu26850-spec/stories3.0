@@ -97,6 +97,19 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const abortControllerRef = useRef<AbortController | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+    // Refresh assets when modal opens to ensure custom assets are available
+    useEffect(() => {
+        if (assetModalOpen) {
+            const loadAssets = async () => {
+                const data = await fetchMaterials();
+                setAssets(data.map((item: any) => ({
+                    id: item.id, name: item.name, type: item.type === 'idea' ? 'inspiration' : item.type, content: item.content, tags: item.tags || []
+                })));
+            };
+            loadAssets();
+        }
+    }, [assetModalOpen]);
+
     useEffect(() => {
         const loadAssets = async () => {
             const data = await fetchMaterials();

@@ -115,6 +115,25 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         loadAssets();
     }, []);
 
+    // Also refresh assets when opening modal
+    useEffect(() => {
+        if (isAssetModalOpen) {
+            const loadAssets = async () => {
+                const data = await fetchMaterials();
+                const mappedAssets: Asset[] = data.map((item: any) => ({
+                    id: item.id,
+                    name: item.name || item.title,
+                    type: item.type === 'idea' ? 'inspiration' : item.type,
+                    content: item.content,
+                    tags: item.tags || [],
+                    data: { name: item.name }
+                }));
+                setAssets(mappedAssets);
+            };
+            loadAssets();
+        }
+    }, [isAssetModalOpen]);
+
     const selectedAssetNames = useMemo(() => {
         return Array.from(selectedAssetIds)
             .map(id => assets.find(a => a.id === id)?.name)
@@ -490,7 +509,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 <button onClick={() => handleOpenPromptModal('requirements')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
                                     <div className="flex items-center justify-between">
                                         <span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                                            {selectedPrompt ? selectedPrompt.title : '选择写作要求...'}
+                                            {selectedPrompt ? selectedPrompt.title : '选择Prompt模板...'}
                                         </span>
                                         <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-sky-500" />
                                     </div>
@@ -507,7 +526,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                             <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
                                             <span className="font-semibold text-xs truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '关联人物/剧情...'}</span>
                                         </div>
-                                        <ChevronDown className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                        <ChevronDown className="w-3 h-3 text-gray-400 opacity-50 flex-shrink-0" />
                                     </div>
                                 </button>
                                 
@@ -532,7 +551,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                     <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500 font-medium">重置模板</button>
                                 </div>
                                 {selectedPrompt.fields.map((field, index) => {
-                                    if (field.id === 'context' || field.id === 'text' || field.id === 'content' || field.id === 'selection') return null;
+                                    if (field.id === 'context' || field.id === 'text') return null;
                                     return (
                                         <div key={field.id} className="space-y-1.5">
                                             <div className="flex justify-between items-center">
@@ -551,7 +570,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                                     rows={3}
                                                     value={formState[field.id] || ''} 
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
-                                                    placeholder={field.placeholder || "请输入..."} 
+                                                    placeholder={field.placeholder} 
                                                     maxLength={field.maxLength}
                                                     className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" 
                                                 />
@@ -560,7 +579,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                                     type="text" 
                                                     value={formState[field.id] || ''} 
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
-                                                    placeholder={field.placeholder || "请输入..."} 
+                                                    placeholder={field.placeholder} 
                                                     maxLength={field.maxLength}
                                                     className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" 
                                                 />
@@ -581,7 +600,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 <textarea 
                                     value={customInput} 
                                     onChange={(e) => setCustomInput(e.target.value)} 
-                                    placeholder="请输入您的具体要求..."
+                                    placeholder="请输入具体的创作要求..."
                                     className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner"
                                 />
                             </div>
@@ -590,81 +609,10 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 </div>
                 
                 {!isGenerating && !resultText && (
-                    <button onClick={handleGenerate} className="w-full py-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] text-sm mt-4 bg-sky-600 hover:bg-sky-500 text-white shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                        <Sparkles className="w-4 h-4" />{activeTab === 'review' ? '开始评审' : '立即生成'}
+                    <button onClick={handleGenerate} className={`w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed`}>
+                        <Sparkles className="w-5 h-5" />{activeTab === 'review' ? '开始智能评审' : '立即生成内容'}
                     </button>
                 )}
-
-                {/* Result Area */}
-                {(resultText || isGenerating) && (
-                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 animate-fade-in-up">
-                        {isGenerating && !resultText && (
-                            <div className="p-6 bg-white dark:bg-gray-900 rounded-xl border border-sky-100 dark:border-sky-800 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
-                                <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
-                                <div className="text-sm font-bold text-gray-800 dark:text-gray-200 animate-pulse">AI 正在创作...</div>
-                                <div className="text-[10px] text-sky-600 dark:text-sky-400 font-medium italic transition-opacity duration-500 px-4">
-                                    {WRITING_STRATEGIES[strategyIndex]}
-                                </div>
-                                <button onClick={handleStop} className="mt-2 text-xs text-red-500 hover:text-red-600 flex items-center gap-1 font-bold">
-                                    <Stop className="w-3 h-3" /> 停止生成
-                                </button>
-                            </div>
-                        )}
-
-                        {(resultText || (isGenerating && resultText)) && (
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center p-3 rounded-t-xl bg-sky-50/50 border-b border-sky-100/50">
-                                    <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                                        <Sparkles className="w-4 h-4 text-sky-500" />
-                                        生成结果
-                                        {isGenerating && <ArrowPath className="w-3.5 h-3.5 text-sky-500 animate-spin" />}
-                                        {!isGenerating && resultText && <span className="text-xs text-green-500 font-bold ml-1">已完成</span>}
-                                    </h4>
-                                    <div className="flex gap-1">
-                                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-white rounded transition-colors" title="复制"><Copy className="w-3.5 h-3.5" /></button>
-                                        <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-white rounded transition-colors" title="关闭"><X className="w-4 h-4" /></button>
-                                    </div>
-                                </div>
-                                {/* Plain text rendering */}
-                                <div className="p-3 bg-white dark:bg-gray-900 rounded-b-xl border border-t-0 border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">
-                                    {resultText}
-                                </div>
-                                <div className="flex gap-2">
-                                    <button 
-                                        onClick={() => {
-                                            showToast('请确保编辑器中有光标位置或选区');
-                                            if (activeTab === 'polish') onReplace(resultText);
-                                            else onInsert(resultText);
-                                        }} 
-                                        className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm flex items-center justify-center gap-1"
-                                    >
-                                        {activeTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
-                                    </button>
-                                    
-                                    {isGenerating ? (
-                                        <button 
-                                            onClick={handleStop}
-                                            className="flex-1 px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
-                                        >
-                                            <Stop className="w-3 h-3" /> 停止生成
-                                        </button>
-                                    ) : (
-                                        <>
-                                            <button onClick={handleContinue} className="flex-1 px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm flex items-center justify-center gap-1" title="续写更多内容">
-                                                <Play className="w-3 h-3" /> 继续生成
-                                            </button>
-                                            <button onClick={handleGenerate} className="flex-1 px-3 py-2.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold rounded-lg hover:bg-orange-200 transition-colors text-sm flex items-center justify-center gap-1">
-                                                <ArrowPath className="w-3 h-3" /> 重试
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {error && <div className="mt-2 p-2 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100 text-center">{error}</div>}
             </div>
         </div>
     );
