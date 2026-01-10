@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Workflow, Asset, Prompt } from '../types';
@@ -23,6 +24,47 @@ const stripMarkdown = (text: string) => {
         .replace(/`{1,3}.*?`{1,3}/gs, '')
         .replace(/<think>[\s\S]*?<\/think>/g, '')
         .trim();
+};
+
+const escapeHtml = (text: string) => {
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+};
+
+const convertMarkdownToHtml = (text: string) => {
+    const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    
+    return cleanedText.split('\n').map(line => {
+        let content = line.trim();
+        // Preserve empty lines as breaks
+        if (!content) return '<p><br></p>';
+        
+        let isHeader = false;
+        // Handle Headers
+        if (content.startsWith('#')) {
+            const match = content.match(/^(#+)\s*(.*)/);
+            if (match) {
+                content = match[2];
+                isHeader = true;
+            }
+        }
+        
+        // Escape HTML to prevent injection and render as text
+        content = escapeHtml(content);
+        
+        // Handle Bold **text**
+        content = content.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+        
+        // Wrap in p tags, apply bold to headers to match visual hierarchy
+        if (isHeader) {
+            return `<p><b>${content}</b></p>`;
+        }
+        return `<p>${content}</p>`;
+    }).join('');
 };
 
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
@@ -339,7 +381,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     };
 
     const handleOpenSaveModal = (text: string) => {
-        setSaveModalContent(stripMarkdown(text));
+        // Use convertMarkdownToHtml to preserve paragraph structure and bold formatting compatible with editor
+        setSaveModalContent(convertMarkdownToHtml(text));
         setSaveModalOpen(true);
     };
 
