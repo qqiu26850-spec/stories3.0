@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Workflow, Asset, Prompt } from '../types';
@@ -727,7 +726,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                     onClick={() => handleOpenSaveModal(result)}
                                                     className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
                                                 >
-                                                    <DocumentPlus className="w-3.5 h-3.5" /> 存入创作
+                                                    <DocumentPlus className="w-3.5 h-3.5" /> 存入创作中心
                                                 </button>
                                                 {((executionStatus === 'paused' || executionStatus === 'completed') && nextStepIndex === idx) || executionStatus === 'completed' ? (
                                                     <button 
@@ -770,14 +769,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                 </div>
                             );
                         })}
-
-                        {!isLoading && Object.keys(stepResults).length === 0 && (
-                            <div className="h-full flex flex-col items-center justify-center text-gray-300 dark:text-gray-700 opacity-40 py-10">
-                                <Bolt className="w-20 h-20 mb-4" />
-                                <p className="text-lg font-black italic tracking-tighter">WAITING FOR EXECUTION</p>
-                                <p className="text-xs mt-1 font-medium">填写左侧参数并运行，结果将显示在这里</p>
-                            </div>
-                        )}
                      </div>
                 </div>
             </div>

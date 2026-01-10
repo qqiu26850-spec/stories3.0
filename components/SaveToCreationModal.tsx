@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, Copy, Film, Check, X, Search, Plus, ArrowPath } from './Icon';
-import { createProject, fetchProjects, saveChapterToDB } from '../services/supabaseService';
+import { createProject, fetchProjects, saveChapterToDB, fetchChapters } from '../services/supabaseService';
 
 interface SaveToCreationModalProps {
     isOpen: boolean;
@@ -70,11 +70,29 @@ const SaveToCreationModal: React.FC<SaveToCreationModalProps> = ({ isOpen, onClo
                 return;
             }
 
-            const chapterTitle = `生成内容-${new Date().toLocaleTimeString()}`;
-            // Use a timestamp based ID to avoid collision if strict format isn't required by DB
-            const chapterId = `wf-gen-${Date.now()}`;
-            
-            await saveChapterToDB(projectId, chapterId, chapterTitle, content, 9999); // Append to end with high index
+            // Logic to handle saving content based on project type
+            if (projectType === 'short_story') {
+                // Short Story logic: try to find the main chapter and append
+                const chapters = await fetchChapters(projectId);
+                
+                if (chapters && chapters.length > 0) {
+                    const mainChapter = chapters[0];
+                    const newContent = (mainChapter.content ? mainChapter.content + '\n\n' : '') + content;
+                    
+                    // Update existing chapter
+                    await saveChapterToDB(projectId, mainChapter.id, mainChapter.title, newContent, mainChapter.order_index);
+                } else {
+                    // Create new main chapter if none exists
+                    await saveChapterToDB(projectId, `wf-gen-${Date.now()}`, '正文', content, 1);
+                }
+            } else {
+                // Novel or Script: Create a new chapter/scene appended to the end
+                // We fetch chapters first to determine order index, although 9999 trick works, cleaner to be explicit if possible
+                // Using 9999 as a simple robust strategy for "append to end" if we don't fetch.
+                const chapterTitle = `生成内容-${new Date().toLocaleTimeString()}`;
+                const chapterId = `wf-gen-${Date.now()}`;
+                await saveChapterToDB(projectId, chapterId, chapterTitle, content, 9999);
+            }
             
             onSuccess(mode === 'new' ? '已创建新作品并存入' : '已存入选中作品');
             onClose();

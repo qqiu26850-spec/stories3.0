@@ -291,8 +291,8 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                     
                                     <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 space-y-4 shadow-sm relative group">
                                         <div className="flex justify-between items-center border-b border-gray-50 dark:border-gray-700 pb-3">
-                                            <input type="text" value={step.name} onChange={e => updateStep(index, 'name', e.target.value)} className="bg-transparent font-black text-gray-900 dark:text-white outline-none border-b border-transparent focus:border-purple-500 transition-all flex-1 text-base" placeholder="请输入步骤名称..." />
-                                            <div className="flex gap-2 items-center">
+                                            <input type="text" value={step.name} onChange={e => updateStep(index, 'name', e.target.value)} className="bg-transparent font-black text-gray-900 dark:text-white outline-none border-b border-transparent focus:border-purple-500 transition-all flex-1 text-base mr-4" placeholder="请输入步骤名称..." />
+                                            <div className="flex gap-2 items-center flex-wrap">
                                                 <div className="flex items-center gap-2 mr-2">
                                                     <label className="text-[10px] font-bold text-gray-400 uppercase cursor-pointer select-none" htmlFor={`manual-${step.id}`}>
                                                         生成后暂停
@@ -307,27 +307,23 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                                 </div>
                                                 <button 
                                                     onClick={() => handleImportPrompt(index)} 
-                                                    className="px-4 py-2 bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 rounded-xl text-xs font-bold border border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 flex items-center gap-2 shadow-sm transition-all"
+                                                    className="px-3 py-1.5 bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold border border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30 flex items-center gap-1 shadow-sm transition-all whitespace-nowrap"
                                                 >
-                                                    <Box className="w-4 h-4" /> 
+                                                    <Box className="w-3.5 h-3.5" /> 
                                                     使用提示词模板
                                                 </button>
-                                                <button onClick={() => setSteps(steps.filter((_, i) => i !== index))} className="p-2 text-gray-300 hover:text-rose-500"><Trash className="w-4 h-4" /></button>
+                                                <button 
+                                                    onClick={() => setPolishingStepIndex(polishingStepIndex === index ? null : index)}
+                                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 whitespace-nowrap ${polishingStepIndex === index ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-600 border-purple-200 hover:bg-purple-50'}`}
+                                                >
+                                                    <Sparkles className="w-3.5 h-3.5" />
+                                                    {polishingStepIndex === index ? '关闭润色' : '润色提示词'}
+                                                </button>
+                                                <button onClick={() => setSteps(steps.filter((_, i) => i !== index))} className="p-2 text-gray-300 hover:text-rose-500 ml-1"><Trash className="w-4 h-4" /></button>
                                             </div>
                                         </div>
 
                                         <div className="space-y-2">
-                                            <div className="flex justify-between items-center">
-                                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">运行 Prompt (提示词内容)</label>
-                                                <button 
-                                                    onClick={() => setPolishingStepIndex(polishingStepIndex === index ? null : index)}
-                                                    className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all flex items-center gap-1 ${polishingStepIndex === index ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-600 border-purple-200 hover:bg-purple-50'}`}
-                                                >
-                                                    <Sparkles className="w-3 h-3" />
-                                                    {polishingStepIndex === index ? '关闭润色' : '润色提示词'}
-                                                </button>
-                                            </div>
-
                                             {polishingStepIndex === index && (
                                                 <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800 mb-2 animate-fade-in flex gap-2">
                                                     <input 
@@ -346,6 +342,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                             )}
 
                                             <div className="relative rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                                                <div className="absolute top-2 right-2 z-10 opacity-30 text-[10px] pointer-events-none font-bold text-gray-400 uppercase">PROMPT</div>
                                                 <MarkdownToolbar textareaId={`step-prompt-${index}`} onInsert={(val) => updateStep(index, 'prompt', val)} />
                                                 <textarea 
                                                     id={`step-prompt-${index}`}

@@ -160,6 +160,31 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         setShowLoadingOverlay(false);
     };
 
+    const resetState = () => {
+        setFormState({});
+        setFreeInput('');
+        setGeneratedText('');
+        setSelectedPrompt(null);
+        setSelectedAssetIds(new Set());
+        setSuccessMessage('');
+        setIsGenerating(false);
+        setIsWaitingForFirstChunk(false);
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+    };
+
+    const handleSelectModule = (m: CreativeModule) => {
+        resetState();
+        setSelectedModule(m);
+    };
+
+    const handleExitModule = () => {
+        resetState();
+        setSelectedModule(null);
+    };
+
     const handleGenerate = async () => {
         if (isGenerating) { handleStop(); return; }
         setIsGenerating(true);
@@ -237,7 +262,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             <div className="p-8 h-full animate-fade-in font-sans">
                 <div className="mb-8"><h1 className="text-3xl font-bold text-gray-900 dark:text-white">创意生成</h1></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {CREATIVE_MODULES.map(m => <CreativeCard key={m.id} module={m} onSelect={() => setSelectedModule(m)} />)}
+                    {CREATIVE_MODULES.map(m => <CreativeCard key={m.id} module={m} onSelect={() => handleSelectModule(m)} />)}
                 </div>
             </div>
         );
@@ -252,7 +277,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
 
             <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white dark:bg-gray-900 z-20 shadow-sm font-sans">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => setSelectedModule(null)} className="p-2 rounded-full hover:bg-gray-100 text-gray-500"><ChevronDoubleLeft className="w-5 h-5" /></button>
+                    <button onClick={handleExitModule} className="p-2 rounded-full hover:bg-gray-100 text-gray-500"><ChevronDoubleLeft className="w-5 h-5" /></button>
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">{selectedModule.title}</h2>
                 </div>
             </div>
