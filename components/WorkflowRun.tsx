@@ -5,8 +5,9 @@ import { Workflow, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
 import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight, ExclamationCircle, ChatBubbleOvalLeftEllipsis, Plus, Box, DocumentPlus } from './Icon';
 import ImportAssetModal from './ImportAssetModal';
+import SaveToCreationModal from './SaveToCreationModal';
 import PromptSelectionModal from './PromptSelectionModal';
-import { saveMaterial, createProject, saveChapterToDB } from '../services/supabaseService';
+import { saveMaterial } from '../services/supabaseService';
 
 interface WorkflowRunProps {
     workflow: Workflow;
@@ -317,6 +318,10 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     
     const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; variable: string; initialMode: 'selection' | 'full' } | null>(null);
     
+    // Save to creation modal state
+    const [saveModalOpen, setSaveModalOpen] = useState(false);
+    const [saveModalContent, setSaveModalContent] = useState('');
+
     const abortControllerRef = useRef<AbortController | null>(null);
     const resultRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -334,14 +339,9 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         triggerSuccess('素材已导入');
     };
 
-    // New Function: Save to Creation Center (Short Story Project)
-    const handleSaveToCreation = async (text: string) => {
-        const title = `工作流生成-${new Date().toLocaleTimeString()}`;
-        const { id: projectId, error } = await createProject(title, '来自工作流生成', 'short_story');
-        if (error || !projectId) { triggerSuccess('创建失败'); return; }
-        
-        await saveChapterToDB(projectId, `new-${Date.now()}`, '正文', text, 1);
-        triggerSuccess('已存入短篇小说库');
+    const handleOpenSaveModal = (text: string) => {
+        setSaveModalContent(stripMarkdown(text));
+        setSaveModalOpen(true);
     };
 
     const handleTriggerFollowUp = (stepContent: string, variable: string) => {
@@ -484,6 +484,13 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black/20 font-sans relative">
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={importContent} onSave={handleImportAsset} />
             
+            <SaveToCreationModal 
+                isOpen={saveModalOpen} 
+                onClose={() => setSaveModalOpen(false)} 
+                content={saveModalContent} 
+                onSuccess={triggerSuccess} 
+            />
+
             <FollowUpModal 
                 isOpen={!!activeFollowUp} 
                 onClose={() => setActiveFollowUp(null)} 
@@ -717,10 +724,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                 </button>
                                                 <button 
                                                     type="button"
-                                                    onClick={() => {
-                                                        const plain = stripMarkdown(result);
-                                                        handleSaveToCreation(plain);
-                                                    }}
+                                                    onClick={() => handleOpenSaveModal(result)}
                                                     className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
                                                 >
                                                     <DocumentPlus className="w-3.5 h-3.5" /> 存入创作
@@ -749,7 +753,12 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                         >
                                             {result ? (
                                                 <FormattedText text={result} />
-                                            ) : (currentStepIndex === idx ? "AI 正在构思本环节内容..." : "")}
+                                            ) : (currentStepIndex === idx ? (
+                                                <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                                                    <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                                                    <p className="text-sm font-medium animate-pulse">内容生成中...</p>
+                                                </div>
+                                            ) : "")}
                                         </div>
                                         
                                         {result && (

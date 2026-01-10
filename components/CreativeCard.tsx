@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { CreativeModule } from '../types';
-import { Icon, Sparkles, Fire, UserCircle, Globe, ListBullet, DocumentText, BookOpen } from './Icon';
+import { Icon, Sparkles, Fire, UserCircle, Globe, ListBullet, DocumentText, BookOpen, Bolt, Pencil } from './Icon';
 
 // Mapping module IDs to Icons and Colors
 const MODULE_CONFIG: Record<string, { icon: Icon; colorClass: string; bgClass: string }> = {
@@ -12,6 +12,8 @@ const MODULE_CONFIG: Record<string, { icon: Icon; colorClass: string; bgClass: s
     'outline': { icon: ListBullet, colorClass: 'text-cyan-600 dark:text-cyan-400', bgClass: 'bg-cyan-100 dark:bg-cyan-900/30' },
     'detailed-outline': { icon: DocumentText, colorClass: 'text-indigo-600 dark:text-indigo-400', bgClass: 'bg-indigo-100 dark:bg-indigo-900/30' },
     'synopsis': { icon: BookOpen, colorClass: 'text-rose-600 dark:text-rose-400', bgClass: 'bg-rose-100 dark:bg-rose-900/30' },
+    'short-story-lead': { icon: Bolt, colorClass: 'text-yellow-600 dark:text-yellow-400', bgClass: 'bg-yellow-100 dark:bg-yellow-900/30' },
+    'imitate-style': { icon: Pencil, colorClass: 'text-pink-600 dark:text-pink-400', bgClass: 'bg-pink-100 dark:bg-pink-900/30' },
 };
 
 interface CreativeCardProps {
