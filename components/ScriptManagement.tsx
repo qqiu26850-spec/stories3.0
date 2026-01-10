@@ -12,7 +12,11 @@ import { createProject, fetchProjects, deleteProject, updateProject } from '../s
 type ScriptType = 'original' | 'adaptation';
 type ViewState = 'selection' | 'list';
 
-const ScriptManagement: React.FC = () => {
+interface ScriptManagementProps {
+    isActive?: boolean;
+}
+
+const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false }) => {
     const [scripts, setScripts] = useState<Script[]>([]);
     const [view, setView] = useState<ViewState>('selection');
     const [scriptType, setScriptType] = useState<ScriptType | null>(null);
@@ -29,8 +33,9 @@ const ScriptManagement: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
 
-    // Fetch projects on mount or when closing editor
+    // Fetch projects on mount, when closing editor, or when active
     useEffect(() => {
+        if (!isActive) return;
         const loadScripts = async () => {
             try {
                 const data = await fetchProjects();
@@ -53,7 +58,7 @@ const ScriptManagement: React.FC = () => {
             }
         };
         loadScripts();
-    }, [editingScript]);
+    }, [editingScript, isActive]);
 
     const handleSelectType = (type: ScriptType) => {
         setScriptType(type);
@@ -229,7 +234,7 @@ const ScriptManagement: React.FC = () => {
                             {successMessage}
                         </div>
                     )}
-                    {filteredScripts.length > 0 && (
+                    {(filteredScripts.length > 0 || isActive) && (
                         <button
                             onClick={() => setCreateModalOpen(true)}
                             className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0 shadow-sm"

@@ -83,14 +83,14 @@ const SaveToCreationModal: React.FC<SaveToCreationModalProps> = ({ isOpen, onClo
                     await saveChapterToDB(projectId, mainChapter.id, mainChapter.title, newContent, mainChapter.order_index);
                 } else {
                     // Create new main chapter if none exists
-                    await saveChapterToDB(projectId, `wf-gen-${Date.now()}`, '正文', content, 1);
+                    // Key Fix: Use 'new-' prefix to trigger INSERT in saveChapterToDB
+                    await saveChapterToDB(projectId, `new-wf-gen-${Date.now()}`, '正文', content, 1);
                 }
             } else {
                 // Novel or Script: Create a new chapter/scene appended to the end
-                // We fetch chapters first to determine order index, although 9999 trick works, cleaner to be explicit if possible
-                // Using 9999 as a simple robust strategy for "append to end" if we don't fetch.
                 const chapterTitle = `生成内容-${new Date().toLocaleTimeString()}`;
-                const chapterId = `wf-gen-${Date.now()}`;
+                // Key Fix: Use 'new-' prefix to trigger INSERT in saveChapterToDB
+                const chapterId = `new-wf-gen-${Date.now()}`;
                 await saveChapterToDB(projectId, chapterId, chapterTitle, content, 9999);
             }
             

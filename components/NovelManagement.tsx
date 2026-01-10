@@ -11,9 +11,10 @@ import { createProject, fetchProjects, deleteProject, updateProject } from '../s
 
 interface NovelManagementProps {
     mode?: 'long' | 'short';
+    isActive?: boolean;
 }
 
-const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
+const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long', isActive = false }) => {
     // Initialized with empty array, data will be fetched
     const [novels, setNovels] = useState<Novel[]>([]);
     
@@ -35,8 +36,9 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
     const description = mode === 'long' ? '在这里开始、管理和发展你的长篇故事。' : '快速捕捉灵感，创作精彩的短篇故事。';
     const createButtonLabel = mode === 'long' ? '新建长篇小说' : '新建短篇故事';
 
-    // Fetch projects on mount or mode change
+    // Fetch projects on mount or mode change or when active
     useEffect(() => {
+        if (!isActive) return;
         const loadProjects = async () => {
             try {
                 const data = await fetchProjects();
@@ -86,7 +88,7 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
             }
         };
         loadProjects();
-    }, [mode, editingNovel]); // Reload when closing editor to update word count
+    }, [mode, editingNovel, isActive]); // Reload when closing editor or becoming active
 
     const handleCreateNovel = async (title: string) => {
         setIsProcessing(true);
@@ -217,7 +219,7 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long' }) => {
                             {successMessage}
                         </div>
                     )}
-                    {novels.length > 0 && (
+                    {(novels.length > 0 || isActive) && (
                         <button
                             onClick={() => setCreateModalOpen(true)}
                             className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-500 transition-colors flex-shrink-0 shadow-sm"

@@ -129,15 +129,15 @@ const App: React.FC = () => {
                 </div>
 
                 <div className={activeView === 'novel-management' ? 'block h-full' : 'hidden h-full'}>
-                    <NovelManagement mode="long" />
+                    <NovelManagement mode="long" isActive={activeView === 'novel-management'} />
                 </div>
 
                 <div className={activeView === 'hit-copywriting' ? 'block h-full' : 'hidden h-full'}>
-                    <NovelManagement mode="short" />
+                    <NovelManagement mode="short" isActive={activeView === 'hit-copywriting'} />
                 </div>
 
                 <div className={activeView === 'script-management' ? 'block h-full' : 'hidden h-full'}>
-                    <ScriptManagement />
+                    <ScriptManagement isActive={activeView === 'script-management'} />
                 </div>
 
                 <div className={activeView === 'personal-center' ? 'block h-full' : 'hidden h-full'}>
