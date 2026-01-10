@@ -21,12 +21,14 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'idea': '创意', 'golden_finger': '金手指', 'character_design': '人物设定', 'worldview': '世界观',
     'outline': '大纲', 'detailed_outline': '细纲', 'synopsis': '简介', 'requirements': '写作要求',
     'style': '写作风格', 'continue': '续写', 'polish': '润色', 'expand': '扩写', 'proofread': '审稿', 'imitate': '仿写',
+    'short_story_lead': '短篇导语',
     'general': '通用', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
     'apocalypse': '末世', 'urban': '都市', 'fantasy': '玄幻', 'history': '历史', 'social': '世情',
     'suspense': '悬疑', 'sci-fi': '科幻'
 };
 
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
+// ... rest of the file remains unchanged ...
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('all');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');

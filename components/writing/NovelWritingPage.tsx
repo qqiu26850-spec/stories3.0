@@ -28,6 +28,7 @@ const ContextMenu: React.FC<{
     onClose: () => void;
     onAction: (action: 'expand' | 'continue' | 'polish' | 'review') => void;
 }> = ({ x, y, visible, mode, onClose, onAction }) => {
+// ... ContextMenu remains unchanged ...
     if (!visible) return null;
 
     const options = mode === 'long' 
@@ -566,6 +567,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                 onStream={handleAIStream}
                                 projectSettings={novel.settings}
                                 externalAction={aiTrigger}
+                                chapters={novel.chapters} // Pass chapters for selection context
                             />
                         )}
                     </div>

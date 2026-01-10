@@ -3,10 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Workflow, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight, ExclamationCircle, ChatBubbleOvalLeftEllipsis, Plus, Box } from './Icon';
+import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight, ExclamationCircle, ChatBubbleOvalLeftEllipsis, Plus, Box, DocumentPlus } from './Icon';
 import ImportAssetModal from './ImportAssetModal';
 import PromptSelectionModal from './PromptSelectionModal';
-import { saveMaterial } from '../services/supabaseService';
+import { saveMaterial, createProject, saveChapterToDB } from '../services/supabaseService';
 
 interface WorkflowRunProps {
     workflow: Workflow;
@@ -23,6 +23,46 @@ const stripMarkdown = (text: string) => {
         .replace(/`{1,3}.*?`{1,3}/gs, '')
         .replace(/<think>[\s\S]*?<\/think>/g, '')
         .trim();
+};
+
+const FormattedText: React.FC<{ text: string }> = ({ text }) => {
+    const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+    return (
+        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
+            {cleanedText.split('\n').map((line, index) => {
+                const trimmedLine = line.trim();
+                const isMarkdownHeader = trimmedLine.startsWith('#');
+                
+                if (isMarkdownHeader) {
+                    const match = trimmedLine.match(/^(#+)\s*(.*)/);
+                    if (match) {
+                        const level = Math.min(match[1].length, 6);
+                        const content = match[2];
+                        
+                        let className = "font-bold text-gray-900 dark:text-white ";
+                        if (level === 1) className += "text-base mt-4 mb-2";
+                        else if (level === 2) className += "text-sm mt-3 mb-1.5";
+                        else className += "text-xs mt-2 mb-1";
+                        
+                        return <div key={index} className={className}>{content}</div>;
+                    }
+                }
+                
+                const parts = line.split(/(\*\*.*?\*\*)/g);
+                return (
+                    <div key={index} className="min-h-[1.5em] mb-1">
+                        {parts.map((part, i) => {
+                            if (part.startsWith('**') && part.endsWith('**')) {
+                                return <span key={i} className="font-bold text-gray-900 dark:text-white">{part.slice(2, -2)}</span>;
+                            }
+                            return <span key={i}>{part}</span>;
+                        })}
+                    </div>
+                );
+            })}
+        </div>
+    );
 };
 
 const FollowUpModal: React.FC<{
@@ -126,7 +166,6 @@ ${query}
     };
 
     const handlePromptSelect = (prompt: Prompt) => {
-        // Just set the title as the instruction, don't show the full template content
         setQuery(prev => (prev ? prev + '\n' : '') + `[任务：${prompt.title}]`);
         setPromptModalOpen(false);
     }
@@ -261,7 +300,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const modelRef = useRef(model);
     const [temperature, setTemperature] = useState(0.8);
     const [topP, setTopP] = useState(0.95);
-    const [maxOutputTokens, setMaxOutputTokens] = useState(8192); // Set high default
+    const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
     const [showConfig, setShowConfig] = useState(true);
 
     const [formState, setFormState] = useState<Record<string, string>>({});
@@ -276,11 +315,9 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [importContent, setImportContent] = useState('');
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     
-    const [selectedText, setSelectedText] = useState('');
     const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; variable: string; initialMode: 'selection' | 'full' } | null>(null);
     
     const abortControllerRef = useRef<AbortController | null>(null);
-    // Use div references for text selection if needed, but mostly we rely on window selection for the read-only div
     const resultRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
     useEffect(() => {
@@ -295,6 +332,16 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const handleImportAsset = async (data: { name: string; type: Asset['type']; tags: string[]; content: string }) => {
         await saveMaterial(data.name, data.content, data.type === 'inspiration' ? 'idea' : data.type, data.tags);
         triggerSuccess('素材已导入');
+    };
+
+    // New Function: Save to Creation Center (Short Story Project)
+    const handleSaveToCreation = async (text: string) => {
+        const title = `工作流生成-${new Date().toLocaleTimeString()}`;
+        const { id: projectId, error } = await createProject(title, '来自工作流生成', 'short_story');
+        if (error || !projectId) { triggerSuccess('创建失败'); return; }
+        
+        await saveChapterToDB(projectId, `new-${Date.now()}`, '正文', text, 1);
+        triggerSuccess('已存入短篇小说库');
     };
 
     const handleTriggerFollowUp = (stepContent: string, variable: string) => {
@@ -322,12 +369,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             if (type === 'replace' && activeFollowUp.target) {
                 updatedContent = currentContent.replace(activeFollowUp.target, newText);
             } else {
-                // For read-only view, simple append or complex logic. 
-                // Since we don't have cursor position in a read-only div easily without contentEditable,
-                // we will append to the end or replace selection if selection existed.
                 if (activeFollowUp.target && currentContent.includes(activeFollowUp.target)) {
                      const parts = currentContent.split(activeFollowUp.target);
-                     // Append after target
                      updatedContent = parts[0] + activeFollowUp.target + '\n' + newText + parts.slice(1).join(activeFollowUp.target);
                 } else {
                     updatedContent = currentContent + '\n\n' + newText;
@@ -376,7 +419,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 });
 
                 let stepContent = '';
-                // Pass current config values, including high max tokens
                 const stream = generateTextStream(finalPrompt, { 
                     model: modelRef.current, 
                     temperature, 
@@ -514,7 +556,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                         <label className="block text-[10px] font-black text-sky-500 flex justify-between">
                                             <span>最大长度: {maxOutputTokens}</span>
                                         </label>
-                                        {/* Slider increased to 16384 for Gemini */}
                                         <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                                     </div>
                                     <div className="space-y-1">
@@ -529,13 +570,22 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                             <div className="space-y-4">
                                 {workflow.fields?.map((field, idx) => (
                                     <div key={field.id} className="space-y-1">
-                                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 ml-1 flex items-center justify-between">
-                                            <span>
+                                        <div className="flex justify-between items-center mr-1">
+                                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 ml-1">
                                                 <span className="opacity-50 mr-1">{idx + 1}.</span> 
                                                 {field.label}
-                                                {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
-                                            </span>
-                                        </label>
+                                                {field.required !== false ? (
+                                                    <span className="ml-1 text-red-500 font-normal">* (必填)</span>
+                                                ) : (
+                                                    <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
+                                                )}
+                                            </label>
+                                            {field.maxLength && (
+                                                <span className={`text-[9px] ${(formState[field.variable]?.length || 0) > field.maxLength ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
+                                                    {formState[field.variable]?.length || 0} / {field.maxLength}
+                                                </span>
+                                            )}
+                                        </div>
                                         {field.type === 'textarea' ? (
                                             <textarea
                                                 value={formState[field.variable] || ''}
@@ -665,6 +715,16 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                 >
                                                     <Database className="w-3.5 h-3.5" /> 存素材
                                                 </button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const plain = stripMarkdown(result);
+                                                        handleSaveToCreation(plain);
+                                                    }}
+                                                    className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
+                                                >
+                                                    <DocumentPlus className="w-3.5 h-3.5" /> 存入创作
+                                                </button>
                                                 {((executionStatus === 'paused' || executionStatus === 'completed') && nextStepIndex === idx) || executionStatus === 'completed' ? (
                                                     <button 
                                                         type="button"
@@ -682,18 +742,14 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                     <div 
                                         className="bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm overflow-hidden"
                                     >
-                                        {/* 
-                                            Updated Display Area:
-                                            - Replaced textarea with div for better reading experience (auto-expand, no scroll inside unless huge).
-                                            - Fixed Area (to bottom): We set min-height and let it grow.
-                                            - No Markdown: Using whitespace-pre-wrap to preserve formatting but simple text rendering.
-                                        */}
                                         <div 
                                             ref={(el) => { resultRefs.current[step.outputVariable] = el; }}
-                                            className="w-full min-h-[300px] p-6 text-sm leading-7 text-gray-800 dark:text-gray-200 font-sans whitespace-pre-wrap outline-none"
+                                            className="w-full min-h-[300px] p-6 text-sm leading-7 text-gray-800 dark:text-gray-200 font-sans outline-none"
                                             onMouseUp={() => handleTriggerFollowUp(result, step.outputVariable)} // Allow selection trigger
                                         >
-                                            {result || (currentStepIndex === idx ? "AI 正在构思本环节内容..." : "")}
+                                            {result ? (
+                                                <FormattedText text={result} />
+                                            ) : (currentStepIndex === idx ? "AI 正在构思本环节内容..." : "")}
                                         </div>
                                         
                                         {result && (

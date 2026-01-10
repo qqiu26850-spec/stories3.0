@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Asset, Prompt, NovelSettings } from '../../types';
+import { Asset, Prompt, NovelSettings, Chapter } from '../../types';
 import { generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS } from '../../constants';
@@ -29,6 +29,7 @@ interface AIFunctionPanelProps {
     onStream?: (text: string, isFirst: boolean) => void;
     projectSettings?: NovelSettings;
     externalAction?: { type: TabType; text: string } | null;
+    chapters?: Chapter[]; // Added prop
 }
 
 const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
@@ -44,7 +45,7 @@ const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isV
     );
 };
 
-const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream, projectSettings, externalAction }) => {
+const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', selectedText = '', onInsert, onReplace, onStream, projectSettings, externalAction, chapters = [] }) => {
     const [activeTab, setActiveTab] = useState<TabType>('expand');
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(1);
@@ -55,6 +56,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [isProjectSettingsAssociated, setProjectSettingsAssociated] = useState(false);
+    const [associatedChapterIds, setAssociatedChapterIds] = useState<Set<string>>(new Set());
+    const [isChapterSelectorOpen, setIsChapterSelectorOpen] = useState(false);
+
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
@@ -206,6 +210,18 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 settingsContext = `【作品背景设定】\n题材：${projectSettings.typeElements}\n主题：${projectSettings.theme}\n世界观：${projectSettings.worldview}\n人物基础设定：${projectSettings.characterSettings}\n梗概：${projectSettings.synopsis}\n特定词条：${projectSettings.specificTerms}`;
             }
 
+            // Chapter Context Construction
+            let chapterContext = '';
+            if (associatedChapterIds.size > 0 && chapters.length > 0) {
+                const selectedChaptersContent = chapters
+                    .filter(c => associatedChapterIds.has(c.id))
+                    .map(c => `【${c.title}】\n${c.content}`)
+                    .join('\n\n');
+                if (selectedChaptersContent) {
+                    chapterContext = `【相关章节背景】\n${selectedChaptersContent}\n`;
+                }
+            }
+
             let finalPrompt = '';
             
             // Text processing priority:
@@ -233,10 +249,10 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     template = `${template}\n\n【需处理内容】：\n${textToProcess}`;
                 }
 
-                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
+                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${chapterContext ? `${chapterContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
             } else {
                 const userReq = customInput ? `\n【用户要求】：${customInput}` : '';
-                finalPrompt = `${instruction}${userReq}。\n${settingsContext ? `${settingsContext}\n\n` : ''}当前上下文/选中文本：\n${textToProcess}\n\n${assetContext ? `关联素材：\n${assetContext}` : ''}`;
+                finalPrompt = `${instruction}${userReq}。\n${settingsContext ? `${settingsContext}\n\n` : ''}${chapterContext ? `${chapterContext}\n\n` : ''}当前上下文/选中文本：\n${textToProcess}\n\n${assetContext ? `关联素材：\n${assetContext}` : ''}`;
             }
 
             const stream = generateTextStream(finalPrompt, { 
@@ -405,6 +421,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 
                 {/* Module 1: Parameter Config */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
+                    {/* ... config content ... */}
                     <button 
                         onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} 
                         className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
@@ -464,11 +481,54 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
 
                 {/* Module 2: Text to Process */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
-                    <div className="p-3 border-b border-gray-100 dark:border-gray-800">
+                    <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
                             <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>
                             需修改的正文内容
                         </span>
+                        
+                        <div className="relative">
+                            <button 
+                                onClick={() => setIsChapterSelectorOpen(!isChapterSelectorOpen)}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                                    associatedChapterIds.size > 0 
+                                    ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400' 
+                                    : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'
+                                }`}
+                            >
+                                <BookOpen className="w-3 h-3" />
+                                {associatedChapterIds.size > 0 ? `已关联 ${associatedChapterIds.size} 章` : '关联章节'}
+                                <ChevronDown className="w-3 h-3" />
+                            </button>
+                            
+                            {/* Chapter Selector Dropdown */}
+                            {isChapterSelectorOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setIsChapterSelectorOpen(false)} />
+                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-2 animate-fade-in max-h-60 overflow-y-auto custom-scrollbar">
+                                        <div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase">选择参考章节</div>
+                                        {chapters.length > 0 ? chapters.map(ch => (
+                                            <label key={ch.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={associatedChapterIds.has(ch.id)} 
+                                                    onChange={() => setAssociatedChapterIds(prev => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(ch.id)) next.delete(ch.id);
+                                                        else next.add(ch.id);
+                                                        return next;
+                                                    })}
+                                                    className="rounded border-gray-300 text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
+                                                />
+                                                <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{ch.title || '未命名'}</span>
+                                            </label>
+                                        )) : (
+                                            <div className="p-2 text-xs text-gray-400 text-center">暂无章节</div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                     <div className="p-3">
                         <textarea 
@@ -554,14 +614,18 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                     if (field.id === 'context' || field.id === 'text') return null;
                                     return (
                                         <div key={field.id} className="space-y-1.5">
-                                            <div className="flex justify-between items-center">
+                                            <div className="flex justify-between items-center mr-1">
                                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
                                                     {index + 1}. {field.label}
-                                                    {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
+                                                    {field.required !== false ? (
+                                                        <span className="ml-1 text-red-500 font-normal">* (必填)</span>
+                                                    ) : (
+                                                        <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
+                                                    )}
                                                 </label>
                                                 {field.maxLength && (
-                                                    <span className={`text-[9px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
-                                                        {formState[field.id]?.length || 0}/{field.maxLength}
+                                                    <span className={`text-[9px] ${(formState[field.id]?.length || 0) > field.maxLength ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
+                                                        {formState[field.id]?.length || 0} / {field.maxLength}
                                                     </span>
                                                 )}
                                             </div>
