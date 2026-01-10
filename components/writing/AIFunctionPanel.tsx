@@ -569,7 +569,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 <button onClick={() => handleOpenPromptModal('requirements')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
                                     <div className="flex items-center justify-between">
                                         <span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                                            {selectedPrompt ? selectedPrompt.title : '选择Prompt模板...'}
+                                            {selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}
                                         </span>
                                         <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-sky-500" />
                                     </div>
@@ -614,18 +614,14 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                     if (field.id === 'context' || field.id === 'text') return null;
                                     return (
                                         <div key={field.id} className="space-y-1.5">
-                                            <div className="flex justify-between items-center mr-1">
+                                            <div className="flex justify-between items-center">
                                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
                                                     {index + 1}. {field.label}
-                                                    {field.required !== false ? (
-                                                        <span className="ml-1 text-red-500 font-normal">* (必填)</span>
-                                                    ) : (
-                                                        <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
-                                                    )}
+                                                    {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
                                                 </label>
                                                 {field.maxLength && (
-                                                    <span className={`text-[9px] ${(formState[field.id]?.length || 0) > field.maxLength ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
-                                                        {formState[field.id]?.length || 0} / {field.maxLength}
+                                                    <span className={`text-[9px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
+                                                        {formState[field.id]?.length || 0}/{field.maxLength}
                                                     </span>
                                                 )}
                                             </div>
@@ -634,7 +630,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                                     rows={3}
                                                     value={formState[field.id] || ''} 
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
-                                                    placeholder={field.placeholder} 
+                                                    placeholder={field.placeholder || "请输入..."}
                                                     maxLength={field.maxLength}
                                                     className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" 
                                                 />
@@ -643,7 +639,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                                     type="text" 
                                                     value={formState[field.id] || ''} 
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
-                                                    placeholder={field.placeholder} 
+                                                    placeholder={field.placeholder || "请输入..."}
                                                     maxLength={field.maxLength}
                                                     className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" 
                                                 />

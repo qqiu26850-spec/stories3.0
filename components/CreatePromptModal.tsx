@@ -4,6 +4,7 @@ import { Prompt, PromptCategory, PromptField, PromptSubCategory } from '../types
 import { Trash, Sparkles, Check, ChevronDown, ChevronUp, X, InformationCircle, Tag, Bolt, Plus, BookOpen, DocumentText, ArrowPath, Stop } from './Icon';
 import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
 import { generateTextStream } from '../services/geminiService';
+import MarkdownToolbar from './MarkdownToolbar';
 
 type NewPromptData = Omit<Prompt, 'id' | 'heat' | 'content'>;
 
@@ -372,7 +373,16 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                 </div>
                             )}
 
-                            <textarea value={template} onChange={e => setTemplate(e.target.value)} placeholder="使用 ${变量名} 引用下方定义的字段..." className="w-full h-48 p-4 bg-white text-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl font-mono text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm resize-y" />
+                            <div className="relative rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                <MarkdownToolbar textareaId="prompt-template-editor" onInsert={(val) => setTemplate(val)} />
+                                <textarea 
+                                    id="prompt-template-editor"
+                                    value={template} 
+                                    onChange={e => setTemplate(e.target.value)} 
+                                    placeholder="使用 ${变量名} 引用下方定义的字段..." 
+                                    className="w-full h-48 p-4 bg-white text-gray-900 dark:text-white dark:bg-gray-800 font-mono text-sm focus:outline-none resize-y" 
+                                />
+                            </div>
                         </div>
 
                         {/* 动态表单 */}
@@ -398,12 +408,12 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
 
                                             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 pr-10">
                                                 <div className="md:col-span-4 space-y-1.5">
-                                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">显示名称 (Label)</label>
-                                                    <input type="text" value={field.label} onChange={e => updateField(index, 'label', e.target.value)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all" placeholder="如：主角姓名" />
+                                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">显示名称</label>
+                                                    <input type="text" value={field.label} onChange={e => updateField(index, 'label', e.target.value)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all" placeholder="请输入如：主角姓名" />
                                                 </div>
                                                 <div className="md:col-span-4 space-y-1.5">
                                                     <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">变量名 (ID)</label>
-                                                    <input type="text" value={field.id} onChange={e => updateField(index, 'id', e.target.value)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-mono text-rose-600 dark:text-rose-400 focus:ring-2 focus:ring-rose-500 outline-none transition-all" placeholder="name" />
+                                                    <input type="text" value={field.id} onChange={e => updateField(index, 'id', e.target.value)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-mono text-rose-600 dark:text-rose-400 focus:ring-2 focus:ring-rose-500 outline-none transition-all" placeholder="请输入变量名" />
                                                 </div>
                                                 <div className="md:col-span-4 space-y-1.5">
                                                     <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">是否必填</label>
@@ -434,11 +444,11 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                                 </div>
                                                 <div className="md:col-span-3 space-y-1.5">
                                                     <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">字数上限 (选填)</label>
-                                                    <input type="number" value={field.maxLength || ''} onChange={e => updateField(index, 'maxLength', e.target.value ? parseInt(e.target.value) : undefined)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-rose-500" placeholder="默认无限制" />
+                                                    <input type="number" value={field.maxLength || ''} onChange={e => updateField(index, 'maxLength', e.target.value ? parseInt(e.target.value) : undefined)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-rose-500" placeholder="请输入数字，默认无限制" />
                                                 </div>
                                                 <div className="md:col-span-6 space-y-1.5">
-                                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">补充说明 (输入提示)</label>
-                                                    <input type="text" value={field.description || ''} onChange={e => updateField(index, 'description', e.target.value)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all" placeholder="例如：请填写用户的具体要求，越详细越好..." />
+                                                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">补充说明</label>
+                                                    <input type="text" value={field.description || ''} onChange={e => updateField(index, 'description', e.target.value)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all" placeholder="例如：请输入用户的具体要求，越详细越好..." />
                                                 </div>
                                             </div>
                                         </div>

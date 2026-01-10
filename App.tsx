@@ -97,12 +97,15 @@ const App: React.FC = () => {
             />
             <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-black relative">
                 
-                <div className={activeView === 'creative-generation' ? 'block h-full' : 'hidden h-full'}>
-                    <CreativeGeneration 
-                        initialData={generationParams} 
-                        onClearInitialData={() => setGenerationParams({})} 
-                    />
-                </div>
+                {/* Modified: Only render when active to force reset state on revisit */}
+                {activeView === 'creative-generation' && (
+                    <div className="block h-full">
+                        <CreativeGeneration 
+                            initialData={generationParams} 
+                            onClearInitialData={() => setGenerationParams({})} 
+                        />
+                    </div>
+                )}
 
                 <div className={activeView === 'prompt-library' ? 'block h-full' : 'hidden h-full'}>
                     <PromptLibrary 

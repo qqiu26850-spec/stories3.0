@@ -54,7 +54,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const [selectedWorkflow, setSelectedWorkflow] = useState(MOCK_WORKFLOWS[0]?.id || '');
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [isProjectSettingsAssociated, setProjectSettingsAssociated] = useState(false);
-    const [isFullTextAssociated, setFullTextAssociated] = useState(false); // New state for full text
     
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
@@ -181,11 +180,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 settingsContext = `【作品背景设定】\n题材：${projectSettings.typeElements}\n主题：${projectSettings.theme}\n梗概：${projectSettings.synopsis}\n人物设定：${projectSettings.characterSettings}`;
             }
 
-            // Global context if full text is associated
-            let globalContext = '';
-            if (isFullTextAssociated && contextText) {
-                globalContext = `\n\n【全文背景参考】\n${contextText.slice(0, 10000)}${contextText.length > 10000 ? '...' : ''}\n\n`;
-            }
+            // Removed Global context logic
 
             let finalPrompt = '';
             
@@ -212,7 +207,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                      template = `${template}\n\n【需处理内容】：\n${textToProcess}`;
                 }
 
-                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${globalContext}${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
+                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
             } else {
                 let basePrompt = '';
                 if (activeTab === 'original') basePrompt = `请根据以下要求写一段短篇小说的正文。\n\n【要求】：${promptInput}`;
@@ -225,7 +220,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                      basePrompt = `请作为一名专业的文学编辑，对以下文本进行评审。${promptInput ? `【关注点】：${promptInput}` : '指出优缺点并给出修改建议。'}\n\n【待评审文本】：\n${textToReview}`;
                 }
                 
-                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${globalContext}${assetContext ? `关联素材：\n${assetContext}\n\n` : ''}${basePrompt}`;
+                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n` : ''}${basePrompt}`;
             }
 
             const stream = generateTextStream(finalPrompt, { 
@@ -456,20 +451,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>
                                 {activeTab === 'imitate' ? '参考文本片段' : '需修改的正文内容'}
                             </span>
-                            
-                            {/* Associate Full Text Toggle */}
-                            <button 
-                                onClick={() => setFullTextAssociated(!isFullTextAssociated)}
-                                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
-                                    isFullTextAssociated 
-                                    ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400' 
-                                    : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'
-                                }`}
-                            >
-                                <BookOpen className="w-3 h-3" />
-                                关联全文
-                                {isFullTextAssociated && <Check className="w-3 h-3" />}
-                            </button>
                         </div>
                         <div className="p-3">
                             <textarea 
@@ -498,24 +479,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                         </span>
                     </div>
                     <div className="p-3 space-y-4">
-                        {/* Only show full text association for original mode here, since Mod 2 is hidden */}
-                        {!['polish', 'review', 'imitate'].includes(activeTab) && (
-                             <div className="flex justify-end">
-                                <button 
-                                    onClick={() => setFullTextAssociated(!isFullTextAssociated)}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
-                                        isFullTextAssociated 
-                                        ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400' 
-                                        : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'
-                                    }`}
-                                >
-                                    <BookOpen className="w-3.5 h-3.5" />
-                                    关联全文背景
-                                    {isFullTextAssociated && <Check className="w-3.5 h-3.5" />}
-                                </button>
-                             </div>
-                        )}
-
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">提示词选择</label>
                             {activeTab === 'polish' || activeTab === 'review' ? (
@@ -576,14 +539,10 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                     if (field.id === 'context' || field.id === 'text') return null;
                                     return (
                                         <div key={field.id} className="space-y-1.5">
-                                            <div className="flex justify-between items-center mr-1">
+                                            <div className="flex justify-between items-center">
                                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
                                                     {index + 1}. {field.label}
-                                                    {field.required !== false ? (
-                                                        <span className="ml-1 text-red-500 font-normal">* (必填)</span>
-                                                    ) : (
-                                                        <span className="ml-1 text-gray-400 font-normal"> (选填)</span>
-                                                    )}
+                                                    {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
                                                 </label>
                                                 {field.maxLength && (
                                                     <span className={`text-[9px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
@@ -596,7 +555,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                                     rows={3}
                                                     value={formState[field.id] || ''} 
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
-                                                    placeholder={field.placeholder} 
+                                                    placeholder={field.placeholder || "请输入..."}
                                                     maxLength={field.maxLength}
                                                     className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" 
                                                 />
@@ -605,7 +564,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                                     type="text" 
                                                     value={formState[field.id] || ''} 
                                                     onChange={e => handleInputChange(field.id, e.target.value)} 
-                                                    placeholder={field.placeholder} 
+                                                    placeholder={field.placeholder || "请输入..."}
                                                     maxLength={field.maxLength}
                                                     className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" 
                                                 />

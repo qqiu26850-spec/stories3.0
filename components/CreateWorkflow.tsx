@@ -1,9 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash, Sparkles, ChevronDown, ChevronUp, InformationCircle, Bolt, DocumentText, X, Check, ChevronLeft, Tag, Box, Stop } from './Icon';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Trash, Sparkles, ChevronDown, ChevronUp, InformationCircle, Bolt, DocumentText, X, Check, ChevronLeft, Tag, Box, Stop, ArrowPath } from './Icon';
 import { WorkflowField, WorkflowStep, Workflow, PromptSubCategory, Prompt } from '../types';
 import { GENRE_TAGS } from '../constants';
 import PromptSelectionModal from './PromptSelectionModal';
+import { generateTextStream } from '../services/geminiService';
+import MarkdownToolbar from './MarkdownToolbar';
 
 interface CreateWorkflowProps {
     onBack: () => void;
@@ -21,6 +23,12 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
 
     const [isPromptModalOpen, setPromptModalOpen] = useState(false);
     const [activeStepIndex, setActiveStepIndex] = useState<number | null>(null);
+
+    // Polish Feature State
+    const [polishingStepIndex, setPolishingStepIndex] = useState<number | null>(null);
+    const [polishRequirement, setPolishRequirement] = useState('');
+    const [isPolishing, setIsPolishing] = useState(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         if (workflowToEdit) {
@@ -129,6 +137,62 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
         setPromptModalOpen(false);
     };
 
+    const handlePolishStep = async (index: number) => {
+        const currentPrompt = steps[index].prompt;
+        if (!currentPrompt.trim()) {
+            alert('请先填写提示词内容');
+            return;
+        }
+
+        setIsPolishing(true);
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        const polishPrompt = `你是一个专业的 Prompt Engineer。请根据以下要求润色用户的提示词模板。
+        
+        【原始提示词】：
+        ${currentPrompt}
+
+        【润色要求】：
+        ${polishRequirement || '请优化语言表达，使其更加精准、逻辑更清晰，适合大语言模型理解。'}
+
+        请直接输出润色后的内容（Markdown格式），不需要包含开场白或结束语。`;
+
+        try {
+            const stream = generateTextStream(polishPrompt, {
+                model: 'deepseek-chat',
+                temperature: 0.7,
+                topP: 0.9,
+                signal: controller.signal
+            });
+
+            let newContent = '';
+            for await (const chunk of stream) {
+                newContent += chunk;
+                // Live update the prompt content
+                updateStep(index, 'prompt', newContent);
+            }
+        } catch (e: any) {
+            if (e.message !== 'Aborted') {
+                console.error("Polish failed", e);
+            }
+        } finally {
+            setIsPolishing(false);
+            setPolishingStepIndex(null);
+            setPolishRequirement('');
+            abortControllerRef.current = null;
+        }
+    };
+
+    const stopPolishing = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsPolishing(false);
+        setPolishingStepIndex(null);
+    };
+
     const handleSave = () => {
         if (!name.trim()) { alert('请输入名称'); return; }
         if (steps.length === 0) { alert('请至少添加一个运行步骤'); return; }
@@ -227,7 +291,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                     
                                     <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 space-y-4 shadow-sm relative group">
                                         <div className="flex justify-between items-center border-b border-gray-50 dark:border-gray-700 pb-3">
-                                            <input type="text" value={step.name} onChange={e => updateStep(index, 'name', e.target.value)} className="bg-transparent font-black text-gray-900 dark:text-white outline-none border-b border-transparent focus:border-purple-500 transition-all flex-1 text-base" placeholder="步骤名称..." />
+                                            <input type="text" value={step.name} onChange={e => updateStep(index, 'name', e.target.value)} className="bg-transparent font-black text-gray-900 dark:text-white outline-none border-b border-transparent focus:border-purple-500 transition-all flex-1 text-base" placeholder="请输入步骤名称..." />
                                             <div className="flex gap-2 items-center">
                                                 <div className="flex items-center gap-2 mr-2">
                                                     <label className="text-[10px] font-bold text-gray-400 uppercase cursor-pointer select-none" htmlFor={`manual-${step.id}`}>
@@ -253,19 +317,50 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">运行 Prompt (提示词内容)</label>
-                                            <textarea 
-                                                value={step.prompt} 
-                                                onChange={e => updateStep(index, 'prompt', e.target.value)} 
-                                                className="w-full p-4 h-72 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl focus:ring-2 focus:ring-purple-500 outline-none text-sm font-medium resize-y transition-all shadow-inner" 
-                                                placeholder="输入 AI 指令，使用 ${变量名} 引用上文或表单变量..." 
-                                            />
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">运行 Prompt (提示词内容)</label>
+                                                <button 
+                                                    onClick={() => setPolishingStepIndex(polishingStepIndex === index ? null : index)}
+                                                    className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all flex items-center gap-1 ${polishingStepIndex === index ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-600 border-purple-200 hover:bg-purple-50'}`}
+                                                >
+                                                    <Sparkles className="w-3 h-3" />
+                                                    {polishingStepIndex === index ? '关闭润色' : '润色提示词'}
+                                                </button>
+                                            </div>
+
+                                            {polishingStepIndex === index && (
+                                                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800 mb-2 animate-fade-in flex gap-2">
+                                                    <input 
+                                                        type="text"
+                                                        value={polishRequirement}
+                                                        onChange={e => setPolishRequirement(e.target.value)}
+                                                        placeholder="请输入润色要求，例如：使其逻辑更严密..."
+                                                        className="flex-1 px-3 py-1.5 text-xs border border-purple-200 rounded-lg outline-none focus:ring-1 focus:ring-purple-500"
+                                                    />
+                                                    {isPolishing ? (
+                                                        <button onClick={stopPolishing} className="px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 flex items-center gap-1"><Stop className="w-3 h-3"/>停止</button>
+                                                    ) : (
+                                                        <button onClick={() => handlePolishStep(index)} className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-500 flex items-center gap-1"><ArrowPath className="w-3 h-3"/>开始润色</button>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div className="relative rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                                                <MarkdownToolbar textareaId={`step-prompt-${index}`} onInsert={(val) => updateStep(index, 'prompt', val)} />
+                                                <textarea 
+                                                    id={`step-prompt-${index}`}
+                                                    value={step.prompt} 
+                                                    onChange={e => updateStep(index, 'prompt', e.target.value)} 
+                                                    className="w-full p-4 h-72 bg-gray-50 dark:bg-gray-900 text-sm font-medium resize-y focus:outline-none shadow-inner" 
+                                                    placeholder="请输入 AI 指令，使用 ${变量名} 引用上文或表单变量..." 
+                                                />
+                                            </div>
                                         </div>
 
                                         <div className="flex items-center gap-4 bg-purple-50/50 dark:bg-purple-900/10 p-3 rounded-2xl border border-purple-100/50">
                                             <DocumentText className="w-4 h-4 text-purple-400" />
                                             <span className="text-xs text-purple-700 dark:text-purple-300 font-bold uppercase">保存结果到变量:</span>
-                                            <input type="text" value={step.outputVariable} onChange={e => updateStep(index, 'outputVariable', e.target.value)} className="bg-transparent text-sm font-mono text-purple-600 dark:text-purple-400 outline-none flex-1 font-bold" placeholder="step_result" />
+                                            <input type="text" value={step.outputVariable} onChange={e => updateStep(index, 'outputVariable', e.target.value)} className="bg-transparent text-sm font-mono text-purple-600 dark:text-purple-400 outline-none flex-1 font-bold" placeholder="请输入变量名..." />
                                         </div>
                                     </div>
                                 </div>
@@ -315,11 +410,11 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                             <div className="space-y-4">
                                                 <div className="space-y-1.5">
                                                     <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">显示名称</label>
-                                                    <input type="text" value={field.label} onChange={e => updateField(index, 'label', e.target.value)} className="w-full p-2.5 text-sm font-medium bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-1 focus:ring-blue-500" placeholder="如：主角性格" />
+                                                    <input type="text" value={field.label} onChange={e => updateField(index, 'label', e.target.value)} className="w-full p-2.5 text-sm font-medium bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-1 focus:ring-blue-500" placeholder="例如：主角性格" />
                                                 </div>
                                                 <div className="space-y-1.5">
                                                     <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">变量名 (ID)</label>
-                                                    <input type="text" value={field.variable} onChange={e => updateField(index, 'variable', e.target.value)} className="w-full p-2.5 text-sm font-medium bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none font-mono focus:ring-1 focus:ring-blue-500" placeholder="如：trait" />
+                                                    <input type="text" value={field.variable} onChange={e => updateField(index, 'variable', e.target.value)} className="w-full p-2.5 text-sm font-medium bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none font-mono focus:ring-1 focus:ring-blue-500" placeholder="例如：trait" />
                                                 </div>
                                             </div>
 
@@ -333,12 +428,12 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                                             onChange={e => updateField(index, 'type', e.target.value)} 
                                                             className="w-full p-2 text-xs font-bold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                                                         >
-                                                            <option value="text">单行文本 (Input)</option>
-                                                            <option value="textarea">多行文本 (Textarea)</option>
+                                                            <option value="text">单行文本</option>
+                                                            <option value="textarea">多行文本</option>
                                                         </select>
                                                     </div>
                                                     <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">字数限制 (Max Length)</label>
+                                                        <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">字数上限 (选填)</label>
                                                         <input 
                                                             type="number" 
                                                             value={field.maxLength || ''} 
@@ -376,13 +471,13 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                         </div>
                                         
                                         <div className="space-y-1.5 w-full">
-                                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">补充说明 (Placeholder/Hint)</label>
+                                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">补充说明</label>
                                             <input 
                                                 type="text" 
                                                 value={field.description || ''} 
                                                 onChange={e => updateField(index, 'description', e.target.value)} 
                                                 className="w-full p-2.5 text-sm font-medium bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-1 focus:ring-blue-500" 
-                                                placeholder="例如：请具体描述人物的三个以上性格关键词..." 
+                                                placeholder="例如：请输入用户的具体要求，越详细越好..." 
                                             />
                                         </div>
                                     </div>
