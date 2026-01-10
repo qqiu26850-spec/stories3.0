@@ -32,6 +32,31 @@ const stripMarkdown = (text: string) => {
         .trim();
 };
 
+// 辅助函数：清洗 Placeholder，移除英文和变量符号
+const cleanPlaceholder = (text: string | undefined, label: string) => {
+    if (!text) return `请输入${label}...`;
+    
+    // 1. 移除模板变量语法 ${variable}
+    let cleaned = text.replace(/\$\{[^}]+\}/g, '');
+    
+    // 2. 移除所有英文字母 (a-z, A-Z)
+    cleaned = cleaned.replace(/[a-zA-Z]/g, '');
+    
+    // 3. 清理首尾空白
+    cleaned = cleaned.trim();
+    
+    // 4. 清理可能残留的起始标点 (如 ": ")
+    cleaned = cleaned.replace(/^[:：]\s*/, '');
+    
+    // 5. 如果清理后内容过短或没有有效字符（中文或数字），回退到默认
+    // 检查是否包含中文字符或数字
+    if (!/[\u4e00-\u9fa50-9]/.test(cleaned)) {
+         return `请输入${label}...`;
+    }
+    
+    return cleaned;
+};
+
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 
@@ -341,7 +366,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                                     <textarea 
                                                         value={formState[f.id] || ''} 
                                                         onChange={e => setFormState({...formState, [f.id]: e.target.value})} 
-                                                        placeholder={f.placeholder} 
+                                                        placeholder={cleanPlaceholder(f.placeholder, f.label)} 
                                                         maxLength={f.maxLength}
                                                         className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm min-h-[100px] shadow-sm transition-all font-sans" 
                                                     />
@@ -350,7 +375,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                                         type="text" 
                                                         value={formState[f.id] || ''} 
                                                         onChange={e => setFormState({...formState, [f.id]: e.target.value})} 
-                                                        placeholder={f.placeholder} 
+                                                        placeholder={cleanPlaceholder(f.placeholder, f.label)} 
                                                         maxLength={f.maxLength}
                                                         className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm shadow-sm transition-all font-sans" 
                                                     />
