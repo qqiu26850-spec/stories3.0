@@ -5,7 +5,7 @@ import { WorkflowField, WorkflowStep, Workflow, PromptSubCategory, Prompt } from
 import { GENRE_TAGS } from '../constants';
 import PromptSelectionModal from './PromptSelectionModal';
 import { generateTextStream } from '../services/geminiService';
-import MarkdownToolbar from './MarkdownToolbar';
+import MarkdownToolbar, { handleListKeyDown } from './MarkdownToolbar';
 
 interface CreateWorkflowProps {
     onBack: () => void;
@@ -351,6 +351,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                                     id={`step-prompt-${index}`}
                                                     value={step.prompt} 
                                                     onChange={e => updateStep(index, 'prompt', e.target.value)} 
+                                                    onKeyDown={(e) => handleListKeyDown(e, step.prompt, (val) => updateStep(index, 'prompt', val))}
                                                     className="w-full p-4 h-72 bg-gray-50 dark:bg-gray-900 text-sm font-medium resize-y focus:outline-none shadow-inner" 
                                                     placeholder="请输入 AI 指令，使用 ${变量名} 引用上文或表单变量..." 
                                                 />

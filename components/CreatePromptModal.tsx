@@ -4,7 +4,7 @@ import { Prompt, PromptCategory, PromptField, PromptSubCategory } from '../types
 import { Trash, Sparkles, Check, ChevronDown, ChevronUp, X, InformationCircle, Tag, Bolt, Plus, BookOpen, DocumentText, ArrowPath, Stop } from './Icon';
 import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
 import { generateTextStream } from '../services/geminiService';
-import MarkdownToolbar from './MarkdownToolbar';
+import MarkdownToolbar, { handleListKeyDown } from './MarkdownToolbar';
 
 type NewPromptData = Omit<Prompt, 'id' | 'heat' | 'content'>;
 
@@ -379,6 +379,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                     id="prompt-template-editor"
                                     value={template} 
                                     onChange={e => setTemplate(e.target.value)} 
+                                    onKeyDown={(e) => handleListKeyDown(e, template, setTemplate)}
                                     placeholder="使用 ${变量名} 引用下方定义的字段..." 
                                     className="w-full h-48 p-4 bg-white text-gray-900 dark:text-white dark:bg-gray-800 font-mono text-sm focus:outline-none resize-y" 
                                 />
