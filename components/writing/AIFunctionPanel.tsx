@@ -486,49 +486,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>
                             需修改的正文内容
                         </span>
-                        
-                        <div className="relative">
-                            <button 
-                                onClick={() => setIsChapterSelectorOpen(!isChapterSelectorOpen)}
-                                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
-                                    associatedChapterIds.size > 0 
-                                    ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400' 
-                                    : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'
-                                }`}
-                            >
-                                <BookOpen className="w-3 h-3" />
-                                {associatedChapterIds.size > 0 ? `已关联 ${associatedChapterIds.size} 章` : '关联章节'}
-                                <ChevronDown className="w-3 h-3" />
-                            </button>
-                            
-                            {/* Chapter Selector Dropdown */}
-                            {isChapterSelectorOpen && (
-                                <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setIsChapterSelectorOpen(false)} />
-                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-2 animate-fade-in max-h-60 overflow-y-auto custom-scrollbar">
-                                        <div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase">选择参考章节</div>
-                                        {chapters.length > 0 ? chapters.map(ch => (
-                                            <label key={ch.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={associatedChapterIds.has(ch.id)} 
-                                                    onChange={() => setAssociatedChapterIds(prev => {
-                                                        const next = new Set(prev);
-                                                        if (next.has(ch.id)) next.delete(ch.id);
-                                                        else next.add(ch.id);
-                                                        return next;
-                                                    })}
-                                                    className="rounded border-gray-300 text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
-                                                />
-                                                <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{ch.title || '未命名'}</span>
-                                            </label>
-                                        )) : (
-                                            <div className="p-2 text-xs text-gray-400 text-center">暂无章节</div>
-                                        )}
-                                    </div>
-                                </>
-                            )}
-                        </div>
                     </div>
                     <div className="p-3">
                         <textarea 
@@ -578,7 +535,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">关联素材</label>
+                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">关联素材与上下文</label>
                             <div className="flex flex-col gap-2">
                                 <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all ${selectedAssetIds.size > 0 ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
                                     <div className="flex items-center justify-between">
@@ -590,16 +547,59 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                     </div>
                                 </button>
                                 
-                                <button 
-                                    onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} 
-                                    className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-sky-600' : 'text-gray-400'}`} />
-                                        <span className="font-semibold text-xs">{isProjectSettingsAssociated ? '已关联设定' : '关联作品设定'}</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button 
+                                        onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} 
+                                        className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-sky-600' : 'text-gray-400'}`} />
+                                            <span className="font-semibold text-xs whitespace-nowrap">关联作品设定</span>
+                                        </div>
+                                        {isProjectSettingsAssociated && <Check className="w-3.5 h-3.5 text-sky-500" />}
+                                    </button>
+
+                                    <div className="relative">
+                                        <button 
+                                            onClick={() => setIsChapterSelectorOpen(!isChapterSelectorOpen)}
+                                            className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${associatedChapterIds.size > 0 ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${associatedChapterIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
+                                                <span className="font-semibold text-xs whitespace-nowrap">{associatedChapterIds.size > 0 ? `已关联 ${associatedChapterIds.size} 章` : '关联章节'}</span>
+                                            </div>
+                                            <ChevronDown className="w-3 h-3 text-gray-400 opacity-50 flex-shrink-0" />
+                                        </button>
+                                        
+                                        {/* Chapter Selector Dropdown */}
+                                        {isChapterSelectorOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setIsChapterSelectorOpen(false)} />
+                                                <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-2 animate-fade-in max-h-60 overflow-y-auto custom-scrollbar">
+                                                    <div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase">选择参考章节</div>
+                                                    {chapters.length > 0 ? chapters.map(ch => (
+                                                        <label key={ch.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={associatedChapterIds.has(ch.id)} 
+                                                                onChange={() => setAssociatedChapterIds(prev => {
+                                                                    const next = new Set(prev);
+                                                                    if (next.has(ch.id)) next.delete(ch.id);
+                                                                    else next.add(ch.id);
+                                                                    return next;
+                                                                })}
+                                                                className="rounded border-gray-300 text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
+                                                            />
+                                                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{ch.title || '未命名'}</span>
+                                                        </label>
+                                                    )) : (
+                                                        <div className="p-2 text-xs text-gray-400 text-center">暂无章节</div>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
-                                    {isProjectSettingsAssociated ? <Check className="w-3.5 h-3.5 text-sky-500" /> : <ChevronDown className="w-3 h-3 text-gray-400 opacity-50" />}
-                                </button>
+                                </div>
                             </div>
                         </div>
 
