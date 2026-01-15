@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { Prompt, PromptCategory, PromptSubCategory } from '../types';
 import { Sparkles, Search, X, Heart } from './Icon';
 import SelectablePromptCard from './SelectablePromptCard';
-import { fetchPrompts, fetchWorkflowFavorites, getCurrentUserId } from '../services/supabaseService';
+import { fetchPrompts } from '../services/supabaseService';
 import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
 
 interface PromptSelectionModalProps {
@@ -42,8 +42,7 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
             }
             setSearchTerm('');
             
-            // Load favorites from local storage to sync state (since PromptLibrary handles writes)
-            // Ideally should fetch from DB but for now syncing with LS used in Library
+            // Load favorites
             const stored = localStorage.getItem('qisimiaoxie_prompt_favorites_v2');
             if(stored) {
                 try {
@@ -59,7 +58,11 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
         
         const loadPrompts = async () => {
             setIsLoading(true);
-            const dbPrompts = await fetchPrompts('all'); // Fetch all to utilize cache
+            // Fetch all for selection modal to allow client-side filtering comfortably 
+            // since this is a modal and we might not need strict pagination here yet, 
+            // or we can implement it. For now, fetch 'all' with a higher limit or standard limit.
+            // Using a higher limit to show more templates.
+            const dbPrompts = await fetchPrompts({ category: 'all', limit: 100 }); 
             
             if (dbPrompts) {
                 const mapped: Prompt[] = dbPrompts.map((p: any) => {
@@ -116,7 +119,7 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
             const subCategoryMatch = activeSubCategory === 'all' || 
                 (prompt.subCategories && prompt.subCategories.includes(activeSubCategory as PromptSubCategory));
 
-            // Enhanced Search: Title, Description, Author, Tags
+            // Enhanced Search
             const term = searchTerm.toLowerCase();
             const searchMatch = !term || 
                 prompt.title.toLowerCase().includes(term) || 

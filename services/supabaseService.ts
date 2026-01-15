@@ -385,30 +385,59 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
     }
 }
 
-// Updated fetchPrompts with pagination
-export async function fetchPrompts(mainCategory?: string, forceRefresh = false, page = 1, limit = 20) {
+// Updated fetchPrompts with flexible options
+export async function fetchPrompts(options: {
+    category?: string;
+    userId?: string;
+    ids?: string[];
+    page?: number;
+    limit?: number;
+} = {}) {
+    const { category = 'all', userId, ids, page = 1, limit = 20 } = options;
+
     try {
         const start = (page - 1) * limit;
         const end = start + limit - 1;
 
         let query = supabase.from('prompts').select('*, profiles(username)').order('usage_count', { ascending: false });
 
-        if (mainCategory && mainCategory !== 'all') {
-            const dbCat = mapPromptCategory(mainCategory);
+        // Filter by Category
+        if (category && category !== 'all' && !ids && !userId) {
+            const dbCat = mapPromptCategory(category);
             query = query.eq('main_category', dbCat);
         }
 
+        // Filter by User
+        if (userId) {
+            query = query.eq('user_id', userId);
+        }
+
+        // Filter by IDs (Favorites)
+        if (ids && ids.length > 0) {
+            query = query.in('id', ids);
+        } else if (ids && ids.length === 0) {
+            // If ids filter is requested but list is empty (e.g. no favorites), return empty
+            return [];
+        }
+
+        // Apply Pagination
         query = query.range(start, end);
 
         let { data, error } = await query;
 
+        // Fallback if join fails (e.g. profiles permissions issue)
         if (error) {
-            console.warn("fetchPrompts join failed, fallback", error);
+            console.warn("fetchPrompts join failed, fallback to simple select", error);
             let fallbackQuery = supabase.from('prompts').select('*').order('usage_count', { ascending: false });
-            if (mainCategory) {
-                const dbCat = mapPromptCategory(mainCategory);
+            
+            if (category && category !== 'all' && !ids && !userId) {
+                const dbCat = mapPromptCategory(category);
                 fallbackQuery = fallbackQuery.eq('main_category', dbCat);
             }
+            if (userId) fallbackQuery = fallbackQuery.eq('user_id', userId);
+            if (ids && ids.length > 0) fallbackQuery = fallbackQuery.in('id', ids);
+            else if (ids && ids.length === 0) return [];
+
             fallbackQuery = fallbackQuery.range(start, end);
             const res = await fallbackQuery;
             data = res.data;

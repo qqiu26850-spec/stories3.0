@@ -61,32 +61,47 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     const [hasMore, setHasMore] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+    // Initialize Favorites & User ID
     useEffect(() => {
-        const stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
-        if (stored) {
-            try {
-                const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed)) setFavoritedIds(new Set(parsed));
-            } catch (e) { console.error("收藏加载失败", e); }
-        }
+        const init = async () => {
+            const uid = await getCurrentUserId();
+            setCurrentUserId(uid);
+            
+            const stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed)) setFavoritedIds(new Set(parsed));
+                } catch (e) { console.error("收藏加载失败", e); }
+            }
+        };
+        init();
     }, []);
 
     useEffect(() => {
         localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(Array.from(favoritedIds)));
     }, [favoritedIds]);
 
-    const fetchAndMapPrompts = async (pageNum: number, isRefresh: boolean = false) => {
-        const userId = await getCurrentUserId();
-        setCurrentUserId(userId);
-        
-        if (isRefresh) {
-            const profile = await fetchUserProfile();
-            if(profile && profile.nickname) setUserNickname(profile.nickname);
+    // Data Fetching Logic
+    const fetchAndMapPrompts = async (pageNum: number, currentTab: string) => {
+        const options: any = { page: pageNum, limit: 20 };
+
+        if (currentTab === 'my-prompts') {
+            const uid = await getCurrentUserId();
+            if (!uid) return [];
+            options.userId = uid;
+        } else if (currentTab === 'favorites') {
+            const ids = Array.from(favoritedIds);
+            if (ids.length === 0) return [];
+            options.ids = ids;
+        } else {
+            options.category = currentTab;
         }
 
-        const fetchedData = await fetchPrompts('all', isRefresh, pageNum);
+        const fetchedData = await fetchPrompts(options);
         
         if (fetchedData && fetchedData.length > 0) {
+            const userId = await getCurrentUserId();
             const mappedPrompts: Prompt[] = fetchedData.map((p: any) => {
                 let parsedContent: any = {};
                 try { parsedContent = JSON.parse(p.content); } catch (e) { parsedContent = { template: p.content }; }
@@ -119,38 +134,48 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         return [];
     };
 
-    const loadData = useCallback(async (forceRefresh = false) => {
-        setIsLoading(true);
-        setPage(1);
-        setHasMore(true);
-        try {
-            const mappedPrompts = await fetchAndMapPrompts(1, forceRefresh);
-            setPrompts(mappedPrompts);
-            if (mappedPrompts.length < 20) setHasMore(false);
-        } catch (error) { console.error("加载数据失败", error); } finally { setIsLoading(false); }
-    }, []);
+    // Load data when activeTab changes or view becomes active
+    const loadData = useCallback(async (reset = true) => {
+        if (reset) {
+            setIsLoading(true);
+            setPage(1);
+            setHasMore(true);
+            setPrompts([]);
+        } else {
+            setIsLoadingMore(true);
+        }
 
-    const handleLoadMore = async () => {
-        if (!hasMore || isLoadingMore) return;
-        setIsLoadingMore(true);
-        const nextPage = page + 1;
         try {
-            const mappedPrompts = await fetchAndMapPrompts(nextPage);
-            if (mappedPrompts.length > 0) {
-                setPrompts(prev => [...prev, ...mappedPrompts]);
-                setPage(nextPage);
-                if (mappedPrompts.length < 20) setHasMore(false);
+            const targetPage = reset ? 1 : page + 1;
+            const mappedPrompts = await fetchAndMapPrompts(targetPage, activeTab);
+            
+            if (reset) {
+                setPrompts(mappedPrompts);
             } else {
-                setHasMore(false);
+                setPrompts(prev => [...prev, ...mappedPrompts]);
+                setPage(targetPage);
             }
-        } catch (e) {
-            console.error(e);
-        } finally {
+
+            if (mappedPrompts.length < 20) setHasMore(false);
+        } catch (error) { 
+            console.error("加载数据失败", error); 
+        } finally { 
+            setIsLoading(false); 
             setIsLoadingMore(false);
         }
-    };
+    }, [activeTab, page, favoritedIds]); // Depends on favoritedIds for the Favorites tab
 
-    useEffect(() => { if (isActive) loadData(); }, [isActive, loadData]);
+    // Trigger load on tab change or activation
+    useEffect(() => {
+        if (isActive) {
+            loadData(true);
+        }
+    }, [isActive, activeTab]);
+
+    const handleLoadMore = () => {
+        if (!hasMore || isLoadingMore) return;
+        loadData(false);
+    };
 
     const toggleFavorite = (id: string) => {
         setFavoritedIds(prev => {
@@ -159,6 +184,9 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             else next.add(id);
             return next;
         });
+        // If in favorites tab, remove immediately from view if unfavorited? 
+        // Better to keep it until refresh to avoid jumping UI, but user expects removal.
+        // For simple UX, we leave it.
     };
 
     const handleSelectPrompt = (prompt: Prompt) => {
@@ -178,11 +206,13 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         }
     };
 
+    // Client-side filtering for SubCategories and Search Term
+    // Note: In a full implementation, search and tags should also be server-side params.
+    // For now, we filter the *loaded* prompts. This is a compromise.
     const filteredPrompts = useMemo(() => {
         return prompts.filter(p => {
-            if (activeTab === 'favorites') return favoritedIds.has(p.id);
-            if (activeTab === 'my-prompts') return p.userId === currentUserId;
-            if (activeTab !== 'all' && p.category !== activeTab) return false;
+            // Note: activeTab filtering is handled by server fetch now
+            
             if (activeSubCategory !== 'all' && !p.subCategories.includes(activeSubCategory as PromptSubCategory)) return false;
             
             const term = searchTerm.toLowerCase();
@@ -198,7 +228,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
 
             return false;
         });
-    }, [activeTab, activeSubCategory, searchTerm, prompts, favoritedIds, currentUserId]);
+    }, [activeSubCategory, searchTerm, prompts]);
 
     const handleOpenDelete = (prompt: Prompt) => {
         setPromptToDelete(prompt);
@@ -225,10 +255,13 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col relative font-sans">
             <CreatePromptModal isOpen={isCreateModalOpen} onClose={() => { setCreateModalOpen(false); setPromptToEdit(null); }} onSave={async (data, id) => {
-                const content = JSON.stringify({ ...data, authorName: userNickname });
+                // Ensure profile exists for username
+                const profile = await fetchUserProfile();
+                const content = JSON.stringify({ ...data, authorName: profile?.nickname || '社区用户' });
                 if (id) await updatePrompt(id, { title: data.title, content, main_category: data.category });
                 else await savePrompt(data.title, content, data.category, data.subCategories[0] as string);
-                setCreateModalOpen(false); loadData(true);
+                setCreateModalOpen(false); 
+                loadData(true);
                 setSuccessMessage(id ? '已更新' : '已发布');
                 setShowSuccessToast(true);
                 setTimeout(() => setShowSuccessToast(false), 2000); 
