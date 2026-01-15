@@ -62,7 +62,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
             body: JSON.stringify({
                 model: options.model,
                 messages: [
-                    { role: "system", content: "You are a helpful creative writing assistant. Use Markdown headers (# ## ###) for structure when appropriate." },
+                    { role: "system", content: "You are a helpful creative writing assistant. Write detailed, expansive, and high-quality content. Do not summarize unless asked. If the user asks for a long text, generate as much as possible within the token limit. Use Markdown headers (# ## ###) for structure." },
                     { role: "user", content: prompt }
                 ],
                 temperature: options.temperature,
@@ -171,7 +171,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                 body: JSON.stringify({
                     model: options.model,
                     messages: [
-                        { role: "system", content: "You are a helpful creative writing assistant. Use Markdown headers (# ## ###) for structure." },
+                        { role: "system", content: "You are a helpful creative writing assistant. Write detailed, expansive, and high-quality content. Do not summarize unless asked. If the user asks for a long text, generate as much as possible within the token limit. Use Markdown headers (# ## ###) for structure." },
                         { role: "user", content: prompt }
                     ],
                     temperature: options.temperature,

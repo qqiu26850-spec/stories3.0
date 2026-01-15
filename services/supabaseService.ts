@@ -198,7 +198,7 @@ export async function updateProject(projectId: string, updates: { title?: string
     }
 }
 
-// Updated fetchProjects with pagination support
+// Updated fetchProjects with pagination support and HTML-stripped word count
 export async function fetchProjects(page = 1, limit = 20) {
     try {
         const userId = await getCurrentUserId();
@@ -218,7 +218,9 @@ export async function fetchProjects(page = 1, limit = 20) {
             const { data: chapters } = await supabase.from('chapters').select('project_id, content').in('project_id', projectIds);
             const countMap: Record<string, number> = {};
             chapters?.forEach((c: any) => {
-                countMap[c.project_id] = (countMap[c.project_id] || 0) + (c.content?.length || 0);
+                // Strip HTML tags for accurate word count of content
+                const text = (c.content || '').replace(/<[^>]*>/g, '').replace(/\s/g, '');
+                countMap[c.project_id] = (countMap[c.project_id] || 0) + text.length;
             });
             return data.map(p => ({ ...p, word_count: countMap[p.id] || 0 }));
         }
@@ -451,6 +453,28 @@ export async function fetchPrompts(options: {
     }
 }
 
+// --- Prompt Favorites (DB Based) ---
+export async function fetchPromptFavorites(): Promise<string[]> {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+    try {
+        const { data } = await supabase.from('prompt_favorites').select('prompt_id').eq('user_id', userId);
+        return data?.map((d: any) => d.prompt_id) || [];
+    } catch (e) { return []; }
+}
+
+export async function togglePromptFavoriteDB(promptId: string, isFavorite: boolean) {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    try {
+        if (isFavorite) {
+            await supabase.from('prompt_favorites').delete().eq('user_id', userId).eq('prompt_id', promptId);
+        } else {
+            await supabase.from('prompt_favorites').insert({ user_id: userId, prompt_id: promptId });
+        }
+    } catch (e) { console.error("Toggle prompt favorite failed", e); }
+}
+
 export async function incrementPromptHeat(id: string) {
     try {
         if (!id || id.startsWith('prompt-')) return;
@@ -510,15 +534,42 @@ export async function updateWorkflow(id: string, updates: { title?: string, desc
     } catch (err: any) { return { success: false, error: err }; }
 }
 
-// Updated fetchWorkflows with pagination
-export async function fetchWorkflows(page = 1, limit = 20) {
+// Updated fetchWorkflows with flexible options and pagination
+export async function fetchWorkflows(options: {
+    category?: string;
+    userId?: string;
+    ids?: string[];
+    page?: number;
+    limit?: number;
+} = {}) {
+    const { category = 'all', userId, ids, page = 1, limit = 20 } = options;
+
     try {
         const start = (page - 1) * limit;
         const end = start + limit - 1;
 
-        const { data: workflows, error: wfError } = await withRetry(async () => 
-            await supabase.from('workflows').select('*').order('usage_count', { ascending: false }).range(start, end)
-        );
+        let query = supabase.from('workflows').select('*').order('usage_count', { ascending: false });
+
+        // Filter by Category
+        if (category && category !== 'all' && !ids && !userId) {
+            query = query.eq('main_category', mapPromptCategory(category));
+        }
+
+        // Filter by User
+        if (userId) {
+            query = query.eq('user_id', userId);
+        }
+
+        // Filter by IDs (Favorites)
+        if (ids && ids.length > 0) {
+            query = query.in('id', ids);
+        } else if (ids && ids.length === 0) {
+            return [];
+        }
+
+        query = query.range(start, end);
+
+        const { data: workflows, error: wfError } = await withRetry(async () => await query);
         
         if (wfError) {
             console.error("Fetch workflows failed", wfError);

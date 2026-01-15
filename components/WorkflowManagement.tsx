@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Sparkles, Film, UserCircle, Plus, Play, Fire, Heart, Box, Search, BookOpen, Pencil, Trash, InformationCircle, Check, ArrowPath } from './Icon';
 import CreateWorkflow from './CreateWorkflow';
 import WorkflowRun from './WorkflowRun';
@@ -42,7 +42,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // 顶部栏通知状态
   const [notification, setNotification] = useState<string | null>(null);
 
   const triggerNotification = (msg: string) => {
@@ -50,10 +49,25 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const fetchAndMapWorkflows = async (pageNum: number, userId: string | null, currentUserProfile: any) => {
-      const data = await fetchWorkflows(pageNum);
+  const fetchAndMapWorkflows = async (pageNum: number, currentTab: string) => {
+      const options: any = { page: pageNum, limit: 20 };
+
+      if (currentTab === 'my-workflows') {
+          const uid = await getCurrentUserId();
+          if (!uid) return [];
+          options.userId = uid;
+      } else if (currentTab === 'favorites') {
+          const ids = Array.from(favoritedIds);
+          if (ids.length === 0) return [];
+          options.ids = ids;
+      } else {
+          options.category = currentTab;
+      }
+
+      const data = await fetchWorkflows(options);
       
       if (data && data.length > 0) {
+          const userId = await getCurrentUserId();
           const mapped: Workflow[] = data.map((wf: any) => {
                 let content: any = {};
                 try { 
@@ -75,7 +89,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                 if (profile && (profile.username || profile.nickname || profile.full_name)) {
                     authorName = profile.username || profile.nickname || profile.full_name;
                 } else if (wf.user_id === userId) {
-                    authorName = currentUserProfile.nickname || '我';
+                    authorName = '我';
                 }
 
                 return {
@@ -97,54 +111,60 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       return [];
   };
 
-  const loadData = async () => {
-    setIsLoading(true);
-    setPage(1);
-    setHasMore(true);
+  const loadData = useCallback(async (reset = true) => {
+    if (reset) {
+        setIsLoading(true);
+        setPage(1);
+        setHasMore(true);
+        setDbWorkflows([]);
+    } else {
+        setIsLoadingMore(true);
+    }
+
     try {
         const userId = await getCurrentUserId();
         setCurrentUserId(userId);
-        const currentUserProfile = await fetchUserProfile();
         
-        const mapped = await fetchAndMapWorkflows(1, userId, currentUserProfile);
-        setDbWorkflows(mapped);
-        if(mapped.length < 20) setHasMore(false);
+        // Refresh favorites if switching to favorite tab or initializing
+        if (reset || activeTab === 'favorites') {
+            const favs = await fetchWorkflowFavorites();
+            setFavoritedIds(new Set(favs));
+        }
 
-        const favs = await fetchWorkflowFavorites();
-        setFavoritedIds(new Set(favs));
+        const targetPage = reset ? 1 : page + 1;
+        const mapped = await fetchAndMapWorkflows(targetPage, activeTab);
+        
+        if (reset) {
+            setDbWorkflows(mapped);
+        } else {
+            setDbWorkflows(prev => [...prev, ...mapped]);
+            setPage(targetPage);
+        }
+
+        if (mapped.length < 20) setHasMore(false);
+
     } catch(e) {
         console.error("Workflow load error", e);
         triggerNotification('数据加载出现异常');
     } finally { 
         setIsLoading(false); 
+        setIsLoadingMore(false);
     }
-  };
+  }, [activeTab, page]);
 
-  const handleLoadMore = async () => {
-      if (!hasMore || isLoadingMore) return;
-      setIsLoadingMore(true);
-      const nextPage = page + 1;
-      try {
-          const userId = currentUserId;
-          const currentUserProfile = { nickname: '我' }; // Fallback, not critical for load more
-          const mapped = await fetchAndMapWorkflows(nextPage, userId, currentUserProfile);
-          if (mapped.length > 0) {
-              setDbWorkflows(prev => [...prev, ...mapped]);
-              setPage(nextPage);
-              if (mapped.length < 20) setHasMore(false);
-          } else {
-              setHasMore(false);
-          }
-      } catch (e) {
-          console.error(e);
-      } finally {
-          setIsLoadingMore(false);
+  useEffect(() => { 
+      if (isActive) {
+          loadData(true);
       }
+  }, [isActive, activeTab]);
+
+  const handleLoadMore = () => {
+      if (!hasMore || isLoadingMore) return;
+      loadData(false);
   };
 
-  useEffect(() => { if (isActive) loadData(); }, [isActive]);
-
-  const toggleFavorite = async (id: string) => {
+  const toggleFavorite = async (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
       const isFav = favoritedIds.has(id);
       setFavoritedIds(prev => {
           const next = new Set(prev);
@@ -156,17 +176,15 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       await toggleWorkflowFavoriteDB(id, isFav);
   };
 
+  // Client-side subcategory filter (for now) and search
   const filteredWorkflows = useMemo(() => {
     return dbWorkflows.filter(w => {
-      if (activeTab === 'favorites') return favoritedIds.has(w.id);
-      if (activeTab === 'my-workflows') return w.userId === currentUserId;
-      if (activeTab !== 'all' && w.category !== activeTab) return false;
       if (activeSubCategory !== 'all' && !w.subCategories?.includes(activeSubCategory)) return false;
       
       const term = searchTerm.toLowerCase();
       return !term || w.title.toLowerCase().includes(term) || w.description.toLowerCase().includes(term);
     });
-  }, [activeTab, activeSubCategory, searchTerm, dbWorkflows, favoritedIds, currentUserId]);
+  }, [activeSubCategory, searchTerm, dbWorkflows]);
 
   const handleEdit = (e: React.MouseEvent, wf: Workflow) => {
     e.stopPropagation();
@@ -183,7 +201,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
   const handleConfirmDelete = async () => {
     if (workflowToDelete) {
       await deleteWorkflow(workflowToDelete.id);
-      await loadData();
+      loadData(true);
       setDeleteModalOpen(false);
       setWorkflowToDelete(null);
       triggerNotification('工作流删除成功');
@@ -209,7 +227,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         }
         setView('list');
         setWorkflowToEdit(null);
-        await loadData();
+        loadData(true);
     } catch (e) {
         triggerNotification('操作失败，请重试');
     }
@@ -222,8 +240,13 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       setView('run');
   };
 
+  const handleSelectWorkflow = (wf: Workflow) => {
+      setSelectedWorkflow(wf);
+      setDetailModalOpen(true);
+  }
+
   if (view === 'create') return <CreateWorkflow onBack={() => { setView('list'); setWorkflowToEdit(null); }} onSave={handleSaveWorkflow} workflowToEdit={workflowToEdit} />;
-  if (view === 'run' && selectedWorkflow) return <WorkflowRun workflow={selectedWorkflow} onBack={() => { setView('list'); loadData(); }} />;
+  if (view === 'run' && selectedWorkflow) return <WorkflowRun workflow={selectedWorkflow} onBack={() => { setView('list'); loadData(true); }} />;
 
   return (
     <div className="h-full animate-fade-in flex flex-col font-sans bg-white dark:bg-black">
@@ -234,6 +257,14 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         onRun={(vals) => { incrementWorkflowUsage(selectedWorkflow!.id); setDetailModalOpen(false); setView('run'); }} 
       />
       <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
+
+      {/* Notification Toast */}
+      {notification && (
+          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 bg-gray-800 text-white rounded-full shadow-xl animate-fade-in-up flex items-center gap-2">
+              <Check className="w-4 h-4 text-green-400" />
+              <span className="text-sm font-bold">{notification}</span>
+          </div>
+      )}
 
       {/* Top Bar */}
       <div className="flex flex-col gap-3 px-6 py-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
@@ -262,7 +293,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                     <input type="text" placeholder="搜索工作流..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 text-sm rounded-xl border border-transparent focus:bg-white dark:focus:bg-black focus:border-blue-500 outline-none transition-all" />
                 </div>
 
-                <button onClick={loadData} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="刷新列表">
+                <button onClick={() => loadData(true)} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="刷新列表">
                     <ArrowPath className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                 </button>
 
@@ -278,83 +309,88 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0 uppercase tracking-wider">题材分类:</span>
             <button onClick={() => setActiveSubCategory('all')} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>全部</button>
             {GENRE_TAGS.map(cat => (
-                <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>{cat.label}</button>
+                <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+                    {cat.label}
+                </button>
             ))}
         </div>
-        
-        {notification && (
-            <div className="fixed top-20 right-8 z-50 flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-lg animate-fade-in-up text-sm font-bold">
-                <Check className="w-4 h-4" />
-                {notification}
-            </div>
-        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 custom-scrollbar bg-gray-50/50 dark:bg-black/50">
+      {/* Grid Content */}
+      <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-black/20 custom-scrollbar">
           {isLoading ? (
-              <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-t-blue-500 rounded-full animate-spin"></div></div>
+              <div className="flex items-center justify-center h-64">
+                  <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
+              </div>
           ) : (
-            <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-6">
-                {filteredWorkflows.map(workflow => (
-                    <div key={workflow.id} onClick={() => { setSelectedWorkflow(workflow); setDetailModalOpen(true); }} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl hover:border-blue-400 transition-all cursor-pointer group flex flex-col h-full relative">
-                        <div className="flex justify-between items-start mb-3">
-                            <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors line-clamp-1 pr-8">{workflow.title}</h3>
-                            <button onClick={(e) => { e.stopPropagation(); toggleFavorite(workflow.id); }} className={`p-1.5 rounded-full absolute top-5 right-5 transition-colors ${favoritedIds.has(workflow.id) ? 'text-red-500 bg-red-50 dark:bg-red-900/20' : 'text-gray-300 hover:text-red-500 hover:bg-red-50'}`}><Heart className={`w-5 h-5 ${favoritedIds.has(workflow.id) ? 'fill-current' : ''}`} /></button>
-                        </div>
-                        <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-6 line-clamp-3 flex-grow">{workflow.description}</p>
-                        
-                        <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800 mt-auto gap-2">
-                            <div className="flex items-center gap-2 overflow-hidden flex-1">
-                                <div className="flex items-center gap-1 text-xs text-orange-400 font-bold shrink-0" title={`热度: ${workflow.heat}`}>
-                                    <Fire className="w-3.5 h-3.5" />
-                                    {workflow.heat || 0}
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {filteredWorkflows.map(wf => (
+                        <div 
+                            key={wf.id} 
+                            onClick={() => handleSelectWorkflow(wf)}
+                            className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-[220px]"
+                        >
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="flex gap-2 mb-1">
+                                    <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-bold border border-blue-100">{CATEGORY_LABELS[wf.category] || '全类型'}</span>
                                 </div>
-                                <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
-                                
-                                <div className="flex items-center gap-1 text-xs text-gray-400 shrink-0" title={`创建者: ${workflow.author}`}>
-                                    <UserCircle className="w-3.5 h-3.5" />
-                                    <span className="max-w-[80px] truncate">{workflow.author}</span>
-                                </div>
-                                <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
-
-                                <div className="flex items-center gap-1.5 overflow-hidden">
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 whitespace-nowrap">
-                                        {CATEGORY_LABELS[workflow.category] || '通用'}
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 shrink-0">
-                                {workflow.userId === currentUserId && (
-                                    <>
-                                        <button onClick={(e) => handleEdit(e, workflow)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
-                                        <button onClick={(e) => handleOpenDelete(e, workflow)} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"><Trash className="w-4 h-4" /></button>
-                                    </>
-                                )}
                                 <button 
-                                    onClick={(e) => handleRunClick(e, workflow)}
-                                    className="ml-2 px-4 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 active:scale-95 transition-all"
+                                    onClick={(e) => toggleFavorite(e, wf.id)}
+                                    className={`p-1.5 rounded-full hover:bg-gray-100 transition-colors ${favoritedIds.has(wf.id) ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
                                 >
-                                    <Play className="w-3 h-3" /> 运行
+                                    <Heart className={`w-4 h-4 ${favoritedIds.has(wf.id) ? 'fill-current' : ''}`} />
                                 </button>
                             </div>
+                            
+                            <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-2 line-clamp-1 group-hover:text-blue-600 transition-colors">{wf.title}</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed flex-grow">
+                                {wf.description || '暂无描述'}
+                            </p>
+                            
+                            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                                <div className="flex items-center gap-3 text-xs text-gray-400">
+                                    <div className="flex items-center gap-1"><Fire className="w-3.5 h-3.5 text-orange-400" /> {wf.usageCount}</div>
+                                    <div className="flex items-center gap-1"><UserCircle className="w-3.5 h-3.5" /> {wf.author}</div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                    {wf.userId === currentUserId && (
+                                        <>
+                                            <button onClick={(e) => handleEdit(e, wf)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                                            <button onClick={(e) => handleOpenDelete(e, wf)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash className="w-3.5 h-3.5" /></button>
+                                        </>
+                                    )}
+                                    <button 
+                                        onClick={(e) => handleRunClick(e, wf)}
+                                        className="p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm group-hover:scale-110"
+                                        title="立即运行"
+                                    >
+                                        <Play className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    ))}
+                    {filteredWorkflows.length === 0 && (
+                        <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400 opacity-60">
+                            <Box className="w-16 h-16 mb-4" />
+                            <p className="text-sm font-medium">暂无工作流</p>
+                        </div>
+                    )}
                 </div>
                 {hasMore && (
-                    <div className="py-4 text-center">
+                    <div className="py-6 text-center">
                         <button 
                             onClick={handleLoadMore} 
                             disabled={isLoadingMore}
-                            className="px-6 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+                            className="px-6 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 rounded-full text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 mx-auto disabled:opacity-50 shadow-sm"
                         >
-                            {isLoadingMore ? <ArrowPath className="w-4 h-4 animate-spin" /> : '加载更多'}
+                            {isLoadingMore ? <ArrowPath className="w-3.5 h-3.5 animate-spin" /> : '加载更多'}
                         </button>
                     </div>
                 )}
-            </>
+              </>
           )}
       </div>
     </div>

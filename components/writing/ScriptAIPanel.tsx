@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -21,6 +22,8 @@ const WRITING_STRATEGIES = [
     "💡 提示：场景标题要规范，明确内/外景、时间。",
     "💡 提示：冲突是戏剧的核心。",
 ];
+
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
 
 const CollapsibleSection: React.FC<{ title: string; icon: any; color: string; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, icon: Icon, color, children, defaultOpen = true }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -153,6 +156,11 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
             if (activeTab === 'idea') finalPrompt = `${cleanInstruction}\n请根据以下信息，生成3个剧本创意方案。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
             else finalPrompt = `${cleanInstruction}\n请写一段影视剧本正文。包含场景标题、场景描述、动作、对白。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
             
+            // Append Force Long Instruction for script content only
+            if (activeTab === 'script') {
+                finalPrompt += FORCE_LONG_INSTRUCTION;
+            }
+
             if (activeTab === 'idea') {
                 const result = await generateText(finalPrompt, { 
                     model, 
@@ -193,7 +201,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
         setError('');
         
         const tail = generatedText.slice(-3000); 
-        const continuePrompt = `IMPORTANT: Output ONLY the continued script content.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
+        const continuePrompt = `IMPORTANT: Output ONLY the continued script content.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
 
         const controller = new AbortController();
         abortControllerRef.current = controller;

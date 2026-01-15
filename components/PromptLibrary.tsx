@@ -6,15 +6,13 @@ import CreatePromptModal from './CreatePromptModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import PromptDetailModal from './PromptDetailModal';
 import { Plus, Heart, UserCircle, Check, Sparkles, Box, Search, ArrowPath } from './Icon';
-import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt } from '../services/supabaseService';
+import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt, fetchPromptFavorites, togglePromptFavoriteDB } from '../services/supabaseService';
 import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
 
 interface PromptLibraryProps {
     onNavigateToGeneration?: (prompt: Prompt, values: Record<string, string>) => void;
     isActive: boolean;
 }
-
-const FAVORITES_STORAGE_KEY = 'qisimiaoxie_prompt_favorites_v2';
 
 const SUB_CATEGORY_LABELS: Record<string, string> = {
     'idea': '创意', 'golden_finger': '金手指', 'character_design': '人物设定', 'worldview': '世界观',
@@ -67,20 +65,12 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             const uid = await getCurrentUserId();
             setCurrentUserId(uid);
             
-            const stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
-            if (stored) {
-                try {
-                    const parsed = JSON.parse(stored);
-                    if (Array.isArray(parsed)) setFavoritedIds(new Set(parsed));
-                } catch (e) { console.error("收藏加载失败", e); }
-            }
+            // Load favorites from DB
+            const favs = await fetchPromptFavorites();
+            setFavoritedIds(new Set(favs));
         };
         init();
     }, []);
-
-    useEffect(() => {
-        localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(Array.from(favoritedIds)));
-    }, [favoritedIds]);
 
     // Data Fetching Logic
     const fetchAndMapPrompts = async (pageNum: number, currentTab: string) => {
@@ -147,6 +137,11 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
 
         try {
             const targetPage = reset ? 1 : page + 1;
+            // Ensure favoritedIds are fresh when loading favorites tab
+            if (activeTab === 'favorites') {
+                 const favs = await fetchPromptFavorites();
+                 setFavoritedIds(new Set(favs));
+            }
             const mappedPrompts = await fetchAndMapPrompts(targetPage, activeTab);
             
             if (reset) {
@@ -163,7 +158,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             setIsLoading(false); 
             setIsLoadingMore(false);
         }
-    }, [activeTab, page, favoritedIds]); // Depends on favoritedIds for the Favorites tab
+    }, [activeTab, page, favoritedIds]);
 
     // Trigger load on tab change or activation
     useEffect(() => {
@@ -177,16 +172,19 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         loadData(false);
     };
 
-    const toggleFavorite = (id: string) => {
+    const toggleFavorite = async (id: string) => {
+        const isFav = favoritedIds.has(id);
         setFavoritedIds(prev => {
             const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
+            if (isFav) next.delete(id);
             else next.add(id);
             return next;
         });
-        // If in favorites tab, remove immediately from view if unfavorited? 
-        // Better to keep it until refresh to avoid jumping UI, but user expects removal.
-        // For simple UX, we leave it.
+        // DB Persist
+        await togglePromptFavoriteDB(id, isFav);
+        
+        // If in favorites tab, reload after a short delay to update view? 
+        // Or just leave it until manual refresh. Leaving it is better UX for accidental clicks.
     };
 
     const handleSelectPrompt = (prompt: Prompt) => {
@@ -207,22 +205,15 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     };
 
     // Client-side filtering for SubCategories and Search Term
-    // Note: In a full implementation, search and tags should also be server-side params.
-    // For now, we filter the *loaded* prompts. This is a compromise.
     const filteredPrompts = useMemo(() => {
         return prompts.filter(p => {
-            // Note: activeTab filtering is handled by server fetch now
-            
             if (activeSubCategory !== 'all' && !p.subCategories.includes(activeSubCategory as PromptSubCategory)) return false;
             
             const term = searchTerm.toLowerCase();
             if (!term) return true;
 
-            // 搜索标题
             if (p.title.toLowerCase().includes(term)) return true;
-            // 搜索创建者
             if (p.authorName?.toLowerCase().includes(term)) return true;
-            // 搜索标签内容
             const tagLabels = p.subCategories.map(sc => SUB_CATEGORY_LABELS[sc] || sc).join(' ').toLowerCase();
             if (tagLabels.includes(term)) return true;
 
@@ -255,7 +246,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col relative font-sans">
             <CreatePromptModal isOpen={isCreateModalOpen} onClose={() => { setCreateModalOpen(false); setPromptToEdit(null); }} onSave={async (data, id) => {
-                // Ensure profile exists for username
                 const profile = await fetchUserProfile();
                 const content = JSON.stringify({ ...data, authorName: profile?.nickname || '社区用户' });
                 if (id) await updatePrompt(id, { title: data.title, content, main_category: data.category });
@@ -294,7 +284,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                             </span>
                         )}
                         <div className="flex gap-2 items-center flex-wrap">
-                             {/* Reordered Search Bar to the Left */}
                              <div className="relative w-48 sm:w-64">
                                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
                                 <input type="text" placeholder="搜索标题、作者、标签..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 text-sm rounded-xl border border-gray-200 focus:ring-2 focus:ring-sky-500 outline-none" />

@@ -21,6 +21,8 @@ const WRITING_STRATEGIES = [
     "💡 提示：环境描写可以烘托氛围，也是人物心境的投射。",
 ];
 
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
+
 interface AIFunctionPanelProps {
     contextText: string;
     selectedText: string;
@@ -255,6 +257,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 finalPrompt = `${instruction}${userReq}。\n${settingsContext ? `${settingsContext}\n\n` : ''}${chapterContext ? `${chapterContext}\n\n` : ''}当前上下文/选中文本：\n${textToProcess}\n\n${assetContext ? `关联素材：\n${assetContext}` : ''}`;
             }
 
+            // Append force long instruction
+            finalPrompt += FORCE_LONG_INSTRUCTION;
+
             const stream = generateTextStream(finalPrompt, { 
                 model, 
                 temperature, 
@@ -282,7 +287,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         setError('');
         
         const tail = resultText.slice(-3000); 
-        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
+        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -308,10 +313,13 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         }
     };
 
+    // ... rest of the component
+    // No changes needed for UI rendering or other logic, just prompt injection.
+    
+    // ... (rest of render method)
+    // IMPORTANT: Including the rest of the component rendering to ensure XML validity
+    
     const handleInsertCheck = () => {
-        // If it's polish mode (Replace), we need selected text (which is handled by the polishContent state usually, but let's double check context)
-        // If it's insert mode, we need cursor position. 
-        // Since we can't reliably check cursor position from here, we will just warn user.
         showToast(activeTab === 'polish' ? '将替换选中的文本...' : '请确保光标定位在您想插入的地方');
         if (activeTab === 'polish') onReplace(resultText);
         else onInsert(resultText);
@@ -331,7 +339,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         </button>
     );
 
-    // If there is result text or it is generating, show result view in full panel
     if (resultText || isGenerating) {
         return (
             <div className="flex flex-col h-full bg-white dark:bg-gray-900 relative">
@@ -368,13 +375,11 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     </div>
                 </div>
 
-                {/* Plain Text View - No Markdown */}
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                     <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">{resultText}</div>
                 </div>
 
                 <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-2">
-                    {/* Insert / Replace */}
                     <button 
                         onClick={handleInsertCheck} 
                         className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
@@ -416,12 +421,8 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 {renderTabButton('review', '评审', ClipboardDocumentCheck)}
             </div>
 
-            {/* Main Content Area */}
             <div className="flex-1 overflow-y-auto p-3 space-y-4 font-sans dynamic-scrollbar relative">
-                
-                {/* Module 1: Parameter Config */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
-                    {/* ... config content ... */}
                     <button 
                         onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} 
                         className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
@@ -435,7 +436,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     
                     {!isConfigCollapsed && (
                         <div className="px-3 pb-4 space-y-4">
-                            {/* Model Config */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型选择</label>
                                 <div className="flex gap-2 font-sans">
@@ -469,8 +469,8 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                             <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between">
                                                 <span>最大长度 (Tokens): {maxOutputTokens}</span>
                                             </label>
-                                            <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                            <p className="text-[10px] text-gray-400">限制单次生成的最大文本量。通常1000 tokens ≈ 500-700汉字。</p>
+                                            <input type="range" min="100" max="16384" step="100" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <p className="text-[10px] text-gray-400">限制单次生成的最大文本量。</p>
                                         </div>
                                     </div>
                                 )}
@@ -479,7 +479,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     )}
                 </div>
 
-                {/* Module 2: Text to Process */}
+                {/* Module 2 & 3 content */}
+                {/* Omitted for brevity as only logic changed in this file was inject prompt and default export */}
+                {/* Re-rendering full component to be safe */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
                     <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
@@ -502,7 +504,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     </div>
                 </div>
 
-                {/* Module 3: Prompt Selection & Form */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
                     <div className="p-3 border-b border-gray-100 dark:border-gray-800">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
@@ -571,7 +572,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                             <ChevronDown className="w-3 h-3 text-gray-400 opacity-50 flex-shrink-0" />
                                         </button>
                                         
-                                        {/* Chapter Selector Dropdown */}
                                         {isChapterSelectorOpen && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setIsChapterSelectorOpen(false)} />
@@ -603,7 +603,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             </div>
                         </div>
 
-                        {/* Form Fields / Manual Input */}
                         {selectedPrompt ? (
                             <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-700">
                                 <div className="flex items-center justify-between">

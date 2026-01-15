@@ -13,6 +13,8 @@ interface WorkflowRunProps {
     onBack: () => void;
 }
 
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
+
 const stripMarkdown = (text: string) => {
     return text
         .replace(/#+\s/g, '')
@@ -221,6 +223,9 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                 Object.keys(currentContext).forEach(key => {
                     finalPrompt = finalPrompt.split(`\${${key}}`).join(currentContext[key] || '');
                 });
+
+                // Append Force Long Instruction
+                finalPrompt += FORCE_LONG_INSTRUCTION;
 
                 let stepContent = '';
                 const stream = generateTextStream(finalPrompt, { 

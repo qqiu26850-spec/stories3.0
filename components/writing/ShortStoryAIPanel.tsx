@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt, Workflow, NovelSettings } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -18,6 +17,8 @@ const WRITING_STRATEGIES = [
     "💡 提示：用最少的文字传达最多的信息。",
     "💡 提示：每一个字都应该为主题服务。",
 ];
+
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
 
 interface ShortStoryAIPanelProps {
     contextText: string;
@@ -232,6 +233,9 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 finalPrompt = `${cleanInstruction}\n${settingsContext ? `${settingsContext}\n\n` : ''}${fullTextContext}${assetContext ? `关联素材：\n${assetContext}\n\n` : ''}${basePrompt}`;
             }
 
+            // Append force long instruction
+            finalPrompt += FORCE_LONG_INSTRUCTION;
+
             const stream = generateTextStream(finalPrompt, { 
                 model, 
                 temperature, 
@@ -253,14 +257,13 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         }
     };
 
-    // ... (rest of methods like handleContinue, handleInsertCheck remain unchanged) ...
     const handleContinue = async () => {
         if (isGenerating) return;
         setIsGenerating(true);
         setError('');
         
         const tail = resultText.slice(-3000); 
-        const continuePrompt = `IMPORTANT: Output ONLY the continued story content. Do NOT include any filler.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
+        const continuePrompt = `IMPORTANT: Output ONLY the continued story content. Do NOT include any filler.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -452,38 +455,33 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     )}
                 </div>
 
-                {/* Module 2: Need to Modify Content (Only for Polish/Review/Imitate) */}
-                {['polish', 'review', 'imitate'].includes(activeTab) && (
-                    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
-                        <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                            <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>
-                                {activeTab === 'imitate' ? '参考文本片段' : '需修改的正文内容'}
-                            </span>
-                        </div>
-                        <div className="p-3">
-                            <textarea 
-                                value={polishContent} 
-                                onChange={(e) => setPolishContent(e.target.value)} 
-                                placeholder={activeTab === 'imitate' ? "请输入需要模仿的段落..." : "请在正文中选择一段文本，内容将自动填充至此..."}
-                                className="w-full h-32 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner"
-                            />
-                            {polishContent.length === 0 && (
-                                <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1 font-medium">
-                                    <InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本
-                                </p>
-                            )}
-                        </div>
+                {/* Module 2 & 3 content */}
+                <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
+                    <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                        <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>
+                            需修改的正文内容
+                        </span>
                     </div>
-                )}
+                    <div className="p-3">
+                        <textarea 
+                            value={polishContent} 
+                            onChange={(e) => setPolishContent(e.target.value)} 
+                            placeholder={activeTab === 'imitate' ? "参考文本风格..." : "请在正文中选择一段文本，内容将自动填充至此..."}
+                            className="w-full h-32 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner"
+                        />
+                        {activeTab !== 'imitate' && polishContent.length === 0 && (
+                            <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1 font-medium">
+                                <InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本
+                            </p>
+                        )}
+                    </div>
+                </div>
 
-                {/* Module 3: Prompt Selection & Associated Assets & Form */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
                     <div className="p-3 border-b border-gray-100 dark:border-gray-800">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">
-                                {['polish', 'review', 'imitate'].includes(activeTab) ? '3' : '2'}
-                            </span>
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">3</span>
                             提示词选择 & 关联素材
                         </span>
                     </div>
@@ -500,10 +498,10 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                     </div>
                                 </button>
                             ) : (
-                                <button onClick={() => handleOpenPromptModal(activeTab === 'imitate' ? 'style' : 'requirements')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
+                                <button onClick={() => handleOpenPromptModal('requirements')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
                                     <div className="flex items-center justify-between">
                                         <span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                                            {selectedPrompt ? selectedPrompt.title : (activeTab === 'imitate' ? '选择风格模板...' : '选择写作要求...')}
+                                            {selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}
                                         </span>
                                         <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-sky-500" />
                                     </div>
@@ -527,7 +525,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 <div className="grid grid-cols-2 gap-2">
                                     <button 
                                         onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} 
-                                        className={`p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                                        className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
                                     >
                                         <div className="flex items-center gap-2">
                                             <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-sky-600' : 'text-gray-400'}`} />
@@ -538,7 +536,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
                                     <button 
                                         onClick={() => setIsFullTextAssociated(!isFullTextAssociated)} 
-                                        className={`p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isFullTextAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                                        className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isFullTextAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
                                         title="将全文内容作为背景参考"
                                     >
                                         <div className="flex items-center gap-2">
@@ -551,7 +549,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                             </div>
                         </div>
 
-                        {/* Form Fields / Manual Input */}
                         {selectedPrompt ? (
                             <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-700">
                                 <div className="flex items-center justify-between">

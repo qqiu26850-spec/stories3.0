@@ -25,6 +25,8 @@ const WRITING_STRATEGIES = [
     "💡 提示：注意场景转换的流畅性。",
 ];
 
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
+
 const CollapsibleSection: React.FC<{ title: string; icon: any; color: string; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, icon: Icon, color, children, defaultOpen = true }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     const themeColor = 'sky';
@@ -158,7 +160,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                 throw new Error("请选择一个提示词模板或工作流");
             }
 
-            finalPrompt = `${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
+            finalPrompt = `${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}${FORCE_LONG_INSTRUCTION}`;
 
             // Stream to panel result
             const stream = generateTextStream(finalPrompt, { 
@@ -188,7 +190,7 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
         setError('');
         
         const tail = generatedText.slice(-3000); 
-        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
+        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -335,11 +337,11 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                                 <div className="flex justify-between items-center font-sans">
                                     <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果</h4>
                                     <div className="flex gap-2 font-sans">
-                                        <button onClick={() => navigator.clipboard.writeText(generatedText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
-                                        <button onClick={() => setGeneratedText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>
+                                        <button onClick={() => navigator.clipboard.writeText(generatedText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-white rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
+                                        <button onClick={() => setGeneratedText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-white rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>
                                     </div>
                                 </div>
-                                <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">{generatedText}</div>
+                                <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-mono">{generatedText}</div>
                                 
                                 <div className="flex gap-2">
                                     <button 

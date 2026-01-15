@@ -19,6 +19,8 @@ interface CreativeGenerationProps {
   onClearInitialData?: () => void;
 }
 
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
+
 // 辅助函数：去除 Markdown 标记转为纯文本
 const stripMarkdown = (text: string) => {
     return text
@@ -196,7 +198,11 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             selectedPrompt.fields.forEach(f => basePrompt = basePrompt.replace(new RegExp(`\\$\\{${f.id}\\}`, 'g'), formState[f.id] || ''));
         }
         const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考：${a!.name}】\n${a!.content}`).join('\n\n');
-        const finalPrompt = assetContext ? `${assetContext}\n\n---\n\n${basePrompt}` : basePrompt;
+        
+        let finalPrompt = assetContext ? `${assetContext}\n\n---\n\n${basePrompt}` : basePrompt;
+        // Append verbose instruction
+        finalPrompt += FORCE_LONG_INSTRUCTION;
+
         const controller = new AbortController(); abortControllerRef.current = controller;
         try {
             const stream = generateTextStream(finalPrompt, { 
@@ -227,7 +233,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         
         // Take the last portion of text to serve as context
         const tail = generatedText.slice(-3000); 
-        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
+        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
 
         const controller = new AbortController(); 
         abortControllerRef.current = controller;
