@@ -195,6 +195,9 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 ? polishContent 
                 : (selectedText || contextText.slice(-2000));
 
+            // Clean Output Instruction
+            const cleanInstruction = "IMPORTANT: Output ONLY the story content or result. Do NOT output any conversational filler (e.g. 'Here is the story', 'Sure', 'Okay').";
+
             if (selectedPrompt) {
                 incrementPromptHeat(selectedPrompt.id);
                 let template = selectedPrompt.template || selectedPrompt.content;
@@ -213,7 +216,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                      template = `${template}\n\n【需处理内容】：\n${textToProcess}`;
                 }
 
-                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${fullTextContext}${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
+                finalPrompt = `${cleanInstruction}\n${settingsContext ? `${settingsContext}\n\n` : ''}${fullTextContext}${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
             } else {
                 let basePrompt = '';
                 if (activeTab === 'original') basePrompt = `请根据以下要求写一段短篇小说的正文。\n\n【要求】：${promptInput}`;
@@ -226,7 +229,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                      basePrompt = `请作为一名专业的文学编辑，对以下文本进行评审。${promptInput ? `【关注点】：${promptInput}` : '指出优缺点并给出修改建议。'}\n\n【待评审文本】：\n${textToReview}`;
                 }
                 
-                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${fullTextContext}${assetContext ? `关联素材：\n${assetContext}\n\n` : ''}${basePrompt}`;
+                finalPrompt = `${cleanInstruction}\n${settingsContext ? `${settingsContext}\n\n` : ''}${fullTextContext}${assetContext ? `关联素材：\n${assetContext}\n\n` : ''}${basePrompt}`;
             }
 
             const stream = generateTextStream(finalPrompt, { 
@@ -257,7 +260,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         setError('');
         
         const tail = resultText.slice(-3000); 
-        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
+        const continuePrompt = `IMPORTANT: Output ONLY the continued story content. Do NOT include any filler.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
 
         const controller = new AbortController();
         abortControllerRef.current = controller;

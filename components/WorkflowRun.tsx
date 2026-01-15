@@ -1,13 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { Workflow, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Bolt, Play, Database, X, ChatBubbleLeftRight, ExclamationCircle, ChatBubbleOvalLeftEllipsis, Plus, Box, DocumentPlus } from './Icon';
+import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Play, Database, ChatBubbleOvalLeftEllipsis, DocumentPlus } from './Icon';
 import ImportAssetModal from './ImportAssetModal';
 import SaveToCreationModal from './SaveToCreationModal';
-import PromptSelectionModal from './PromptSelectionModal';
 import { saveMaterial } from '../services/supabaseService';
+import FollowUpModal from './FollowUpModal';
 
 interface WorkflowRunProps {
     workflow: Workflow;
@@ -40,11 +39,9 @@ const convertMarkdownToHtml = (text: string) => {
     
     return cleanedText.split('\n').map(line => {
         let content = line.trim();
-        // Preserve empty lines as breaks
         if (!content) return '<p><br></p>';
         
         let isHeader = false;
-        // Handle Headers
         if (content.startsWith('#')) {
             const match = content.match(/^(#+)\s*(.*)/);
             if (match) {
@@ -53,13 +50,9 @@ const convertMarkdownToHtml = (text: string) => {
             }
         }
         
-        // Escape HTML to prevent injection and render as text
         content = escapeHtml(content);
-        
-        // Handle Bold **text**
         content = content.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
         
-        // Wrap in p tags, apply bold to headers to match visual hierarchy
         if (isHeader) {
             return `<p><b>${content}</b></p>`;
         }
@@ -107,236 +100,6 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-const FollowUpModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    targetText: string;
-    context: string;
-    initialMode: 'selection' | 'full';
-    onApply: (text: string, type: 'insert' | 'replace') => void;
-}> = ({ isOpen, onClose, targetText, context, initialMode, onApply }) => {
-    const [query, setQuery] = useState('');
-    const [result, setResult] = useState('');
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [activeMode, setActiveMode] = useState<'selection' | 'full'>(initialMode);
-    
-    // Modal specific model settings
-    const [modalModel, setModalModel] = useState('deepseek-chat');
-    const [isPromptModalOpen, setPromptModalOpen] = useState(false);
-    
-    const abortControllerRef = useRef<AbortController | null>(null);
-
-    useEffect(() => {
-        if (isOpen) {
-            setQuery('');
-            setResult('');
-            setIsGenerating(false);
-            setActiveMode(targetText ? initialMode : 'full');
-        }
-    }, [isOpen, targetText, initialMode]);
-
-    const handleGenerate = async () => {
-        if (!query.trim()) return; 
-        
-        setIsGenerating(true);
-        setResult('');
-        
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
-
-        let prompt = '';
-        if (activeMode === 'selection') {
-            prompt = `你是一个专业的创意写作助手。
-请基于下方的【全文背景】和用户【选中的文本片段】，回答用户的【追问/指令】。
-你的回答必须针对选中的内容进行处理，同时不脱离全文设定的背景。
-
-【全文背景】：
-${context.slice(0, 3000)}${context.length > 3000 ? '...' : ''}
-
-【选中的文本片段】：
-${targetText}
-
-【用户的追问/指令】：
-${query}
-
-请直接输出结果：`;
-        } else {
-            prompt = `你是一个专业的创意写作助手。
-请基于下方的【当前内容】，回答用户的【追问/指令】。
-你的回答应当是对当前内容的补充、解释或修改建议。
-
-【当前内容】：
-${context.slice(0, 3000)}${context.length > 3000 ? '...' : ''}
-
-【用户的追问/指令】：
-${query}
-
-请直接输出结果：`;
-        }
-
-        try {
-            const stream = generateTextStream(prompt, {
-                model: modalModel,
-                temperature: 0.8,
-                topP: 0.95,
-                signal: controller.signal
-            });
-
-            for await (const chunk of stream) {
-                setResult(prev => prev + chunk);
-            }
-        } catch (e: any) {
-            if (e.message !== 'Aborted') {
-                setResult(`生成出错: ${e.message}`);
-            }
-        } finally {
-            setIsGenerating(false);
-            abortControllerRef.current = null;
-        }
-    };
-
-    const handleStop = () => {
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
-        setIsGenerating(false);
-    };
-
-    const handleCopy = () => {
-        navigator.clipboard.writeText(result);
-    };
-
-    const handlePromptSelect = (prompt: Prompt) => {
-        setQuery(prev => (prev ? prev + '\n' : '') + `[任务：${prompt.title}]`);
-        setPromptModalOpen(false);
-    }
-
-    if (!isOpen) return null;
-
-    return createPortal(
-        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-            {isPromptModalOpen && (
-                <div style={{zIndex: 110}}>
-                    <PromptSelectionModal isOpen={true} onClose={() => setPromptModalOpen(false)} onSelect={handlePromptSelect} />
-                </div>
-            )}
-            
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
-                <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <ChatBubbleOvalLeftEllipsis className="w-5 h-5 text-sky-500" />
-                        AI 智能追问
-                    </h3>
-                    <button type="button" onClick={onClose} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-                    <div className="flex gap-2">
-                        <select 
-                            value={modalModel} 
-                            onChange={(e) => setModalModel(e.target.value)}
-                            className="p-2 text-xs font-bold rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-sky-500 outline-none"
-                        >
-                            <option value="deepseek-chat">DeepSeek V3</option>
-                            <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-                            <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
-                        </select>
-
-                        <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-lg flex-1">
-                            <button
-                                onClick={() => setActiveMode('full')}
-                                className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${activeMode === 'full' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-                            >
-                                全文/本段
-                            </button>
-                            <button
-                                onClick={() => setActiveMode('selection')}
-                                disabled={!targetText}
-                                className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${activeMode === 'selection' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'} ${!targetText ? 'opacity-50 cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-white'}`}
-                            >
-                                针对选中
-                            </button>
-                        </div>
-                    </div>
-
-                    {activeMode === 'selection' && (
-                        <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">已选中文本</div>
-                            <div className="text-xs text-gray-600 dark:text-gray-300 line-clamp-3 italic">
-                                “{targetText}”
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="space-y-2">
-                        <textarea 
-                            value={query}
-                            onChange={e => setQuery(e.target.value)}
-                            placeholder={activeMode === 'selection' 
-                                ? "请输入针对选中文本的追问或修改指令..." 
-                                : "请输入针对全文/本段的追问..."}
-                            className="w-full h-24 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-sm resize-none"
-                        />
-                        <div className="flex justify-between items-center">
-                            <button onClick={() => setPromptModalOpen(true)} className="text-xs text-sky-600 hover:text-sky-500 font-bold flex items-center gap-1">
-                                <Box className="w-3.5 h-3.5" /> 引用提示词
-                            </button>
-                            {isGenerating ? (
-                                <button type="button" onClick={handleStop} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors flex items-center gap-1">
-                                    <Stop className="w-3.5 h-3.5" /> 停止
-                                </button>
-                            ) : (
-                                <button type="button" onClick={handleGenerate} disabled={!query.trim()} className="px-4 py-2 bg-sky-600 text-white rounded-lg text-xs font-bold hover:bg-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">
-                                    <Sparkles className="w-3.5 h-3.5" /> 发送追问
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {result && (
-                        <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
-                            <div className="flex justify-between items-center">
-                                <span className="text-xs font-bold text-sky-600 dark:text-sky-400">AI 回复</span>
-                            </div>
-                            <div className="p-4 bg-sky-50/30 dark:bg-sky-900/10 rounded-xl text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
-                                {result}
-                            </div>
-                            {!isGenerating && (
-                                <div className="flex gap-2 justify-end pt-1">
-                                    <button 
-                                        onClick={() => { onApply(result, 'insert'); onClose(); }}
-                                        className="px-3 py-1.5 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors flex items-center gap-1"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" /> 插入正文
-                                    </button>
-                                    {activeMode === 'selection' && (
-                                        <button 
-                                            onClick={() => { onApply(result, 'replace'); onClose(); }}
-                                            className="px-3 py-1.5 bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400 rounded-lg text-xs font-bold hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors flex items-center gap-1"
-                                        >
-                                            <ArrowPath className="w-3.5 h-3.5" /> 替换原文
-                                        </button>
-                                    )}
-                                    <button 
-                                        onClick={handleCopy}
-                                        className="px-3 py-1.5 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 rounded-lg text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
-                                    >
-                                        <Copy className="w-3.5 h-3.5" /> 复制
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>,
-        document.body
-    );
-};
-
 const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [model, setModel] = useState('deepseek-chat');
     const modelRef = useRef(model);
@@ -359,7 +122,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     
     const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; variable: string; initialMode: 'selection' | 'full' } | null>(null);
     
-    // Save to creation modal state
     const [saveModalOpen, setSaveModalOpen] = useState(false);
     const [saveModalContent, setSaveModalContent] = useState('');
 
@@ -381,7 +143,6 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     };
 
     const handleOpenSaveModal = (text: string) => {
-        // Use convertMarkdownToHtml to preserve paragraph structure and bold formatting compatible with editor
         setSaveModalContent(convertMarkdownToHtml(text));
         setSaveModalOpen(true);
     };
@@ -422,6 +183,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         });
         
         triggerSuccess('内容已更新');
+        setActiveFollowUp(null);
     };
 
     const handleStop = () => {

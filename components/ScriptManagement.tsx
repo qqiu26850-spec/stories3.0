@@ -5,7 +5,7 @@ import CreateProjectModal from './CreateProjectModal';
 import EditProjectModal from './EditProjectModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
-import { Film, BookOpen, DocumentPlus, Check } from './Icon';
+import { Film, BookOpen, DocumentPlus, Check, ArrowPath } from './Icon';
 import ScriptWritingPage from './writing/ScriptWritingPage';
 import { createProject, fetchProjects, deleteProject, updateProject } from '../services/supabaseService';
 
@@ -33,32 +33,65 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
     const [isProcessing, setIsProcessing] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
 
+    // Pagination
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+    const fetchAndMapScripts = async (pageNum: number) => {
+        const data = await fetchProjects(pageNum);
+        if (data) {
+            const filtered = data.filter((p: any) => p.type === 'script');
+            const mappedScripts: Script[] = filtered.map((p: any) => ({
+                id: p.id,
+                title: p.title,
+                coverImage: null, 
+                wordCount: p.word_count || 0,
+                type: p.description?.includes('Adaptation') ? 'adaptation' : 'original', 
+                creationDate: p.created_at || new Date().toISOString(),
+                scenes: []
+            }));
+            return mappedScripts;
+        }
+        return [];
+    };
+
     // Fetch projects on mount, when closing editor, or when active
     useEffect(() => {
         if (!isActive) return;
+        setPage(1);
+        setHasMore(true);
         const loadScripts = async () => {
             try {
-                const data = await fetchProjects();
-                if (data) {
-                    const filtered = data.filter((p: any) => p.type === 'script');
-                    
-                    const mappedScripts: Script[] = filtered.map((p: any) => ({
-                        id: p.id,
-                        title: p.title,
-                        coverImage: null, // Fixed cover
-                        wordCount: p.word_count || 0, // Real-time word count from DB
-                        type: p.description?.includes('Adaptation') ? 'adaptation' : 'original', // Simple heuristic or store in DB
-                        creationDate: p.created_at || new Date().toISOString(),
-                        scenes: []
-                    }));
-                    setScripts(mappedScripts);
-                }
+                const mappedScripts = await fetchAndMapScripts(1);
+                setScripts(mappedScripts);
+                if (mappedScripts.length < 20) setHasMore(false);
             } catch (error) {
                 console.error("Failed to load scripts", error);
             }
         };
         loadScripts();
     }, [editingScript, isActive]);
+
+    const handleLoadMore = async () => {
+        if (!hasMore || isLoadingMore) return;
+        setIsLoadingMore(true);
+        const nextPage = page + 1;
+        try {
+            const mappedScripts = await fetchAndMapScripts(nextPage);
+            if (mappedScripts.length > 0) {
+                setScripts(prev => [...prev, ...mappedScripts]);
+                setPage(nextPage);
+                if (mappedScripts.length < 20) setHasMore(false);
+            } else {
+                setHasMore(false);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsLoadingMore(false);
+        }
+    };
 
     const handleSelectType = (type: ScriptType) => {
         setScriptType(type);
@@ -247,21 +280,34 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
             </div>
             
             {/* Content */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 overflow-y-auto pr-2 -mr-2">
                  {filteredScripts.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fade-in pb-10">
-                        {filteredScripts.map(script => (
-                           <ProjectCard 
-                            key={script.id} 
-                            project={script} 
-                            onDelete={handleOpenDeleteModal}
-                            onEdit={handleOpenEditModal}
-                            onSelect={() => handleSelectScript(script)}
-                           />
-                        ))}
-                    </div>
+                    <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fade-in pb-10">
+                            {filteredScripts.map(script => (
+                            <ProjectCard 
+                                key={script.id} 
+                                project={script} 
+                                onDelete={handleOpenDeleteModal}
+                                onEdit={handleOpenEditModal}
+                                onSelect={() => handleSelectScript(script)}
+                            />
+                            ))}
+                        </div>
+                        {hasMore && (
+                            <div className="py-4 text-center">
+                                <button 
+                                    onClick={handleLoadMore} 
+                                    disabled={isLoadingMore}
+                                    className="px-6 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+                                >
+                                    {isLoadingMore ? <ArrowPath className="w-4 h-4 animate-spin" /> : '加载更多'}
+                                </button>
+                            </div>
+                        )}
+                    </>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center animate-fade-in">
+                    <div className="flex-1 flex items-center justify-center animate-fade-in h-full">
                         <div className="text-center max-w-md p-10 bg-white dark:bg-gray-900 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 flex flex-col items-center">
                             <div className="w-24 h-24 bg-sky-50 dark:bg-sky-900/20 rounded-full flex items-center justify-center mb-6">
                                 {scriptType === 'original' ? (

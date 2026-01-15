@@ -37,6 +37,11 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // 顶部栏通知状态
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -45,20 +50,11 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-        const userId = await getCurrentUserId();
-        setCurrentUserId(userId);
-        
-        // 获取当前用户资料，作为回退方案
-        const currentUserProfile = await fetchUserProfile();
-        
-        // 使用 service 中的统一获取方法（包含 profiles 手动关联查询）
-        const data = await fetchWorkflows();
-
-        if (data) {
-            const mapped: Workflow[] = data.map((wf: any) => {
+  const fetchAndMapWorkflows = async (pageNum: number, userId: string | null, currentUserProfile: any) => {
+      const data = await fetchWorkflows(pageNum);
+      
+      if (data && data.length > 0) {
+          const mapped: Workflow[] = data.map((wf: any) => {
                 let content: any = {};
                 try { 
                     content = typeof wf.content === 'string' ? JSON.parse(wf.content) : wf.content; 
@@ -66,7 +62,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                     console.error("Content parse error", e);
                 }
                 
-                // 映射分类
                 let mainCat: PromptCategory = 'short-story';
                 if(wf.main_category === 'long') mainCat = 'long-story';
                 else if(wf.main_category === 'script') mainCat = 'script';
@@ -74,17 +69,12 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                 else if(wf.main_category === 'short') mainCat = 'short-story';
                 else if(wf.main_category) mainCat = wf.main_category as PromptCategory;
                 
-                // 智能解析作者名称
                 let authorName = '匿名用户';
-                
-                // fetchWorkflows 在 service 层手动拼装了 profiles 对象
-                // 检查 wf.profiles 是否存在且有效
                 const profile = wf.profiles; 
                 
                 if (profile && (profile.username || profile.nickname || profile.full_name)) {
                     authorName = profile.username || profile.nickname || profile.full_name;
                 } else if (wf.user_id === userId) {
-                    // 如果没有关联到 profile 但 ID 匹配当前用户，使用当前 session 信息
                     authorName = currentUserProfile.nickname || '我';
                 }
 
@@ -102,8 +92,23 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                     steps: content?.steps || []
                 };
             });
-            setDbWorkflows(mapped);
-        }
+            return mapped;
+      }
+      return [];
+  };
+
+  const loadData = async () => {
+    setIsLoading(true);
+    setPage(1);
+    setHasMore(true);
+    try {
+        const userId = await getCurrentUserId();
+        setCurrentUserId(userId);
+        const currentUserProfile = await fetchUserProfile();
+        
+        const mapped = await fetchAndMapWorkflows(1, userId, currentUserProfile);
+        setDbWorkflows(mapped);
+        if(mapped.length < 20) setHasMore(false);
 
         const favs = await fetchWorkflowFavorites();
         setFavoritedIds(new Set(favs));
@@ -113,6 +118,28 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
     } finally { 
         setIsLoading(false); 
     }
+  };
+
+  const handleLoadMore = async () => {
+      if (!hasMore || isLoadingMore) return;
+      setIsLoadingMore(true);
+      const nextPage = page + 1;
+      try {
+          const userId = currentUserId;
+          const currentUserProfile = { nickname: '我' }; // Fallback, not critical for load more
+          const mapped = await fetchAndMapWorkflows(nextPage, userId, currentUserProfile);
+          if (mapped.length > 0) {
+              setDbWorkflows(prev => [...prev, ...mapped]);
+              setPage(nextPage);
+              if (mapped.length < 20) setHasMore(false);
+          } else {
+              setHasMore(false);
+          }
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setIsLoadingMore(false);
+      }
   };
 
   useEffect(() => { if (isActive) loadData(); }, [isActive]);
@@ -267,54 +294,67 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
           {isLoading ? (
               <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-t-blue-500 rounded-full animate-spin"></div></div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
-              {filteredWorkflows.map(workflow => (
-                  <div key={workflow.id} onClick={() => { setSelectedWorkflow(workflow); setDetailModalOpen(true); }} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl hover:border-blue-400 transition-all cursor-pointer group flex flex-col h-full relative">
-                      <div className="flex justify-between items-start mb-3">
-                          <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors line-clamp-1 pr-8">{workflow.title}</h3>
-                          <button onClick={(e) => { e.stopPropagation(); toggleFavorite(workflow.id); }} className={`p-1.5 rounded-full absolute top-5 right-5 transition-colors ${favoritedIds.has(workflow.id) ? 'text-red-500 bg-red-50 dark:bg-red-900/20' : 'text-gray-300 hover:text-red-500 hover:bg-red-50'}`}><Heart className={`w-5 h-5 ${favoritedIds.has(workflow.id) ? 'fill-current' : ''}`} /></button>
-                      </div>
-                      <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-6 line-clamp-3 flex-grow">{workflow.description}</p>
-                      
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800 mt-auto gap-2">
-                          <div className="flex items-center gap-2 overflow-hidden flex-1">
-                              <div className="flex items-center gap-1 text-xs text-orange-400 font-bold shrink-0" title={`热度: ${workflow.heat}`}>
-                                  <Fire className="w-3.5 h-3.5" />
-                                  {workflow.heat || 0}
-                              </div>
-                              <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
-                              
-                              <div className="flex items-center gap-1 text-xs text-gray-400 shrink-0" title={`创建者: ${workflow.author}`}>
-                                <UserCircle className="w-3.5 h-3.5" />
-                                <span className="max-w-[80px] truncate">{workflow.author}</span>
-                              </div>
-                              <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
+            <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-6">
+                {filteredWorkflows.map(workflow => (
+                    <div key={workflow.id} onClick={() => { setSelectedWorkflow(workflow); setDetailModalOpen(true); }} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl hover:border-blue-400 transition-all cursor-pointer group flex flex-col h-full relative">
+                        <div className="flex justify-between items-start mb-3">
+                            <h3 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors line-clamp-1 pr-8">{workflow.title}</h3>
+                            <button onClick={(e) => { e.stopPropagation(); toggleFavorite(workflow.id); }} className={`p-1.5 rounded-full absolute top-5 right-5 transition-colors ${favoritedIds.has(workflow.id) ? 'text-red-500 bg-red-50 dark:bg-red-900/20' : 'text-gray-300 hover:text-red-500 hover:bg-red-50'}`}><Heart className={`w-5 h-5 ${favoritedIds.has(workflow.id) ? 'fill-current' : ''}`} /></button>
+                        </div>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs leading-relaxed mb-6 line-clamp-3 flex-grow">{workflow.description}</p>
+                        
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800 mt-auto gap-2">
+                            <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                <div className="flex items-center gap-1 text-xs text-orange-400 font-bold shrink-0" title={`热度: ${workflow.heat}`}>
+                                    <Fire className="w-3.5 h-3.5" />
+                                    {workflow.heat || 0}
+                                </div>
+                                <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
+                                
+                                <div className="flex items-center gap-1 text-xs text-gray-400 shrink-0" title={`创建者: ${workflow.author}`}>
+                                    <UserCircle className="w-3.5 h-3.5" />
+                                    <span className="max-w-[80px] truncate">{workflow.author}</span>
+                                </div>
+                                <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 shrink-0"></div>
 
-                              <div className="flex items-center gap-1.5 overflow-hidden">
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 whitespace-nowrap">
-                                      {CATEGORY_LABELS[workflow.category] || '通用'}
-                                  </span>
-                              </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 shrink-0">
-                              {workflow.userId === currentUserId && (
-                                  <>
-                                      <button onClick={(e) => handleEdit(e, workflow)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
-                                      <button onClick={(e) => handleOpenDelete(e, workflow)} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"><Trash className="w-4 h-4" /></button>
-                                  </>
-                              )}
-                              <button 
-                                onClick={(e) => handleRunClick(e, workflow)}
-                                className="ml-2 px-4 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 active:scale-95 transition-all"
-                              >
-                                <Play className="w-3 h-3" /> 运行
-                              </button>
-                          </div>
-                      </div>
-                  </div>
-              ))}
-            </div>
+                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 whitespace-nowrap">
+                                        {CATEGORY_LABELS[workflow.category] || '通用'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 shrink-0">
+                                {workflow.userId === currentUserId && (
+                                    <>
+                                        <button onClick={(e) => handleEdit(e, workflow)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
+                                        <button onClick={(e) => handleOpenDelete(e, workflow)} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"><Trash className="w-4 h-4" /></button>
+                                    </>
+                                )}
+                                <button 
+                                    onClick={(e) => handleRunClick(e, workflow)}
+                                    className="ml-2 px-4 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 active:scale-95 transition-all"
+                                >
+                                    <Play className="w-3 h-3" /> 运行
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                </div>
+                {hasMore && (
+                    <div className="py-4 text-center">
+                        <button 
+                            onClick={handleLoadMore} 
+                            disabled={isLoadingMore}
+                            className="px-6 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+                        >
+                            {isLoadingMore ? <ArrowPath className="w-4 h-4 animate-spin" /> : '加载更多'}
+                        </button>
+                    </div>
+                )}
+            </>
           )}
       </div>
     </div>

@@ -1,12 +1,11 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { Prompt, PromptCategory, PromptSubCategory } from '../types';
 import PromptCard from './PromptCard';
 import CreatePromptModal from './CreatePromptModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import PromptDetailModal from './PromptDetailModal';
-import { Plus, Heart, UserCircle, Check, X, Sparkles, Box, Search } from './Icon';
+import { Plus, Heart, UserCircle, Check, Sparkles, Box, Search, ArrowPath } from './Icon';
 import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt } from '../services/supabaseService';
 import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
 
@@ -27,8 +26,15 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'suspense': '悬疑', 'sci-fi': '科幻'
 };
 
+const CATEGORY_TABS = [
+  { id: 'all', label: '全部' },
+  { id: 'short-story', label: '短篇小说' },
+  { id: 'long-story', label: '长篇小说' },
+  { id: 'script', label: '剧本' },
+  { id: 'general', label: '全类型' },
+];
+
 const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
-// ... rest of the file remains unchanged ...
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('all');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
@@ -49,6 +55,11 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     
     const [isLoading, setIsLoading] = useState(true);
     const [successMessage, setSuccessMessage] = useState('');
+    
+    // Pagination State
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
 
     useEffect(() => {
         const stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
@@ -64,48 +75,80 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(Array.from(favoritedIds)));
     }, [favoritedIds]);
 
-    const loadData = useCallback(async (forceRefresh = false) => {
-        setIsLoading(true);
-        try {
-            const userId = await getCurrentUserId();
-            setCurrentUserId(userId);
-            
+    const fetchAndMapPrompts = async (pageNum: number, isRefresh: boolean = false) => {
+        const userId = await getCurrentUserId();
+        setCurrentUserId(userId);
+        
+        if (isRefresh) {
             const profile = await fetchUserProfile();
             if(profile && profile.nickname) setUserNickname(profile.nickname);
+        }
 
-            const fetchedData = await fetchPrompts('all', forceRefresh); 
-            if (fetchedData) {
-                const mappedPrompts: Prompt[] = fetchedData.map((p: any) => {
-                    let parsedContent: any = {};
-                    try { parsedContent = JSON.parse(p.content); } catch (e) { parsedContent = { template: p.content }; }
+        const fetchedData = await fetchPrompts('all', isRefresh, pageNum);
+        
+        if (fetchedData && fetchedData.length > 0) {
+            const mappedPrompts: Prompt[] = fetchedData.map((p: any) => {
+                let parsedContent: any = {};
+                try { parsedContent = JSON.parse(p.content); } catch (e) { parsedContent = { template: p.content }; }
 
-                    let appCat: PromptCategory = 'short-story';
-                    if(p.main_category === 'long') appCat = 'long-story';
-                    else if(p.main_category === 'script') appCat = 'script';
-                    else if(p.main_category === 'short') appCat = 'short-story';
-                    else if(p.main_category === 'general') appCat = 'general';
-                    else appCat = p.main_category as PromptCategory;
+                let appCat: PromptCategory = 'short-story';
+                if(p.main_category === 'long') appCat = 'long-story';
+                else if(p.main_category === 'script') appCat = 'script';
+                else if(p.main_category === 'short') appCat = 'short-story';
+                else if(p.main_category === 'general') appCat = 'general';
+                else appCat = p.main_category as PromptCategory;
 
-                    return {
-                        id: p.id,
-                        title: p.title,
-                        description: p.description || parsedContent.description || '用户自定义提示词',
-                        example: parsedContent.example || '',
-                        content: parsedContent.template || p.content,
-                        category: appCat,
-                        subCategories: parsedContent.subCategories || [p.sub_category],
-                        fields: parsedContent.fields || [], 
-                        template: parsedContent.template || p.content,
-                        heat: p.usage_count || 0,
-                        creator: p.user_id === userId ? 'user' : 'system',
-                        userId: p.user_id,
-                        authorName: p.profiles?.username || parsedContent.authorName || '匿名用户'
-                    };
-                });
-                setPrompts(mappedPrompts);
-            }
+                return {
+                    id: p.id,
+                    title: p.title,
+                    description: p.description || parsedContent.description || '用户自定义提示词',
+                    example: parsedContent.example || '',
+                    content: parsedContent.template || p.content,
+                    category: appCat,
+                    subCategories: parsedContent.subCategories || [p.sub_category],
+                    fields: parsedContent.fields || [], 
+                    template: parsedContent.template || p.content,
+                    heat: p.usage_count || 0,
+                    creator: p.user_id === userId ? 'user' : 'system',
+                    userId: p.user_id,
+                    authorName: p.profiles?.username || parsedContent.authorName || '匿名用户'
+                };
+            });
+            return mappedPrompts;
+        }
+        return [];
+    };
+
+    const loadData = useCallback(async (forceRefresh = false) => {
+        setIsLoading(true);
+        setPage(1);
+        setHasMore(true);
+        try {
+            const mappedPrompts = await fetchAndMapPrompts(1, forceRefresh);
+            setPrompts(mappedPrompts);
+            if (mappedPrompts.length < 20) setHasMore(false);
         } catch (error) { console.error("加载数据失败", error); } finally { setIsLoading(false); }
     }, []);
+
+    const handleLoadMore = async () => {
+        if (!hasMore || isLoadingMore) return;
+        setIsLoadingMore(true);
+        const nextPage = page + 1;
+        try {
+            const mappedPrompts = await fetchAndMapPrompts(nextPage);
+            if (mappedPrompts.length > 0) {
+                setPrompts(prev => [...prev, ...mappedPrompts]);
+                setPage(nextPage);
+                if (mappedPrompts.length < 20) setHasMore(false);
+            } else {
+                setHasMore(false);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsLoadingMore(false);
+        }
+    };
 
     useEffect(() => { if (isActive) loadData(); }, [isActive, loadData]);
 
@@ -255,28 +298,33 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 {isLoading ? (
                     <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-t-sky-500 rounded-full animate-spin"></div></div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
-                        {filteredPrompts.map(prompt => (
-                            <PromptCard key={prompt.id} prompt={prompt} onSelect={handleSelectPrompt} onDelete={handleOpenDelete} onEdit={handleEditPrompt} isFavorited={favoritedIds.has(prompt.id)} onToggleFavorite={toggleFavorite} isOwner={prompt.userId === currentUserId} />
-                        ))}
-                        {filteredPrompts.length === 0 && (
-                            <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
-                                <Box className="w-16 h-16 mb-4 opacity-20" /><p>暂无相关提示词，换个筛选条件试试吧！</p>
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-6">
+                            {filteredPrompts.map(prompt => (
+                                <PromptCard key={prompt.id} prompt={prompt} onSelect={handleSelectPrompt} onDelete={handleOpenDelete} onEdit={handleEditPrompt} isFavorited={favoritedIds.has(prompt.id)} onToggleFavorite={toggleFavorite} isOwner={prompt.userId === currentUserId} />
+                            ))}
+                            {filteredPrompts.length === 0 && (
+                                <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
+                                    <Box className="w-16 h-16 mb-4 opacity-20" /><p>暂无相关提示词，换个筛选条件试试吧！</p>
+                                </div>
+                            )}
+                        </div>
+                        {hasMore && (
+                            <div className="py-4 text-center">
+                                <button 
+                                    onClick={handleLoadMore} 
+                                    disabled={isLoadingMore}
+                                    className="px-6 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+                                >
+                                    {isLoadingMore ? <ArrowPath className="w-4 h-4 animate-spin" /> : '加载更多'}
+                                </button>
                             </div>
                         )}
-                    </div>
+                    </>
                 )}
             </div>
         </div>
     );
 };
-
-const CATEGORY_TABS = [
-  { id: 'all', label: '全部' },
-  { id: 'short-story', label: '短篇小说' },
-  { id: 'long-story', label: '长篇小说' },
-  { id: 'script', label: '剧本' },
-  { id: 'general', label: '全类型' },
-];
 
 export default PromptLibrary;

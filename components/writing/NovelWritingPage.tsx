@@ -9,6 +9,7 @@ import ShortStoryAIPanel from './ShortStoryAIPanel';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, deleteChapterFromDB, updateChapterOrder } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
+import FollowUpModal from '../FollowUpModal';
 
 interface NovelWritingPageProps {
     novel: Novel;
@@ -26,21 +27,21 @@ const ContextMenu: React.FC<{
     visible: boolean;
     mode: 'long' | 'short';
     onClose: () => void;
-    onAction: (action: 'expand' | 'continue' | 'polish' | 'review') => void;
+    onAction: (action: 'expand' | 'continue' | 'polish' | 'review' | 'ask') => void;
 }> = ({ x, y, visible, mode, onClose, onAction }) => {
-// ... ContextMenu remains unchanged ...
     if (!visible) return null;
 
-    const options = mode === 'long' 
-        ? [
-            { id: 'continue', label: '续写', icon: '📝' },
-            { id: 'expand', label: '扩写', icon: '✨' },
-            { id: 'polish', label: '润色', icon: '🎨' }
-          ]
-        : [
-            { id: 'polish', label: '润色', icon: '🎨' },
-            { id: 'review', label: '评审', icon: '🧐' }
-          ];
+    const options = [
+        ...(mode === 'long' 
+            ? [
+                { id: 'continue', label: '续写', icon: '📝' },
+                { id: 'expand', label: '扩写', icon: '✨' },
+              ] 
+            : []),
+        { id: 'polish', label: '润色', icon: '🎨' },
+        ...(mode === 'short' ? [{ id: 'review', label: '评审', icon: '🧐' }] : []),
+        { id: 'ask', label: '智能追问', icon: '💬' }
+    ];
 
     return createPortal(
         <div 
@@ -91,6 +92,9 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
 
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string }>({ x: 0, y: 0, visible: false, text: '' });
     const [aiTrigger, setAiTrigger] = useState<{ type: 'expand' | 'continue' | 'polish' | 'review', text: string } | null>(null);
+    
+    // FollowUp Modal State
+    const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; initialMode: 'selection' | 'full' } | null>(null);
 
     useEffect(() => {
         const loadInitialChapters = async () => {
@@ -329,6 +333,12 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         });
     };
 
+    const handleApplyFollowUp = (text: string, type: 'insert' | 'replace') => {
+        if (type === 'replace') handleReplaceText(text);
+        else handleInsertText(text);
+        setActiveFollowUp(null);
+    };
+
     const handleAIStream = (chunk: string, isFirst: boolean) => {
         if (!editorRef.current) return;
         if (isFirst) { 
@@ -362,9 +372,17 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }
     };
 
-    const handleAIAction = (type: 'expand' | 'continue' | 'polish' | 'review') => {
-        setAiTrigger({ type, text: contextMenu.text });
-        if (!isRightSidebarOpen) setRightSidebarOpen(true);
+    const handleAIAction = (type: 'expand' | 'continue' | 'polish' | 'review' | 'ask') => {
+        if (type === 'ask') {
+            setActiveFollowUp({
+                target: contextMenu.text,
+                context: debouncedContextText,
+                initialMode: 'selection'
+            });
+        } else {
+            setAiTrigger({ type, text: contextMenu.text });
+            if (!isRightSidebarOpen) setRightSidebarOpen(true);
+        }
     };
 
     useEffect(() => {
@@ -389,6 +407,15 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     <span className="text-sm font-bold">已成功复制全文</span>
                 </div>
             )}
+
+            <FollowUpModal 
+                isOpen={!!activeFollowUp} 
+                onClose={() => setActiveFollowUp(null)} 
+                targetText={activeFollowUp?.target || ''}
+                context={activeFollowUp?.context || ''}
+                initialMode={activeFollowUp?.initialMode || 'full'}
+                onApply={handleApplyFollowUp}
+            />
 
             <ContextMenu 
                 {...contextMenu} 

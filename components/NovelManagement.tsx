@@ -6,7 +6,7 @@ import EditProjectModal from './EditProjectModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
 import NovelWritingPage from './writing/NovelWritingPage';
-import { BookOpen, Sparkles, Check } from './Icon';
+import { BookOpen, Sparkles, Check, ArrowPath } from './Icon';
 import { createProject, fetchProjects, deleteProject, updateProject } from '../services/supabaseService';
 
 interface NovelManagementProps {
@@ -32,63 +32,94 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long', isActi
     const [isProcessing, setIsProcessing] = useState(false); // For create/update loading
     const [successMessage, setSuccessMessage] = useState('');
 
+    // Pagination
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+
     const pageTitle = mode === 'long' ? '长篇小说' : '短篇小说';
     const description = mode === 'long' ? '在这里开始、管理和发展你的长篇故事。' : '快速捕捉灵感，创作精彩的短篇故事。';
     const createButtonLabel = mode === 'long' ? '新建长篇小说' : '新建短篇故事';
 
+    const fetchAndMapProjects = async (pageNum: number) => {
+        const data = await fetchProjects(pageNum);
+        if (data) {
+            const targetType = mode === 'long' ? 'novel' : 'short_story';
+            // Filter by type
+            const filtered = data.filter((p: any) => p.type === targetType);
+            
+            const mappedNovels: Novel[] = filtered.map((p: any) => {
+                let parsedSettings: any = {};
+                try {
+                    const raw = p.description || '{}';
+                    if (raw.trim().startsWith('{')) {
+                        parsedSettings = JSON.parse(raw);
+                    } else {
+                        parsedSettings = { synopsis: raw };
+                    }
+                } catch (e) {
+                    parsedSettings = { synopsis: p.description || '' };
+                }
+
+                return {
+                    id: p.id,
+                    title: p.title,
+                    coverImage: null,
+                    wordCount: p.word_count || 0,
+                    creationDate: p.created_at || new Date().toISOString(),
+                    settings: { 
+                        typeElements: parsedSettings.typeElements || '', 
+                        theme: parsedSettings.theme || '', 
+                        targetAudience: parsedSettings.targetAudience || '', 
+                        synopsis: parsedSettings.synopsis || '', 
+                        worldview: parsedSettings.worldview || '', 
+                        characterSettings: parsedSettings.characterSettings || '',
+                        specificTerms: parsedSettings.specificTerms || ''
+                    },
+                    chapters: []
+                };
+            });
+            return mappedNovels;
+        }
+        return [];
+    };
+
     // Fetch projects on mount or mode change or when active
     useEffect(() => {
         if (!isActive) return;
+        setPage(1);
+        setHasMore(true);
         const loadProjects = async () => {
             try {
-                const data = await fetchProjects();
-                if (data) {
-                    const targetType = mode === 'long' ? 'novel' : 'short_story';
-                    // Filter by type
-                    const filtered = data.filter((p: any) => p.type === targetType);
-                    
-                    const mappedNovels: Novel[] = filtered.map((p: any) => {
-                        // Correctly parse settings from description
-                        let parsedSettings: any = {};
-                        try {
-                            // Try parsing description as JSON settings object
-                            const raw = p.description || '{}';
-                            if (raw.trim().startsWith('{')) {
-                                parsedSettings = JSON.parse(raw);
-                            } else {
-                                // If not JSON, treat entire string as synopsis (legacy support)
-                                parsedSettings = { synopsis: raw };
-                            }
-                        } catch (e) {
-                            parsedSettings = { synopsis: p.description || '' };
-                        }
-
-                        return {
-                            id: p.id,
-                            title: p.title,
-                            coverImage: null, // Fixed cover handled by UI
-                            wordCount: p.word_count || 0, // Use real-time word count from DB
-                            creationDate: p.created_at || new Date().toISOString(),
-                            settings: { 
-                                typeElements: parsedSettings.typeElements || '', 
-                                theme: parsedSettings.theme || '', 
-                                targetAudience: parsedSettings.targetAudience || '', 
-                                synopsis: parsedSettings.synopsis || '', 
-                                worldview: parsedSettings.worldview || '', 
-                                characterSettings: parsedSettings.characterSettings || '',
-                                specificTerms: parsedSettings.specificTerms || ''
-                            },
-                            chapters: [] // Chapters are not fetched in list view
-                        };
-                    });
-                    setNovels(mappedNovels);
-                }
+                const mappedNovels = await fetchAndMapProjects(1);
+                setNovels(mappedNovels);
+                if (mappedNovels.length < 20) setHasMore(false); // Approximation if less than limit, likely no more
             } catch (error) {
                 console.error("Failed to load projects", error);
             }
         };
         loadProjects();
-    }, [mode, editingNovel, isActive]); // Reload when closing editor or becoming active
+    }, [mode, editingNovel, isActive]);
+
+    const handleLoadMore = async () => {
+        if (!hasMore || isLoadingMore) return;
+        setIsLoadingMore(true);
+        const nextPage = page + 1;
+        try {
+            const mappedNovels = await fetchAndMapProjects(nextPage);
+            if (mappedNovels.length > 0) {
+                setNovels(prev => [...prev, ...mappedNovels]);
+                setPage(nextPage);
+                if (mappedNovels.length < 20) setHasMore(false);
+            } else {
+                setHasMore(false);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsLoadingMore(false);
+        }
+    };
 
     const handleCreateNovel = async (title: string) => {
         setIsProcessing(true);
@@ -232,21 +263,34 @@ const NovelManagement: React.FC<NovelManagementProps> = ({ mode = 'long', isActi
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 overflow-y-auto pr-2 -mr-2">
                 {novels.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fade-in pb-10">
-                        {novels.map(novel => (
-                           <ProjectCard 
-                                key={novel.id} 
-                                project={novel} 
-                                onDelete={handleOpenDeleteModal}
-                                onEdit={handleOpenEditModal}
-                                onSelect={() => handleSelectNovel(novel)}
-                            />
-                        ))}
-                    </div>
+                    <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fade-in pb-10">
+                            {novels.map(novel => (
+                            <ProjectCard 
+                                    key={novel.id} 
+                                    project={novel} 
+                                    onDelete={handleOpenDeleteModal}
+                                    onEdit={handleOpenEditModal}
+                                    onSelect={() => handleSelectNovel(novel)}
+                                />
+                            ))}
+                        </div>
+                        {hasMore && (
+                            <div className="py-4 text-center">
+                                <button 
+                                    onClick={handleLoadMore} 
+                                    disabled={isLoadingMore}
+                                    className="px-6 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+                                >
+                                    {isLoadingMore ? <ArrowPath className="w-4 h-4 animate-spin" /> : '加载更多'}
+                                </button>
+                            </div>
+                        )}
+                    </>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center animate-fade-in">
+                    <div className="flex-1 flex items-center justify-center animate-fade-in h-full">
                         <div className="text-center max-w-md p-10 bg-white dark:bg-gray-900 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 flex flex-col items-center">
                             <div className="w-24 h-24 bg-sky-50 dark:bg-sky-900/20 rounded-full flex items-center justify-center mb-6">
                                 {mode === 'long' ? (

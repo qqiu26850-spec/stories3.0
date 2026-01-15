@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Asset, Prompt } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -148,8 +147,11 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                 }
             } else promptContent = customInput;
             
-            if (activeTab === 'idea') finalPrompt = `请根据以下信息，生成3个剧本创意方案。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
-            else finalPrompt = `请写一段影视剧本正文。包含场景标题、场景描述、动作、对白。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
+            // Clean output instruction
+            const cleanInstruction = "IMPORTANT: Output ONLY the script/idea content. Do NOT include any filler text.";
+
+            if (activeTab === 'idea') finalPrompt = `${cleanInstruction}\n请根据以下信息，生成3个剧本创意方案。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
+            else finalPrompt = `${cleanInstruction}\n请写一段影视剧本正文。包含场景标题、场景描述、动作、对白。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
             
             if (activeTab === 'idea') {
                 const result = await generateText(finalPrompt, { 
@@ -191,7 +193,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
         setError('');
         
         const tail = generatedText.slice(-3000); 
-        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
+        const continuePrompt = `IMPORTANT: Output ONLY the continued script content.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}`;
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -275,7 +277,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                         </div>
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">写作风格</label>
-                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-pink-50 border-pink-300 text-pink-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
+                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2 rounded-lg border text-left transition-all relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-pink-50 border-pink-300 text-pink-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
                                 <div className="flex items-center justify-between text-[11px] font-semibold truncate text-gray-600 dark:text-gray-300">
                                     <span>{selectedPrompt && selectedPrompt.subCategories.includes('style') ? selectedPrompt.title : '选择风格...'}</span>
                                     <ChevronDown className="w-3 h-3 text-sky-400 opacity-50" />
@@ -288,7 +290,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                 <CollapsibleSection title="关联素材" icon={Database} color="sky">
                     <div className="space-y-1">
                         <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">素材选择</label>
-                        <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
+                        <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
                             <div className="flex items-center justify-between text-[11px] font-semibold truncate">
                                 <div className="flex items-center gap-1.5 overflow-hidden">
                                     <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
@@ -300,9 +302,55 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                     </div>
                 </CollapsibleSection>
 
-                {!isGenerating && !generatedText && generatedIdeas.length === 0 && (
+                <div className="space-y-4">
+                    {selectedPrompt ? (
+                        <div className="p-3 bg-white/50 dark:bg-black/20 rounded-xl border border-sky-100 dark:border-sky-800 space-y-3 shadow-sm animate-fade-in">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">模板参数</span>
+                                <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-red-500 font-medium">清空模板</button>
+                            </div>
+                            {selectedPrompt.fields.map((field, index) => (
+                                <div key={field.id} className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                        {index + 1}. {field.label}
+                                        {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
+                                    </label>
+                                    {field.type === 'textarea' ? (
+                                        <textarea 
+                                            rows={2}
+                                            value={formState[field.id] || ''} 
+                                            onChange={e => handleInputChange(field.id, e.target.value)} 
+                                            placeholder={field.placeholder || "请输入..."}
+                                            className="w-full p-2 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none" 
+                                        />
+                                    ) : (
+                                        <input 
+                                            type="text" 
+                                            value={formState[field.id] || ''} 
+                                            onChange={e => handleInputChange(field.id, e.target.value)} 
+                                            placeholder={field.placeholder || "请输入..."}
+                                            className="w-full p-2 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" 
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">自定义要求</label>
+                            <textarea 
+                                value={customInput} 
+                                onChange={(e) => setCustomInput(e.target.value)} 
+                                placeholder={activeTab === 'idea' ? "例如：想一个发生在火星的悬疑故事..." : "例如：写一段主角在废弃工厂发现秘密的戏..."}
+                                className="w-full h-24 p-3 text-xs bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {!isGenerating && !generatedText && (
                     <button onClick={handleGenerate} className="w-full py-3 font-bold rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 bg-sky-600 text-white font-sans mt-2 text-sm">
-                        <Sparkles className="w-4 h-4" /> 生成内容
+                         <Sparkles className="w-4 h-4" /> 生成内容
                     </button>
                 )}
 
@@ -322,46 +370,47 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                             </div>
                         )}
 
-                        {(generatedText || generatedIdeas.length > 0) && (
+                        {activeTab === 'idea' && generatedIdeas.length > 0 && !isGenerating && (
+                            <div className="space-y-3">
+                                {generatedIdeas.map((idea, idx) => (
+                                    <div key={idx} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:border-sky-300 transition-colors group">
+                                        <h4 className="text-xs font-bold text-sky-600 dark:text-sky-400 mb-2">方案 {idx + 1}</h4>
+                                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-3 whitespace-pre-wrap">{idea}</p>
+                                        <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => navigator.clipboard.writeText(idea)} className="p-1.5 text-gray-400 hover:text-sky-600 transition-colors" title="复制"><Copy className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                    </div>
+                                ))}
+                                <button onClick={handleGenerate} className="w-full py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-xs">
+                                    <ArrowPath className="w-3.5 h-3.5" /> 换一批
+                                </button>
+                            </div>
+                        )}
+
+                        {activeTab === 'script' && generatedText && (
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center font-sans">
                                     <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果</h4>
                                     <div className="flex gap-2 font-sans">
-                                        <button onClick={() => {
-                                            const text = activeTab === 'idea' ? generatedIdeas.join('\n\n') : generatedText;
-                                            navigator.clipboard.writeText(text);
-                                        }} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
-                                        <button onClick={() => {
-                                            setGeneratedText('');
-                                            setGeneratedIdeas([]);
-                                        }} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>
+                                        <button onClick={() => navigator.clipboard.writeText(generatedText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-white rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
+                                        <button onClick={() => setGeneratedText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-white rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>
                                     </div>
                                 </div>
-                                
-                                <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">
-                                    {activeTab === 'idea' ? generatedIdeas.map((idea, i) => (
-                                        <div key={i} className="mb-4 last:mb-0 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-700">
-                                            <span className="font-bold text-sky-600 block mb-1">方案 {i+1}</span>
-                                            {idea}
-                                        </div>
-                                    )) : generatedText}
-                                </div>
+                                <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-mono">{generatedText}</div>
                                 
                                 <div className="flex gap-2">
                                     <button 
-                                        onClick={() => onInsert(activeTab === 'idea' ? generatedIdeas.join('\n\n') : generatedText)} 
+                                        onClick={() => onInsert(generatedText)} 
                                         className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
                                     >
                                         <Plus className="w-3 h-3" /> 插入剧本
                                     </button>
                                     {!isGenerating && (
                                         <div className="flex gap-2">
-                                            {activeTab === 'script' && (
-                                                <button onClick={handleContinue} className="px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-xs flex items-center gap-1" title="续写更多内容">
-                                                    <Play className="w-3 h-3" /> 继续生成
-                                                </button>
-                                            )}
-                                            <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-xs flex items-center gap-1">
+                                            <button onClick={handleContinue} className="px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-xs flex items-center gap-1" title="续写更多内容">
+                                                <Play className="w-3 h-3" /> 继续生成
+                                            </button>
+                                            <button onClick={handleGenerate} className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-lg hover:bg-gray-200 transition-colors text-sm font-sans flex items-center gap-1">
                                                 <ArrowPath className="w-3 h-3" /> 重试
                                             </button>
                                         </div>
@@ -372,7 +421,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                     </div>
                 )}
 
-                {error && <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/50 font-sans mt-2">{error}</div>}
+                {error && <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-900/50 font-sans">{error}</div>}
             </div>
         </div>
     );

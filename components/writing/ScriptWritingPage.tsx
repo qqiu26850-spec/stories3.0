@@ -7,6 +7,8 @@ import ScriptAIPanel from './ScriptAIPanel';
 import ScriptAdaptationPanel from './ScriptAdaptationPanel';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, deleteChapterFromDB, updateChapterOrder } from '../../services/supabaseService';
+import { createPortal } from 'react-dom';
+import FollowUpModal from '../FollowUpModal';
 
 interface ScriptWritingPageProps {
     script: Script;
@@ -14,6 +16,33 @@ interface ScriptWritingPageProps {
 }
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
+
+// Custom Context Menu for Script Page
+const ScriptContextMenu: React.FC<{
+    x: number;
+    y: number;
+    visible: boolean;
+    onClose: () => void;
+    onAction: (action: 'ask') => void;
+}> = ({ x, y, visible, onClose, onAction }) => {
+    if (!visible) return null;
+
+    return createPortal(
+        <div 
+            className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 py-1 min-w-[120px] animate-fade-in"
+            style={{ top: y, left: x }}
+            onMouseLeave={onClose}
+        >
+            <button
+                onClick={() => { onAction('ask'); onClose(); }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-sky-50 dark:hover:bg-sky-900/30 hover:text-sky-600 transition-colors flex items-center gap-2"
+            >
+                <span>💬</span> 智能追问
+            </button>
+        </div>,
+        document.body
+    );
+};
 
 const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialScript, onBack }) => {
     const [script, setScript] = useState<Script>(initialScript);
@@ -35,6 +64,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
+
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string }>({ x: 0, y: 0, visible: false, text: '' });
+    const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; initialMode: 'selection' | 'full' } | null>(null);
 
     useEffect(() => {
         const loadInitialScenes = async () => {
@@ -238,6 +270,40 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         handleContentInput();
     };
 
+    const handleReplaceText = (text: string) => {
+        if (!editorRef.current) return;
+        editorRef.current.focus();
+        document.execCommand('insertText', false, text);
+        handleContentInput();
+    };
+
+    const handleContextMenu = (e: React.MouseEvent) => {
+        const selection = window.getSelection();
+        const text = selection?.toString().trim();
+
+        if (text && text.length > 0) {
+            e.preventDefault();
+            setContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+                visible: true,
+                text: text
+            });
+        }
+    };
+
+    const handleApplyFollowUp = (text: string, type: 'insert' | 'replace') => {
+        if (type === 'replace') handleReplaceText(text);
+        else handleInsertText(text);
+        setActiveFollowUp(null);
+    };
+
+    useEffect(() => {
+        const closeMenu = () => setContextMenu(prev => ({ ...prev, visible: false }));
+        document.addEventListener('click', closeMenu);
+        return () => document.removeEventListener('click', closeMenu);
+    }, []);
+
     // Save title when changed
     useEffect(() => {
         if (!activeScene) return;
@@ -255,6 +321,25 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     <span className="text-sm font-bold">剧本复制成功</span>
                 </div>
             )}
+
+            <FollowUpModal 
+                isOpen={!!activeFollowUp} 
+                onClose={() => setActiveFollowUp(null)} 
+                targetText={activeFollowUp?.target || ''}
+                context={editorRef.current?.innerText || ''}
+                initialMode={'selection'}
+                onApply={handleApplyFollowUp}
+            />
+
+            <ScriptContextMenu 
+                {...contextMenu} 
+                onClose={() => setContextMenu(prev => ({ ...prev, visible: false }))} 
+                onAction={() => setActiveFollowUp({
+                    target: contextMenu.text,
+                    context: editorRef.current?.innerText || '',
+                    initialMode: 'selection'
+                })}
+            />
 
             <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm h-16">
                 <div className="w-64 flex-shrink-0 flex items-center gap-2 px-4 border-r border-gray-200 dark:border-gray-800">
@@ -351,6 +436,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         contentEditable 
                                         onInput={handleContentInput}
                                         onPaste={handlePaste}
+                                        onContextMenu={handleContextMenu}
                                         suppressContentEditableWarning={true}
                                         spellCheck={false}
                                         autoCorrect="off"
