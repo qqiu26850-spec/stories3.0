@@ -7,7 +7,7 @@ import ChapterManager from './ChapterManager';
 import AIFunctionPanel from './AIFunctionPanel';
 import ShortStoryAIPanel from './ShortStoryAIPanel';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
-import { saveChapterToDB, updateProject, fetchChapters, deleteChapterFromDB, updateChapterOrder } from '../../services/supabaseService';
+import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, deleteChapterFromDB, updateChapterOrder } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
 
@@ -89,6 +89,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
     const [isLoadingChapters, setIsLoadingChapters] = useState(true);
+    const [isContentLoading, setIsContentLoading] = useState(false);
 
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string }>({ x: 0, y: 0, visible: false, text: '' });
     const [aiTrigger, setAiTrigger] = useState<{ type: 'expand' | 'continue' | 'polish' | 'review', text: string } | null>(null);
@@ -99,14 +100,16 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     useEffect(() => {
         const loadInitialChapters = async () => {
              setIsLoadingChapters(true);
+             // Use lightweight fetch - only metadata
              const data = await fetchChapters(novel.id);
              if (data) {
-                const mapped = data.map((c: any) => ({
+                const mapped: Chapter[] = data.map((c: any) => ({
                     id: c.id,
                     title: c.title,
-                    content: c.content,
-                    wordCount: c.content?.length || 0,
-                    lastModified: c.updated_at
+                    content: '', // Content is lazy loaded
+                    wordCount: 0, // Word count updates after content load
+                    lastModified: c.updated_at,
+                    isContentLoaded: false
                 }));
                 setNovel(prev => ({ ...prev, chapters: mapped }));
                 
@@ -125,15 +128,37 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         loadInitialChapters();
     }, [novel.id, mode]);
 
-    // Handle Chapter Switching
+    // Handle Lazy Loading of Chapter Content
     useEffect(() => {
-        if (activeChapter) {
+        const loadContent = async () => {
+            if (activeChapter && !activeChapter.isContentLoaded) {
+                setIsContentLoading(true);
+                // Clear editor UI immediately to indicate transition/loading
+                if (editorRef.current) editorRef.current.innerHTML = '';
+                
+                const content = await fetchChapterContent(activeChapter.id);
+                
+                // Update local state with loaded content
+                setNovel(prev => ({
+                    ...prev,
+                    chapters: prev.chapters.map(c => c.id === activeChapter.id ? { ...c, content, isContentLoaded: true, wordCount: content.length } : c)
+                }));
+                
+                setActiveChapter(prev => prev ? { ...prev, content, isContentLoaded: true, wordCount: content.length } : null);
+                setIsContentLoading(false);
+            }
+        };
+        loadContent();
+    }, [activeChapter?.id]);
+
+    // Handle Chapter Content Rendering
+    useEffect(() => {
+        if (activeChapter && activeChapter.isContentLoaded) {
             setChapterTitle(activeChapter.title);
             const content = activeChapter.content || '';
             
             if (editorRef.current) {
                 const html = content.includes('<p>') ? content : content.split('\n').map(p => `<p>${p || '<br>'}</p>`).join('');
-                // Direct DOM manipulation only when switching chapter context
                 if (editorRef.current.innerHTML !== html) {
                     editorRef.current.innerHTML = html;
                 }
@@ -144,7 +169,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             setSaveStatus('saved');
             setCurrentSelection('');
         }
-    }, [activeChapter?.id]); 
+    }, [activeChapter?.id, activeChapter?.isContentLoaded]); 
 
     const handleSaveToCloud = async (currentContent: string) => {
         if (activeChapter) {
@@ -154,11 +179,11 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             if (newId) {
                 setNovel(prev => ({
                     ...prev,
-                    chapters: prev.chapters.map(c => c.id === activeChapter.id ? { ...c, content: currentContent, id: newId } : c)
+                    chapters: prev.chapters.map(c => c.id === activeChapter.id ? { ...c, content: currentContent, id: newId, isContentLoaded: true } : c)
                 }));
                 
                 if (activeChapter.id !== newId) {
-                    setActiveChapter(prev => prev ? { ...prev, id: newId } : null);
+                    setActiveChapter(prev => prev ? { ...prev, id: newId, isContentLoaded: true } : null);
                 }
                 setSaveStatus('saved');
             } else {
@@ -191,7 +216,8 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 title: newTitle,
                 content: '',
                 wordCount: 0,
-                lastModified: new Date().toISOString()
+                lastModified: new Date().toISOString(),
+                isContentLoaded: true
             };
             setNovel(prev => ({
                 ...prev,
@@ -311,12 +337,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         requestAnimationFrame(() => {
             if (editorRef.current) {
                 editorRef.current.focus();
-                
-                // If text is very large, consider chunking or direct HTML manipulation if execCommand is slow,
-                // but execCommand is usually safest for undo history.
                 document.execCommand('insertText', false, text);
-                
-                // Trigger save logic (debounced)
                 handleContentInput();
             }
         });
@@ -539,21 +560,27 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                         </>
                                     )}
                                     
-                                    <div 
-                                        ref={editorRef}
-                                        contentEditable 
-                                        onInput={handleContentInput}
-                                        onKeyUp={updateSelection} 
-                                        onMouseUp={updateSelection} 
-                                        onPaste={handlePaste}
-                                        onContextMenu={handleContextMenu}
-                                        suppressContentEditableWarning={true}
-                                        spellCheck={false}
-                                        autoCorrect="off"
-                                        autoCapitalize="off"
-                                        className="w-full bg-transparent focus:outline-none leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[75vh] outline-none pb-32"
-                                        style={{ textAlign: alignment, fontSize: `${fontSize}px` }}
-                                    ></div>
+                                    {isContentLoading ? (
+                                        <div className="w-full h-96 flex items-center justify-center">
+                                            <div className="w-8 h-8 border-2 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div>
+                                        </div>
+                                    ) : (
+                                        <div 
+                                            ref={editorRef}
+                                            contentEditable 
+                                            onInput={handleContentInput}
+                                            onKeyUp={updateSelection} 
+                                            onMouseUp={updateSelection} 
+                                            onPaste={handlePaste}
+                                            onContextMenu={handleContextMenu}
+                                            suppressContentEditableWarning={true}
+                                            spellCheck={false}
+                                            autoCorrect="off"
+                                            autoCapitalize="off"
+                                            className="w-full bg-transparent focus:outline-none leading-relaxed text-gray-800 dark:text-gray-200 font-serif min-h-[75vh] outline-none pb-32"
+                                            style={{ textAlign: alignment, fontSize: `${fontSize}px` }}
+                                        ></div>
+                                    )}
                                 </div>
 
                                 <div className="absolute bottom-6 right-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-4 py-1.5 rounded-full text-xs text-gray-400 font-mono border border-gray-100 dark:border-gray-800 shadow-sm z-20">

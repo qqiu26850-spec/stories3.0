@@ -164,7 +164,8 @@ export async function fetchUserLibrary() {
     try {
         const userId = await getCurrentUserId();
         if (!userId) return { prompts: [], materials: [] };
-        const { data: prompts } = await withRetry(async () => await supabase.from('prompts').select('*').eq('user_id', userId).order('created_at', { ascending: false }));
+        // Limit fields for speed
+        const { data: prompts } = await withRetry(async () => await supabase.from('prompts').select('id, title, description, content, main_category, sub_category, usage_count, created_at, user_id').eq('user_id', userId).order('created_at', { ascending: false }));
         const { data: materials } = await withRetry(async () => await supabase.from('materials').select('*').eq('user_id', userId).order('created_at', { ascending: false }));
         return { prompts: (prompts as any[]) || [], materials: (materials as any[]) || [] };
     } catch (e) {
@@ -198,7 +199,7 @@ export async function updateProject(projectId: string, updates: { title?: string
     }
 }
 
-// Updated fetchProjects with pagination support and HTML-stripped word count
+// Optimized fetchProjects: Removed chapter content fetching for significant performance boost
 export async function fetchProjects(page = 1, limit = 20) {
     try {
         const userId = await getCurrentUserId();
@@ -213,18 +214,9 @@ export async function fetchProjects(page = 1, limit = 20) {
             .order('created_at', { ascending: false })
             .range(start, end));
 
-        if (data && data.length > 0) {
-            const projectIds = data.map(p => p.id);
-            const { data: chapters } = await supabase.from('chapters').select('project_id, content').in('project_id', projectIds);
-            const countMap: Record<string, number> = {};
-            chapters?.forEach((c: any) => {
-                // Strip HTML tags for accurate word count of content
-                const text = (c.content || '').replace(/<[^>]*>/g, '').replace(/\s/g, '');
-                countMap[c.project_id] = (countMap[c.project_id] || 0) + text.length;
-            });
-            return data.map(p => ({ ...p, word_count: countMap[p.id] || 0 }));
-        }
-        return error ? [] : data;
+        // Note: Word count is taken directly from project metadata if available or defaults to 0.
+        // We no longer fetch all chapters content to calculate it on the fly to improve performance.
+        return data || [];
     } catch (e) {
         return [];
     }
@@ -236,11 +228,28 @@ export async function deleteProject(id: string) {
     await supabase.from('projects').delete().eq('id', id).eq('user_id', userId);
 }
 
+// Optimized fetchChapters: Exclude content column for fast list loading
 export async function fetchChapters(projectId: string) {
     try {
-        const { data, error } = await supabase.from('chapters').select('*').eq('project_id', projectId).order('order_index', { ascending: true });
+        const { data, error } = await supabase
+            .from('chapters')
+            .select('id, title, order_index, updated_at, project_id') // Exclude content
+            .eq('project_id', projectId)
+            .order('order_index', { ascending: true });
         return error ? [] : data;
     } catch (e) { return []; }
+}
+
+// New: Fetch content for a single chapter on demand
+export async function fetchChapterContent(chapterId: string) {
+    try {
+        const { data, error } = await supabase
+            .from('chapters')
+            .select('content')
+            .eq('id', chapterId)
+            .single();
+        return error ? '' : (data?.content || '');
+    } catch (e) { return ''; }
 }
 
 export async function saveChapterToDB(projectId: string, chapterId: string, title: string, content: string, orderIndex: number) {
@@ -387,7 +396,7 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
     }
 }
 
-// Updated fetchPrompts with flexible options
+// Optimized fetchPrompts: Limit columns for faster loading
 export async function fetchPrompts(options: {
     category?: string;
     userId?: string;
@@ -401,7 +410,9 @@ export async function fetchPrompts(options: {
         const start = (page - 1) * limit;
         const end = start + limit - 1;
 
-        let query = supabase.from('prompts').select('*, profiles(username)').order('usage_count', { ascending: false });
+        let query = supabase.from('prompts')
+            .select('id, title, description, content, main_category, sub_category, usage_count, user_id, profiles(username)')
+            .order('usage_count', { ascending: false });
 
         // Filter by Category
         if (category && category !== 'all' && !ids && !userId) {
@@ -430,7 +441,7 @@ export async function fetchPrompts(options: {
         // Fallback if join fails (e.g. profiles permissions issue)
         if (error) {
             console.warn("fetchPrompts join failed, fallback to simple select", error);
-            let fallbackQuery = supabase.from('prompts').select('*').order('usage_count', { ascending: false });
+            let fallbackQuery = supabase.from('prompts').select('id, title, description, content, main_category, sub_category, usage_count, user_id').order('usage_count', { ascending: false });
             
             if (category && category !== 'all' && !ids && !userId) {
                 const dbCat = mapPromptCategory(category);
@@ -453,7 +464,6 @@ export async function fetchPrompts(options: {
     }
 }
 
-// --- Prompt Favorites (DB Based) ---
 export async function fetchPromptFavorites(): Promise<string[]> {
     const userId = await getCurrentUserId();
     if (!userId) return [];
@@ -475,156 +485,6 @@ export async function togglePromptFavoriteDB(promptId: string, isFavorite: boole
     } catch (e) { console.error("Toggle prompt favorite failed", e); }
 }
 
-export async function incrementPromptHeat(id: string) {
-    try {
-        if (!id || id.startsWith('prompt-')) return;
-        const { data } = await supabase.from('prompts').select('usage_count').eq('id', id).single();
-        if (data) {
-            const newCount = (data.usage_count || 0) + 1;
-            await supabase.from('prompts').update({ usage_count: newCount }).eq('id', id);
-        }
-    } catch (e) {}
-}
-
-export async function deletePrompt(id: string) {
-    const userId = await getCurrentUserId();
-    if (!userId) return;
-    await supabase.from('prompts').delete().eq('id', id).eq('user_id', userId);
-}
-
-export async function saveWorkflow(title: string, description: string, category: string, subCategories: string[], fields: any[], steps: any[]) {
-    try {
-        const userId = await getCurrentUserId();
-        if (!userId) throw new Error("未登录");
-        
-        await ensureUserProfileExists();
-
-        const content = JSON.stringify({ fields, steps });
-        const { error } = await supabase.from('workflows').insert([{ 
-            user_id: userId, title, description, content, main_category: mapPromptCategory(category), sub_categories: subCategories, usage_count: 0 
-        }]);
-        if (error) throw error;
-        return { success: true };
-    } catch (err: any) { return { success: false, error: err }; }
-}
-
-export async function updateWorkflow(id: string, updates: { title?: string, description?: string, category?: string, subCategories?: string[], fields?: any[], steps?: any[] }) {
-    try {
-        const userId = await getCurrentUserId();
-        if (!userId) throw new Error("未登录");
-        
-        const dbUpdates: any = {};
-        if (updates.title) dbUpdates.title = updates.title;
-        if (updates.description) dbUpdates.description = updates.description;
-        if (updates.category) dbUpdates.main_category = mapPromptCategory(updates.category);
-        if (updates.subCategories) dbUpdates.sub_categories = updates.subCategories;
-        
-        if (updates.fields || updates.steps) {
-            dbUpdates.content = JSON.stringify({ 
-                fields: updates.fields || [], 
-                steps: updates.steps || [] 
-            });
-        }
-        
-        if (Object.keys(dbUpdates).length === 0) return { success: true };
-
-        const { error } = await supabase.from('workflows').update(dbUpdates).eq('id', id).eq('user_id', userId);
-        if (error) throw error;
-        return { success: true };
-    } catch (err: any) { return { success: false, error: err }; }
-}
-
-// Updated fetchWorkflows with flexible options and pagination
-export async function fetchWorkflows(options: {
-    category?: string;
-    userId?: string;
-    ids?: string[];
-    page?: number;
-    limit?: number;
-} = {}) {
-    const { category = 'all', userId, ids, page = 1, limit = 20 } = options;
-
-    try {
-        const start = (page - 1) * limit;
-        const end = start + limit - 1;
-
-        let query = supabase.from('workflows').select('*').order('usage_count', { ascending: false });
-
-        // Filter by Category
-        if (category && category !== 'all' && !ids && !userId) {
-            query = query.eq('main_category', mapPromptCategory(category));
-        }
-
-        // Filter by User
-        if (userId) {
-            query = query.eq('user_id', userId);
-        }
-
-        // Filter by IDs (Favorites)
-        if (ids && ids.length > 0) {
-            query = query.in('id', ids);
-        } else if (ids && ids.length === 0) {
-            return [];
-        }
-
-        query = query.range(start, end);
-
-        const { data: workflows, error: wfError } = await withRetry(async () => await query);
-        
-        if (wfError) {
-            console.error("Fetch workflows failed", wfError);
-            return [];
-        }
-        
-        if (!workflows || workflows.length === 0) return [];
-
-        const userIds = Array.from(new Set(workflows.map((w: any) => w.user_id).filter(Boolean)));
-
-        if (userIds.length === 0) return workflows;
-
-        const { data: profiles, error: profError } = await supabase
-            .from('profiles')
-            .select('id, username, avatar_url')
-            .in('id', userIds);
-
-        if (profError) {
-            console.warn("Fetch profiles for workflows failed", profError);
-        }
-
-        const profileMap: Record<string, any> = {};
-        profiles?.forEach((p: any) => {
-            profileMap[p.id] = p;
-        });
-
-        return workflows.map((w: any) => {
-            const profile = profileMap[w.user_id];
-            return {
-                ...w,
-                profiles: profile
-            };
-        });
-
-    } catch (e) {
-        console.error("fetchWorkflows exception", e);
-        return [];
-    }
-}
-
-export async function deleteWorkflow(id: string) {
-    const userId = await getCurrentUserId();
-    if (!userId) return;
-    await supabase.from('workflows').delete().eq('id', id).eq('user_id', userId);
-}
-
-export async function incrementWorkflowUsage(id: string) {
-    try {
-        const { data } = await supabase.from('workflows').select('usage_count').eq('id', id).single();
-        if (data) {
-            await supabase.from('workflows').update({ usage_count: (data.usage_count || 0) + 1 }).eq('id', id);
-        }
-    } catch (e) {}
-}
-
 export async function fetchWorkflowFavorites(): Promise<string[]> {
     const userId = await getCurrentUserId();
     if (!userId) return [];
@@ -644,6 +504,104 @@ export async function toggleWorkflowFavoriteDB(workflowId: string, isFavorite: b
             await supabase.from('workflow_favorites').insert({ user_id: userId, workflow_id: workflowId });
         }
     } catch (e) { console.error("Toggle favorite failed", e); }
+}
+
+export async function saveWorkflow(title: string, description: string, category: string, subCategories: string[], fields: any[], steps: any[]) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        await ensureUserProfileExists();
+        const content = JSON.stringify({ fields, steps });
+        const { error } = await supabase.from('workflows').insert([{ 
+            user_id: userId, title, description, content, main_category: mapPromptCategory(category), sub_categories: subCategories, usage_count: 0 
+        }]);
+        if (error) throw error;
+        return { success: true };
+    } catch (err: any) { return { success: false, error: err }; }
+}
+
+export async function updateWorkflow(id: string, updates: { title?: string, description?: string, category?: string, subCategories?: string[], fields?: any[], steps?: any[] }) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) throw new Error("未登录");
+        const dbUpdates: any = {};
+        if (updates.title) dbUpdates.title = updates.title;
+        if (updates.description) dbUpdates.description = updates.description;
+        if (updates.category) dbUpdates.main_category = mapPromptCategory(updates.category);
+        if (updates.subCategories) dbUpdates.sub_categories = updates.subCategories;
+        if (updates.fields || updates.steps) {
+            dbUpdates.content = JSON.stringify({ fields: updates.fields || [], steps: updates.steps || [] });
+        }
+        if (Object.keys(dbUpdates).length === 0) return { success: true };
+        const { error } = await supabase.from('workflows').update(dbUpdates).eq('id', id).eq('user_id', userId);
+        if (error) throw error;
+        return { success: true };
+    } catch (err: any) { return { success: false, error: err }; }
+}
+
+export async function fetchWorkflows(options: { category?: string; userId?: string; ids?: string[]; page?: number; limit?: number; } = {}) {
+    const { category = 'all', userId, ids, page = 1, limit = 20 } = options;
+    try {
+        const start = (page - 1) * limit;
+        const end = start + limit - 1;
+        let query = supabase.from('workflows').select('*').order('usage_count', { ascending: false });
+        if (category && category !== 'all' && !ids && !userId) {
+            query = query.eq('main_category', mapPromptCategory(category));
+        }
+        if (userId) {
+            query = query.eq('user_id', userId);
+        }
+        if (ids && ids.length > 0) {
+            query = query.in('id', ids);
+        } else if (ids && ids.length === 0) {
+            return [];
+        }
+        query = query.range(start, end);
+        const { data: workflows, error: wfError } = await withRetry(async () => await query);
+        if (wfError) return [];
+        if (!workflows || workflows.length === 0) return [];
+        const userIds = Array.from(new Set(workflows.map((w: any) => w.user_id).filter(Boolean)));
+        if (userIds.length === 0) return workflows;
+        const { data: profiles } = await supabase.from('profiles').select('id, username, avatar_url').in('id', userIds);
+        const profileMap: Record<string, any> = {};
+        profiles?.forEach((p: any) => { profileMap[p.id] = p; });
+        return workflows.map((w: any) => {
+            const profile = profileMap[w.user_id];
+            return { ...w, profiles: profile };
+        });
+    } catch (e) { return []; }
+}
+
+export async function deleteWorkflow(id: string) {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    await supabase.from('workflows').delete().eq('id', id).eq('user_id', userId);
+}
+
+export async function incrementWorkflowUsage(id: string) {
+    try {
+        const { data } = await supabase.from('workflows').select('usage_count').eq('id', id).single();
+        if (data) {
+            await supabase.from('workflows').update({ usage_count: (data.usage_count || 0) + 1 }).eq('id', id);
+        }
+    } catch (e) {}
+}
+
+export async function incrementPromptHeat(id: string) {
+    try {
+        if (!id || id.startsWith('prompt-')) return;
+        const { data } = await supabase.from('prompts').select('usage_count').eq('id', id).single();
+        if (data) {
+            const newCount = (data.usage_count || 0) + 1;
+            await supabase.from('prompts').update({ usage_count: newCount }).eq('id', id);
+        }
+    } catch (e) {}
+}
+
+export async function deletePrompt(id: string) {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    await supabase.from('prompts').delete().eq('id', id).eq('user_id', userId);
 }
 
 export async function uploadCoverImage(file: File) {

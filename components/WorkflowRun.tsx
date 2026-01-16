@@ -204,8 +204,15 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             return;
         }
 
+        // If starting from the beginning, clear all previous results
+        if (startIndex === 0) {
+            setStepResults({});
+            setExecutionStatus('running'); // Reset status immediately to show active UI
+            setError('');
+        }
+
         setIsLoading(true);
-        setExecutionStatus('running');
+        if (startIndex > 0) setExecutionStatus('running');
         setError('');
         
         const currentContext: Record<string, string> = { ...formState, ...stepResults };
@@ -288,6 +295,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         if (idx < nextStepIndex || executionStatus === 'completed') return 'bg-emerald-500 text-white';
         return 'bg-gray-100 dark:bg-gray-800 text-gray-400';
     };
+
+    const hasResults = Object.keys(stepResults).length > 0;
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black/20 font-sans relative">
@@ -472,7 +481,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                             文本生成
                             {isLoading && <span className="text-[10px] font-normal text-sky-500 animate-pulse ml-2 flex items-center gap-1"><ArrowPath className="w-3 h-3 animate-spin" /> AI 正在创作...</span>}
                         </h3>
-                        {Object.keys(stepResults).length > 0 && (
+                        {hasResults && (
                             <button 
                                 type="button"
                                 onClick={() => { 
@@ -489,56 +498,64 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                      </div>
 
                      <div className="flex-1 overflow-y-auto p-4 relative custom-scrollbar space-y-6">
-                        {workflow.steps?.map((step, idx) => {
-                            const result = stepResults[step.outputVariable];
-                            if (!result && currentStepIndex !== idx) return null;
-                            const isFinished = !!result;
+                        {!hasResults && !isLoading && executionStatus === 'idle' ? (
+                            <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
+                                <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                                    <Sparkles className="w-10 h-10 text-gray-300 dark:text-gray-600" />
+                                </div>
+                                <p className="text-sm font-medium">请配置左侧参数并点击运行</p>
+                                <p className="text-xs mt-1 text-gray-300 dark:text-gray-600">AI 将按照设定的步骤为您生成内容</p>
+                            </div>
+                        ) : (
+                            workflow.steps?.map((step, idx) => {
+                                const result = stepResults[step.outputVariable];
+                                if (!result && currentStepIndex !== idx) return null;
+                                const isFinished = !!result;
 
-                            return (
-                                <div key={step.id} className="animate-fade-in space-y-2">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-px w-8 bg-gray-200 dark:bg-gray-800" />
-                                            {/* Changed title to Blue */}
-                                            <span className="text-xs font-black text-sky-600 dark:text-sky-400 uppercase tracking-[0.1em]">{step.name}</span>
-                                            {isFinished && (
-                                                <span className="text-[10px] text-green-500 bg-green-50 dark:bg-green-900/30 px-1.5 py-0.5 rounded font-bold ml-2 border border-green-100 dark:border-green-900">
-                                                    输出完成
-                                                </span>
-                                            )}
-                                            <div className="h-px w-8 bg-gray-200 dark:bg-gray-800" />
-                                        </div>
-                                        
-                                        {/* Buttons moved to header row */}
-                                        {result && (
-                                            <div className="flex items-center gap-2">
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => handleTriggerFollowUp(result, step.outputVariable)} 
-                                                    className="flex items-center gap-1 px-3 py-1 text-xs font-bold bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 dark:hover:bg-sky-900/40 rounded-lg transition-colors border border-sky-100 dark:border-sky-800"
-                                                >
-                                                    <ChatBubbleOvalLeftEllipsis className="w-3.5 h-3.5" /> 
-                                                    智能追问
-                                                </button>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const plain = stripMarkdown(result);
-                                                        setImportContent(plain);
-                                                        setImportModalOpen(true);
-                                                    }}
-                                                    className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors border border-transparent hover:border-purple-100"
-                                                >
-                                                    <Database className="w-3.5 h-3.5" /> 存素材
-                                                </button>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => handleOpenSaveModal(result)}
-                                                    className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
-                                                >
-                                                    <DocumentPlus className="w-3.5 h-3.5" /> 存入创作中心
-                                                </button>
-                                                {((executionStatus === 'paused' || executionStatus === 'completed') && nextStepIndex === idx) || executionStatus === 'completed' ? (
+                                return (
+                                    <div key={step.id} className="animate-fade-in space-y-2">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-px w-8 bg-gray-200 dark:bg-gray-800" />
+                                                <span className="text-xs font-black text-sky-600 dark:text-sky-400 uppercase tracking-[0.1em]">{step.name}</span>
+                                                {isFinished && (
+                                                    <span className="text-[10px] text-green-500 bg-green-50 dark:bg-green-900/30 px-1.5 py-0.5 rounded font-bold ml-2 border border-green-100 dark:border-green-900">
+                                                        输出完成
+                                                    </span>
+                                                )}
+                                                <div className="h-px w-8 bg-gray-200 dark:bg-gray-800" />
+                                            </div>
+                                            
+                                            {/* Buttons moved to header row */}
+                                            {result && (
+                                                <div className="flex items-center gap-2">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => handleTriggerFollowUp(result, step.outputVariable)} 
+                                                        className="flex items-center gap-1 px-3 py-1 text-xs font-bold bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 dark:hover:bg-sky-900/40 rounded-lg transition-colors border border-sky-100 dark:border-sky-800"
+                                                    >
+                                                        <ChatBubbleOvalLeftEllipsis className="w-3.5 h-3.5" /> 
+                                                        智能追问
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const plain = stripMarkdown(result);
+                                                            setImportContent(plain);
+                                                            setImportModalOpen(true);
+                                                        }}
+                                                        className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors border border-transparent hover:border-purple-100"
+                                                    >
+                                                        <Database className="w-3.5 h-3.5" /> 存素材
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => handleOpenSaveModal(result)}
+                                                        className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
+                                                    >
+                                                        <DocumentPlus className="w-3.5 h-3.5" /> 存入创作中心
+                                                    </button>
+                                                    {/* Allow Retry for specific steps */}
                                                     <button 
                                                         type="button"
                                                         onClick={() => handleRegenerateStep(idx)} 
@@ -547,38 +564,38 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                     >
                                                         <ArrowPath className="w-3.5 h-3.5" /> 重试
                                                     </button>
-                                                ) : null}
-                                            </div>
-                                        )}
-                                    </div>
-                                    
-                                    <div 
-                                        className="bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm overflow-hidden"
-                                    >
-                                        <div 
-                                            ref={(el) => { resultRefs.current[step.outputVariable] = el; }}
-                                            className="w-full min-h-[300px] p-6 text-sm leading-7 text-gray-800 dark:text-gray-200 font-sans outline-none"
-                                            onMouseUp={() => handleTriggerFollowUp(result, step.outputVariable)} // Allow selection trigger
-                                        >
-                                            {result ? (
-                                                <FormattedText text={result} />
-                                            ) : (currentStepIndex === idx ? (
-                                                <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                                                    <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                                                    <p className="text-sm font-medium animate-pulse">内容生成中...</p>
                                                 </div>
-                                            ) : "")}
+                                            )}
                                         </div>
                                         
-                                        {result && (
-                                            <div className="absolute bottom-4 right-4 text-[10px] text-gray-300 font-mono pointer-events-none bg-white/80 dark:bg-black/50 px-2 py-1 rounded backdrop-blur-sm">
-                                                {stripMarkdown(result).length} 字
+                                        <div 
+                                            className="bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-gray-800 relative group shadow-sm overflow-hidden"
+                                        >
+                                            <div 
+                                                ref={(el) => { resultRefs.current[step.outputVariable] = el; }}
+                                                className="w-full min-h-[300px] p-6 text-sm leading-7 text-gray-800 dark:text-gray-200 font-sans outline-none"
+                                                onMouseUp={() => handleTriggerFollowUp(result, step.outputVariable)} // Allow selection trigger
+                                            >
+                                                {result ? (
+                                                    <FormattedText text={result} />
+                                                ) : (currentStepIndex === idx ? (
+                                                    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                                                        <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                                                        <p className="text-sm font-medium animate-pulse">内容生成中...</p>
+                                                    </div>
+                                                ) : "")}
                                             </div>
-                                        )}
+                                            
+                                            {result && (
+                                                <div className="absolute bottom-4 right-4 text-[10px] text-gray-300 font-mono pointer-events-none bg-white/80 dark:bg-black/50 px-2 py-1 rounded backdrop-blur-sm">
+                                                    {stripMarkdown(result).length} 字
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })
+                        )}
                      </div>
                 </div>
             </div>

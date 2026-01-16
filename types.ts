@@ -131,6 +131,7 @@ export interface Chapter {
   content: string;
   wordCount: number;
   lastModified: string;
+  isContentLoaded?: boolean; // New field for lazy loading state
 }
 
 export interface NovelSettings {
@@ -157,6 +158,7 @@ export interface Scene {
     id: string;
     title: string;
     content: string;
+    isContentLoaded?: boolean; // New field for lazy loading state
 }
 
 export interface Script {

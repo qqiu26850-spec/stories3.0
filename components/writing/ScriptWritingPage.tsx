@@ -6,7 +6,7 @@ import ScriptEpisodeManager from './ScriptEpisodeManager';
 import ScriptAIPanel from './ScriptAIPanel';
 import ScriptAdaptationPanel from './ScriptAdaptationPanel';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
-import { saveChapterToDB, updateProject, fetchChapters, deleteChapterFromDB, updateChapterOrder } from '../../services/supabaseService';
+import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, deleteChapterFromDB, updateChapterOrder } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
 
@@ -64,18 +64,21 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
+    const [isContentLoading, setIsContentLoading] = useState(false);
 
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string }>({ x: 0, y: 0, visible: false, text: '' });
     const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; initialMode: 'selection' | 'full' } | null>(null);
 
     useEffect(() => {
         const loadInitialScenes = async () => {
+             // Use lightweight fetch
              const data = await fetchChapters(script.id);
              if (data) {
-                const mapped = data.map((c: any) => ({
+                const mapped: Scene[] = data.map((c: any) => ({
                     id: c.id,
                     title: c.title,
-                    content: c.content
+                    content: '', // Start empty
+                    isContentLoaded: false
                 }));
                 setScript(prev => ({ ...prev, scenes: mapped }));
                 if (mapped.length > 0 && !activeScene) {
@@ -86,9 +89,31 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         loadInitialScenes();
     }, [script.id]);
 
+    // Handle Lazy Loading of Scene Content
+    useEffect(() => {
+        const loadContent = async () => {
+            if (activeScene && !activeScene.isContentLoaded) {
+                setIsContentLoading(true);
+                // Clear editor
+                if (editorRef.current) editorRef.current.innerHTML = '';
+
+                const content = await fetchChapterContent(activeScene.id);
+                
+                setScript(prev => ({
+                    ...prev,
+                    scenes: prev.scenes.map(s => s.id === activeScene.id ? { ...s, content, isContentLoaded: true } : s)
+                }));
+                
+                setActiveScene(prev => prev ? { ...prev, content, isContentLoaded: true } : null);
+                setIsContentLoading(false);
+            }
+        };
+        loadContent();
+    }, [activeScene?.id]);
+
     // Optimize Scene Switching - Direct DOM update
     useEffect(() => {
-        if (activeScene) {
+        if (activeScene && activeScene.isContentLoaded) {
             setSceneTitle(activeScene.title);
             const content = activeScene.content || '';
             
@@ -101,7 +126,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             setWordCount(count);
             setSaveStatus('saved');
         }
-    }, [activeScene?.id]);
+    }, [activeScene?.id, activeScene?.isContentLoaded]);
 
     const handleSaveToCloud = async (currentContent: string) => {
         if (activeScene) {
@@ -110,7 +135,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
             if (newId) {
                 // Update local state without re-rendering editor
-                const updatedScene = { ...activeScene, id: newId, title: sceneTitle, content: currentContent };
+                const updatedScene = { ...activeScene, id: newId, title: sceneTitle, content: currentContent, isContentLoaded: true };
                 setScript(prev => ({
                     ...prev,
                     scenes: prev.scenes.map(s => s.id === activeScene.id ? updatedScene : s)
@@ -118,7 +143,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 
                 // Silent update of ID if new
                 if (activeScene.id !== newId) {
-                    setActiveScene(prev => prev ? { ...prev, id: newId } : null);
+                    setActiveScene(prev => prev ? { ...prev, id: newId, isContentLoaded: true } : null);
                 }
                 
                 setSaveStatus('saved');
@@ -138,7 +163,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             const newScene: Scene = {
                 id: newId,
                 title: newTitle,
-                content: ''
+                content: '',
+                isContentLoaded: true
             };
             setScript(prev => ({
                 ...prev,
@@ -431,19 +457,25 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                     />
                                     <div className="border-b border-gray-100 dark:border-gray-800 mb-6" />
                                     
-                                    <div 
-                                        ref={editorRef}
-                                        contentEditable 
-                                        onInput={handleContentInput}
-                                        onPaste={handlePaste}
-                                        onContextMenu={handleContextMenu}
-                                        suppressContentEditableWarning={true}
-                                        spellCheck={false}
-                                        autoCorrect="off"
-                                        autoCapitalize="off"
-                                        className="w-full bg-transparent focus:outline-none leading-relaxed text-gray-800 dark:text-gray-200 font-mono min-h-[75vh] outline-none pb-32"
-                                        style={{ textAlign: alignment, fontSize: `${fontSize}px` }}
-                                    ></div>
+                                    {isContentLoading ? (
+                                        <div className="w-full h-96 flex items-center justify-center">
+                                            <div className="w-8 h-8 border-2 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div>
+                                        </div>
+                                    ) : (
+                                        <div 
+                                            ref={editorRef}
+                                            contentEditable 
+                                            onInput={handleContentInput}
+                                            onPaste={handlePaste}
+                                            onContextMenu={handleContextMenu}
+                                            suppressContentEditableWarning={true}
+                                            spellCheck={false}
+                                            autoCorrect="off"
+                                            autoCapitalize="off"
+                                            className="w-full bg-transparent focus:outline-none leading-relaxed text-gray-800 dark:text-gray-200 font-mono min-h-[75vh] outline-none pb-32"
+                                            style={{ textAlign: alignment, fontSize: `${fontSize}px` }}
+                                        ></div>
+                                    )}
                                 </div>
 
                                 <div className="absolute bottom-6 right-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-4 py-1.5 rounded-full text-xs text-gray-400 font-mono border border-gray-100 dark:border-gray-800 shadow-sm z-20">
