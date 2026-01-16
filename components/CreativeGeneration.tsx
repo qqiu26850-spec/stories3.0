@@ -123,6 +123,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     
     const abortControllerRef = useRef<AbortController | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const isUserScrollingRef = useRef(false);
 
     // Refresh assets when modal opens to ensure custom assets are available
     useEffect(() => {
@@ -150,10 +151,19 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const selectedAssetNames = useMemo(() => Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)?.name).filter(Boolean).join(', '), [selectedAssetIds, assets]);
 
     useEffect(() => {
-        if (isGenerating && scrollContainerRef.current) {
+        if (isGenerating && !isUserScrollingRef.current && scrollContainerRef.current) {
             scrollContainerRef.current.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: 'auto' });
         }
     }, [generatedText, isGenerating]);
+
+    const handleScroll = () => {
+        if (scrollContainerRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+            // 允许 50px 的误差，如果距离底部超过 50px，则认为用户正在向上查看历史记录
+            const isAtBottom = scrollHeight - scrollTop - clientHeight <= 50;
+            isUserScrollingRef.current = !isAtBottom;
+        }
+    };
 
     const handleStop = () => {
         if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -171,6 +181,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         setSuccessMessage('');
         setIsGenerating(false);
         setIsWaitingForFirstChunk(false);
+        isUserScrollingRef.current = false;
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
@@ -191,6 +202,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         if (isGenerating) { handleStop(); return; }
         setIsGenerating(true);
         setIsWaitingForFirstChunk(true);
+        isUserScrollingRef.current = false; // Reset to allow auto-scroll
         setGeneratedText('');
         let basePrompt = selectedPrompt ? selectedPrompt.template : freeInput;
         if (selectedPrompt) {
@@ -230,6 +242,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const handleContinue = async () => {
         if (isGenerating) return;
         setIsGenerating(true);
+        isUserScrollingRef.current = false; // Reset to allow auto-scroll
         
         // Take the last portion of text to serve as context
         const tail = generatedText.slice(-3000); 
@@ -450,7 +463,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         <button onClick={() => setImportModalOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors font-sans"><Database className="w-4 h-4" /> 导入素材库</button>
                                     </div>
                                 </div>
-                                <div className="flex-1 overflow-y-auto px-10 py-8 relative font-sans scroll-smooth" ref={scrollContainerRef}>
+                                <div className="flex-1 overflow-y-auto px-10 py-8 relative font-sans scroll-smooth" ref={scrollContainerRef} onScroll={handleScroll}>
                                     {isWaitingForFirstChunk && (
                                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm z-10 animate-fade-in font-sans">
                                             <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
