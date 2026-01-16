@@ -27,19 +27,12 @@ const ContextMenu: React.FC<{
     visible: boolean;
     mode: 'long' | 'short';
     onClose: () => void;
-    onAction: (action: 'expand' | 'continue' | 'polish' | 'review' | 'ask') => void;
+    onAction: (action: 'ask') => void;
 }> = ({ x, y, visible, mode, onClose, onAction }) => {
     if (!visible) return null;
 
+    // Only "Ask" is retained as requested
     const options = [
-        ...(mode === 'long' 
-            ? [
-                { id: 'continue', label: '续写', icon: '📝' },
-                { id: 'expand', label: '扩写', icon: '✨' },
-              ] 
-            : []),
-        { id: 'polish', label: '润色', icon: '🎨' },
-        ...(mode === 'short' ? [{ id: 'review', label: '评审', icon: '🧐' }] : []),
         { id: 'ask', label: '智能追问', icon: '💬' }
     ];
 
@@ -393,16 +386,13 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }
     };
 
-    const handleAIAction = (type: 'expand' | 'continue' | 'polish' | 'review' | 'ask') => {
+    const handleAIAction = (type: 'ask') => {
         if (type === 'ask') {
             setActiveFollowUp({
                 target: contextMenu.text,
-                context: debouncedContextText,
+                context: debouncedContextText, // Pass full chapter text as context
                 initialMode: 'selection'
             });
-        } else {
-            setAiTrigger({ type, text: contextMenu.text });
-            if (!isRightSidebarOpen) setRightSidebarOpen(true);
         }
     };
 

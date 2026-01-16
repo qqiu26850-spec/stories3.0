@@ -73,8 +73,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete, onEdit, on
                 >
                     {project.title}
                 </h3>
-                <div className="text-xs text-gray-500 dark:text-gray-400 flex justify-between items-center mb-4">
-                    <span>字数: {project.wordCount.toLocaleString()}</span>
+                <div className="text-xs text-gray-500 dark:text-gray-400 flex justify-end items-center mb-4">
                     <span>{new Date(project.creationDate).toLocaleDateString()}</span>
                 </div>
                 

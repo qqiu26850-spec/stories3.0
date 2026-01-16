@@ -60,6 +60,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [isProjectSettingsAssociated, setProjectSettingsAssociated] = useState(false);
     const [associatedChapterIds, setAssociatedChapterIds] = useState<Set<string>>(new Set());
     const [isChapterSelectorOpen, setIsChapterSelectorOpen] = useState(false);
+    
+    // Key fix: Use this state to track if we should include full text (current chapter context)
+    const [isFullTextAssociated, setIsFullTextAssociated] = useState(false);
 
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
@@ -78,6 +81,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [error, setError] = useState('');
     const [strategyIndex, setStrategyIndex] = useState(0);
     const [toastMsg, setToastMsg] = useState('');
+    const [lastGeneratedTab, setLastGeneratedTab] = useState<TabType | null>(null);
     
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -202,59 +206,75 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         setIsGenerating(true);
         setResultText('');
         setError('');
+        setLastGeneratedTab(activeTab);
         const controller = new AbortController();
         abortControllerRef.current = controller;
         try {
+            // 1. Asset Context
             const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考素材：${a!.name}】\n${a!.content}`).join('\n\n');
             
+            // 2. Settings Context
             let settingsContext = '';
             if (isProjectSettingsAssociated && projectSettings) {
-                settingsContext = `【作品背景设定】\n题材：${projectSettings.typeElements}\n主题：${projectSettings.theme}\n世界观：${projectSettings.worldview}\n人物基础设定：${projectSettings.characterSettings}\n梗概：${projectSettings.synopsis}\n特定词条：${projectSettings.specificTerms}`;
+                settingsContext = `【作品背景设定】\n题材：${projectSettings.typeElements}\n主题：${projectSettings.theme}\n世界观：${projectSettings.worldview}\n人物基础设定：${projectSettings.characterSettings}\n梗概：${projectSettings.synopsis}\n特定词条：${projectSettings.specificTerms}\n\n`;
             }
 
-            // Chapter Context Construction
+            // 3. Chapter/Full Text Context
             let chapterContext = '';
+            // Associated chapters
             if (associatedChapterIds.size > 0 && chapters.length > 0) {
                 const selectedChaptersContent = chapters
                     .filter(c => associatedChapterIds.has(c.id))
-                    .map(c => `【${c.title}】\n${c.content}`)
+                    .map(c => `【参考章节：${c.title}】\n${c.content}`)
                     .join('\n\n');
                 if (selectedChaptersContent) {
-                    chapterContext = `【相关章节背景】\n${selectedChaptersContent}\n`;
+                    chapterContext += `${selectedChaptersContent}\n\n`;
                 }
             }
+            // "Associate Full Text" usually means the CURRENT chapter context (passed via contextText prop)
+            if (isFullTextAssociated && contextText) {
+                chapterContext += `【当前正文背景】\n${contextText}\n\n`;
+            }
 
-            let finalPrompt = '';
-            
-            // Text processing priority:
+            // 4. Determine Text to Process (Selection or Custom)
             const textToProcess = (activeTab === 'polish' || activeTab === 'review') 
                 ? polishContent 
-                : (selectedText || contextText.slice(-2000));
-            
-            const instruction = activeTab === 'continue' ? '请根据上文续写' : (activeTab === 'polish' ? '请润色以下文本' : (activeTab === 'expand' ? '请扩写以下文本' : '请评审以下文本'));
+                : (selectedText || contextText.slice(-2000)); // Default fallback if no selection for other modes
 
+            let finalPrompt = '';
+
+            // 5. Construct Prompt Logic
             if (selectedPrompt) {
                 incrementPromptHeat(selectedPrompt.id);
-                let template = selectedPrompt.template || selectedPrompt.content;
-                let textInjected = false;
-
+                
+                // Start with the raw template
+                let basePrompt = selectedPrompt.template || selectedPrompt.content;
+                
+                // Replace variables from Form State
                 for (const field of selectedPrompt.fields) {
                     let val = formState[field.id] || '';
+                    
+                    // Smart injection for common context variables if empty
                     if (!val && (field.id === 'context' || field.id === 'text' || field.id === 'content' || field.id === 'selection')) {
                         val = textToProcess;
-                        textInjected = true;
                     }
-                    template = template.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
+                    basePrompt = basePrompt.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
                 }
 
-                if (!textInjected && textToProcess) {
-                    template = `${template}\n\n【需处理内容】：\n${textToProcess}`;
-                }
+                // Construct final prompt combining all contexts
+                // Structure: Contexts -> Assets -> Task (Prompt)
+                finalPrompt = `${settingsContext}${chapterContext}${assetContext ? `【关联素材】\n${assetContext}\n\n---\n\n` : ''}${basePrompt}`;
 
-                finalPrompt = `${settingsContext ? `${settingsContext}\n\n` : ''}${chapterContext ? `${chapterContext}\n\n` : ''}${assetContext ? `关联素材：\n${assetContext}\n\n---\n\n` : ''}${template}`;
             } else {
-                const userReq = customInput ? `\n【用户要求】：${customInput}` : '';
-                finalPrompt = `${instruction}${userReq}。\n${settingsContext ? `${settingsContext}\n\n` : ''}${chapterContext ? `${chapterContext}\n\n` : ''}当前上下文/选中文本：\n${textToProcess}\n\n${assetContext ? `关联素材：\n${assetContext}` : ''}`;
+                // No template selected - Custom Mode
+                const instruction = activeTab === 'continue' ? '请根据上文续写' : (activeTab === 'polish' ? '请润色以下文本' : (activeTab === 'expand' ? '请扩写以下文本' : '请评审以下文本'));
+                const userReq = customInput ? `\n【用户具体要求】：${customInput}` : '';
+                
+                finalPrompt = `${settingsContext}${chapterContext}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}
+${instruction}${userReq}。
+
+【待处理文本/上下文】：
+${textToProcess}`;
             }
 
             // Append force long instruction
@@ -287,7 +307,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         setError('');
         
         const tail = resultText.slice(-3000); 
-        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
+        const continuePrompt = `IMPORTANT: Output ONLY the continued story content. Do NOT include any filler.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -313,15 +333,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         }
     };
 
-    // ... rest of the component
-    // No changes needed for UI rendering or other logic, just prompt injection.
-    
-    // ... (rest of render method)
-    // IMPORTANT: Including the rest of the component rendering to ensure XML validity
-    
     const handleInsertCheck = () => {
-        showToast(activeTab === 'polish' ? '将替换选中的文本...' : '请确保光标定位在您想插入的地方');
-        if (activeTab === 'polish') onReplace(resultText);
+        showToast(lastGeneratedTab === 'polish' ? '将替换选中的文本...' : '请确保光标定位在您想插入的地方');
+        if (lastGeneratedTab === 'polish') onReplace(resultText);
         else onInsert(resultText);
     };
 
@@ -339,6 +353,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         </button>
     );
 
+    // If there is result text or it is generating, show result view in full panel
     if (resultText || isGenerating) {
         return (
             <div className="flex flex-col h-full bg-white dark:bg-gray-900 relative">
@@ -469,7 +484,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                             <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between">
                                                 <span>最大长度 (Tokens): {maxOutputTokens}</span>
                                             </label>
-                                            <input type="range" min="100" max="16384" step="100" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                                             <p className="text-[10px] text-gray-400">限制单次生成的最大文本量。</p>
                                         </div>
                                     </div>
@@ -479,9 +494,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                     )}
                 </div>
 
-                {/* Module 2 & 3 content */}
-                {/* Omitted for brevity as only logic changed in this file was inject prompt and default export */}
-                {/* Re-rendering full component to be safe */}
+                {/* Module 2: Text to Process */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
                     <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
@@ -538,7 +551,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">关联素材与上下文</label>
                             <div className="flex flex-col gap-2">
-                                <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all ${selectedAssetIds.size > 0 ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
+                                <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 overflow-hidden">
                                             <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
@@ -551,7 +564,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                 <div className="grid grid-cols-2 gap-2">
                                     <button 
                                         onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} 
-                                        className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                                        className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
                                     >
                                         <div className="flex items-center gap-2">
                                             <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-sky-600' : 'text-gray-400'}`} />
@@ -563,7 +576,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                     <div className="relative">
                                         <button 
                                             onClick={() => setIsChapterSelectorOpen(!isChapterSelectorOpen)}
-                                            className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${associatedChapterIds.size > 0 ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
+                                            className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${associatedChapterIds.size > 0 ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
                                         >
                                             <div className="flex items-center gap-2">
                                                 <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${associatedChapterIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
@@ -576,7 +589,18 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setIsChapterSelectorOpen(false)} />
                                                 <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-2 animate-fade-in max-h-60 overflow-y-auto custom-scrollbar">
-                                                    <div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase">选择参考章节</div>
+                                                    {/* Full text toggle */}
+                                                    <label className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors border-b border-gray-100 dark:border-gray-700 mb-1">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={isFullTextAssociated} 
+                                                            onChange={() => setIsFullTextAssociated(!isFullTextAssociated)}
+                                                            className="rounded border-gray-300 text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
+                                                        />
+                                                        <span className="text-xs font-bold text-sky-600 dark:text-sky-400">当前正文 (全文)</span>
+                                                    </label>
+
+                                                    <div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase">其他章节</div>
                                                     {chapters.length > 0 ? chapters.map(ch => (
                                                         <label key={ch.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors">
                                                             <input 
