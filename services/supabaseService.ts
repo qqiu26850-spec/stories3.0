@@ -26,10 +26,13 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     }
 });
 
-// --- Global Cache Variables ---
-// Removed cache for prompts to support pagination
-let lastFetchTime = 0;
-const CACHE_DURATION = 60000 * 5;
+// --- Global Cache ---
+const promptQueryCache = new Map<string, { data: any[], timestamp: number }>();
+const CACHE_DURATION = 60000 * 5; // 5 minutes cache
+
+function invalidatePromptCache() {
+    promptQueryCache.clear();
+}
 
 export async function getCurrentUserId() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -370,6 +373,8 @@ export async function savePrompt(title: string, content: string, mainCat: string
         }
         const { error } = await supabase.from('prompts').insert([{ user_id: userId, title, content, description, main_category: dbMainCat, sub_category: subCat, usage_count: 0 }]);
         if (error) throw error;
+        
+        invalidatePromptCache(); // Invalidate cache on save
         return { success: true };
     } catch (err: any) {
         return { success: false, error: err };
@@ -390,13 +395,15 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
         }
         const { error } = await supabase.from('prompts').update(dbUpdates).eq('id', id).eq('user_id', userId);
         if (error) throw error;
+        
+        invalidatePromptCache(); // Invalidate cache on update
         return { success: true };
     } catch (err: any) {
         return { success: false, error: err };
     }
 }
 
-// Optimized fetchPrompts: Limit columns for faster loading
+// Optimized fetchPrompts with caching and limited columns
 export async function fetchPrompts(options: {
     category?: string;
     userId?: string;
@@ -405,6 +412,15 @@ export async function fetchPrompts(options: {
     limit?: number;
 } = {}) {
     const { category = 'all', userId, ids, page = 1, limit = 20 } = options;
+    const cacheKey = JSON.stringify({ category, userId, ids, page, limit });
+
+    // Check Cache
+    if (promptQueryCache.has(cacheKey)) {
+        const cached = promptQueryCache.get(cacheKey)!;
+        if (Date.now() - cached.timestamp < CACHE_DURATION) {
+            return cached.data;
+        }
+    }
 
     try {
         const start = (page - 1) * limit;
@@ -458,7 +474,12 @@ export async function fetchPrompts(options: {
         }
 
         if (error) return [];
-        return data || [];
+        
+        const result = data || [];
+        // Set Cache
+        promptQueryCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        
+        return result;
     } catch (e) {
         return [];
     }
@@ -602,6 +623,7 @@ export async function deletePrompt(id: string) {
     const userId = await getCurrentUserId();
     if (!userId) return;
     await supabase.from('prompts').delete().eq('id', id).eq('user_id', userId);
+    invalidatePromptCache(); // Invalidate cache on delete
 }
 
 export async function uploadCoverImage(file: File) {
