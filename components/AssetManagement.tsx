@@ -6,7 +6,6 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import AssetDetailModal from './AssetDetailModal';
 import { Pencil, Trash, Check, Tag, Search, UserCircle, BookOpen, Sparkles, Plus, X, Bars2, AdjustmentsHorizontal, Heart } from './Icon';
 import { saveMaterial, fetchMaterials, deleteMaterial, toggleMaterialFavorite } from '../services/supabaseService';
-import { createPortal } from 'react-dom';
 
 type AssetLibraryView = 'character-library' | 'plot-library' | 'inspiration-library';
 
@@ -18,8 +17,8 @@ interface AssetManagementProps {
 
 const viewConfig: Record<AssetLibraryView, { title: string; assetType: Asset['type']; icon: any; color: string; }> = {
     'character-library': { title: '角色库', assetType: 'character', icon: UserCircle, color: 'sky' },
-    'plot-library': { title: '剧情库', assetType: 'plot', icon: BookOpen, color: 'purple' },
-    'inspiration-library': { title: '灵光库', assetType: 'inspiration', icon: Sparkles, color: 'amber' }
+    'plot-library': { title: '剧情库', assetType: 'plot', icon: BookOpen, color: 'sky' },
+    'inspiration-library': { title: '灵光库', assetType: 'inspiration', icon: Sparkles, color: 'sky' }
 };
 
 const TAG_COLORS = [
@@ -31,21 +30,6 @@ const TAG_COLORS = [
 export const getTagStyle = (tag: string) => {
   let hash = 0; for (let i = 0; i < tag.length; i++) hash = tag.charCodeAt(i) + ((hash << 5) - hash);
   const index = Math.abs(hash) % TAG_COLORS.length; return TAG_COLORS[index];
-};
-
-const SuccessToast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
-    if (!isVisible) return null;
-    return createPortal(
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] animate-fade-in-up">
-            <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md border border-green-200 dark:border-green-900 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
-                <div className="w-6 h-6 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
-                    <Check className="w-4 h-4" />
-                </div>
-                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{message}</span>
-            </div>
-        </div>,
-        document.body
-    );
 };
 
 const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, isActive }) => {
@@ -166,15 +150,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
         await toggleMaterialFavorite(assetId, !currentStatus);
     };
 
-    const getAccentBorderClass = () => {
-        if (assetType === 'character') return 'hover:border-sky-400 hover:ring-2 hover:ring-sky-500/10';
-        if (assetType === 'plot') return 'hover:border-purple-400 hover:ring-2 hover:ring-purple-500/10';
-        return 'hover:border-amber-400 hover:ring-2 hover:ring-amber-500/10';
-    };
-
     return (
         <div className="p-4 sm:p-6 lg:p-8 h-full animate-fade-in flex flex-col font-sans bg-gray-50/50 dark:bg-black/20 overflow-hidden">
-            <SuccessToast message={successMessage} isVisible={showToast} />
             <CreateAssetModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} onSave={handleSaveAsset} assetType={assetType} existingTags={customTags} />
             <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
             <AssetDetailModal isOpen={isDetailModalOpen} onClose={() => setDetailModalOpen(false)} asset={selectedAsset} onSaveSuccess={() => { loadAssets(); triggerToast('内容已更新'); }} />
@@ -187,7 +164,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                     <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{title}</h1>
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-4">
+                    {showToast && (
+                        <span className="text-base font-bold text-sky-600 dark:text-sky-400 animate-fade-in transition-all">
+                            {successMessage}
+                        </span>
+                    )}
                     <div className="relative group">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 group-focus-within:text-sky-500 transition-colors" />
                         <input 
@@ -275,10 +257,10 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                             <div 
                                 key={asset.id} 
                                 onClick={() => handleOpenEdit(asset)} 
-                                className={`group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col h-[260px] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 ${getAccentBorderClass()}`}
+                                className="group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 transition-all duration-300 cursor-pointer flex flex-col h-[260px] overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-sky-500 hover:ring-2 hover:ring-sky-500/20"
                             >
                                 <div className="flex flex-col h-full">
-                                    {/* 顶部标题栏 - Updated to Light Blue */}
+                                    {/* 顶部标题栏 */}
                                     <div className="px-5 py-3 bg-sky-50 dark:bg-sky-900/20 flex justify-between items-start">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors pr-6" title={asset.name}>
                                             {asset.name.length > 15 ? asset.name.substring(0, 15) + '...' : asset.name}
@@ -312,7 +294,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                                             {asset.tags.length > 3 && <span className="text-[10px] text-gray-400 shrink-0 font-normal">...</span>}
                                         </div>
 
-                                        <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex gap-1 shrink-0">
                                             <button 
                                                 onClick={e => { e.stopPropagation(); handleOpenEdit(asset); }} 
                                                 className="p-1.5 text-gray-400 hover:text-sky-500 hover:bg-sky-100 dark:hover:bg-sky-900/40 rounded-lg transition-all" 
