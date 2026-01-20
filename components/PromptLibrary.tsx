@@ -60,6 +60,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     
     const observerTarget = useRef(null);
+    const loadingRef = useRef(false); // Ref to track loading state for safer concurrent checks
 
     // Initialize Favorites & User ID
     useEffect(() => {
@@ -129,6 +130,9 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
 
     // Load data when activeTab changes or view becomes active
     const loadData = useCallback(async (reset = true) => {
+        if (loadingRef.current) return;
+        
+        loadingRef.current = true;
         if (reset) {
             setIsLoading(true);
             setPage(1);
@@ -149,8 +153,14 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             
             if (reset) {
                 setPrompts(mappedPrompts);
+                setPage(1);
             } else {
-                setPrompts(prev => [...prev, ...mappedPrompts]);
+                setPrompts(prev => {
+                    // Filter duplicates based on ID
+                    const existingIds = new Set(prev.map(p => p.id));
+                    const newPrompts = mappedPrompts.filter(p => !existingIds.has(p.id));
+                    return [...prev, ...newPrompts];
+                });
                 setPage(targetPage);
             }
 
@@ -160,6 +170,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         } finally { 
             setIsLoading(false); 
             setIsLoadingMore(false);
+            loadingRef.current = false;
         }
     }, [activeTab, page, favoritedIds, searchTerm]);
 

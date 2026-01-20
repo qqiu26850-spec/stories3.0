@@ -450,9 +450,10 @@ export async function fetchPrompts(options: {
             return [];
         }
 
-        // Fuzzy Search
+        // Fuzzy Search (Title, Description, Content, Category)
+        // Note: 'content' usually stores the JSON which includes authorName and tags
         if (search) {
-            query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+            query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,content.ilike.%${search}%,sub_category.ilike.%${search}%`);
         }
 
         // Apply Pagination
@@ -474,12 +475,12 @@ export async function fetchPrompts(options: {
             else if (ids && ids.length === 0) return [];
             
             if (search) {
-                fallbackQuery = fallbackQuery.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+                fallbackQuery = fallbackQuery.or(`title.ilike.%${search}%,description.ilike.%${search}%,content.ilike.%${search}%,sub_category.ilike.%${search}%`);
             }
 
             fallbackQuery = fallbackQuery.range(start, end);
             const res = await fallbackQuery;
-            data = res.data;
+            data = res.data as any; // Cast to any to handle missing profiles property type mismatch
             error = res.error;
         }
 
@@ -588,9 +589,12 @@ export async function fetchWorkflows(options: { category?: string; userId?: stri
             return [];
         }
         
-        // Fuzzy Search
+        // Fuzzy Search (Title, Description, Content)
+        // Content contains fields/steps definitions which usually contain keywords.
+        // We do not deeply search joined profile names here due to PostgREST limitations with simple ORs,
+        // but title/desc covers most cases.
         if (search) {
-            query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+            query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,content.ilike.%${search}%`);
         }
 
         query = query.range(start, end);

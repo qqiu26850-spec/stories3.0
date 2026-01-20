@@ -102,7 +102,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
     }, [customTags, assetType]);
 
     const filteredAssets = useMemo(() => assets.filter(a => {
-        const matchesSearch = !searchTerm || a.name.toLowerCase().includes(searchTerm.toLowerCase()) || a.content.toLowerCase().includes(searchTerm.toLowerCase());
+        const term = searchTerm.toLowerCase();
+        const matchesSearch = !searchTerm || 
+            a.name.toLowerCase().includes(term) || 
+            a.content.toLowerCase().includes(term) ||
+            a.tags.some(t => t.toLowerCase().includes(term));
+            
         const matchesTag = selectedTag === 'all' || a.tags.includes(selectedTag);
         return matchesSearch && matchesTag;
     }), [assets, searchTerm, selectedTag]);

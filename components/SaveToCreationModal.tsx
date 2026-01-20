@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, Copy, Film, Check, X, Search, Plus, ArrowPath } from './Icon';
-import { createProject, fetchProjects, saveChapterToDB, fetchChapters } from '../services/supabaseService';
+import { createProject, fetchProjects, saveChapterToDB, fetchChapters, fetchChapterContent } from '../services/supabaseService';
 
 interface SaveToCreationModalProps {
     isOpen: boolean;
@@ -77,7 +77,10 @@ const SaveToCreationModal: React.FC<SaveToCreationModalProps> = ({ isOpen, onClo
                 
                 if (chapters && chapters.length > 0) {
                     const mainChapter = chapters[0];
-                    const newContent = (mainChapter.content ? mainChapter.content + '\n\n' : '') + content;
+                    // Fetch existing content separately because fetchChapters excludes it
+                    const existingContent = await fetchChapterContent(mainChapter.id);
+                    
+                    const newContent = (existingContent ? existingContent + '\n\n' : '') + content;
                     
                     // Update existing chapter
                     await saveChapterToDB(projectId, mainChapter.id, mainChapter.title, newContent, mainChapter.order_index);
