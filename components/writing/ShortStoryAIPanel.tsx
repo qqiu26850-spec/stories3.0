@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Asset, Prompt, Workflow, NovelSettings } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
@@ -387,7 +388,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
             <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
 
             <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans flex-shrink-0">
-                {renderTabButton('original', '原创', Sparkles)}
+                {renderTabButton('original', '创作', Sparkles)}
                 {renderTabButton('imitate', '仿写', DocumentPlus)}
                 {renderTabButton('polish', '润色', Pencil)}
                 {renderTabButton('review', '评审', ClipboardDocumentCheck)}
@@ -455,33 +456,38 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     )}
                 </div>
 
-                {/* Module 2 & 3 content */}
-                <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
-                    <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                        <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>
-                            需修改的正文内容
-                        </span>
+                {/* Module 2: Text to Process (HIDDEN for 'original') */}
+                {activeTab !== 'original' && (
+                    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
+                        <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                            <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>
+                                需修改的正文内容
+                            </span>
+                        </div>
+                        <div className="p-3">
+                            <textarea 
+                                value={polishContent} 
+                                onChange={(e) => setPolishContent(e.target.value)} 
+                                placeholder={activeTab === 'imitate' ? "参考文本风格..." : "请在正文中选择一段文本，内容将自动填充至此..."}
+                                className="w-full h-32 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner"
+                            />
+                            {activeTab !== 'imitate' && polishContent.length === 0 && (
+                                <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1 font-medium">
+                                    <InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本
+                                </p>
+                            )}
+                        </div>
                     </div>
-                    <div className="p-3">
-                        <textarea 
-                            value={polishContent} 
-                            onChange={(e) => setPolishContent(e.target.value)} 
-                            placeholder={activeTab === 'imitate' ? "参考文本风格..." : "请在正文中选择一段文本，内容将自动填充至此..."}
-                            className="w-full h-32 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner"
-                        />
-                        {activeTab !== 'imitate' && polishContent.length === 0 && (
-                            <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1 font-medium">
-                                <InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本
-                            </p>
-                        )}
-                    </div>
-                </div>
+                )}
 
+                {/* Module 3: Prompt Selection */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
                     <div className="p-3 border-b border-gray-100 dark:border-gray-800">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">3</span>
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">
+                                {activeTab === 'original' ? '2' : '3'}
+                            </span>
                             提示词选择 & 关联素材
                         </span>
                     </div>
@@ -605,7 +611,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 <textarea 
                                     value={promptInput} 
                                     onChange={(e) => setPromptInput(e.target.value)} 
-                                    placeholder="请输入具体的创作要求..."
+                                    placeholder={activeTab === 'original' ? "例如：想一个发生在火星的悬疑故事..." : "例如：写一段主角在废弃工厂发现秘密的戏..."}
                                     className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner"
                                 />
                             </div>
