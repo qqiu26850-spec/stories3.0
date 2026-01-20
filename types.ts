@@ -66,6 +66,7 @@ export interface Prompt {
   creator: 'system' | 'user';
   userId?: string;
   authorName?: string;
+  createdAt?: string;
 }
 
 export interface WorkflowField {
@@ -99,6 +100,7 @@ export interface Workflow {
   fields?: WorkflowField[];
   steps?: WorkflowStep[];
   template?: string; // 旧版兼容
+  createdAt?: string;
 }
 
 export type AssetFormData = {

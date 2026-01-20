@@ -410,9 +410,10 @@ export async function fetchPrompts(options: {
     ids?: string[];
     page?: number;
     limit?: number;
+    search?: string;
 } = {}) {
-    const { category = 'all', userId, ids, page = 1, limit = 20 } = options;
-    const cacheKey = JSON.stringify({ category, userId, ids, page, limit });
+    const { category = 'all', userId, ids, page = 1, limit = 20, search } = options;
+    const cacheKey = JSON.stringify({ category, userId, ids, page, limit, search });
 
     // Check Cache
     if (promptQueryCache.has(cacheKey)) {
@@ -427,7 +428,7 @@ export async function fetchPrompts(options: {
         const end = start + limit - 1;
 
         let query = supabase.from('prompts')
-            .select('id, title, description, content, main_category, sub_category, usage_count, user_id, profiles(username)')
+            .select('id, title, description, content, main_category, sub_category, usage_count, user_id, created_at, profiles(username)')
             .order('usage_count', { ascending: false });
 
         // Filter by Category
@@ -449,6 +450,11 @@ export async function fetchPrompts(options: {
             return [];
         }
 
+        // Fuzzy Search
+        if (search) {
+            query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+        }
+
         // Apply Pagination
         query = query.range(start, end);
 
@@ -457,7 +463,7 @@ export async function fetchPrompts(options: {
         // Fallback if join fails (e.g. profiles permissions issue)
         if (error) {
             console.warn("fetchPrompts join failed, fallback to simple select", error);
-            let fallbackQuery = supabase.from('prompts').select('id, title, description, content, main_category, sub_category, usage_count, user_id').order('usage_count', { ascending: false });
+            let fallbackQuery = supabase.from('prompts').select('id, title, description, content, main_category, sub_category, usage_count, user_id, created_at').order('usage_count', { ascending: false });
             
             if (category && category !== 'all' && !ids && !userId) {
                 const dbCat = mapPromptCategory(category);
@@ -466,6 +472,10 @@ export async function fetchPrompts(options: {
             if (userId) fallbackQuery = fallbackQuery.eq('user_id', userId);
             if (ids && ids.length > 0) fallbackQuery = fallbackQuery.in('id', ids);
             else if (ids && ids.length === 0) return [];
+            
+            if (search) {
+                fallbackQuery = fallbackQuery.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+            }
 
             fallbackQuery = fallbackQuery.range(start, end);
             const res = await fallbackQuery;
@@ -560,8 +570,8 @@ export async function updateWorkflow(id: string, updates: { title?: string, desc
     } catch (err: any) { return { success: false, error: err }; }
 }
 
-export async function fetchWorkflows(options: { category?: string; userId?: string; ids?: string[]; page?: number; limit?: number; } = {}) {
-    const { category = 'all', userId, ids, page = 1, limit = 20 } = options;
+export async function fetchWorkflows(options: { category?: string; userId?: string; ids?: string[]; page?: number; limit?: number; search?: string; } = {}) {
+    const { category = 'all', userId, ids, page = 1, limit = 20, search } = options;
     try {
         const start = (page - 1) * limit;
         const end = start + limit - 1;
@@ -577,6 +587,12 @@ export async function fetchWorkflows(options: { category?: string; userId?: stri
         } else if (ids && ids.length === 0) {
             return [];
         }
+        
+        // Fuzzy Search
+        if (search) {
+            query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+        }
+
         query = query.range(start, end);
         const { data: workflows, error: wfError } = await withRetry(async () => await query);
         if (wfError) return [];

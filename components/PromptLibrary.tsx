@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Prompt, PromptCategory, PromptSubCategory } from '../types';
 import PromptCard from './PromptCard';
 import CreatePromptModal from './CreatePromptModal';
@@ -58,6 +58,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    
+    const observerTarget = useRef(null);
 
     // Initialize Favorites & User ID
     useEffect(() => {
@@ -73,8 +75,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     }, []);
 
     // Data Fetching Logic
-    const fetchAndMapPrompts = async (pageNum: number, currentTab: string) => {
-        const options: any = { page: pageNum, limit: 20 };
+    const fetchAndMapPrompts = async (pageNum: number, currentTab: string, search: string) => {
+        const options: any = { page: pageNum, limit: 20, search };
 
         if (currentTab === 'my-prompts') {
             const uid = await getCurrentUserId();
@@ -116,7 +118,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                     heat: p.usage_count || 0,
                     creator: p.user_id === userId ? 'user' : 'system',
                     userId: p.user_id,
-                    authorName: p.profiles?.username || parsedContent.authorName || '匿名用户'
+                    authorName: p.profiles?.username || parsedContent.authorName || '匿名用户',
+                    createdAt: p.created_at
                 };
             });
             return mappedPrompts;
@@ -142,7 +145,7 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                  const favs = await fetchPromptFavorites();
                  setFavoritedIds(new Set(favs));
             }
-            const mappedPrompts = await fetchAndMapPrompts(targetPage, activeTab);
+            const mappedPrompts = await fetchAndMapPrompts(targetPage, activeTab, searchTerm);
             
             if (reset) {
                 setPrompts(mappedPrompts);
@@ -158,19 +161,48 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             setIsLoading(false); 
             setIsLoadingMore(false);
         }
-    }, [activeTab, page, favoritedIds]);
+    }, [activeTab, page, favoritedIds, searchTerm]);
 
-    // Trigger load on tab change or activation
+    // Trigger load on search term change (debounced) or tab change
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(() => {
+            if (isActive) {
+                loadData(true);
+            }
+        }, 500);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [searchTerm, isActive, activeTab]);
+
     useEffect(() => {
         if (isActive) {
-            loadData(true);
+            // Initial load is covered by the debounced effect as searchTerm starts empty.
+            // But if we switch back to this tab, we might want to reload.
+            // The dependency array includes isActive so it triggers.
         }
-    }, [isActive, activeTab]);
+    }, [isActive]);
 
-    const handleLoadMore = () => {
-        if (!hasMore || isLoadingMore) return;
-        loadData(false);
-    };
+    // Infinite Scroll Observer
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            entries => {
+                if (entries[0].isIntersecting && hasMore && !isLoading && !isLoadingMore) {
+                    loadData(false);
+                }
+            },
+            { threshold: 0.1 }
+        );
+
+        if (observerTarget.current) {
+            observer.observe(observerTarget.current);
+        }
+
+        return () => {
+            if (observerTarget.current) {
+                observer.unobserve(observerTarget.current);
+            }
+        };
+    }, [hasMore, isLoading, isLoadingMore, loadData]);
 
     const toggleFavorite = async (id: string) => {
         const isFav = favoritedIds.has(id);
@@ -182,9 +214,6 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         });
         // DB Persist
         await togglePromptFavoriteDB(id, isFav);
-        
-        // If in favorites tab, reload after a short delay to update view? 
-        // Or just leave it until manual refresh. Leaving it is better UX for accidental clicks.
     };
 
     const handleSelectPrompt = (prompt: Prompt) => {
@@ -204,22 +233,13 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
         }
     };
 
-    // Client-side filtering for SubCategories and Search Term
+    // Client-side filtering for SubCategories only (server handles search text)
     const filteredPrompts = useMemo(() => {
         return prompts.filter(p => {
             if (activeSubCategory !== 'all' && !p.subCategories.includes(activeSubCategory as PromptSubCategory)) return false;
-            
-            const term = searchTerm.toLowerCase();
-            if (!term) return true;
-
-            if (p.title.toLowerCase().includes(term)) return true;
-            if (p.authorName?.toLowerCase().includes(term)) return true;
-            const tagLabels = p.subCategories.map(sc => SUB_CATEGORY_LABELS[sc] || sc).join(' ').toLowerCase();
-            if (tagLabels.includes(term)) return true;
-
-            return false;
+            return true;
         });
-    }, [activeSubCategory, searchTerm, prompts]);
+    }, [activeSubCategory, prompts]);
 
     const handleOpenDelete = (prompt: Prompt) => {
         setPromptToDelete(prompt);
@@ -332,14 +352,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                             )}
                         </div>
                         {hasMore && (
-                            <div className="py-4 text-center">
-                                <button 
-                                    onClick={handleLoadMore} 
-                                    disabled={isLoadingMore}
-                                    className="px-6 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
-                                >
-                                    {isLoadingMore ? <ArrowPath className="w-4 h-4 animate-spin" /> : '加载更多'}
-                                </button>
+                            <div ref={observerTarget} className="py-4 text-center flex justify-center">
+                                <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
                             </div>
                         )}
                     </>

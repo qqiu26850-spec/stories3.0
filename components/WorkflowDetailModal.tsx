@@ -30,12 +30,17 @@ const WorkflowDetailModal: React.FC<WorkflowDetailModalProps> = ({ isOpen, onClo
 
     if (!isOpen || !workflow) return null;
 
+    const formattedDate = workflow.createdAt ? new Date(workflow.createdAt).toLocaleDateString() : '';
+
     return createPortal(
         <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col relative max-h-[90vh] animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
                 <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-start bg-white dark:bg-gray-900">
                     <div className="flex-1">
-                        <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-3">{workflow.title}</h2>
+                        <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-3 flex items-baseline gap-3">
+                            {workflow.title}
+                            {formattedDate && <span className="text-xs text-gray-400 font-normal">{formattedDate}</span>}
+                        </h2>
                         <div className="flex flex-wrap gap-2 text-xs font-bold">
                             <span className="px-2.5 py-1 rounded-md bg-purple-50 text-purple-600 border border-purple-100 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800">{CATEGORY_LABELS[workflow.category] || '全类型'}</span>
                             {/* Changed Automation Chain badge color from gray to blue */}

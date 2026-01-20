@@ -58,11 +58,8 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
         
         const loadPrompts = async () => {
             setIsLoading(true);
-            // Fetch all for selection modal to allow client-side filtering comfortably 
-            // since this is a modal and we might not need strict pagination here yet, 
-            // or we can implement it. For now, fetch 'all' with a higher limit or standard limit.
-            // Using a higher limit to show more templates.
-            const dbPrompts = await fetchPrompts({ category: 'all', limit: 100 }); 
+            // Fetch with search term
+            const dbPrompts = await fetchPrompts({ category: 'all', limit: 100, search: searchTerm }); 
             
             if (dbPrompts) {
                 const mapped: Prompt[] = dbPrompts.map((p: any) => {
@@ -103,8 +100,14 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
             }
             setIsLoading(false);
         };
-        loadPrompts();
-    }, [isOpen]);
+        
+        // Debounce search
+        const delayDebounceFn = setTimeout(() => {
+            loadPrompts();
+        }, 500);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [isOpen, searchTerm]);
 
     const filteredPrompts = useMemo(() => {
         return allPrompts.filter(prompt => {
@@ -119,17 +122,9 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
             const subCategoryMatch = activeSubCategory === 'all' || 
                 (prompt.subCategories && prompt.subCategories.includes(activeSubCategory as PromptSubCategory));
 
-            // Enhanced Search
-            const term = searchTerm.toLowerCase();
-            const searchMatch = !term || 
-                prompt.title.toLowerCase().includes(term) || 
-                prompt.description.includes(term) ||
-                prompt.authorName?.toLowerCase().includes(term) ||
-                (prompt.subCategories && prompt.subCategories.some(tag => tag.toLowerCase().includes(term)));
-            
-            return subCategoryMatch && searchMatch;
+            return subCategoryMatch;
         });
-    }, [activeTab, activeSubCategory, searchTerm, allPrompts, favoritedIds]);
+    }, [activeTab, activeSubCategory, allPrompts, favoritedIds]);
 
     if (!isOpen) return null;
 

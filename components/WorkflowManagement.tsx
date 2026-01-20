@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Sparkles, Film, UserCircle, Plus, Play, Fire, Heart, Box, Search, BookOpen, Pencil, Trash, InformationCircle, Check, ArrowPath } from './Icon';
 import CreateWorkflow from './CreateWorkflow';
 import WorkflowRun from './WorkflowRun';
@@ -41,6 +41,8 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  
+  const observerTarget = useRef(null);
 
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -49,8 +51,8 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const fetchAndMapWorkflows = async (pageNum: number, currentTab: string) => {
-      const options: any = { page: pageNum, limit: 20 };
+  const fetchAndMapWorkflows = async (pageNum: number, currentTab: string, search: string) => {
+      const options: any = { page: pageNum, limit: 20, search };
 
       if (currentTab === 'my-workflows') {
           const uid = await getCurrentUserId();
@@ -103,7 +105,8 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                     category: mainCat,
                     subCategories: wf.sub_categories || [],
                     fields: content?.fields || [],
-                    steps: content?.steps || []
+                    steps: content?.steps || [],
+                    createdAt: wf.created_at
                 };
             });
             return mapped;
@@ -132,7 +135,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         }
 
         const targetPage = reset ? 1 : page + 1;
-        const mapped = await fetchAndMapWorkflows(targetPage, activeTab);
+        const mapped = await fetchAndMapWorkflows(targetPage, activeTab, searchTerm);
         
         if (reset) {
             setDbWorkflows(mapped);
@@ -150,18 +153,47 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
         setIsLoading(false); 
         setIsLoadingMore(false);
     }
-  }, [activeTab, page]);
+  }, [activeTab, page, searchTerm]);
+
+  // Debounced search handler
+  useEffect(() => {
+      const delayDebounceFn = setTimeout(() => {
+          if (isActive) {
+              loadData(true);
+          }
+      }, 500);
+
+      return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm, isActive, activeTab]);
 
   useEffect(() => { 
       if (isActive) {
-          loadData(true);
+          // Initial load handled by search debounce effect or explicit call if needed
+          // But since search term starts empty, the above effect runs once.
       }
-  }, [isActive, activeTab]);
+  }, [isActive]);
 
-  const handleLoadMore = () => {
-      if (!hasMore || isLoadingMore) return;
-      loadData(false);
-  };
+  // Infinite Scroll Observer
+  useEffect(() => {
+      const observer = new IntersectionObserver(
+          entries => {
+              if (entries[0].isIntersecting && hasMore && !isLoading && !isLoadingMore) {
+                  loadData(false);
+              }
+          },
+          { threshold: 0.1 }
+      );
+
+      if (observerTarget.current) {
+          observer.observe(observerTarget.current);
+      }
+
+      return () => {
+          if (observerTarget.current) {
+              observer.unobserve(observerTarget.current);
+          }
+      };
+  }, [hasMore, isLoading, isLoadingMore, loadData]);
 
   const toggleFavorite = async (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
@@ -176,15 +208,13 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       await toggleWorkflowFavoriteDB(id, isFav);
   };
 
-  // Client-side subcategory filter (for now) and search
+  // Client-side subcategory filter (remains client-side for now as API handles category/search)
   const filteredWorkflows = useMemo(() => {
     return dbWorkflows.filter(w => {
       if (activeSubCategory !== 'all' && !w.subCategories?.includes(activeSubCategory)) return false;
-      
-      const term = searchTerm.toLowerCase();
-      return !term || w.title.toLowerCase().includes(term) || w.description.toLowerCase().includes(term);
+      return true;
     });
-  }, [activeSubCategory, searchTerm, dbWorkflows]);
+  }, [activeSubCategory, dbWorkflows]);
 
   const handleEdit = (e: React.MouseEvent, wf: Workflow) => {
     e.stopPropagation();
@@ -307,7 +337,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
         <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-hide">
             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0 uppercase tracking-wider">题材分类:</span>
-            <button onClick={() => setActiveSubCategory('all')} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}>全部</button>
+            <button onClick={() => setActiveSubCategory('all')} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>全部</button>
             {GENRE_TAGS.map(cat => (
                 <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
                     {cat.label}
@@ -324,7 +354,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
               </div>
           ) : (
               <>
-                {/* Changed to 3 columns max as requested */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredWorkflows.map(wf => (
                         <div 
@@ -333,8 +362,8 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                             className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-[220px]"
                         >
                             <div className="flex justify-between items-start mb-3">
-                                <div className="flex gap-2 mb-1">
-                                    <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-bold border border-blue-100">{CATEGORY_LABELS[wf.category] || '全类型'}</span>
+                                <div className="flex gap-2 mb-1 opacity-0">
+                                    {/* Placeholder for layout consistency if needed, but tags moved to bottom */}
                                 </div>
                                 <button 
                                     onClick={(e) => toggleFavorite(e, wf.id)}
@@ -344,18 +373,24 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                                 </button>
                             </div>
                             
-                            <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-2 line-clamp-1 group-hover:text-blue-600 transition-colors">{wf.title}</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed flex-grow">
-                                {wf.description || '暂无描述'}
-                            </p>
+                            <div className="-mt-8">
+                                <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-2 line-clamp-1 group-hover:text-blue-600 transition-colors">{wf.title}</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed flex-grow">
+                                    {wf.description || '暂无描述'}
+                                </p>
+                            </div>
                             
-                            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-                                <div className="flex items-center gap-3 text-xs text-gray-400">
-                                    <div className="flex items-center gap-1"><Fire className="w-3.5 h-3.5 text-orange-400" /> {wf.usageCount}</div>
-                                    <div className="flex items-center gap-1"><UserCircle className="w-3.5 h-3.5" /> {wf.author}</div>
+                            <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-100 dark:border-gray-800">
+                                {/* Left Side: Tags and Info */}
+                                <div className="flex items-center gap-2 overflow-hidden mr-2">
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold border border-blue-100 flex-shrink-0">{CATEGORY_LABELS[wf.category] || '全类型'}</span>
+                                    <div className="flex items-center gap-2 text-xs text-gray-400 flex-shrink-0">
+                                        <div className="flex items-center gap-0.5"><Fire className="w-3 h-3 text-orange-400" /> {wf.usageCount}</div>
+                                        <div className="flex items-center gap-0.5"><UserCircle className="w-3 h-3" /> {wf.author}</div>
+                                    </div>
                                 </div>
                                 
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1 flex-shrink-0">
                                     {wf.userId === currentUserId && (
                                         <>
                                             <button onClick={(e) => handleEdit(e, wf)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
@@ -380,15 +415,11 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                         </div>
                     )}
                 </div>
+                
+                {/* Infinite Scroll Sentinel */}
                 {hasMore && (
-                    <div className="py-6 text-center">
-                        <button 
-                            onClick={handleLoadMore} 
-                            disabled={isLoadingMore}
-                            className="px-6 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 rounded-full text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 mx-auto disabled:opacity-50 shadow-sm"
-                        >
-                            {isLoadingMore ? <ArrowPath className="w-3.5 h-3.5 animate-spin" /> : '加载更多'}
-                        </button>
+                    <div ref={observerTarget} className="py-6 text-center flex justify-center">
+                        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                     </div>
                 )}
               </>
