@@ -125,6 +125,16 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const isUserScrollingRef = useRef(false);
 
+    // 判断文本是否被截断（非自然结尾）
+    const isLikelyTruncated = useMemo(() => {
+        if (!generatedText) return false;
+        const trimmed = generatedText.trim();
+        // 常见的句子/段落结束符。如果结尾不是这些符号，很可能是被截断了。
+        // 包括：句号、叹号、问号、省略号、右引号、右括号、破折号等
+        const endingPunctuation = /[.!?;:。”！？…—~】]$/;
+        return !endingPunctuation.test(trimmed);
+    }, [generatedText]);
+
     // Refresh assets when modal opens to ensure custom assets are available
     useEffect(() => {
         if (assetModalOpen) {
@@ -245,8 +255,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         isUserScrollingRef.current = false; // Reset to allow auto-scroll
         
         // Take the last portion of text to serve as context
-        const tail = generatedText.slice(-3000); 
-        const continuePrompt = `请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
+        const tail = generatedText.slice(-2000); 
+        // 强化指令：要求格式和内容必须承接
+        const continuePrompt = `请紧接着上文中断的地方继续生成，保持格式、风格和逻辑的完美连贯，不要重复上文结尾，直接输出后续内容。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
 
         const controller = new AbortController(); 
         abortControllerRef.current = controller;
@@ -471,15 +482,24 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                         </div>
                                     )}
                                     <FormattedText text={generatedText} />
-                                    {/* Continue Button */}
+                                    {/* Smart Continue/Regenerate Button */}
                                     {!isGenerating && generatedText && (
                                         <div className="mt-8 mb-4 flex justify-center animate-fade-in">
-                                            <button 
-                                                onClick={handleContinue}
-                                                className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-full shadow-lg hover:shadow-sky-500/30 flex items-center gap-2 transition-all active:scale-95 text-sm"
-                                            >
-                                                <Play className="w-4 h-4" /> 继续生成
-                                            </button>
+                                            {isLikelyTruncated ? (
+                                                <button 
+                                                    onClick={handleContinue}
+                                                    className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-full shadow-lg hover:shadow-sky-500/30 flex items-center gap-2 transition-all active:scale-95 text-sm"
+                                                >
+                                                    <Play className="w-4 h-4" /> 继续生成 (内容截断)
+                                                </button>
+                                            ) : (
+                                                <button 
+                                                    onClick={handleGenerate}
+                                                    className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold rounded-full shadow-sm hover:shadow-md flex items-center gap-2 transition-all active:scale-95 text-sm"
+                                                >
+                                                    <ArrowPath className="w-4 h-4" /> 重新生成
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
