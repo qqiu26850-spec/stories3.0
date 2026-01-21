@@ -163,6 +163,23 @@ export interface Scene {
     isContentLoaded?: boolean; // New field for lazy loading state
 }
 
+// Updated Script Interfaces
+export interface ScriptSettings {
+    format: 'live_action' | 'animation';
+    totalEpisodes: string;
+    durationPerEpisode: string;
+    scenesPerEpisodeLimit: string;
+    outputLanguage: 'zh' | 'en';
+    model: string;
+}
+
+export interface ScriptPlanning {
+    synopsis: string;
+    characterSettings: string;
+    worldview: string;
+    outline: string;
+}
+
 export interface Script {
   id: string;
   title: string;
@@ -171,6 +188,10 @@ export interface Script {
   type: 'original' | 'adaptation';
   creationDate: string;
   scenes: Scene[];
+  scriptData?: {
+      settings: ScriptSettings;
+      planning: ScriptPlanning;
+  };
 }
 
 export type Project = Novel | Script;

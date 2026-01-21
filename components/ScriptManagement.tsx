@@ -49,7 +49,8 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
                 wordCount: p.word_count || 0,
                 type: p.description?.includes('Adaptation') ? 'adaptation' : 'original', 
                 creationDate: p.created_at || new Date().toISOString(),
-                scenes: []
+                scenes: [],
+                scriptData: p.script_data || undefined // Map the new column
             }));
             return mappedScripts;
         }
