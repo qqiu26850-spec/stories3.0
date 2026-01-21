@@ -2,7 +2,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Script, Scene, ScriptSettings, ScriptPlanning, Prompt, Asset } from '../../types';
 import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, UserCircle, Globe, ListBullet, Database, Play, Pencil, Box, X, Copy, Stop, ChevronDown, ChevronUp } from '../Icon';
-import ScriptEpisodeManager from './ScriptEpisodeManager';
 import WritingToolbar from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, deleteChapterFromDB, updateChapterOrder, fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
@@ -21,6 +20,42 @@ interface ScriptWritingPageProps {
 type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 // Updated Phases
 type ScriptPhase = 'setup' | 'outline' | 'content'; 
+
+// --- Component: Sidebar Section (Moved OUTSIDE to prevent re-render flickering) ---
+const SidebarSection: React.FC<{ 
+    title: string; 
+    number: string; 
+    icon: any; 
+    children: React.ReactNode;
+    defaultOpen?: boolean;
+}> = ({ title, number, icon: Icon, children, defaultOpen = true }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+    return (
+        <div className="border-b border-blue-50 dark:border-gray-800 last:border-0 bg-white dark:bg-gray-900 mb-2 rounded-xl border border-transparent shadow-sm overflow-hidden">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-blue-50/50 dark:hover:bg-gray-800 transition-colors"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold border border-blue-200 dark:border-blue-800">
+                        {number}
+                    </div>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <Icon className="w-4 h-4 text-blue-500" />
+                        {title}
+                    </span>
+                </div>
+                {isOpen ? <ChevronUp className="w-3 h-3 text-gray-400"/> : <ChevronDown className="w-3 h-3 text-gray-400"/>}
+            </button>
+            
+            {isOpen && (
+                <div className="px-4 pb-4 animate-fade-in">
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+};
 
 // --- Helper: Reading Mode Renderer (Non-Markdown) ---
 const FormattedText: React.FC<{ text: string; className?: string }> = ({ text, className = "" }) => {
@@ -100,6 +135,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [isContentLoading, setIsContentLoading] = useState(false);
+    const [isEpisodeSelectorOpen, setIsEpisodeSelectorOpen] = useState(false); // New state for episode dropdown
 
     const editorRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -126,12 +162,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                if (loadedData && loadedData.settings) {
                    setSettings(loadedData.settings);
                    if (loadedData.planning?.outline) setOutlineContent(loadedData.planning.outline);
-                   
-                   // Initial phase logic: if outline exists but no scenes, stay in outline phase to allow generation
-                   if (mapped.length > 0) {
-                       // Optional: could auto-switch to content
-                   }
                }
+               // 如果已经有大纲，尝试切换到大纲视图，如果有剧本，切换到剧本视图（如果用户未指定）
+               // 这里不做强制切换，以免覆盖用户操作，保留在默认 setup 也可以
             }
             // Load Assets
             const userAssets = await fetchMaterials();
@@ -167,20 +200,23 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     // Initialize prompt form state when prompt selected
     useEffect(() => {
         if (selectedPrompt) {
+            // Keep existing values if keys match, otherwise empty
             const initial: Record<string, string> = {};
-            selectedPrompt.fields.forEach(f => initial[f.id] = '');
+            selectedPrompt.fields.forEach(f => {
+                initial[f.id] = promptFormState[f.id] || '';
+            });
             setPromptFormState(initial);
         } else {
             setPromptFormState({});
         }
-    }, [selectedPrompt]);
+    }, [selectedPrompt]); // Dependent only on prompt selection
 
     // Save Data
     const persistScriptData = async (newSettings?: ScriptSettings, newOutline?: string) => {
         const updatedData = {
             settings: newSettings || settings,
             planning: {
-                synopsis: '', // Keeping structure
+                synopsis: '', 
                 characterSettings: '',
                 worldview: '',
                 outline: newOutline !== undefined ? newOutline : outlineContent
@@ -252,37 +288,42 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             return;
         }
 
-        // Logic for creating Episode 1 if none exists, or just continuing
-        if (!activeScene) {
-            await handleCreateEpisode();
+        // Auto create episode if needed
+        let targetScene = activeScene;
+        if (!targetScene) {
+            const newOrder = script.scenes.length + 1;
+            const epTitle = `第${newOrder}集`;
+            const newId = await saveChapterToDB(script.id, `new-ep-${Date.now()}`, epTitle, '', newOrder);
+            if(newId) {
+                const newScene: Scene = { id: newId, title: epTitle, content: '', isContentLoaded: true };
+                setScript(prev => ({ ...prev, scenes: [...prev.scenes, newScene] }));
+                setActiveScene(newScene);
+                targetScene = newScene;
+            }
         }
-        
-        // For 'full' mode, we might want to iterate creation, but here we'll stick to generating the current active one 
-        // or the newly created one to avoid timeouts on client-side full generation.
-        // The user can click 'Generate Full' to basically imply 'Start from Ep 1' structure.
         
         setIsGenerating(true);
         setCurrentPhase('content');
         
         const baseInfo = constructBasePrompt();
         const outlineContext = outlineContent ? `\n【剧本大纲参考】\n${outlineContent.slice(0, 3000)}\n` : '';
-        const currentEpTitle = activeScene ? activeScene.title : "新剧本";
+        const currentEpTitle = targetScene ? targetScene.title : "新剧本";
         
-        const finalPrompt = `${baseInfo}${outlineContext}\n\n任务：请撰写【${currentEpTitle}】的完整剧本正文。
-        要求：
-        1. 使用标准影视剧本格式（场景标题、动作描述、人物对白）。
-        2. 场景标题包含：内/外、地点、时间（日/夜）。
-        3. 动作描写生动，对白符合人物性格。
-        4. 直接输出剧本内容，无需多余寒暄。`;
+        // Use user selected prompt if available, else default instructions
+        const taskInstruction = selectedPrompt 
+            ? `\n请根据上述指令生成【${currentEpTitle}】的内容。`
+            : `\n任务：请撰写【${currentEpTitle}】的完整剧本正文。\n要求：\n1. 使用标准影视剧本格式。\n2. 场景标题包含：内/外、地点、时间。\n3. 动作描写生动，对白符合人物性格。`;
+
+        const finalPrompt = `${baseInfo}${outlineContext}${taskInstruction}`;
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
 
         let generatedContent = '';
-        if (activeScene) {
+        if (targetScene) {
              setScript(prev => ({
                 ...prev,
-                scenes: prev.scenes.map(s => s.id === activeScene.id ? { ...s, content: '' } : s)
+                scenes: prev.scenes.map(s => s.id === targetScene!.id ? { ...s, content: '' } : s)
             }));
         }
 
@@ -290,15 +331,17 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             const stream = generateTextStream(finalPrompt, { model: settings.model, temperature: 0.8, topP: 0.95, signal: controller.signal });
             for await (const chunk of stream) {
                 generatedContent += chunk;
-                if (activeScene) {
+                if (targetScene) {
                     setScript(prev => ({
                         ...prev,
-                        scenes: prev.scenes.map(s => s.id === activeScene.id ? { ...s, content: (s.content || '') + chunk, isContentLoaded: true } : s)
+                        scenes: prev.scenes.map(s => s.id === targetScene!.id ? { ...s, content: (s.content || '') + chunk, isContentLoaded: true } : s)
                     }));
                 }
             }
-            if (activeScene) {
-                await saveChapterToDB(script.id, activeScene.id, activeScene.title, generatedContent, 99);
+            if (targetScene) {
+                await saveChapterToDB(script.id, targetScene.id, targetScene.title, generatedContent, 99);
+                // Also update local active scene content
+                setActiveScene(prev => prev ? { ...prev, content: generatedContent } : null);
             }
         } catch (e) {
             console.error(e);
@@ -325,47 +368,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         setIsGenerating(false);
     };
 
-    // --- UI Components ---
-
-    // Collapsible Section Component
-    const SidebarSection: React.FC<{ 
-        title: string; 
-        number: string; 
-        icon: any; 
-        children: React.ReactNode 
-    }> = ({ title, number, icon: Icon, children }) => {
-        const [isOpen, setIsOpen] = useState(true);
-        return (
-            <div className="border-b border-gray-100 dark:border-gray-800 last:border-0 bg-white dark:bg-gray-900">
-                <button 
-                    onClick={() => setIsOpen(!isOpen)}
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 flex items-center justify-center text-[10px] font-bold border border-gray-200 dark:border-gray-700">
-                            {number}
-                        </div>
-                        <span className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <Icon className="w-4 h-4 text-sky-500" />
-                            {title}
-                        </span>
-                    </div>
-                    {isOpen ? <ChevronUp className="w-3 h-3 text-gray-400"/> : <ChevronDown className="w-3 h-3 text-gray-400"/>}
-                </button>
-                
-                {isOpen && (
-                    <div className="px-4 pb-4 animate-fade-in">
-                        {children}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
     const renderSetupSidebar = () => (
-        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans">
+        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-96">
             {/* Scrollable Container */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-4 space-y-3">
                 {/* 1. Model Configuration */}
                 <SidebarSection title="模型配置" number="1" icon={AdjustmentsHorizontal}>
                     <div className="space-y-1">
@@ -379,15 +385,15 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-400">总集数</label>
-                            <input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" />
+                            <input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-400">单集时长(min)</label>
-                            <input type="text" value={settings.durationPerEpisode} onChange={e => setSettings(s => ({...s, durationPerEpisode: e.target.value}))} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" />
+                            <input type="text" value={settings.durationPerEpisode} onChange={e => setSettings(s => ({...s, durationPerEpisode: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-400">场次限制</label>
-                            <input type="number" value={settings.scenesPerEpisodeLimit} onChange={e => setSettings(s => ({...s, scenesPerEpisodeLimit: e.target.value}))} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" />
+                            <input type="number" value={settings.scenesPerEpisodeLimit} onChange={e => setSettings(s => ({...s, scenesPerEpisodeLimit: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-400">语言</label>
@@ -397,28 +403,40 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 </SidebarSection>
 
                 {/* 3. Prompt & Assets */}
-                <SidebarSection title="提示词与素材" number="3" icon={Sparkles}>
-                    <div className="space-y-3">
-                        <button onClick={() => setPromptModalOpen(true)} className="w-full p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-xs text-gray-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:text-sky-600 hover:border-sky-300 transition-all text-left flex justify-between items-center group">
-                            <span className="truncate group-hover:font-bold">{selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}</span>
-                            <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                        </button>
+                <SidebarSection title={outlineContent ? "分集创作设置" : "提示词与素材"} number="3" icon={Sparkles}>
+                    <div className="space-y-4">
+                        {/* 3.1 Associate Assets (Moved to top) */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">关联素材</label>
+                            <button onClick={() => setAssetModalOpen(true)} className="w-full p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-xs text-gray-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 hover:border-blue-300 transition-all text-left flex justify-between items-center group">
+                                <span className="truncate font-bold">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 项素材` : '选择角色/剧情/世界观...'}</span>
+                                <Database className="w-4 h-4 group-hover:scale-110 transition-transform text-blue-400" />
+                            </button>
+                        </div>
+
+                        {/* 3.2 Prompt Selection */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">提示词模板</label>
+                            <button onClick={() => setPromptModalOpen(true)} className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 hover:border-blue-300 transition-all text-left flex justify-between items-center group shadow-sm">
+                                <span className="truncate font-bold">{selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}</span>
+                                {selectedPrompt ? <X className="w-4 h-4 text-gray-400 hover:text-red-500" onClick={(e) => { e.stopPropagation(); setSelectedPrompt(null); setPromptFormState({}); }} /> : <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-gray-400" />}
+                            </button>
+                        </div>
                         
-                        {/* Dynamic Prompt Form */}
+                        {/* 3.3 Dynamic Prompt Form */}
                         {selectedPrompt && (
-                            <div className="p-3 bg-sky-50 dark:bg-sky-900/10 rounded-xl border border-sky-100 dark:border-sky-800 space-y-3 animate-fade-in">
-                                <div className="flex justify-between items-center pb-2 border-b border-sky-100 dark:border-sky-800/50">
-                                    <span className="text-[10px] font-bold text-sky-600">参数填写</span>
-                                    <button onClick={() => { setSelectedPrompt(null); setPromptFormState({}); }} className="text-[10px] text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
+                            <div className="p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800 space-y-4 animate-fade-in">
+                                <div className="flex justify-between items-center border-b border-blue-100 dark:border-blue-800 pb-2">
+                                    <span className="text-xs font-black text-blue-600 dark:text-blue-400 flex items-center gap-1"><AdjustmentsHorizontal className="w-3 h-3"/> 参数填写</span>
                                 </div>
                                 {selectedPrompt.fields.map((field) => (
-                                    <div key={field.id} className="space-y-1">
-                                        <label className="text-[10px] text-gray-500 block">{field.label}</label>
+                                    <div key={field.id} className="space-y-1.5">
+                                        <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300 block">{field.label}</label>
                                         {field.type === 'textarea' ? (
                                             <textarea 
                                                 value={promptFormState[field.id] || ''}
                                                 onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))}
-                                                className="w-full p-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-1 focus:ring-sky-500 outline-none resize-none h-16"
+                                                className="w-full p-2.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none h-20"
                                                 placeholder={field.placeholder}
                                             />
                                         ) : (
@@ -426,7 +444,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                 type="text"
                                                 value={promptFormState[field.id] || ''}
                                                 onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))}
-                                                className="w-full p-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-1 focus:ring-sky-500 outline-none"
+                                                className="w-full p-2.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                                 placeholder={field.placeholder}
                                             />
                                         )}
@@ -434,11 +452,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 ))}
                             </div>
                         )}
-
-                        <button onClick={() => setAssetModalOpen(true)} className="w-full p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-xs text-gray-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-600 hover:border-purple-300 transition-all text-left flex justify-between items-center group">
-                            <span className="truncate group-hover:font-bold">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 项素材` : '关联素材库...'}</span>
-                            <Database className="w-3 h-3 group-hover:scale-110 transition-transform" />
-                        </button>
                     </div>
                 </SidebarSection>
             </div>
@@ -455,32 +468,32 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 ) : !outlineContent ? (
                     <button 
                         onClick={handleGenerateOutline} 
-                        className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
+                        className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
                     >
                         <ListBullet className="w-4 h-4" /> 生成剧本大纲
                     </button>
                 ) : (
-                    <div className="flex flex-col gap-2">
-                        <button 
-                            onClick={handleGenerateOutline} 
-                            className="w-full py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2 text-sm"
-                        >
-                            <ArrowPath className="w-4 h-4" /> 重新生成大纲
-                        </button>
+                    <div className="flex flex-col gap-2 animate-fade-in">
                         <div className="grid grid-cols-2 gap-2">
                             <button 
                                 onClick={() => handleGenerateEpisodeScript('single')} 
-                                className="w-full py-3 bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800 font-bold rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all flex items-center justify-center gap-2 shadow-sm text-sm"
+                                className="w-full py-3 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 font-bold rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex items-center justify-center gap-2 shadow-sm text-sm"
                             >
                                 <Film className="w-4 h-4" /> 分集创作
                             </button>
                             <button 
                                 onClick={() => handleGenerateEpisodeScript('full')} 
-                                className="w-full py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-500 shadow-lg shadow-purple-500/20 transition-all flex items-center justify-center gap-2 text-sm"
+                                className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 text-sm"
                             >
                                 <Play className="w-4 h-4" /> 一键全集
                             </button>
                         </div>
+                        <button 
+                            onClick={handleGenerateOutline} 
+                            className="w-full py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-bold rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2 text-xs"
+                        >
+                            <ArrowPath className="w-3 h-3" /> 重新生成大纲
+                        </button>
                     </div>
                 )}
             </div>
@@ -510,7 +523,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             {/* Header with Steps */}
             <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm h-16 justify-between px-4">
                 <div className="flex items-center gap-4">
-                    <Film className="w-6 h-6 text-sky-500" />
+                    <Film className="w-6 h-6 text-blue-500" />
                     <span className="font-bold text-lg text-gray-900 dark:text-white truncate max-w-[150px]">{script.title}</span>
                 </div>
                 
@@ -518,21 +531,21 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     <div className="flex items-center bg-gray-100 dark:bg-gray-900 p-1 rounded-lg">
                         <button 
                             onClick={() => setCurrentPhase('setup')}
-                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${currentPhase === 'setup' ? 'bg-white dark:bg-gray-800 text-sky-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${currentPhase === 'setup' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
                         >
                             1. 基础设置
                         </button>
                         <ChevronRight className="w-3 h-3 text-gray-400 mx-1" />
                         <button 
                             onClick={() => setCurrentPhase('outline')}
-                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${currentPhase === 'outline' ? 'bg-white dark:bg-gray-800 text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${currentPhase === 'outline' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
                         >
                             2. 大纲生成
                         </button>
                         <ChevronRight className="w-3 h-3 text-gray-400 mx-1" />
                         <button 
                             onClick={() => setCurrentPhase('content')}
-                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${currentPhase === 'content' ? 'bg-white dark:bg-gray-800 text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${currentPhase === 'content' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
                         >
                             3. 剧本正文
                         </button>
@@ -546,14 +559,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
             <div className="flex-1 flex overflow-hidden relative">
                 {/* Left Sidebar */}
-                <aside className={`flex-shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-80' : 'w-0'}`}>
+                <aside className={`flex-shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-96' : 'w-0'}`}>
                     {renderSetupSidebar()}
                 </aside>
 
                 {/* Sidebar Toggle */}
                 <button 
                     onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
-                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-80' : 'left-0'}`}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-96' : 'left-0'}`}
                 >
                     {isLeftSidebarOpen ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                 </button>
@@ -575,7 +588,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                      {currentPhase === 'outline' && (
                          <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 shadow-sm m-4 rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800">
                              <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-black/20">
-                                 <h2 className="text-lg font-bold text-purple-700 dark:text-purple-400 flex items-center gap-2">
+                                 <h2 className="text-lg font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2">
                                      <ListBullet className="w-5 h-5" /> 剧本大纲
                                      {isGenerating && <ArrowPath className="w-4 h-4 animate-spin" />}
                                  </h2>
@@ -603,29 +616,49 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                      <h2 className="text-lg font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
                                          {activeScene?.title || '剧本正文'}
                                      </h2>
-                                     {saveStatus === 'saving' && <span className="text-xs text-sky-500 animate-pulse">保存中...</span>}
+                                     {saveStatus === 'saving' && <span className="text-xs text-blue-500 animate-pulse">保存中...</span>}
                                      {saveStatus === 'saved' && <span className="text-xs text-green-500">已保存</span>}
                                  </div>
-                                 <WritingToolbar onAction={() => {}} alignment={alignment} />
+                                 
+                                 <div className="flex items-center gap-2">
+                                     <WritingToolbar onAction={() => {}} alignment={alignment} />
+                                     <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
+                                     <div className="relative">
+                                         <button 
+                                            onClick={() => setIsEpisodeSelectorOpen(!isEpisodeSelectorOpen)}
+                                            className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                         >
+                                             {activeScene?.title || "选择集数"}
+                                             <ChevronDown className="w-3 h-3" />
+                                         </button>
+                                         
+                                         {isEpisodeSelectorOpen && (
+                                             <>
+                                                 <div className="fixed inset-0 z-40" onClick={() => setIsEpisodeSelectorOpen(false)} />
+                                                 <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-1 max-h-60 overflow-y-auto custom-scrollbar">
+                                                     <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase border-b border-gray-100 dark:border-gray-700 mb-1 flex justify-between items-center">
+                                                         <span>剧本集数</span>
+                                                         <button onClick={() => { handleCreateEpisode(); setIsEpisodeSelectorOpen(false); }} className="text-blue-500 hover:underline">+ 新建</button>
+                                                     </div>
+                                                     {script.scenes.length > 0 ? script.scenes.map((scene) => (
+                                                         <button 
+                                                             key={scene.id}
+                                                             onClick={() => { setActiveScene(scene); setIsEpisodeSelectorOpen(false); }}
+                                                             className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors ${activeScene?.id === scene.id ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                                                         >
+                                                             {scene.title}
+                                                         </button>
+                                                     )) : (
+                                                         <div className="p-3 text-center text-xs text-gray-400">暂无集数</div>
+                                                     )}
+                                                 </div>
+                                             </>
+                                         )}
+                                     </div>
+                                 </div>
                              </div>
                              
                              <div className="flex-1 flex overflow-hidden">
-                                 {/* Episode List (Mini) */}
-                                 <div className="w-48 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-black overflow-y-auto hidden md:block">
-                                     <ScriptEpisodeManager 
-                                         episodes={script.scenes} 
-                                         activeEpisodeId={activeScene?.id || null} 
-                                         onSelectEpisode={setActiveScene} 
-                                         onDeleteEpisode={async (id) => { await deleteChapterFromDB(id); setScript(p => ({...p, scenes: p.scenes.filter(s => s.id !== id)})); }}
-                                         onCreateEpisode={handleCreateEpisode} 
-                                         onReorderEpisodes={async (newScenes) => {
-                                             setScript(prev => ({ ...prev, scenes: newScenes }));
-                                             const updates = newScenes.map((s, i) => ({ id: s.id, order_index: i + 1 }));
-                                             await updateChapterOrder(updates);
-                                         }}
-                                     />
-                                 </div>
-                                 
                                  {/* Reading Mode Editor */}
                                  <div className="flex-1 bg-white dark:bg-gray-900 overflow-y-auto p-8 lg:px-16 custom-scrollbar relative">
                                      {activeScene ? (
@@ -650,12 +683,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                          }, 1000);
                                                      }}
                                                  >
-                                                     <FormattedText text={activeScene.content || (isGenerating ? '' : '暂无内容，请生成...')} />
+                                                     <FormattedText text={activeScene.content || (isGenerating ? '' : '暂无内容，请点击左侧按钮生成...')} />
                                                  </div>
                                              )}
                                              
                                              {isGenerating && (
-                                                 <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-sky-600 text-white px-6 py-2 rounded-full shadow-lg flex items-center gap-2 animate-pulse z-10">
+                                                 <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full shadow-lg flex items-center gap-2 animate-pulse z-10">
                                                      <ArrowPath className="w-4 h-4 animate-spin" />
                                                      正在生成剧本...
                                                      <button onClick={handleStop} className="ml-2 hover:text-red-200"><X className="w-4 h-4"/></button>
