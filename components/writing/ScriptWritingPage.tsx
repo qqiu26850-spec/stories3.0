@@ -121,7 +121,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
-    const [isWorkflowSelectOpen, setIsWorkflowSelectOpen] = useState(false);
+    const [isWorkflowModalOpen, setWorkflowModalOpen] = useState(false); // Changed to Modal state
 
     // UI State
     const [wordCount, setWordCount] = useState(0);
@@ -396,35 +396,16 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                             </button>
                         </div>
 
-                        {/* Workflow Selection */}
+                        {/* Workflow Selection (Replaced Dropdown with Modal Trigger) */}
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">选择工作流</label>
-                            <div className="relative">
-                                <button 
-                                    onClick={() => setIsWorkflowSelectOpen(!isWorkflowSelectOpen)}
-                                    className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 hover:border-blue-300 transition-all text-left flex justify-between items-center group shadow-sm"
-                                >
-                                    <span className="truncate font-bold">{selectedWorkflow ? selectedWorkflow.title : '选择生成流程...'}</span>
-                                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                                </button>
-                                
-                                {isWorkflowSelectOpen && (
-                                    <>
-                                        <div className="fixed inset-0 z-30" onClick={() => setIsWorkflowSelectOpen(false)}/>
-                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-40 max-h-64 overflow-y-auto custom-scrollbar p-1">
-                                            {availableWorkflows.length > 0 ? availableWorkflows.map(wf => (
-                                                <button 
-                                                    key={wf.id}
-                                                    onClick={() => { setSelectedWorkflow(wf); setIsWorkflowSelectOpen(false); }}
-                                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors mb-0.5 ${selectedWorkflow?.id === wf.id ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                                                >
-                                                    {wf.title}
-                                                </button>
-                                            )) : <div className="p-3 text-center text-xs text-gray-400">暂无剧本工作流</div>}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
+                            <button 
+                                onClick={() => setWorkflowModalOpen(true)}
+                                className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 hover:border-blue-300 transition-all text-left flex justify-between items-center group shadow-sm"
+                            >
+                                <span className="truncate font-bold">{selectedWorkflow ? selectedWorkflow.title : '选择生成流程...'}</span>
+                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                            </button>
                         </div>
                         
                         {/* Dynamic Workflow Form */}
@@ -528,6 +509,44 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
             {/* Selection Modals */}
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
+            
+            {/* WORKFLOW SELECTION MODAL */}
+            {isWorkflowModalOpen && createPortal(
+                <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setWorkflowModalOpen(false)}>
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <WorkflowIcon className="w-5 h-5 text-blue-500" />
+                                选择剧本工作流
+                            </h3>
+                            <button onClick={() => setWorkflowModalOpen(false)} className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
+                                <X className="w-5 h-5"/>
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                            {availableWorkflows.length > 0 ? availableWorkflows.map(wf => (
+                                <button
+                                    key={wf.id}
+                                    onClick={() => { setSelectedWorkflow(wf); setWorkflowModalOpen(false); }}
+                                    className={`w-full text-left p-4 rounded-xl border transition-all flex flex-col gap-1 group hover:shadow-md ${selectedWorkflow?.id === wf.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300'}`}
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <div className="font-bold text-gray-900 dark:text-white text-sm group-hover:text-blue-600 transition-colors">{wf.title}</div>
+                                        {selectedWorkflow?.id === wf.id && <Check className="w-4 h-4 text-blue-500" />}
+                                    </div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{wf.description}</div>
+                                </button>
+                            )) : (
+                                <div className="text-center py-10 text-gray-400">
+                                    <WorkflowIcon className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                                    <p>暂无可用工作流</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             {/* Header with Steps */}
             <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm h-16 justify-between px-4">
