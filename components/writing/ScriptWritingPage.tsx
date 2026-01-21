@@ -1,6 +1,7 @@
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Script, Scene, ScriptSettings, ScriptPlanning, Prompt, Asset } from '../../types';
-import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, UserCircle, Globe, ListBullet, Database, Play, Pencil, Box, X, Copy } from '../Icon';
+import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, UserCircle, Globe, ListBullet, Database, Play, Pencil, Box, X, Copy, Stop, ChevronDown, ChevronUp } from '../Icon';
 import ScriptEpisodeManager from './ScriptEpisodeManager';
 import WritingToolbar from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, deleteChapterFromDB, updateChapterOrder, fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
@@ -126,11 +127,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                    setSettings(loadedData.settings);
                    if (loadedData.planning?.outline) setOutlineContent(loadedData.planning.outline);
                    
-                   // Initial phase logic
+                   // Initial phase logic: if outline exists but no scenes, stay in outline phase to allow generation
                    if (mapped.length > 0) {
-                       // If scenes exist, default to content, but user can switch
-                       // We don't force switch here to allow 'setup' default on first load if preferred, 
-                       // but let's default to Setup for clarity as requested flow
+                       // Optional: could auto-switch to content
                    }
                }
             }
@@ -218,6 +217,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     };
 
     const handleGenerateOutline = async () => {
+        if (isGenerating) {
+            handleStop();
+            return;
+        }
+
         setIsGenerating(true);
         setOutlineContent('');
         setCurrentPhase('outline');
@@ -233,28 +237,32 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             for await (const chunk of stream) {
                 setOutlineContent(prev => prev + chunk);
             }
-            await persistScriptData(undefined, outlineContent); // Save after gen (partial logic, ideally save full at end)
+            await persistScriptData(undefined, outlineContent);
         } catch (e) {
             console.error(e);
         } finally {
             setIsGenerating(false);
-            await persistScriptData(undefined, outlineContent); // Final save
+            await persistScriptData(undefined, outlineContent);
         }
     };
 
-    const handleGenerateEpisodeScript = async () => {
+    const handleGenerateEpisodeScript = async (mode: 'single' | 'full' = 'single') => {
+        if (isGenerating) {
+            handleStop();
+            return;
+        }
+
+        // Logic for creating Episode 1 if none exists, or just continuing
         if (!activeScene) {
-            // If no scene exists, create Episode 1
             await handleCreateEpisode();
         }
         
+        // For 'full' mode, we might want to iterate creation, but here we'll stick to generating the current active one 
+        // or the newly created one to avoid timeouts on client-side full generation.
+        // The user can click 'Generate Full' to basically imply 'Start from Ep 1' structure.
+        
         setIsGenerating(true);
         setCurrentPhase('content');
-        
-        // Ensure activeScene is updated if we just created one
-        // In React state updates are batched, so we might need to rely on a ref or wait, 
-        // but typically user clicks scene then generate. 
-        // If auto-generating new scene, we handle it in `handleCreateEpisode` logic but here we assume activeScene is set.
         
         const baseInfo = constructBasePrompt();
         const outlineContext = outlineContent ? `\n【剧本大纲参考】\n${outlineContent.slice(0, 3000)}\n` : '';
@@ -271,7 +279,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         abortControllerRef.current = controller;
 
         let generatedContent = '';
-        // If replacing content, clear first. If continuing, append. Here we assume overwrite/new gen.
         if (activeScene) {
              setScript(prev => ({
                 ...prev,
@@ -290,7 +297,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     }));
                 }
             }
-            // Auto save to DB
             if (activeScene) {
                 await saveChapterToDB(script.id, activeScene.id, activeScene.title, generatedContent, 99);
             }
@@ -321,144 +327,162 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
     // --- UI Components ---
 
+    // Collapsible Section Component
     const SidebarSection: React.FC<{ 
         title: string; 
         number: string; 
         icon: any; 
-        colorClass: string; 
-        bgClass: string;
         children: React.ReactNode 
-    }> = ({ title, number, icon: Icon, colorClass, bgClass, children }) => (
-        <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
-            <div className={`p-3 border-b border-gray-50 dark:border-gray-800 flex items-center gap-2 ${bgClass}`}>
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${colorClass} bg-white dark:bg-gray-800`}>
-                    {number}
-                </div>
-                <span className={`text-sm font-bold ${colorClass.replace('bg-', 'text-')} flex items-center gap-2`}>
-                    <Icon className="w-4 h-4" />
-                    {title}
-                </span>
+    }> = ({ title, number, icon: Icon, children }) => {
+        const [isOpen, setIsOpen] = useState(true);
+        return (
+            <div className="border-b border-gray-100 dark:border-gray-800 last:border-0 bg-white dark:bg-gray-900">
+                <button 
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 flex items-center justify-center text-[10px] font-bold border border-gray-200 dark:border-gray-700">
+                            {number}
+                        </div>
+                        <span className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <Icon className="w-4 h-4 text-sky-500" />
+                            {title}
+                        </span>
+                    </div>
+                    {isOpen ? <ChevronUp className="w-3 h-3 text-gray-400"/> : <ChevronDown className="w-3 h-3 text-gray-400"/>}
+                </button>
+                
+                {isOpen && (
+                    <div className="px-4 pb-4 animate-fade-in">
+                        {children}
+                    </div>
+                )}
             </div>
-            <div className="p-3 space-y-3">
-                {children}
-            </div>
-        </div>
-    );
+        );
+    };
 
     const renderSetupSidebar = () => (
-        <div className="flex flex-col h-full p-3 space-y-4 overflow-y-auto custom-scrollbar bg-gray-50/50 dark:bg-black">
-            {/* 1. Model Configuration */}
-            <SidebarSection 
-                title="模型配置" 
-                number="1" 
-                icon={AdjustmentsHorizontal} 
-                colorClass="text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/20"
-                bgClass="bg-blue-50/30 dark:bg-blue-900/10"
-            >
-                <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">选择基座模型</label>
-                    <CustomSelect value={settings.model} onChange={(v) => setSettings(s => ({...s, model: v}))} options={MODEL_OPTIONS} />
-                </div>
-            </SidebarSection>
+        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans">
+            {/* Scrollable Container */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {/* 1. Model Configuration */}
+                <SidebarSection title="模型配置" number="1" icon={AdjustmentsHorizontal}>
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase">选择基座模型</label>
+                        <CustomSelect value={settings.model} onChange={(v) => setSettings(s => ({...s, model: v}))} options={MODEL_OPTIONS} />
+                    </div>
+                </SidebarSection>
 
-            {/* 2. Basic Info */}
-            <SidebarSection 
-                title="剧本基本信息" 
-                number="2" 
-                icon={DocumentText} 
-                colorClass="text-purple-600 bg-purple-50 dark:text-purple-400 dark:bg-purple-900/20"
-                bgClass="bg-purple-50/30 dark:bg-purple-900/10"
-            >
-                <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-gray-400">总集数</label>
-                        <input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-gray-400">单集时长(min)</label>
-                        <input type="text" value={settings.durationPerEpisode} onChange={e => setSettings(s => ({...s, durationPerEpisode: e.target.value}))} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-gray-400">场次限制</label>
-                        <input type="number" value={settings.scenesPerEpisodeLimit} onChange={e => setSettings(s => ({...s, scenesPerEpisodeLimit: e.target.value}))} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-gray-400">语言</label>
-                        <CustomSelect value={settings.outputLanguage} onChange={(v) => setSettings(s => ({...s, outputLanguage: v as 'zh' | 'en'}))} options={LANGUAGE_OPTIONS} />
-                    </div>
-                </div>
-            </SidebarSection>
-
-            {/* 3. Prompt & Assets */}
-            <SidebarSection 
-                title="提示词与素材" 
-                number="3" 
-                icon={Sparkles} 
-                colorClass="text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/20"
-                bgClass="bg-emerald-50/30 dark:bg-emerald-900/10"
-            >
-                <div className="space-y-3">
-                    <button onClick={() => setPromptModalOpen(true)} className="w-full p-2.5 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-xs text-gray-500 hover:bg-white dark:hover:bg-gray-800 hover:text-emerald-600 transition-all text-left flex justify-between items-center group">
-                        <span className="truncate group-hover:font-bold">{selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}</span>
-                        <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                    
-                    {/* Dynamic Prompt Form */}
-                    {selectedPrompt && (
-                        <div className="p-2 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-lg border border-emerald-100 dark:border-emerald-800 space-y-2 animate-fade-in">
-                            <div className="flex justify-between items-center pb-1 border-b border-emerald-100 dark:border-emerald-800/50">
-                                <span className="text-[10px] font-bold text-emerald-600">参数填写</span>
-                                <button onClick={() => { setSelectedPrompt(null); setPromptFormState({}); }} className="text-[10px] text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
-                            </div>
-                            {selectedPrompt.fields.map((field) => (
-                                <div key={field.id} className="space-y-1">
-                                    <label className="text-[10px] text-gray-500 block">{field.label}</label>
-                                    {field.type === 'textarea' ? (
-                                        <textarea 
-                                            value={promptFormState[field.id] || ''}
-                                            onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))}
-                                            className="w-full p-1.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md focus:ring-1 focus:ring-emerald-500 outline-none resize-none h-16"
-                                            placeholder={field.placeholder}
-                                        />
-                                    ) : (
-                                        <input 
-                                            type="text"
-                                            value={promptFormState[field.id] || ''}
-                                            onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))}
-                                            className="w-full p-1.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md focus:ring-1 focus:ring-emerald-500 outline-none"
-                                            placeholder={field.placeholder}
-                                        />
-                                    )}
-                                </div>
-                            ))}
+                {/* 2. Basic Info */}
+                <SidebarSection title="剧本基本信息" number="2" icon={DocumentText}>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-400">总集数</label>
+                            <input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" />
                         </div>
-                    )}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-400">单集时长(min)</label>
+                            <input type="text" value={settings.durationPerEpisode} onChange={e => setSettings(s => ({...s, durationPerEpisode: e.target.value}))} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-400">场次限制</label>
+                            <input type="number" value={settings.scenesPerEpisodeLimit} onChange={e => setSettings(s => ({...s, scenesPerEpisodeLimit: e.target.value}))} className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-400">语言</label>
+                            <CustomSelect value={settings.outputLanguage} onChange={(v) => setSettings(s => ({...s, outputLanguage: v as 'zh' | 'en'}))} options={LANGUAGE_OPTIONS} />
+                        </div>
+                    </div>
+                </SidebarSection>
 
-                    <button onClick={() => setAssetModalOpen(true)} className="w-full p-2.5 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-xs text-gray-500 hover:bg-white dark:hover:bg-gray-800 hover:text-emerald-600 transition-all text-left flex justify-between items-center group">
-                        <span className="truncate group-hover:font-bold">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 项素材` : '关联素材库...'}</span>
-                        <Database className="w-3 h-3 group-hover:scale-110 transition-transform" />
+                {/* 3. Prompt & Assets */}
+                <SidebarSection title="提示词与素材" number="3" icon={Sparkles}>
+                    <div className="space-y-3">
+                        <button onClick={() => setPromptModalOpen(true)} className="w-full p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-xs text-gray-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:text-sky-600 hover:border-sky-300 transition-all text-left flex justify-between items-center group">
+                            <span className="truncate group-hover:font-bold">{selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}</span>
+                            <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                        </button>
+                        
+                        {/* Dynamic Prompt Form */}
+                        {selectedPrompt && (
+                            <div className="p-3 bg-sky-50 dark:bg-sky-900/10 rounded-xl border border-sky-100 dark:border-sky-800 space-y-3 animate-fade-in">
+                                <div className="flex justify-between items-center pb-2 border-b border-sky-100 dark:border-sky-800/50">
+                                    <span className="text-[10px] font-bold text-sky-600">参数填写</span>
+                                    <button onClick={() => { setSelectedPrompt(null); setPromptFormState({}); }} className="text-[10px] text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
+                                </div>
+                                {selectedPrompt.fields.map((field) => (
+                                    <div key={field.id} className="space-y-1">
+                                        <label className="text-[10px] text-gray-500 block">{field.label}</label>
+                                        {field.type === 'textarea' ? (
+                                            <textarea 
+                                                value={promptFormState[field.id] || ''}
+                                                onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))}
+                                                className="w-full p-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-1 focus:ring-sky-500 outline-none resize-none h-16"
+                                                placeholder={field.placeholder}
+                                            />
+                                        ) : (
+                                            <input 
+                                                type="text"
+                                                value={promptFormState[field.id] || ''}
+                                                onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))}
+                                                className="w-full p-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-1 focus:ring-sky-500 outline-none"
+                                                placeholder={field.placeholder}
+                                            />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <button onClick={() => setAssetModalOpen(true)} className="w-full p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-xs text-gray-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-600 hover:border-purple-300 transition-all text-left flex justify-between items-center group">
+                            <span className="truncate group-hover:font-bold">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 项素材` : '关联素材库...'}</span>
+                            <Database className="w-3 h-3 group-hover:scale-110 transition-transform" />
+                        </button>
+                    </div>
+                </SidebarSection>
+            </div>
+
+            {/* Bottom Action Area */}
+            <div className="p-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+                {isGenerating ? (
+                    <button 
+                        onClick={handleStop} 
+                        className="w-full py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg hover:bg-red-600 transition-all flex items-center justify-center gap-2 active:scale-95"
+                    >
+                        <Stop className="w-4 h-4" /> 停止生成
                     </button>
-                </div>
-            </SidebarSection>
-
-            {/* Action Buttons */}
-            <div className="pt-4 space-y-2">
-                <button 
-                    onClick={handleGenerateOutline} 
-                    disabled={isGenerating}
-                    className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {isGenerating ? <ArrowPath className="w-4 h-4 animate-spin" /> : <ListBullet className="w-4 h-4" />}
-                    生成剧本大纲
-                </button>
-                <button 
-                    onClick={handleGenerateEpisodeScript} 
-                    disabled={isGenerating}
-                    className="w-full py-3 bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800 font-bold rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                >
-                    {isGenerating ? <ArrowPath className="w-4 h-4 animate-spin" /> : <Film className="w-4 h-4" />}
-                    生成分集剧本
-                </button>
+                ) : !outlineContent ? (
+                    <button 
+                        onClick={handleGenerateOutline} 
+                        className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
+                    >
+                        <ListBullet className="w-4 h-4" /> 生成剧本大纲
+                    </button>
+                ) : (
+                    <div className="flex flex-col gap-2">
+                        <button 
+                            onClick={handleGenerateOutline} 
+                            className="w-full py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2 text-sm"
+                        >
+                            <ArrowPath className="w-4 h-4" /> 重新生成大纲
+                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button 
+                                onClick={() => handleGenerateEpisodeScript('single')} 
+                                className="w-full py-3 bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800 font-bold rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all flex items-center justify-center gap-2 shadow-sm text-sm"
+                            >
+                                <Film className="w-4 h-4" /> 分集创作
+                            </button>
+                            <button 
+                                onClick={() => handleGenerateEpisodeScript('full')} 
+                                className="w-full py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-500 shadow-lg shadow-purple-500/20 transition-all flex items-center justify-center gap-2 text-sm"
+                            >
+                                <Play className="w-4 h-4" /> 一键全集
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
