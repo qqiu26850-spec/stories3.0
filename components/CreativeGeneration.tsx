@@ -10,6 +10,7 @@ import AssetSelectionModal from './AssetSelectionModal';
 import { saveMaterial, incrementPromptHeat, fetchMaterials } from '../services/supabaseService';
 import LoadingOverlay from './LoadingOverlay';
 import ImportAssetModal from './ImportAssetModal';
+import CustomSelect from './CustomSelect';
 
 interface CreativeGenerationProps {
   initialData?: {
@@ -287,6 +288,12 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         setTimeout(() => setShowInlineSuccess(false), 3000);
     };
 
+    const MODEL_OPTIONS = [
+        { value: "deepseek-chat", label: "奇思版 (DeepSeek)" },
+        { value: "gemini-3-flash-preview", label: "妙写版 (Gemini 3.0 Flash)" },
+        { value: "doubao-flash", label: "速写版 (豆包)" }
+    ];
+
     if (!selectedModule) {
         return (
             <div className="p-8 h-full animate-fade-in font-sans">
@@ -325,12 +332,11 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                             <div className="bg-sky-50/50 dark:bg-sky-900/5 p-4 rounded-2xl border border-sky-100 dark:border-sky-900/30">
                                 <div className="flex gap-2">
                                     <div className="relative flex-1">
-                                        <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-3 pr-8 text-xs font-bold bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 rounded-lg text-gray-700 dark:text-gray-200 outline-none appearance-none cursor-pointer font-sans">
-                                            <option value="deepseek-chat">奇思版 (DeepSeek)</option>
-                                            <option value="gemini-3-flash-preview">妙写版 (Gemini 3.0 Flash)</option>
-                                            <option value="doubao-flash">速写版 (豆包)</option>
-                                        </select>
-                                        <ChevronDown className="w-3 h-3 text-sky-400 absolute right-2.5 top-3 pointer-events-none" />
+                                        <CustomSelect 
+                                            value={model} 
+                                            onChange={setModel} 
+                                            options={MODEL_OPTIONS}
+                                        />
                                     </div>
                                     <button onClick={() => setShowConfig(!showConfig)} className="px-3 py-2 text-xs font-bold rounded-lg border border-sky-100 bg-white dark:bg-gray-800 text-sky-600 flex items-center gap-1 hover:bg-sky-50 font-sans"><AdjustmentsHorizontal className="w-4 h-4" />参数</button>
                                 </div>
@@ -447,7 +453,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                     </div>
 
                     <div className="p-3 border-t bg-white dark:bg-gray-900 font-sans">
-                        <button onClick={handleGenerate} className={`w-full py-2 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-rose-500 shadow-rose-500/20' : 'bg-sky-600 hover:bg-sky-500 shadow-sky-500/20'}`}>
+                        <button onClick={handleGenerate} className={`w-full py-2 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-rose-500 shadow-rose-500/20' : 'bg-sky-600 hover:bg-sky-50 shadow-sky-500/20'}`}>
                             {isGenerating ? <><Stop className="w-5 h-5" />停止生成</> : <><Sparkles className="w-5 h-5" />开始创作</>}
                         </button>
                     </div>

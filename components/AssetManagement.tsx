@@ -166,7 +166,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({ view, setActiveView, 
                 
                 <div className="flex items-center gap-4">
                     {showToast && (
-                        <span className="text-base font-bold text-sky-600 dark:text-sky-400 animate-fade-in transition-all">
+                        <span className="text-base font-bold text-emerald-500 animate-fade-in transition-all">
                             {successMessage}
                         </span>
                     )}

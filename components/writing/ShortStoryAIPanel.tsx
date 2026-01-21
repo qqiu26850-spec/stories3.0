@@ -8,6 +8,7 @@ import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown,
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import { createPortal } from 'react-dom';
+import CustomSelect from '../CustomSelect';
 
 type ShortStoryTab = 'original' | 'imitate' | 'polish' | 'review';
 
@@ -310,6 +311,12 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         </button>
     );
 
+    const MODEL_OPTIONS = [
+        { value: "deepseek-chat", label: "奇思版 (DeepSeek)" },
+        { value: "gemini-3-flash-preview", label: "妙写版 (Gemini 3.0 Flash)" },
+        { value: "doubao-flash", label: "速写版 (豆包)" }
+    ];
+
     // If there is result text or it is generating, show result view in full panel
     if (resultText || isGenerating) {
         return (
@@ -417,12 +424,11 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                 <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型选择</label>
                                 <div className="flex gap-2 font-sans">
                                     <div className="relative flex-1">
-                                        <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-2 pl-2 pr-6 text-sm font-medium rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
-                                            <option value="deepseek-chat">奇思版 (DeepSeek)</option>
-                                            <option value="gemini-3-flash-preview">妙写版 (Gemini 3.0 Flash)</option>
-                                            <option value="doubao-flash">速写版 (豆包)</option>
-                                        </select>
-                                        <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2 top-3 pointer-events-none" />
+                                        <CustomSelect 
+                                            value={model} 
+                                            onChange={setModel} 
+                                            options={MODEL_OPTIONS}
+                                        />
                                     </div>
                                     <button onClick={() => setShowConfig(!showConfig)} className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 font-sans ${showConfig ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>参数</button>
                                 </div>

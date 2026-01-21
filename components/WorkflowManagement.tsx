@@ -20,6 +20,12 @@ const CATEGORY_LABELS: Record<string, string> = {
     'long-story': '长篇小说', 'short-story': '短篇小说', 'script': '剧本', 'general': '通用/全类型',
 };
 
+// Helper to look up genre label
+const getGenreLabel = (id: string) => {
+    const found = GENRE_TAGS.find(g => g.id === id);
+    return found ? found.label : null;
+};
+
 const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true }) => {
   const [activeTab, setActiveTab] = useState<ExtendedTab>('all');
   const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
@@ -44,11 +50,14 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
   
   const observerTarget = useRef(null);
 
-  const [notification, setNotification] = useState<string | null>(null);
+  // Success Notification Text (Green)
+  const [successMessage, setSuccessMessage] = useState<string>('');
+  const [showSuccess, setShowSuccess] = useState(false);
 
-  const triggerNotification = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3000);
+  const triggerSuccess = (msg: string) => {
+    setSuccessMessage(msg);
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
   };
 
   const fetchAndMapWorkflows = async (pageNum: number, currentTab: string, search: string) => {
@@ -148,7 +157,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
     } catch(e) {
         console.error("Workflow load error", e);
-        triggerNotification('数据加载出现异常');
     } finally { 
         setIsLoading(false); 
         setIsLoadingMore(false);
@@ -168,8 +176,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
 
   useEffect(() => { 
       if (isActive) {
-          // Initial load handled by search debounce effect or explicit call if needed
-          // But since search term starts empty, the above effect runs once.
+          // Initial load handled by search debounce effect
       }
   }, [isActive]);
 
@@ -234,7 +241,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       loadData(true);
       setDeleteModalOpen(false);
       setWorkflowToDelete(null);
-      triggerNotification('工作流删除成功');
+      triggerSuccess('工作流删除成功');
     }
   };
 
@@ -249,17 +256,17 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
               fields: data.fields,
               steps: data.steps
           });
-          triggerNotification('工作流更新成功');
+          triggerSuccess('工作流更新成功');
         } else {
           await saveWorkflow(data.name, data.description, data.type, data.subCategories || [], data.fields, data.steps);
-          triggerNotification('工作流创建成功');
+          triggerSuccess('工作流创建成功');
           setActiveTab('all');
         }
         setView('list');
         setWorkflowToEdit(null);
         loadData(true);
     } catch (e) {
-        triggerNotification('操作失败，请重试');
+        // Handle error implicitly or add error toast
     }
   };
 
@@ -288,14 +295,6 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       />
       <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
 
-      {/* Notification Toast */}
-      {notification && (
-          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 bg-gray-800 text-white rounded-full shadow-xl animate-fade-in-up flex items-center gap-2">
-              <Check className="w-4 h-4 text-green-400" />
-              <span className="text-sm font-bold">{notification}</span>
-          </div>
-      )}
-
       {/* Top Bar */}
       <div className="flex flex-col gap-3 px-6 py-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <div className="flex flex-col xl:flex-row justify-between xl:items-center gap-4">
@@ -318,6 +317,12 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
             </div>
             
             <div className="flex items-center gap-3 flex-shrink-0 self-end xl:self-auto">
+                {showSuccess && (
+                    <span className="text-base font-bold text-emerald-500 animate-fade-in transition-all whitespace-nowrap">
+                        {successMessage}
+                    </span>
+                )}
+                
                 <div className="relative w-full sm:w-56">
                     <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
                     <input type="text" placeholder="搜索工作流..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 text-sm rounded-xl border border-transparent focus:bg-white dark:focus:bg-black focus:border-blue-500 outline-none transition-all" />
@@ -359,11 +364,10 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                         <div 
                             key={wf.id} 
                             onClick={() => handleSelectWorkflow(wf)}
-                            className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-[220px]"
+                            className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-[210px]"
                         >
-                            <div className="flex justify-between items-start mb-3">
+                            <div className="flex justify-between items-start mb-2">
                                 <div className="flex gap-2 mb-1 opacity-0">
-                                    {/* Placeholder for layout consistency if needed, but tags moved to bottom */}
                                 </div>
                                 <button 
                                     onClick={(e) => toggleFavorite(e, wf.id)}
@@ -375,18 +379,25 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                             
                             <div className="-mt-8">
                                 <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-2 line-clamp-1 group-hover:text-blue-600 transition-colors">{wf.title}</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed flex-grow">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-4 leading-relaxed flex-grow">
                                     {wf.description || '暂无描述'}
                                 </p>
                             </div>
                             
-                            <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-100 dark:border-gray-800">
+                            <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-100 dark:border-gray-800 gap-2">
                                 {/* Left Side: Tags and Info */}
-                                <div className="flex items-center gap-2 overflow-hidden mr-2">
-                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold border border-blue-100 flex-shrink-0">{CATEGORY_LABELS[wf.category] || '全类型'}</span>
-                                    <div className="flex items-center gap-2 text-xs text-gray-400 flex-shrink-0">
+                                <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
+                                    <div className="flex gap-1 flex-shrink-0">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold border border-blue-100 whitespace-nowrap">{CATEGORY_LABELS[wf.category] || '全类型'}</span>
+                                        {wf.subCategories && wf.subCategories.length > 0 && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-bold border border-purple-100 whitespace-nowrap">
+                                                {getGenreLabel(wf.subCategories[0] as string)}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[10px] text-gray-400 flex-shrink-0 truncate">
                                         <div className="flex items-center gap-0.5"><Fire className="w-3 h-3 text-orange-400" /> {wf.usageCount}</div>
-                                        <div className="flex items-center gap-0.5"><UserCircle className="w-3 h-3" /> {wf.author}</div>
+                                        <div className="flex items-center gap-0.5 truncate"><UserCircle className="w-3 h-3" /> {wf.author}</div>
                                     </div>
                                 </div>
                                 
@@ -399,10 +410,11 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                                     )}
                                     <button 
                                         onClick={(e) => handleRunClick(e, wf)}
-                                        className="p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm group-hover:scale-110"
+                                        className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm group-hover:scale-105 active:scale-95 ml-1"
                                         title="立即运行"
                                     >
-                                        <Play className="w-4 h-4" />
+                                        <Play className="w-3 h-3" />
+                                        <span className="text-xs font-bold whitespace-nowrap">立即运行</span>
                                     </button>
                                 </div>
                             </div>

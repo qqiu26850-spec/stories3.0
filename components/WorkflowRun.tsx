@@ -2,11 +2,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Workflow, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
-import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Play, Database, ChatBubbleOvalLeftEllipsis, DocumentPlus } from './Icon';
+import { Sparkles, ChevronDoubleLeft, AdjustmentsHorizontal, Check, Copy, Stop, ArrowPath, Play, Database, ChatBubbleOvalLeftEllipsis, DocumentPlus, X } from './Icon';
 import ImportAssetModal from './ImportAssetModal';
 import SaveToCreationModal from './SaveToCreationModal';
 import { saveMaterial } from '../services/supabaseService';
 import FollowUpModal from './FollowUpModal';
+import CustomSelect from './CustomSelect';
 
 interface WorkflowRunProps {
     workflow: Workflow;
@@ -102,6 +103,54 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
+// Simple Loading Overlay for WorkflowRun to replace the external component if needed or use the existing one if compatible
+const LoadingOverlay: React.FC<{ isVisible: boolean; onClose: () => void }> = ({ isVisible, onClose }) => {
+    const [seconds, setSeconds] = useState(0);
+
+    useEffect(() => {
+        let interval: any;
+        if (isVisible) {
+            setSeconds(0);
+            interval = setInterval(() => {
+                setSeconds(s => s + 1);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [isVisible]);
+
+    useEffect(() => {
+        if (isVisible && seconds >= 10) {
+            onClose();
+        }
+    }, [seconds, isVisible, onClose]);
+
+    if (!isVisible) return null;
+
+    return (
+        <div className="absolute inset-0 z-50 flex items-center justify-center">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-80 text-center mx-4 animate-fade-in-up relative">
+                <button 
+                    onClick={onClose}
+                    className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    title="关闭/取消"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+
+                <div className="relative w-12 h-12 mx-auto mb-4">
+                    <div className="absolute inset-0 border-2 border-gray-100 dark:border-gray-800 rounded-full"></div>
+                    <div className="absolute inset-0 border-2 border-sky-500 rounded-full border-t-transparent animate-spin"></div>
+                    <Sparkles className="absolute inset-0 w-5 h-5 m-auto text-sky-500 animate-pulse" />
+                </div>
+                
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">AI 正在创作...</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-4">已耗时: {seconds} 秒</p>
+                <p className="text-xs text-gray-400">弹窗将在 10 秒后自动关闭</p>
+            </div>
+        </div>
+    );
+};
+
 const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [model, setModel] = useState('deepseek-chat');
     const modelRef = useRef(model);
@@ -116,6 +165,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const [nextStepIndex, setNextStepIndex] = useState<number>(0);
     const [executionStatus, setExecutionStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
     const [isLoading, setIsLoading] = useState(false);
+    const [showOverlay, setShowOverlay] = useState(false);
     const [error, setError] = useState('');
     
     const [importModalOpen, setImportModalOpen] = useState(false);
@@ -194,6 +244,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
             abortControllerRef.current = null;
         }
         setIsLoading(false);
+        setShowOverlay(false);
         setExecutionStatus('paused');
     };
 
@@ -298,6 +349,13 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
 
     const hasResults = Object.keys(stepResults).length > 0;
 
+    const MODEL_OPTIONS = [
+        { value: 'gemini-3-flash-preview', label: '谷歌极速 (Gemini 3 Flash)' },
+        { value: 'gemini-3-pro-preview', label: '谷歌深度 (Gemini 3 Pro)' },
+        { value: 'deepseek-chat', label: 'DeepSeek V3' },
+        { value: 'deepseek-reasoner', label: 'DeepSeek R1 (推理)' }
+    ];
+
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-black/20 font-sans relative">
             <ImportAssetModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} content={importContent} onSave={handleImportAsset} />
@@ -370,12 +428,11 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                 <div className="space-y-3 animate-fade-in p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
                                     <div>
                                         <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">模型</label>
-                                        <select value={model} onChange={e => setModel(e.target.value)} className="w-full p-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
-                                            <option value="deepseek-chat">DeepSeek V3 (推荐)</option>
-                                            <option value="gemini-3-flash-preview">Gemini 3 Flash (长文本)</option>
-                                            <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
-                                            <option value="doubao-flash">豆包 Flash</option>
-                                        </select>
+                                        <CustomSelect 
+                                            value={model} 
+                                            onChange={setModel} 
+                                            options={MODEL_OPTIONS}
+                                        />
                                     </div>
                                     <div className="space-y-1">
                                         <label className="block text-[10px] font-black text-sky-500 flex justify-between">

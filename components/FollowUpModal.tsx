@@ -5,6 +5,7 @@ import { generateTextStream } from '../services/geminiService';
 import { ChatBubbleOvalLeftEllipsis, X, Stop, Sparkles, Plus, ArrowPath, Copy, Box } from './Icon';
 import PromptSelectionModal from './PromptSelectionModal';
 import { Prompt } from '../types';
+import CustomSelect from './CustomSelect';
 
 interface FollowUpModalProps {
     isOpen: boolean;
@@ -113,6 +114,12 @@ ${query}`;
         setPromptModalOpen(false);
     }
 
+    const MODEL_OPTIONS = [
+        { value: 'deepseek-chat', label: 'DeepSeek V3' },
+        { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+        { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro' }
+    ];
+
     if (!isOpen) return null;
 
     return createPortal(
@@ -135,28 +142,26 @@ ${query}`;
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-                    <div className="flex gap-2">
-                        <select 
-                            value={modalModel} 
-                            onChange={(e) => setModalModel(e.target.value)}
-                            className="p-2 text-xs font-bold rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-sky-500 outline-none"
-                        >
-                            <option value="deepseek-chat">DeepSeek V3</option>
-                            <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-                            <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
-                        </select>
+                    <div className="flex gap-2 items-center">
+                        <div className="w-48">
+                            <CustomSelect 
+                                value={modalModel} 
+                                onChange={setModalModel} 
+                                options={MODEL_OPTIONS}
+                            />
+                        </div>
 
-                        <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-lg flex-1">
+                        <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-lg flex-1 h-[34px]">
                             <button
                                 onClick={() => setActiveMode('full')}
-                                className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${activeMode === 'full' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                                className={`flex-1 text-xs font-bold rounded-md transition-all flex items-center justify-center ${activeMode === 'full' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
                             >
                                 全文/本段
                             </button>
                             <button
                                 onClick={() => setActiveMode('selection')}
                                 disabled={!targetText}
-                                className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${activeMode === 'selection' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'} ${!targetText ? 'opacity-50 cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-white'}`}
+                                className={`flex-1 text-xs font-bold rounded-md transition-all flex items-center justify-center ${activeMode === 'selection' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'} ${!targetText ? 'opacity-50 cursor-not-allowed' : 'hover:text-gray-900 dark:hover:text-white'}`}
                             >
                                 针对选中
                             </button>
