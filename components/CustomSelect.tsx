@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from './Icon';
 
 interface Option {
@@ -17,14 +18,42 @@ interface CustomSelectProps {
 
 const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, className = "", placeholder = "请选择" }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
 
     const selectedOption = options.find(o => o.value === value);
 
+    const updateCoords = () => {
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setCoords({
+                top: rect.bottom + window.scrollY,
+                left: rect.left + window.scrollX,
+                width: rect.width
+            });
+        }
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            updateCoords();
+            window.addEventListener('resize', updateCoords);
+            window.addEventListener('scroll', updateCoords, true);
+        }
+        return () => {
+            window.removeEventListener('resize', updateCoords);
+            window.removeEventListener('scroll', updateCoords, true);
+        };
+    }, [isOpen]);
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
+                // Also check if click is inside the portal content
+                const portal = document.getElementById('custom-select-portal');
+                if (portal && !portal.contains(event.target as Node)) {
+                    setIsOpen(false);
+                }
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -40,15 +69,23 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, c
         <div className={`relative ${className}`} ref={containerRef}>
             <button
                 type="button"
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={() => { setIsOpen(!isOpen); }}
                 className={`w-full flex items-center justify-between px-3 py-2 bg-white dark:bg-gray-800 border border-sky-500 rounded-lg shadow-sm transition-all text-xs font-bold text-gray-700 dark:text-gray-200 hover:shadow-md outline-none ${isOpen ? 'ring-2 ring-sky-200 dark:ring-sky-900' : ''}`}
             >
                 <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-sky-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {isOpen && (
-                <div className="absolute z-[200] w-full mt-1 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-lg shadow-xl max-h-60 overflow-y-auto custom-scrollbar animate-fade-in">
+            {isOpen && createPortal(
+                <div 
+                    id="custom-select-portal"
+                    className="absolute z-[9999] bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-lg shadow-xl max-h-60 overflow-y-auto custom-scrollbar animate-fade-in"
+                    style={{
+                        top: coords.top + 4,
+                        left: coords.left,
+                        width: coords.width,
+                    }}
+                >
                     <div className="p-1 space-y-0.5">
                         {options.map((option) => (
                             <button
@@ -66,7 +103,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, c
                             </button>
                         ))}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

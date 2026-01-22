@@ -47,7 +47,7 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
     };
 
     return (
-        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100 dark:border-gray-800 w-full px-1">
+        <div className="flex items-center justify-between mb-2 w-full px-1">
             <div className="flex items-center gap-1">
                 {formattingButtons.map((btn) => renderButton(btn))}
             </div>

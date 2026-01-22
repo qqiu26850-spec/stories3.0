@@ -137,13 +137,15 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 tags: item.tags || []
             })));
 
-            // Load Workflows
-            const workflows = await fetchWorkflows({ category: 'script' });
+            // Load Workflows - Fetch ALL categories to ensure list is populated
+            const workflows = await fetchWorkflows({ category: 'all' });
             setAvailableWorkflows(workflows);
-            // Default to first available workflow if none selected
+            // Default to first available workflow if none selected and filtered by script logic ideally
             if (workflows.length > 0 && !selectedWorkflow) {
-                // Try to find one with 'outline' in subcategories for default, or just first
-                setSelectedWorkflow(workflows[0]);
+                // Try to find script workflows first
+                const scriptWfs = workflows.filter(w => w.category === 'script');
+                if (scriptWfs.length > 0) setSelectedWorkflow(scriptWfs[0]);
+                else setSelectedWorkflow(workflows[0]);
             }
         };
         loadInitialData();
@@ -314,6 +316,15 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             initialMode: text ? 'selection' : 'full'
         });
     };
+
+    // Helper for episode grouping
+    const episodeGroups = useMemo(() => {
+        const groups = [];
+        for (let i = 0; i < script.scenes.length; i += 5) {
+            groups.push(script.scenes.slice(i, i + 5));
+        }
+        return groups;
+    }, [script.scenes]);
 
     const renderSetupSidebar = () => (
         <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-96 relative">
@@ -595,7 +606,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                      {/* Content Header & Toolbar */}
                      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-2 flex justify-between items-center shrink-0 h-12 relative">
                          <div className="flex items-center gap-4 pl-4 w-1/3">
-                             <h2 className="text-base font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2 truncate">
+                             <h2 className="text-base font-bold text-sky-500 dark:text-sky-400 flex items-center gap-2 truncate">
                                  {activeScene?.title || '剧本正文'}
                              </h2>
                              {saveStatus === 'saving' && <span className="text-xs text-blue-500 animate-pulse whitespace-nowrap">保存中...</span>}
@@ -611,7 +622,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                              <div className="relative">
                                  <button 
                                     onClick={() => setIsEpisodeSelectorOpen(!isEpisodeSelectorOpen)}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 rounded-lg text-xs font-bold hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors"
                                  >
                                      {activeScene?.title || "选择集数"}
                                      <ChevronDown className="w-3 h-3" />
@@ -625,15 +636,27 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                  <span>剧本集数</span>
                                                  <button onClick={() => { handleCreateEpisode(); setIsEpisodeSelectorOpen(false); }} className="text-blue-500 hover:underline">+ 新建</button>
                                              </div>
-                                             {script.scenes.length > 0 ? script.scenes.map((scene) => (
-                                                 <button 
-                                                     key={scene.id}
-                                                     onClick={() => { setActiveScene(scene); setIsEpisodeSelectorOpen(false); }}
-                                                     className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors ${activeScene?.id === scene.id ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                                                 >
-                                                     {scene.title}
-                                                 </button>
-                                             )) : (
+                                             
+                                             {script.scenes.length > 0 ? (
+                                                 episodeGroups.map((group, groupIdx) => (
+                                                     <div key={groupIdx} className="mb-1">
+                                                         <button className="w-full text-left px-3 py-1.5 text-xs font-bold text-sky-600 bg-sky-50/50 hover:bg-sky-100 dark:text-sky-400 dark:bg-sky-900/20 dark:hover:bg-sky-900/40 rounded-md mb-1 cursor-default">
+                                                             第 {groupIdx * 5 + 1} - {Math.min((groupIdx + 1) * 5, script.scenes.length)} 集
+                                                         </button>
+                                                         <div className="pl-2 space-y-0.5 border-l-2 border-sky-100 dark:border-sky-900 ml-2">
+                                                             {group.map((scene) => (
+                                                                 <button 
+                                                                     key={scene.id}
+                                                                     onClick={() => { setActiveScene(scene); setIsEpisodeSelectorOpen(false); }}
+                                                                     className={`w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors truncate ${activeScene?.id === scene.id ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                                                                 >
+                                                                     {scene.title}
+                                                                 </button>
+                                                             ))}
+                                                         </div>
+                                                     </div>
+                                                 ))
+                                             ) : (
                                                  <div className="p-3 text-center text-xs text-gray-400">暂无集数</div>
                                              )}
                                          </div>
