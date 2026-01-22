@@ -214,9 +214,20 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                         
                         <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
                             <VersionItem 
+                                version="v1.7.0" 
+                                date="2026.02.26"
+                                isLatest={true}
+                                features={[
+                                    "剧本生成重构：全屏沉浸式布局，移除冗余边距，支持直接编辑生成内容与实时保存。",
+                                    "智能右键菜单：在剧本正文中右键即可唤起 AI 菜单，支持「智能追问」、「润色」与「扩写」。",
+                                    "Word 导出升级：剧本分集支持一键导出为 Word (.doc) 格式，保留阅读版式预览。",
+                                    "界面优化：右侧 AI 功能栏改为默认收起，提供更开阔的写作视野。",
+                                    "将“存入”按钮优化为更直观的“追问”功能，方便对生成结果进行即时调整。"
+                                ]}
+                            />
+                            <VersionItem 
                                 version="v1.6.0" 
                                 date="2026.01.10"
-                                isLatest={true}
                                 features={[
                                     "新增「工作流选中追问」：在运行结果中选中文字，即可进行上下文感知的定向追问。",
                                     "模型升级：全面接入 Gemini 3.0 Flash 与 DeepSeek-V3，生成更智能、响应更迅速。",

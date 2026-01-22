@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Sparkles, AdjustmentsHorizontal, BookOpen, Workflow } from './Icon';
+import { X, Check, Sparkles, Film, DocumentArrowDown, ArrowPath } from './Icon';
 
-const CURRENT_VERSION = 'v1.6.0';
+const CURRENT_VERSION = 'v1.7.0';
 const STORAGE_KEY = `qisimiaoxie_version_seen_${CURRENT_VERSION}`;
 
 const VersionUpdateModal: React.FC = () => {
@@ -47,49 +47,43 @@ const VersionUpdateModal: React.FC = () => {
                                 奇思妙写 <span className="text-indigo-600">{CURRENT_VERSION}</span>
                             </h2>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-bold tracking-wide">
-                                2026.01.10 · 工作流升级 · 交互优化
+                                2026.02.26 · 剧本生成重构 · 交互升级
                             </p>
                         </div>
                     </div>
 
                     <div className="space-y-4">
-                        {/* Feature 1: Workflow Follow-up */}
+                        {/* Feature 1: Script Layout */}
                         <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                                <Workflow className="w-4 h-4 text-indigo-500" />
-                                工作流精准追问
+                                <Film className="w-4 h-4 text-indigo-500" />
+                                沉浸式剧本创作
                             </h3>
                             <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                在工作流运行结果中，选中任意一段文字即可触发“追问”按钮。AI 将结合全文背景与您的具体指令，对选中内容进行定向优化或解答。
+                                剧本生成界面全面焕新，采用全屏无边距设计。生成的分集内容支持直接编辑与实时保存，所见即所得。
                             </p>
                         </div>
 
-                        {/* Feature 2: Model Upgrade */}
+                        {/* Feature 2: Right Click & Sidebar */}
                         <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                                <Sparkles className="w-4 h-4 text-indigo-500" />
-                                全线模型升级
+                                <ArrowPath className="w-4 h-4 text-indigo-500" />
+                                智能右键交互
                             </h3>
                             <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                所有创作模块默认集成 Gemini 3.0 Flash 与 DeepSeek-V3，响应速度提升 40%，指令遵循能力显著增强。
+                                在正文中右键即可唤起 AI 菜单，支持对选中文本进行追问、润色或扩写。右侧功能栏改为默认收起，让写作更专注。
                             </p>
                         </div>
 
-                        {/* Feature 3: Short Story Mode */}
+                        {/* Feature 3: Word Download */}
                         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
                             <h3 className="text-sm font-bold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center gap-2">
-                                ✨ 体验优化
+                                <DocumentArrowDown className="w-4 h-4" />
+                                Word 格式导出
                             </h3>
-                            <ul className="space-y-1.5">
-                                <li className="flex items-start gap-2 text-xs text-indigo-900 dark:text-indigo-200">
-                                    <span className="text-indigo-500 font-bold">•</span>
-                                    <span>优化了 AI 续写逻辑，确保长文本生成时的上下文连贯性。</span>
-                                </li>
-                                <li className="flex items-start gap-2 text-xs text-indigo-900 dark:text-indigo-200">
-                                    <span className="text-indigo-500 font-bold">•</span>
-                                    <span>修复了流式输出在网络波动时的中断问题。</span>
-                                </li>
-                            </ul>
+                            <p className="text-xs text-indigo-900 dark:text-indigo-200 leading-relaxed">
+                                优化了下载功能，现在可以将剧本分集内容直接导出为带有排版格式的 Word 文档，无缝对接后续编辑工作。
+                            </p>
                         </div>
                     </div>
 
@@ -97,7 +91,7 @@ const VersionUpdateModal: React.FC = () => {
                         onClick={handleClose}
                         className="mt-6 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-xl shadow-indigo-500/30 transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
                     >
-                        <Check className="w-4 h-4" /> 立即体验新版本
+                        <Check className="w-4 h-4" /> 立即体验
                     </button>
                 </div>
             </div>

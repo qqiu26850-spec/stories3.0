@@ -1,20 +1,22 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Asset, Prompt } from '../../types';
+import { Asset, Prompt, PromptSubCategory } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
-import { PROMPTS } from '../../constants';
-import { Sparkles, Film, X, ChevronDown, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, Database, InformationCircle, Check, ArrowPath, Plus, Play } from '../Icon';
+import { Sparkles, Film, ChevronDown, Database, Copy, Stop, AdjustmentsHorizontal, Check, ArrowPath, Play, Pencil, ClipboardDocumentCheck, DocumentPlus, Trash, Plus } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import CustomSelect from '../CustomSelect';
 
 interface ScriptAIPanelProps {
     onInsert: (text: string) => void;
+    onReplace?: (text: string) => void;
     onStream?: (text: string, isFirst: boolean) => void;
+    selectedText?: string;
+    externalAction?: { type: 'polish' | 'expand' | 'ask'; text: string } | null;
 }
 
-type ScriptTab = 'idea' | 'script';
+type ScriptTab = 'idea' | 'script' | 'polish' | 'review';
 
 const WRITING_STRATEGIES = [
     "💡 提示：剧本创作强调'画面感'，避免过多的心理描写。",
@@ -44,7 +46,7 @@ const CollapsibleSection: React.FC<{ title: string; icon: any; color: string; ch
     );
 };
 
-const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => {
+const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onStream, selectedText = '', externalAction }) => {
     const [activeTab, setActiveTab] = useState<ScriptTab>('idea');
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(1);
@@ -54,12 +56,13 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
     
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
     const [isPromptModalOpen, setPromptModalOpen] = useState(false);
-    const [promptFilterType, setPromptFilterType] = useState<'requirements' | 'style'>('requirements');
+    const [promptFilterType, setPromptFilterType] = useState<PromptSubCategory>('requirements');
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
     
     const [customInput, setCustomInput] = useState('');
+    const [polishContent, setPolishContent] = useState('');
     const [formState, setFormState] = useState<Record<string, string>>({});
     
     // New Loading & Result Logic
@@ -69,6 +72,25 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
     const [error, setError] = useState('');
     const [strategyIndex, setStrategyIndex] = useState(0);
     const abortControllerRef = useRef<AbortController | null>(null);
+
+    // Handle External Actions (Context Menu)
+    useEffect(() => {
+        if (externalAction) {
+            if (externalAction.type === 'polish') {
+                setActiveTab('polish');
+                setPolishContent(externalAction.text);
+            } else if (externalAction.type === 'expand') {
+                setActiveTab('script'); // 'Expand' usually generates more script content
+                setCustomInput(`请扩写以下内容：\n${externalAction.text}`);
+            } else if (externalAction.type === 'ask') {
+                // For 'Ask', we can use 'script' tab but prefill prompt
+                setActiveTab('script');
+                setCustomInput(`关于以下内容的追问：\n${externalAction.text}\n\n我的问题是：`);
+            }
+        } else if (selectedText) {
+            setPolishContent(selectedText);
+        }
+    }, [externalAction, selectedText]);
 
     useEffect(() => {
         const loadAssets = async () => {
@@ -93,7 +115,6 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
             .join(', ');
     }, [selectedAssetIds, assets]);
 
-    // Strategies Rotation
     useEffect(() => {
         let interval: any;
         if (isGenerating) {
@@ -118,7 +139,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
         setFormState(prev => ({ ...prev, [id]: val }));
     };
 
-    const handleOpenPromptModal = (filter: 'requirements' | 'style') => {
+    const handleOpenPromptModal = (filter: PromptSubCategory) => {
         setPromptFilterType(filter);
         setPromptModalOpen(true);
     };
@@ -142,6 +163,8 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
             const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考素材：${a!.name}】\n${a!.content}`).join('\n\n');
             let finalPrompt = '';
             let promptContent = '';
+            
+            // Determine Input content
             if (selectedPrompt) {
                 incrementPromptHeat(selectedPrompt.id);
                 promptContent = selectedPrompt.template || selectedPrompt.content;
@@ -149,16 +172,22 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                     const val = formState[field.id] || '';
                     promptContent = promptContent.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
                 }
-            } else promptContent = customInput;
+            } else {
+                promptContent = customInput;
+            }
             
-            // Clean output instruction
             const cleanInstruction = "IMPORTANT: Output ONLY the script/idea content. Do NOT include any filler text.";
 
-            if (activeTab === 'idea') finalPrompt = `${cleanInstruction}\n请根据以下信息，生成3个剧本创意方案。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
-            else finalPrompt = `${cleanInstruction}\n请写一段影视剧本正文。包含场景标题、场景描述、动作、对白。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
-            
-            // Append Force Long Instruction for script content only
-            if (activeTab === 'script') {
+            // Construct Final Prompt based on Tab
+            if (activeTab === 'idea') {
+                finalPrompt = `${cleanInstruction}\n请根据以下信息，生成3个剧本创意方案。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
+            } else if (activeTab === 'polish') {
+                finalPrompt = `${cleanInstruction}\n请润色以下剧本片段，使其更加专业、画面感更强。\n\n【待润色内容】：\n${polishContent}\n\n${promptContent ? `【额外要求】：${promptContent}` : ''}`;
+            } else if (activeTab === 'review') {
+                finalPrompt = `${cleanInstruction}\n请作为资深编剧评审以下剧本片段，指出优缺点并给出修改建议。\n\n【待评审内容】：\n${polishContent}\n\n${promptContent ? `【额外要求】：${promptContent}` : ''}`;
+            } else {
+                // Script generation
+                finalPrompt = `${cleanInstruction}\n请写一段影视剧本正文。包含场景标题、场景描述、动作、对白。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
                 finalPrompt += FORCE_LONG_INSTRUCTION;
             }
 
@@ -173,7 +202,6 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                 const ideas = result.split(/【方案[一二三]】/).filter(s => s.trim().length > 10);
                 setGeneratedIdeas(ideas.length === 0 ? [result] : ideas.map(s => s.trim()));
             } else {
-                // Stream to panel result
                 const stream = generateTextStream(finalPrompt, { 
                     model, 
                     temperature, 
@@ -228,6 +256,20 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
         }
     };
 
+    const renderTabButton = (type: ScriptTab, label: string, Icon: React.ElementType) => (
+        <button
+            onClick={() => { setActiveTab(type); setGeneratedText(''); setGeneratedIdeas([]); }}
+            className={`flex-1 py-2 flex flex-col items-center justify-center gap-1 transition-colors border-b-2 font-sans ${
+                activeTab === type 
+                    ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20' 
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+        >
+            <Icon className="w-4 h-4" />
+            <span className="text-xs font-bold">{label}</span>
+        </button>
+    );
+
     const MODEL_OPTIONS = [
         { value: "deepseek-chat", label: "奇思版 (DeepSeek)" },
         { value: "gemini-3-flash-preview", label: "妙写版 (Gemini 3.0 Flash)" },
@@ -239,10 +281,15 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
             
-            <div className="p-4 border-b border-gray-200 bg-white dark:bg-gray-900 flex items-center gap-2 font-bold font-sans"><Film className="w-5 h-5 text-sky-500" />分集改编</div>
+            <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans flex-shrink-0">
+                {renderTabButton('idea', '创意', Sparkles)}
+                {renderTabButton('script', '正文', Film)}
+                {renderTabButton('polish', '润色', Pencil)}
+                {renderTabButton('review', '评审', ClipboardDocumentCheck)}
+            </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-3 font-sans dynamic-scrollbar">
-                {/* ... existing collapsible sections ... */}
+                {/* Parameters Section */}
                 <CollapsibleSection title="参数填写" icon={AdjustmentsHorizontal} color="sky">
                     <div className="flex flex-col gap-2 font-sans">
                         <div className="flex gap-2">
@@ -275,22 +322,27 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                     )}
                 </CollapsibleSection>
 
+                {/* Polish Content Area (Visible only in polish/review modes) */}
+                {(activeTab === 'polish' || activeTab === 'review') && (
+                    <CollapsibleSection title="待处理文本" icon={DocumentPlus} color="purple">
+                        <textarea 
+                            value={polishContent} 
+                            onChange={(e) => setPolishContent(e.target.value)} 
+                            placeholder="请选择正文中的一段文字，内容将自动填充至此..."
+                            className="w-full h-24 p-2 text-xs bg-white dark:bg-gray-800 border border-purple-100 dark:border-purple-800 rounded-lg focus:ring-1 focus:ring-purple-500 outline-none resize-none"
+                        />
+                        {polishContent.length === 0 && <p className="text-[9px] text-gray-400 mt-1 italic">提示：在左侧正文区域选中文字即可自动填充。</p>}
+                    </CollapsibleSection>
+                )}
+
+                {/* Prompt Selection */}
                 <CollapsibleSection title="写作要求 & 风格" icon={Sparkles} color="sky">
                     <div className="flex flex-col gap-2 font-sans">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">写作要求</label>
-                            <button onClick={() => handleOpenPromptModal('requirements')} className={`w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all relative overflow-hidden group hover:border-sky-300`}>
+                            <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">提示词模板</label>
+                            <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : (activeTab === 'review' ? 'proofread' : 'requirements'))} className={`w-full p-2 rounded-lg border border-sky-100 dark:border-sky-800 bg-white dark:bg-gray-800 text-left transition-all relative overflow-hidden group hover:border-sky-300`}>
                                 <div className="flex items-center justify-between text-[11px] font-semibold truncate text-gray-600 dark:text-gray-300">
-                                    <span>{selectedPrompt && selectedPrompt.subCategories.includes('requirements') ? selectedPrompt.title : '选择要求...'}</span>
-                                    <ChevronDown className="w-3 h-3 text-sky-400 opacity-50" />
-                                </div>
-                            </button>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">写作风格</label>
-                            <button onClick={() => handleOpenPromptModal('style')} className={`w-full p-2 rounded-lg border text-left transition-all relative overflow-hidden font-sans ${selectedPrompt && selectedPrompt.subCategories.includes('style') ? 'bg-pink-50 border-pink-300 text-pink-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
-                                <div className="flex items-center justify-between text-[11px] font-semibold truncate text-gray-600 dark:text-gray-300">
-                                    <span>{selectedPrompt && selectedPrompt.subCategories.includes('style') ? selectedPrompt.title : '选择风格...'}</span>
+                                    <span>{selectedPrompt ? selectedPrompt.title : '选择提示词...'}</span>
                                     <ChevronDown className="w-3 h-3 text-sky-400 opacity-50" />
                                 </div>
                             </button>
@@ -298,19 +350,17 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                     </div>
                 </CollapsibleSection>
 
+                {/* Assets */}
                 <CollapsibleSection title="关联素材" icon={Database} color="sky">
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">素材选择</label>
-                        <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
-                            <div className="flex items-center justify-between text-[11px] font-semibold truncate">
-                                <div className="flex items-center gap-1.5 overflow-hidden">
-                                    <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
-                                    <span className="truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '点击关联设定...'}</span>
-                                </div>
-                                <ChevronDown className="w-3 h-3 text-sky-400 opacity-50 flex-shrink-0" />
+                    <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-sky-100 dark:border-sky-800 text-gray-500 hover:border-sky-300'}`}>
+                        <div className="flex items-center justify-between text-[11px] font-semibold truncate">
+                            <div className="flex items-center gap-1.5 overflow-hidden">
+                                <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
+                                <span className="truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '点击关联设定...'}</span>
                             </div>
-                        </button>
-                    </div>
+                            <ChevronDown className="w-3 h-3 text-sky-400 opacity-50 flex-shrink-0" />
+                        </div>
+                    </button>
                 </CollapsibleSection>
 
                 <div className="space-y-4">
@@ -365,7 +415,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                     </button>
                 )}
 
-                {/* Loading / Result Area */}
+                {/* Result Area */}
                 {(isGenerating || generatedText || generatedIdeas.length > 0) && (
                     <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in-up">
                         {isGenerating && !generatedText && generatedIdeas.length === 0 && (
@@ -398,7 +448,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                             </div>
                         )}
 
-                        {activeTab === 'script' && generatedText && (
+                        {activeTab !== 'idea' && generatedText && (
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center font-sans">
                                     <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果</h4>
@@ -411,10 +461,13 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onStream }) => 
                                 
                                 <div className="flex gap-2">
                                     <button 
-                                        onClick={() => onInsert(generatedText)} 
+                                        onClick={() => {
+                                            if (activeTab === 'polish' && onReplace) onReplace(generatedText);
+                                            else onInsert(generatedText);
+                                        }} 
                                         className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
                                     >
-                                        <Plus className="w-3 h-3" /> 插入剧本
+                                        <Plus className="w-3 h-3" /> {activeTab === 'polish' ? '替换原文' : '插入剧本'}
                                     </button>
                                     {!isGenerating && (
                                         <div className="flex gap-2">
