@@ -36,7 +36,7 @@ export interface CreativeModule {
 export interface PromptField {
   id: string;
   label: string;
-  type: 'text' | 'textarea';
+  type: 'text' | 'textarea' | 'file';
   placeholder: string;
   required?: boolean;
   description?: string;
@@ -73,7 +73,7 @@ export interface WorkflowField {
     id: string;
     label: string;
     variable: string;
-    type: 'text' | 'textarea';
+    type: 'text' | 'textarea' | 'file';
     required?: boolean;
     description?: string;
     maxLength?: number;

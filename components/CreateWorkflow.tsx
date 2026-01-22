@@ -428,6 +428,7 @@ const CreateWorkflow: React.FC<CreateWorkflowProps> = ({ onBack, onSave, workflo
                                                         >
                                                             <option value="text">单行文本</option>
                                                             <option value="textarea">多行文本</option>
+                                                            <option value="file">文件上传 (Word/Txt)</option>
                                                         </select>
                                                     </div>
                                                     <div className="space-y-1.5">

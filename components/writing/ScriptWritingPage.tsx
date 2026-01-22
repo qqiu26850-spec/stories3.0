@@ -18,6 +18,8 @@ interface ScriptWritingPageProps {
     onBack: () => void;
 }
 
+const NO_MARKDOWN_INSTRUCTION = "\n\n【重要指令】：请以纯文本格式输出剧本，严禁使用Markdown格式（如 **加粗**、# 标题 等）。请直接按剧本格式输出场景、动作和对白。";
+
 // Editable Content Component for each step
 const EditableStepContent: React.FC<{
     initialContent: string;
@@ -78,7 +80,6 @@ const EditableStepContent: React.FC<{
     );
 };
 
-// ... (MODEL_OPTIONS, LANGUAGE_OPTIONS, CATEGORY_LABELS, getGenreLabel remain same)
 const MODEL_OPTIONS = [
     { value: "deepseek-chat", label: "奇思版 (DeepSeek V3)" },
     { value: "gemini-3-flash-preview", label: "妙写版 (Gemini 3 Flash)" },
@@ -182,6 +183,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     // Context Menu & AI interaction
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string }>({ x: 0, y: 0, visible: false, text: '' });
     const [aiTrigger, setAiTrigger] = useState<{ type: 'polish' | 'expand' | 'ask', text: string } | null>(null);
+    
+    // FollowUp Modal State
+    const [followUpModal, setFollowUpModal] = useState<{ open: boolean; targetText: string; context: string; stepVar: string; }>({
+        open: false, targetText: '', context: '', stepVar: ''
+    });
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const stepRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -312,7 +318,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 const step = selectedWorkflow.steps![i];
                 let prompt = step.prompt;
                 Object.keys(currentContext).forEach(key => { prompt = prompt.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), currentContext[key] || ''); });
-                const finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${prompt}`;
+                
+                // Add Plain Text Instruction
+                const finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${prompt}${NO_MARKDOWN_INSTRUCTION}`;
                 
                 let stepOutput = '';
                 const stream = generateTextStream(finalPrompt, { model: settings.model, temperature, topP, maxOutputTokens, signal: controller.signal });
@@ -360,15 +368,63 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     };
 
     const handleContextMenuAction = (action: 'polish' | 'expand' | 'ask') => {
-        if (contextMenu.text) {
+        if (action === 'ask' && contextMenu.text) {
+            // Find which step this text belongs to (approximate logic or rely on clicked location context if available)
+            // For now, assume it applies to the currently visible step content context
+            // But we need to know WHICH step variable it is.
+            // Since ContextMenu is global, we might need to store stepId when right clicking.
+            // Simplified: "Ask" will open FollowUpModal for the specific text.
+            // We pass an empty stepVar here, we'll need to improve EditableStepContent to pass variable back up.
+            // Actually, we can assume the user just wants an answer, not direct replacement in this flow unless specified.
+            // But requirement 3 says "like workflow follow up".
+            // Let's open the FollowUpModal.
+            
+            // To properly identify context, we assume the user is clicking within a step. 
+            // We'll iterate steps to find where the text is? No, selection is global. 
+            // Ideally EditableStepContent passes the ID.
+            // For this implementation, we will use a generic modal and apply back to the active/last touched step if possible, 
+            // or just copy to clipboard if ambiguous.
+            // However, the cleanest way is for the ContextMenu to know the source.
+            // Let's adapt EditableStepContent to pass the variable name up to onContextMenu.
+            
+            setFollowUpModal({
+                open: true,
+                targetText: contextMenu.text,
+                context: '', // We can try to find context from stepResults if we knew the key.
+                stepVar: '' 
+            });
+        } else if (contextMenu.text) {
             setAiTrigger({ type: action, text: contextMenu.text });
             setRightSidebarOpen(true);
         }
     };
 
-    const handleOpenDeepAsk = (text: string) => {
-        setAiTrigger({ type: 'ask', text: text }); // Reuse 'ask' type
-        setRightSidebarOpen(true);
+    const handleOpenDeepAsk = (text: string, stepVar: string) => {
+        setFollowUpModal({
+            open: true,
+            targetText: '', // Full context mode usually
+            context: text,
+            stepVar: stepVar
+        });
+    };
+
+    const handleFollowUpApply = (newText: string, type: 'insert' | 'replace') => {
+        if (followUpModal.stepVar) {
+             setStepResults(prev => {
+                const currentContent = prev[followUpModal.stepVar] || '';
+                let updatedContent = currentContent;
+                if (type === 'replace' && followUpModal.targetText) {
+                    updatedContent = currentContent.replace(followUpModal.targetText, newText);
+                } else {
+                    updatedContent = currentContent + '\n\n' + newText;
+                }
+                return { ...prev, [followUpModal.stepVar]: updatedContent };
+            });
+        } else {
+            // Fallback: Copy to clipboard or alert
+            navigator.clipboard.writeText(newText);
+            alert("由于无法确定插入位置，结果已复制到剪贴板。");
+        }
     };
 
     const episodeGroups = useMemo(() => {
@@ -405,7 +461,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     // --- Render ---
 
     const renderSetupSidebar = () => (
-        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-96 relative">
+        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-[300px] relative">
             <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-6 space-y-8">
                 {/* ... (Model Config, Basic Info Sections remain same as before) ... */}
                 {/* 1. Model Configuration */}
@@ -503,6 +559,15 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden relative font-sans" onClick={() => setContextMenu(prev => ({...prev, visible: false}))}>
             <LoadingOverlay isVisible={showLoadingOverlay} message={loadingMessage} onClose={() => setShowLoadingOverlay(false)} />
             
+            <FollowUpModal 
+                isOpen={followUpModal.open} 
+                onClose={() => setFollowUpModal(prev => ({ ...prev, open: false }))} 
+                targetText={followUpModal.targetText}
+                context={followUpModal.context || (selectedWorkflow?.steps?.find(s => s.outputVariable === followUpModal.stepVar)?.prompt || '')} 
+                initialMode={followUpModal.targetText ? 'selection' : 'full'}
+                onApply={handleFollowUpApply}
+            />
+
             <ContextMenu 
                 {...contextMenu} 
                 onClose={() => setContextMenu(prev => ({ ...prev, visible: false }))} 
@@ -630,13 +695,13 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
             <div className="flex-1 flex overflow-hidden relative">
                 {/* Left Sidebar */}
-                <aside className={`flex-shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-96' : 'w-0'}`}>
+                <aside className={`flex-shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-[300px]' : 'w-0'}`}>
                     {renderSetupSidebar()}
                 </aside>
 
                 <button 
                     onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
-                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-96' : 'left-0'}`}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-[300px]' : 'left-0'}`}
                 >
                     {isLeftSidebarOpen ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                 </button>
@@ -741,7 +806,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                          <>
                                                             <button 
                                                                 type="button"
-                                                                onClick={() => handleOpenDeepAsk(result)} 
+                                                                onClick={() => handleOpenDeepAsk(result, step.outputVariable)} 
                                                                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 dark:hover:bg-sky-900/40 rounded-lg transition-colors"
                                                                 title="使用侧边栏深度追问"
                                                             >
@@ -807,22 +872,15 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 {/* Right Sidebar */}
                 <button 
                     onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
-                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-l-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isRightSidebarOpen ? 'right-96' : 'right-0'}`}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-l-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isRightSidebarOpen ? 'right-[280px]' : 'right-0'}`}
                 >
                     {isRightSidebarOpen ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
                 </button>
 
-                <aside className={`flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isRightSidebarOpen ? 'w-96' : 'w-0'}`}>
+                <aside className={`flex-shrink-0 bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isRightSidebarOpen ? 'w-[280px]' : 'w-0'}`}>
                     <ScriptAIPanel 
                         onInsert={(text) => {
-                            // Insert to active step content logic would be complex with multi-step. 
-                            // For simplicity, we just trigger the insert callback which might need to handle specific focused step.
-                            // Currently, ScriptAIPanel is mostly for independent generation or polish.
-                            // We can update the last active step result.
                             if (selectedWorkflow?.steps && currentStepIndex !== null) {
-                                // Insert into current generating step? Not usually.
-                                // Insert into the last clicked step? 
-                                // Let's just log for now or show toast. "请手动复制"
                                 alert("请手动复制内容到对应步骤");
                             }
                         }}

@@ -209,6 +209,28 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         setSelectedModule(null);
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, fieldId: string) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const files = Array.from(e.target.files);
+            const readers = files.map(file => {
+                return new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        resolve(`【文件: ${file.name}】\n${ev.target?.result as string}\n`);
+                    };
+                    reader.readAsText(file);
+                });
+            });
+
+            Promise.all(readers).then(contents => {
+                setFormState(prev => ({
+                    ...prev,
+                    [fieldId]: (prev[fieldId] || '') + contents.join('\n')
+                }));
+            });
+        }
+    };
+
     const handleGenerate = async () => {
         if (isGenerating) { handleStop(); return; }
         setIsGenerating(true);
@@ -423,7 +445,22 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                                                         </span>
                                                     )}
                                                 </div>
-                                                {f.type === 'textarea' ? (
+                                                {f.type === 'file' ? (
+                                                    <div className="w-full p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl transition-all font-sans">
+                                                        <input 
+                                                            type="file"
+                                                            multiple
+                                                            accept=".txt,.md,.json,.csv"
+                                                            onChange={(e) => handleFileChange(e, f.id)}
+                                                            className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                                                        />
+                                                        {formState[f.id] && (
+                                                            <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-900 rounded text-[10px] text-gray-600 dark:text-gray-400 truncate">
+                                                                已加载内容 (预览): {formState[f.id].substring(0, 50)}...
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : f.type === 'textarea' ? (
                                                     <textarea 
                                                         value={formState[f.id] || ''} 
                                                         onChange={e => setFormState({...formState, [f.id]: e.target.value})} 

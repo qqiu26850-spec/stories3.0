@@ -238,6 +238,28 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         setActiveFollowUp(null);
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, fieldVar: string) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const files = Array.from(e.target.files);
+            const readers = files.map(file => {
+                return new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        resolve(`【文件: ${file.name}】\n${ev.target?.result as string}\n`);
+                    };
+                    reader.readAsText(file);
+                });
+            });
+
+            Promise.all(readers).then(contents => {
+                setFormState(prev => ({
+                    ...prev,
+                    [fieldVar]: (prev[fieldVar] || '') + contents.join('\n')
+                }));
+            });
+        }
+    };
+
     const handleStop = () => {
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -468,7 +490,22 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                                 </span>
                                             )}
                                         </div>
-                                        {field.type === 'textarea' ? (
+                                        {field.type === 'file' ? (
+                                            <div className="w-full p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl font-sans">
+                                                <input 
+                                                    type="file"
+                                                    multiple
+                                                    accept=".txt,.md,.json,.csv"
+                                                    onChange={(e) => handleFileChange(e, field.variable)}
+                                                    className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 transition-colors"
+                                                />
+                                                {formState[field.variable] && (
+                                                    <div className="mt-2 text-[10px] text-green-600 dark:text-green-400 truncate">
+                                                        已加载 {formState[field.variable].length} 字符
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : field.type === 'textarea' ? (
                                             <textarea
                                                 value={formState[field.variable] || ''}
                                                 onChange={e => setFormState(prev => ({ ...prev, [field.variable]: e.target.value }))}

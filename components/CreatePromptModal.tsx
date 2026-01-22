@@ -441,6 +441,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                                     <select value={field.type} onChange={e => updateField(index, 'type', e.target.value)} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-rose-500">
                                                         <option value="text">单行文本</option>
                                                         <option value="textarea">多行文本</option>
+                                                        <option value="file">文件上传 (Word/Txt)</option>
                                                     </select>
                                                 </div>
                                                 <div className="md:col-span-3 space-y-1.5">

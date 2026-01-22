@@ -16,7 +16,7 @@ interface ScriptAIPanelProps {
     externalAction?: { type: 'polish' | 'expand' | 'ask'; text: string } | null;
 }
 
-type ScriptTab = 'idea' | 'script' | 'polish' | 'review';
+type ScriptTab = 'polish' | 'review';
 
 const WRITING_STRATEGIES = [
     "💡 提示：剧本创作强调'画面感'，避免过多的心理描写。",
@@ -47,7 +47,7 @@ const CollapsibleSection: React.FC<{ title: string; icon: any; color: string; ch
 };
 
 const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onStream, selectedText = '', externalAction }) => {
-    const [activeTab, setActiveTab] = useState<ScriptTab>('idea');
+    const [activeTab, setActiveTab] = useState<ScriptTab>('polish');
     const [model, setModel] = useState('deepseek-chat');
     const [temperature, setTemperature] = useState(1);
     const [topP, setTopP] = useState(0.95);
@@ -61,7 +61,6 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [assets, setAssets] = useState<Asset[]>([]);
     
-    const [customInput, setCustomInput] = useState('');
     const [polishContent, setPolishContent] = useState('');
     const [formState, setFormState] = useState<Record<string, string>>({});
     
@@ -79,13 +78,6 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
             if (externalAction.type === 'polish') {
                 setActiveTab('polish');
                 setPolishContent(externalAction.text);
-            } else if (externalAction.type === 'expand') {
-                setActiveTab('script'); // 'Expand' usually generates more script content
-                setCustomInput(`请扩写以下内容：\n${externalAction.text}`);
-            } else if (externalAction.type === 'ask') {
-                // For 'Ask', we can use 'script' tab but prefill prompt
-                setActiveTab('script');
-                setCustomInput(`关于以下内容的追问：\n${externalAction.text}\n\n我的问题是：`);
             }
         } else if (selectedText) {
             setPolishContent(selectedText);
@@ -172,47 +164,27 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                     const val = formState[field.id] || '';
                     promptContent = promptContent.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
                 }
-            } else {
-                promptContent = customInput;
-            }
+            } 
             
             const cleanInstruction = "IMPORTANT: Output ONLY the script/idea content. Do NOT include any filler text.";
 
             // Construct Final Prompt based on Tab
-            if (activeTab === 'idea') {
-                finalPrompt = `${cleanInstruction}\n请根据以下信息，生成3个剧本创意方案。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
-            } else if (activeTab === 'polish') {
+            if (activeTab === 'polish') {
                 finalPrompt = `${cleanInstruction}\n请润色以下剧本片段，使其更加专业、画面感更强。\n\n【待润色内容】：\n${polishContent}\n\n${promptContent ? `【额外要求】：${promptContent}` : ''}`;
             } else if (activeTab === 'review') {
                 finalPrompt = `${cleanInstruction}\n请作为资深编剧评审以下剧本片段，指出优缺点并给出修改建议。\n\n【待评审内容】：\n${polishContent}\n\n${promptContent ? `【额外要求】：${promptContent}` : ''}`;
-            } else {
-                // Script generation
-                finalPrompt = `${cleanInstruction}\n请写一段影视剧本正文。包含场景标题、场景描述、动作、对白。\n\n${promptContent}\n${assetContext ? `关联素材：\n${assetContext}\n` : ''}`;
-                finalPrompt += FORCE_LONG_INSTRUCTION;
-            }
+            } 
 
-            if (activeTab === 'idea') {
-                const result = await generateText(finalPrompt, { 
-                    model, 
-                    temperature, 
-                    topP, 
-                    maxOutputTokens, 
-                    signal: controller.signal 
-                });
-                const ideas = result.split(/【方案[一二三]】/).filter(s => s.trim().length > 10);
-                setGeneratedIdeas(ideas.length === 0 ? [result] : ideas.map(s => s.trim()));
-            } else {
-                const stream = generateTextStream(finalPrompt, { 
-                    model, 
-                    temperature, 
-                    topP, 
-                    maxOutputTokens, 
-                    signal: controller.signal 
-                });
-                
-                for await (const chunk of stream) {
-                    setGeneratedText(prev => prev + chunk);
-                }
+            const stream = generateTextStream(finalPrompt, { 
+                model, 
+                temperature, 
+                topP, 
+                maxOutputTokens, 
+                signal: controller.signal 
+            });
+            
+            for await (const chunk of stream) {
+                setGeneratedText(prev => prev + chunk);
             }
         } catch (err: any) {
             if (err.message !== 'Aborted') {
@@ -282,8 +254,6 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
             <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
             
             <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans flex-shrink-0">
-                {renderTabButton('idea', '创意', Sparkles)}
-                {renderTabButton('script', '正文', Film)}
                 {renderTabButton('polish', '润色', Pencil)}
                 {renderTabButton('review', '评审', ClipboardDocumentCheck)}
             </div>
@@ -323,17 +293,15 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 </CollapsibleSection>
 
                 {/* Polish Content Area (Visible only in polish/review modes) */}
-                {(activeTab === 'polish' || activeTab === 'review') && (
-                    <CollapsibleSection title="待处理文本" icon={DocumentPlus} color="purple">
-                        <textarea 
-                            value={polishContent} 
-                            onChange={(e) => setPolishContent(e.target.value)} 
-                            placeholder="请选择正文中的一段文字，内容将自动填充至此..."
-                            className="w-full h-24 p-2 text-xs bg-white dark:bg-gray-800 border border-purple-100 dark:border-purple-800 rounded-lg focus:ring-1 focus:ring-purple-500 outline-none resize-none"
-                        />
-                        {polishContent.length === 0 && <p className="text-[9px] text-gray-400 mt-1 italic">提示：在左侧正文区域选中文字即可自动填充。</p>}
-                    </CollapsibleSection>
-                )}
+                <CollapsibleSection title="待处理文本" icon={DocumentPlus} color="purple">
+                    <textarea 
+                        value={polishContent} 
+                        onChange={(e) => setPolishContent(e.target.value)} 
+                        placeholder="请选择正文中的一段文字，内容将自动填充至此..."
+                        className="w-full h-24 p-2 text-xs bg-white dark:bg-gray-800 border border-purple-100 dark:border-purple-800 rounded-lg focus:ring-1 focus:ring-purple-500 outline-none resize-none"
+                    />
+                    {polishContent.length === 0 && <p className="text-[9px] text-gray-400 mt-1 italic">提示：在左侧正文区域选中文字即可自动填充。</p>}
+                </CollapsibleSection>
 
                 {/* Prompt Selection */}
                 <CollapsibleSection title="写作要求 & 风格" icon={Sparkles} color="sky">
@@ -364,7 +332,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 </CollapsibleSection>
 
                 <div className="space-y-4">
-                    {selectedPrompt ? (
+                    {selectedPrompt && (
                         <div className="p-3 bg-white/50 dark:bg-black/20 rounded-xl border border-sky-100 dark:border-sky-800 space-y-3 shadow-sm animate-fade-in">
                             <div className="flex items-center justify-between">
                                 <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">模板参数</span>
@@ -396,16 +364,6 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                                 </div>
                             ))}
                         </div>
-                    ) : (
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">自定义要求</label>
-                            <textarea 
-                                value={customInput} 
-                                onChange={(e) => setCustomInput(e.target.value)} 
-                                placeholder={activeTab === 'idea' ? "例如：想一个发生在火星的悬疑故事..." : "例如：写一段主角在废弃工厂发现秘密的戏..."}
-                                className="w-full h-24 p-3 text-xs bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
-                            />
-                        </div>
                     )}
                 </div>
 
@@ -431,24 +389,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                             </div>
                         )}
 
-                        {activeTab === 'idea' && generatedIdeas.length > 0 && !isGenerating && (
-                            <div className="space-y-3">
-                                {generatedIdeas.map((idea, idx) => (
-                                    <div key={idx} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:border-sky-300 transition-colors group">
-                                        <h4 className="text-xs font-bold text-sky-600 dark:text-sky-400 mb-2">方案 {idx + 1}</h4>
-                                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-3 whitespace-pre-wrap">{idea}</p>
-                                        <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => navigator.clipboard.writeText(idea)} className="p-1.5 text-gray-400 hover:text-sky-600 transition-colors" title="复制"><Copy className="w-3.5 h-3.5" /></button>
-                                        </div>
-                                    </div>
-                                ))}
-                                <button onClick={handleGenerate} className="w-full py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-xs">
-                                    <ArrowPath className="w-3.5 h-3.5" /> 换一批
-                                </button>
-                            </div>
-                        )}
-
-                        {activeTab !== 'idea' && generatedText && (
+                        {generatedText && (
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center font-sans">
                                     <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果</h4>
