@@ -293,6 +293,43 @@ export async function deleteChapterFromDB(chapterId: string) {
     await supabase.from('chapters').delete().eq('id', chapterId);
 }
 
+// --- Workflow State Persistence ---
+
+export async function saveScriptWorkflowState(projectId: string, workflowId: string | undefined, formState: any, stepResults: any, visibleIndex: number) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+        
+        await supabase.from('script_workflow_states').upsert({
+            project_id: projectId,
+            workflow_id: workflowId,
+            form_state: formState,
+            step_results: stepResults,
+            visible_index: visibleIndex,
+            updated_at: new Date().toISOString()
+        });
+    } catch (e) {
+        console.error("Failed to save workflow state", e);
+    }
+}
+
+export async function fetchScriptWorkflowState(projectId: string) {
+    try {
+        const { data, error } = await supabase
+            .from('script_workflow_states')
+            .select('*')
+            .eq('project_id', projectId)
+            .maybeSingle();
+        
+        if (error) return null;
+        return data;
+    } catch (e) {
+        return null;
+    }
+}
+
+// ----------------------------------
+
 export async function saveMaterial(name: string, content: string, type: 'character' | 'plot' | 'idea' | 'inspiration', tags: string[] = []) {
     try {
         const userId = await getCurrentUserId();

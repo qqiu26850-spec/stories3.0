@@ -3,7 +3,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Script, Scene, ScriptSettings, Workflow, Asset, PromptCategory } from '../../types';
 import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Copy, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, InformationCircle, ChatBubbleOvalLeftEllipsis, DocumentPlus, UserCircle, Fire, Tag, Heart } from '../Icon';
 import WritingToolbar from './WritingToolbar';
-import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, deleteChapterFromDB, updateChapterOrder, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId } from '../../services/supabaseService';
+import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, deleteChapterFromDB, updateChapterOrder, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
 import CustomSelect from '../CustomSelect';
@@ -125,22 +125,31 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const abortControllerRef = useRef<AbortController | null>(null);
     const stepRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const resultRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const dbSaveTimeoutRef = useRef<any>(null);
 
     const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; initialMode: 'selection' | 'full' } | null>(null);
 
     // --- Persistence Helper ---
+    // Debounced save to Supabase
     const persistState = useCallback(() => {
         if (!script.id) return;
-        const stateToSave = {
-            workflowId: selectedWorkflow?.id,
-            formState: workflowFormState,
-            results: stepResults,
-            visibleIndex: visibleStepIndex
-        };
-        localStorage.setItem(`qisimiaoxie_script_run_${script.id}`, JSON.stringify(stateToSave));
+        if (dbSaveTimeoutRef.current) clearTimeout(dbSaveTimeoutRef.current);
+        
+        dbSaveTimeoutRef.current = setTimeout(async () => {
+            // Only save if there is actually some state to save
+            if (selectedWorkflow || Object.keys(stepResults).length > 0) {
+                await saveScriptWorkflowState(
+                    script.id,
+                    selectedWorkflow?.id,
+                    workflowFormState,
+                    stepResults,
+                    visibleStepIndex
+                );
+            }
+        }, 2000); // 2 seconds debounce
     }, [script.id, selectedWorkflow?.id, workflowFormState, stepResults, visibleStepIndex]);
 
-    // Save state on changes
+    // Trigger save on changes
     useEffect(() => {
         persistState();
     }, [persistState]);
@@ -177,9 +186,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 tags: item.tags || []
             })));
 
-            // Load Workflows with proper parsing
+            // Load Workflows first
             const workflowsData = await fetchWorkflows({ category: 'all' });
             let mappedWorkflows: Workflow[] = [];
+            
             if (workflowsData) {
                 mappedWorkflows = workflowsData.map((wf: any) => {
                     let content: any = {};
@@ -211,22 +221,34 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 setAvailableWorkflows(mappedWorkflows);
             }
 
-            // Restore State from LocalStorage
-            const savedStateStr = localStorage.getItem(`qisimiaoxie_script_run_${script.id}`);
-            if (savedStateStr) {
-                try {
-                    const savedState = JSON.parse(savedStateStr);
-                    if (savedState.workflowId) {
-                        const wf = mappedWorkflows.find(w => w.id === savedState.workflowId);
-                        if (wf) {
-                            setSelectedWorkflow(wf);
-                            setWorkflowFormState(savedState.formState || {});
-                            setStepResults(savedState.results || {});
-                            setVisibleStepIndex(savedState.visibleIndex ?? -1);
-                        }
+            // Restore State from Supabase
+            const savedState = await fetchScriptWorkflowState(script.id);
+            if (savedState) {
+                if (savedState.workflow_id) {
+                    const wf = mappedWorkflows.find(w => w.id === savedState.workflow_id);
+                    if (wf) {
+                        setSelectedWorkflow(wf);
+                        setWorkflowFormState(savedState.form_state || {});
+                        setStepResults(savedState.step_results || {});
+                        setVisibleStepIndex(savedState.visible_index ?? -1);
                     }
-                } catch (e) {
-                    console.error("Failed to restore state", e);
+                }
+            } else {
+                // Fallback to local storage if DB is empty
+                const savedStateStr = localStorage.getItem(`qisimiaoxie_script_run_${script.id}`);
+                if (savedStateStr) {
+                    try {
+                        const localState = JSON.parse(savedStateStr);
+                        if (localState.workflowId) {
+                            const wf = mappedWorkflows.find(w => w.id === localState.workflowId);
+                            if (wf) {
+                                setSelectedWorkflow(wf);
+                                setWorkflowFormState(localState.formState || {});
+                                setStepResults(localState.results || {});
+                                setVisibleStepIndex(localState.visibleIndex ?? -1);
+                            }
+                        }
+                    } catch (e) {}
                 }
             }
         };
