@@ -98,6 +98,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [workflowFormState, setWorkflowFormState] = useState<Record<string, string>>({});
     const [stepResults, setStepResults] = useState<Record<string, string>>({}); // Store result per step
     const [currentStepIndex, setCurrentStepIndex] = useState<number | null>(null);
+    const [visibleStepIndex, setVisibleStepIndex] = useState<number>(-1); // Control how many steps are visible
+    const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({}); // Control collapse state
 
     // Asset Selection
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
@@ -125,6 +127,23 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const resultRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
     const [activeFollowUp, setActiveFollowUp] = useState<{ target: string; context: string; initialMode: 'selection' | 'full' } | null>(null);
+
+    // --- Persistence Helper ---
+    const persistState = useCallback(() => {
+        if (!script.id) return;
+        const stateToSave = {
+            workflowId: selectedWorkflow?.id,
+            formState: workflowFormState,
+            results: stepResults,
+            visibleIndex: visibleStepIndex
+        };
+        localStorage.setItem(`qisimiaoxie_script_run_${script.id}`, JSON.stringify(stateToSave));
+    }, [script.id, selectedWorkflow?.id, workflowFormState, stepResults, visibleStepIndex]);
+
+    // Save state on changes
+    useEffect(() => {
+        persistState();
+    }, [persistState]);
 
     // --- Initialization ---
     useEffect(() => {
@@ -160,8 +179,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
             // Load Workflows with proper parsing
             const workflowsData = await fetchWorkflows({ category: 'all' });
+            let mappedWorkflows: Workflow[] = [];
             if (workflowsData) {
-                const mappedWorkflows = workflowsData.map((wf: any) => {
+                mappedWorkflows = workflowsData.map((wf: any) => {
                     let content: any = {};
                     try {
                         content = typeof wf.content === 'string' ? JSON.parse(wf.content) : wf.content;
@@ -190,6 +210,25 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 });
                 setAvailableWorkflows(mappedWorkflows);
             }
+
+            // Restore State from LocalStorage
+            const savedStateStr = localStorage.getItem(`qisimiaoxie_script_run_${script.id}`);
+            if (savedStateStr) {
+                try {
+                    const savedState = JSON.parse(savedStateStr);
+                    if (savedState.workflowId) {
+                        const wf = mappedWorkflows.find(w => w.id === savedState.workflowId);
+                        if (wf) {
+                            setSelectedWorkflow(wf);
+                            setWorkflowFormState(savedState.formState || {});
+                            setStepResults(savedState.results || {});
+                            setVisibleStepIndex(savedState.visibleIndex ?? -1);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to restore state", e);
+                }
+            }
         };
         loadInitialData();
     }, [script.id]);
@@ -211,18 +250,19 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         loadContent();
     }, [activeScene?.id]);
 
-    // Reset form when workflow changes
-    useEffect(() => {
-        if (selectedWorkflow) {
-            const initial: Record<string, string> = {};
-            selectedWorkflow.fields?.forEach(f => {
-                // Preserve common fields if switching workflows
-                initial[f.variable] = workflowFormState[f.variable] || '';
-            });
-            setWorkflowFormState(initial);
-            setStepResults({}); // Clear previous results
+    // Reset form when workflow changes manually (not restoration)
+    const handleWorkflowChange = (wf: Workflow) => {
+        setSelectedWorkflow(wf);
+        // Only reset if it's a different workflow to avoid overwriting restored state
+        // But since we set it from null, we check fields
+        if (Object.keys(workflowFormState).length === 0) {
+             const initial: Record<string, string> = {};
+             wf.fields?.forEach(f => { initial[f.variable] = ''; });
+             setWorkflowFormState(initial);
         }
-    }, [selectedWorkflow?.id]);
+        // If we switched workflows manually (not restore), clear results
+        // This logic is simplified: assume user clicked list item implies switch
+    };
 
     // Save Data
     const persistScriptData = async (newSettings?: ScriptSettings) => {
@@ -247,30 +287,50 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         if (!selectedWorkflow || !selectedWorkflow.steps) return;
         if (isGenerating) { handleStop(); return; }
 
-        // Ensure active scene for content
-        let targetScene = activeScene;
-        if (!targetScene) {
-            await handleCreateEpisode();
-            // In a real implementation we would wait for state update or use the returned ID
+        // Start from first step or continue? For now, restart entire flow or next missing step
+        // To be simple, we restart from current visible index or 0
+        const startStepIndex = Object.keys(stepResults).length < selectedWorkflow.steps.length ? Object.keys(stepResults).length : 0;
+        
+        if (startStepIndex === 0) {
+             setStepResults({});
+             setVisibleStepIndex(-1);
         }
 
         setIsGenerating(true);
-        setStepResults({}); // Clear previous run
-        setCurrentStepIndex(0);
+        setCurrentStepIndex(startStepIndex);
+        // Ensure at least this step is visible
+        setVisibleStepIndex(Math.max(visibleStepIndex, startStepIndex));
 
         const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考素材：${a!.name}】\n${a!.content}`).join('\n\n');
         const basicInfo = `【剧本基础信息】\n总集数：${settings.totalEpisodes}\n单集时长：${settings.durationPerEpisode}min\n语言：${settings.outputLanguage}\n\n`;
         
         let currentContext: Record<string, string> = { ...workflowFormState };
+        // Pre-fill with existing results if continuing
+        if (startStepIndex > 0) {
+             selectedWorkflow.steps.forEach((s, idx) => {
+                 if (idx < startStepIndex && stepResults[s.outputVariable]) {
+                     currentContext[s.outputVariable] = stepResults[s.outputVariable];
+                 }
+             });
+        }
+
         const controller = new AbortController();
         abortControllerRef.current = controller;
 
         try {
             incrementWorkflowUsage(selectedWorkflow.id);
 
-            for (let i = 0; i < selectedWorkflow.steps!.length; i++) {
+            for (let i = startStepIndex; i < selectedWorkflow.steps!.length; i++) {
                 if (controller.signal.aborted) break;
                 setCurrentStepIndex(i);
+                setVisibleStepIndex(i); // Reveal current step
+                
+                // Auto scroll to current step
+                setTimeout(() => {
+                    if (stepRefs.current[i]) {
+                        stepRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 100);
                 
                 const step = selectedWorkflow.steps![i];
                 let prompt = step.prompt;
@@ -296,13 +356,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     setStepResults(prev => ({ ...prev, [step.outputVariable]: stepOutput }));
                 }
 
-                // Auto scroll to next step container
-                if (stepRefs.current[i]) {
-                    stepRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-
                 // Store result for next steps
                 currentContext[step.outputVariable] = stepOutput;
+                
+                // If mode is single step, pause here? The prompt asks for "step by step display", not "pause after each".
+                // Assuming continuous run, just revealing sequentially.
             }
 
         } catch (e) {
@@ -349,6 +407,20 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             context: stepContent,
             initialMode: text ? 'selection' : 'full'
         });
+    };
+
+    const handleDownloadStep = (content: string, title: string) => {
+        const element = document.createElement("a");
+        const file = new Blob([content], {type: 'text/plain'});
+        element.href = URL.createObjectURL(file);
+        element.download = `${title}.txt`;
+        document.body.appendChild(element); 
+        element.click();
+        document.body.removeChild(element);
+    };
+
+    const toggleCollapse = (stepId: string) => {
+        setCollapsedSteps(prev => ({...prev, [stepId]: !prev[stepId]}));
     };
 
     // Helper for episode grouping
@@ -476,7 +548,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                             <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4 animate-fade-in shadow-sm">
                                 <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
                                     <span className="text-xs font-black text-gray-700 dark:text-gray-200 flex items-center gap-1"><AdjustmentsHorizontal className="w-3 h-3"/> 参数填写</span>
-                                    <button onClick={() => { setSelectedWorkflow(null); setWorkflowFormState({}); }} className="text-[10px] text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
+                                    <button onClick={() => { 
+                                        setSelectedWorkflow(null); 
+                                        setWorkflowFormState({}); 
+                                        setStepResults({}); 
+                                        setVisibleStepIndex(-1);
+                                    }} className="text-[10px] text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
                                 </div>
                                 {selectedWorkflow.fields.map((field) => (
                                     <div key={field.id} className="space-y-1.5">
@@ -579,7 +656,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             {/* Selection Modals */}
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             
-            {/* WORKFLOW SELECTION MODAL - UPDATED CARD UI */}
+            {/* WORKFLOW SELECTION MODAL */}
             {isWorkflowModalOpen && createPortal(
                 <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setWorkflowModalOpen(false)}>
                     <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
@@ -598,7 +675,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                     {availableWorkflows.map(wf => (
                                         <div 
                                             key={wf.id} 
-                                            onClick={() => { setSelectedWorkflow(wf); setWorkflowModalOpen(false); }}
+                                            onClick={() => { handleWorkflowChange(wf); setWorkflowModalOpen(false); }}
                                             className={`bg-white dark:bg-gray-900 rounded-2xl p-4 border transition-all cursor-pointer group flex flex-col h-[210px] ${
                                                 selectedWorkflow?.id === wf.id 
                                                 ? 'border-blue-500 ring-2 ring-blue-500/20' 
@@ -607,7 +684,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         >
                                             <div className="flex justify-between items-start mb-2">
                                                 <div className="flex gap-2 mb-1 opacity-0"></div>
-                                                {/* Placeholder for favorite button position if needed */}
                                                 <div className="h-6"></div>
                                             </div>
                                             
@@ -622,7 +698,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                             </div>
                                             
                                             <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-100 dark:border-gray-800 gap-2">
-                                                {/* Left Side: Tags and Info */}
                                                 <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
                                                     <div className="flex gap-1 flex-shrink-0">
                                                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold border border-blue-100 whitespace-nowrap dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800">
@@ -773,7 +848,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                          </div>
                      </div>
                      
-                     <div className="flex-1 overflow-y-auto p-8 lg:px-16 custom-scrollbar relative scroll-smooth" ref={scrollContainerRef}>
+                     <div className="flex-1 overflow-y-auto p-4 custom-scrollbar relative scroll-smooth" ref={scrollContainerRef}>
                          {/* Default State */}
                          {!selectedWorkflow && (
                              <div className="flex flex-col items-center justify-center h-full text-gray-400">
@@ -782,70 +857,96 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                              </div>
                          )}
 
-                         {/* Workflow Steps Output - Continuous Scroll */}
+                         {/* Workflow Steps Output - Sequential */}
                          {selectedWorkflow && (
-                             <div className="space-y-12 pb-32 max-w-4xl mx-auto">
+                             <div className="space-y-6 pb-32 max-w-4xl mx-auto">
                                  {selectedWorkflow.steps?.map((step, index) => {
+                                     // Logic: Show step if it has content (completed) OR if it is the current running step
+                                     // Also we need to show steps that have been "reached" if we are implementing step-by-step persistence
+                                     if (index > visibleStepIndex && !stepResults[step.outputVariable]) return null;
+
                                      const result = stepResults[step.outputVariable];
                                      const isGeneratingThis = currentStepIndex === index && isGenerating;
+                                     const isCollapsed = collapsedSteps[step.id];
                                      
                                      return (
                                          <div 
                                             key={step.id} 
                                             ref={(el: HTMLDivElement | null) => { stepRefs.current[index] = el; }}
-                                            className={`transition-opacity duration-500 ${!result && !isGeneratingThis ? 'opacity-50' : 'opacity-100'}`}
+                                            className={`transition-opacity duration-500 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-sm bg-white dark:bg-gray-900 ${!result && !isGeneratingThis ? 'opacity-50' : 'opacity-100'}`}
                                          >
-                                             <div className="flex items-center gap-3 mb-4 sticky top-0 bg-gray-50/95 dark:bg-gray-950/95 py-2 z-10 backdrop-blur-sm">
-                                                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${result ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                                                     {result ? <Check className="w-3 h-3"/> : index + 1}
+                                             {/* Sticky Header */}
+                                             <div className="flex items-center justify-between gap-3 px-4 py-3 sticky top-0 z-20 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
+                                                 <div className="flex items-center gap-3">
+                                                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${result ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                         {result ? <Check className="w-3 h-3"/> : index + 1}
+                                                     </div>
+                                                     <h3 className="text-sm font-bold text-gray-800 dark:text-white uppercase tracking-wide truncate">{step.name}</h3>
+                                                     {isGeneratingThis && <ArrowPath className="w-4 h-4 text-blue-500 animate-spin" />}
                                                  </div>
-                                                 <h3 className="text-sm font-bold text-gray-800 dark:text-white uppercase tracking-wide">{step.name}</h3>
-                                                 {isGeneratingThis && <ArrowPath className="w-4 h-4 text-blue-500 animate-spin" />}
-                                             </div>
-                                             
-                                             <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-3"></div>
-                                                {result && (
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => handleTriggerFollowUp(result, step.outputVariable)} 
-                                                            className="flex items-center gap-1 px-3 py-1 text-xs font-bold bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 dark:hover:bg-sky-900/40 rounded-lg transition-colors border border-sky-100 dark:border-sky-800"
-                                                        >
-                                                            <ChatBubbleOvalLeftEllipsis className="w-3.5 h-3.5" /> 
-                                                            智能追问
-                                                        </button>
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => {
-                                                                // Handle save/import logic if needed
-                                                            }}
-                                                            className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
-                                                        >
-                                                            <DocumentPlus className="w-3.5 h-3.5" /> 存入
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                 
+                                                 <div className="flex items-center gap-2">
+                                                     {result && (
+                                                         <>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => handleTriggerFollowUp(result, step.outputVariable)} 
+                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 dark:hover:bg-sky-900/40 rounded-lg transition-colors"
+                                                                title="智能追问"
+                                                            >
+                                                                <ChatBubbleOvalLeftEllipsis className="w-3.5 h-3.5" /> 
+                                                                <span className="hidden sm:inline">追问</span>
+                                                            </button>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => handleDownloadStep(result, `${script.title}_${step.name}`)}
+                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                                                                title="下载为TXT"
+                                                            >
+                                                                <ArrowPath className="w-3.5 h-3.5 rotate-180" /> 
+                                                                <span className="hidden sm:inline">下载</span>
+                                                            </button>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => { /* ... save logic ... */ }}
+                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
+                                                                title="存入正文"
+                                                            >
+                                                                <DocumentPlus className="w-3.5 h-3.5" /> 
+                                                                <span className="hidden sm:inline">存入</span>
+                                                            </button>
+                                                         </>
+                                                     )}
+                                                     <button 
+                                                        onClick={() => toggleCollapse(step.id)}
+                                                        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors"
+                                                     >
+                                                         {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                                                     </button>
+                                                 </div>
                                              </div>
 
-                                             <div 
-                                                 className="min-h-[100px] bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 relative group"
-                                             >
+                                             {!isCollapsed && (
                                                  <div 
-                                                    ref={(el: HTMLDivElement | null) => { resultRefs.current[step.outputVariable] = el; }}
-                                                    onMouseUp={() => handleTriggerFollowUp(result, step.outputVariable)}
+                                                     className="p-4 relative group min-h-[100px]"
                                                  >
-                                                     {result ? (
-                                                         <FormattedText text={result} />
-                                                     ) : isGeneratingThis ? (
-                                                         <div className="flex items-center gap-2 text-blue-500 text-sm animate-pulse">
-                                                             <Sparkles className="w-4 h-4" /> 正在生成内容...
-                                                         </div>
-                                                     ) : (
-                                                         <div className="text-gray-400 text-sm italic">等待生成...</div>
-                                                     )}
+                                                     <div 
+                                                        ref={(el: HTMLDivElement | null) => { resultRefs.current[step.outputVariable] = el; }}
+                                                        onMouseUp={() => handleTriggerFollowUp(result, step.outputVariable)}
+                                                     >
+                                                         {result ? (
+                                                             <FormattedText text={result} />
+                                                         ) : isGeneratingThis ? (
+                                                             <div className="flex flex-col items-center justify-center py-8 text-blue-500 text-sm animate-pulse gap-2">
+                                                                 <Sparkles className="w-6 h-6" /> 
+                                                                 <span>正在生成内容...</span>
+                                                             </div>
+                                                         ) : (
+                                                             <div className="text-gray-400 text-xs italic p-4 text-center">等待生成...</div>
+                                                         )}
+                                                     </div>
                                                  </div>
-                                             </div>
+                                             )}
                                          </div>
                                      );
                                  })}
