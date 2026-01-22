@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Script, Scene, ScriptSettings, Workflow, Asset } from '../../types';
-import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Copy, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, InformationCircle, ChatBubbleOvalLeftEllipsis, DocumentPlus } from '../Icon';
+import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Copy, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, InformationCircle, ChatBubbleOvalLeftEllipsis, DocumentPlus, UserCircle, Fire } from '../Icon';
 import WritingToolbar from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, deleteChapterFromDB, updateChapterOrder, fetchMaterials, incrementWorkflowUsage, fetchWorkflows } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
@@ -17,42 +17,6 @@ interface ScriptWritingPageProps {
 }
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
-
-// --- Component: Sidebar Section ---
-const SidebarSection: React.FC<{ 
-    title: string; 
-    number: string; 
-    icon: any; 
-    children: React.ReactNode;
-    defaultOpen?: boolean;
-}> = ({ title, number, icon: Icon, children, defaultOpen = true }) => {
-    const [isOpen, setIsOpen] = useState(defaultOpen);
-    return (
-        <div className="border-b border-blue-50 dark:border-gray-800 last:border-0 bg-white dark:bg-gray-900 mb-2 rounded-xl border border-transparent shadow-sm overflow-hidden">
-            <button 
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-blue-50/50 dark:hover:bg-gray-800 transition-colors"
-            >
-                <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold border border-blue-200 dark:border-blue-800">
-                        {number}
-                    </div>
-                    <span className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <Icon className="w-4 h-4 text-blue-500" />
-                        {title}
-                    </span>
-                </div>
-                {isOpen ? <ChevronUp className="w-3 h-3 text-gray-400"/> : <ChevronDown className="w-3 h-3 text-gray-400"/>}
-            </button>
-            
-            {isOpen && (
-                <div className="px-4 pb-4 animate-fade-in">
-                    {children}
-                </div>
-            )}
-        </div>
-    );
-};
 
 // --- Helper: Reading Mode Renderer ---
 const FormattedText: React.FC<{ text: string; className?: string }> = ({ text, className = "" }) => {
@@ -352,19 +316,32 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     };
 
     const renderSetupSidebar = () => (
-        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-96">
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-4 space-y-3">
+        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-96 relative">
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-6 space-y-8">
                 {/* 1. Model Configuration */}
-                <SidebarSection title="模型配置" number="1" icon={AdjustmentsHorizontal}>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase">选择基座模型</label>
-                        <CustomSelect value={settings.model} onChange={(v) => setSettings(s => ({...s, model: v}))} options={MODEL_OPTIONS} />
+                <div className="space-y-3">
+                    <h3 className="text-sm font-black text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                        <AdjustmentsHorizontal className="w-4 h-4" />
+                        1. 模型配置
+                    </h3>
+                    <div className="pl-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">选择基座模型</label>
+                        <CustomSelect 
+                            value={settings.model} 
+                            onChange={(v) => setSettings(s => ({...s, model: v}))} 
+                            options={MODEL_OPTIONS} 
+                            className="z-50"
+                        />
                     </div>
-                </SidebarSection>
+                </div>
 
                 {/* 2. Basic Info */}
-                <SidebarSection title="剧本基本信息" number="2" icon={DocumentText}>
-                    <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-3">
+                    <h3 className="text-sm font-black text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                        <DocumentText className="w-4 h-4" />
+                        2. 剧本基本信息
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 pl-1">
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-400">总集数</label>
                             <input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
@@ -379,20 +356,26 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         </div>
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-400">语言</label>
-                            <CustomSelect value={settings.outputLanguage} onChange={(v) => setSettings(s => ({...s, outputLanguage: v as 'zh' | 'en'}))} options={LANGUAGE_OPTIONS} />
+                            <div className="relative z-40">
+                                <CustomSelect value={settings.outputLanguage} onChange={(v) => setSettings(s => ({...s, outputLanguage: v as 'zh' | 'en'}))} options={LANGUAGE_OPTIONS} />
+                            </div>
                         </div>
                     </div>
-                </SidebarSection>
+                </div>
 
                 {/* 3. Workflow & Form */}
-                <SidebarSection title="工作流配置" number="3" icon={WorkflowIcon}>
-                    <div className="space-y-4">
+                <div className="space-y-4">
+                    <h3 className="text-sm font-black text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                        <WorkflowIcon className="w-4 h-4" />
+                        3. 工作流配置
+                    </h3>
+                    <div className="space-y-4 pl-1">
                         {/* Asset Selection */}
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">关联素材</label>
-                            <button onClick={() => setAssetModalOpen(true)} className="w-full p-3 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-xs text-gray-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 hover:border-blue-300 transition-all text-left flex justify-between items-center group">
+                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-xl border border-dashed text-xs transition-all text-left flex justify-between items-center group ${selectedAssetIds.size > 0 ? 'border-blue-300 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : 'border-gray-300 dark:border-gray-700 text-gray-500 hover:border-blue-300'}`}>
                                 <span className="truncate font-bold">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 项素材` : '选择角色/剧情/世界观...'}</span>
-                                <Database className="w-4 h-4 group-hover:scale-110 transition-transform text-blue-400" />
+                                <Database className={`w-4 h-4 group-hover:scale-110 transition-transform ${selectedAssetIds.size > 0 ? 'text-blue-500' : 'text-gray-400'}`} />
                             </button>
                         </div>
 
@@ -401,10 +384,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">选择工作流</label>
                             <button 
                                 onClick={() => setWorkflowModalOpen(true)}
-                                className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 hover:border-blue-300 transition-all text-left flex justify-between items-center group shadow-sm"
+                                className={`w-full p-3 rounded-xl border text-xs text-left flex justify-between items-center group shadow-sm transition-all ${selectedWorkflow ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-300'}`}
                             >
                                 <span className="truncate font-bold">{selectedWorkflow ? selectedWorkflow.title : '选择生成流程...'}</span>
-                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                <ChevronDown className={`w-4 h-4 ${selectedWorkflow ? 'text-blue-500' : 'text-gray-400'}`} />
                             </button>
                         </div>
                         
@@ -451,41 +434,39 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                             </div>
                         )}
                     </div>
-                </SidebarSection>
+                </div>
             </div>
 
-            {/* Bottom Action Area */}
-            <div className="p-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+            {/* Bottom Action Area - More Compact */}
+            <div className="p-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
                 {isGenerating ? (
                     <button 
                         onClick={handleStop} 
-                        className="w-full py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg hover:bg-red-600 transition-all flex items-center justify-center gap-2 active:scale-95"
+                        className="w-full py-2 bg-red-500 text-white font-bold rounded-xl shadow-lg hover:bg-red-600 transition-all flex items-center justify-center gap-2 active:scale-95 text-xs"
                     >
-                        <Stop className="w-4 h-4" /> 停止生成
+                        <Stop className="w-3.5 h-3.5" /> 停止生成
                     </button>
                 ) : (
-                    <div className="flex flex-col gap-2 animate-fade-in">
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={() => handleRunWorkflow('single')} 
-                                className="flex-1 py-3 bg-blue-50 text-blue-600 border border-blue-200 font-bold rounded-xl hover:bg-blue-100 transition-all flex items-center justify-center gap-1 shadow-sm text-sm"
-                            >
-                                <Film className="w-4 h-4" /> 分集创作
-                            </button>
-                            <button 
-                                onClick={() => handleRunWorkflow('full')} 
-                                className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-1 text-sm"
-                            >
-                                <Play className="w-4 h-4" /> 一键全集
-                            </button>
-                            <button 
-                                onClick={() => handleRunWorkflow('single')} // Logic can be refined for "Regenerate"
-                                className="px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1 text-sm"
-                                title="重新生成"
-                            >
-                                <ArrowPath className="w-4 h-4" />
-                            </button>
-                        </div>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => handleRunWorkflow('single')} 
+                            className="flex-1 py-2 bg-blue-50 text-blue-600 border border-blue-200 font-bold rounded-xl hover:bg-blue-100 transition-all flex items-center justify-center gap-1 shadow-sm text-xs"
+                        >
+                            <Film className="w-3.5 h-3.5" /> 分集创作
+                        </button>
+                        <button 
+                            onClick={() => handleRunWorkflow('full')} 
+                            className="flex-1 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-1 text-xs"
+                        >
+                            <Play className="w-3.5 h-3.5" /> 一键全集
+                        </button>
+                        <button 
+                            onClick={() => handleRunWorkflow('single')} 
+                            className="px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1 text-xs whitespace-nowrap"
+                            title="重新生成"
+                        >
+                            <ArrowPath className="w-3.5 h-3.5" /> 重新生成
+                        </button>
                     </div>
                 )}
             </div>
@@ -513,7 +494,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             {/* WORKFLOW SELECTION MODAL */}
             {isWorkflowModalOpen && createPortal(
                 <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setWorkflowModalOpen(false)}>
-                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
                         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                 <WorkflowIcon className="w-5 h-5 text-blue-500" />
@@ -523,30 +504,30 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 <X className="w-5 h-5"/>
                             </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar bg-gray-50 dark:bg-black/20">
+                        <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-gray-50 dark:bg-black/20">
                             {availableWorkflows.length > 0 ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {availableWorkflows.map(wf => (
                                         <button
                                             key={wf.id}
                                             onClick={() => { setSelectedWorkflow(wf); setWorkflowModalOpen(false); }}
-                                            className={`w-full text-left p-4 rounded-xl border transition-all flex flex-col gap-2 group hover:shadow-md relative overflow-hidden ${selectedWorkflow?.id === wf.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300'}`}
+                                            className={`w-full text-left p-4 rounded-xl border transition-all flex flex-col gap-2 group hover:shadow-lg hover:-translate-y-1 ${selectedWorkflow?.id === wf.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700'}`}
                                         >
-                                            <div className="flex justify-between items-start w-full">
+                                            <div className="flex justify-between items-start w-full mb-1">
                                                 <div className="font-bold text-gray-900 dark:text-white text-sm group-hover:text-blue-600 transition-colors line-clamp-1">{wf.title}</div>
                                                 {selectedWorkflow?.id === wf.id && <div className="bg-blue-500 text-white rounded-full p-0.5"><Check className="w-3 h-3" /></div>}
                                             </div>
-                                            <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">{wf.description || '暂无描述'}</div>
-                                            <div className="mt-auto pt-2 flex items-center gap-2 text-[10px] text-gray-400">
-                                                <span className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-300">{wf.author || '未知作者'}</span>
-                                                <span>使用: {wf.usageCount || 0}</span>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed h-8">{wf.description || '暂无描述'}</p>
+                                            <div className="mt-auto pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center gap-3 text-[10px] text-gray-400 w-full">
+                                                <span className="flex items-center gap-1"><UserCircle className="w-3 h-3"/> {wf.author || '未知'}</span>
+                                                <span className="flex items-center gap-1"><Fire className="w-3 h-3 text-orange-400"/> {wf.usageCount || 0}</span>
                                             </div>
                                         </button>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="text-center py-10 text-gray-400 flex flex-col items-center">
-                                    <WorkflowIcon className="w-12 h-12 mb-2 opacity-20" />
+                                <div className="text-center py-20 text-gray-400 flex flex-col items-center">
+                                    <WorkflowIcon className="w-16 h-16 mb-4 opacity-10" />
                                     <p>暂无可用工作流</p>
                                 </div>
                             )}
@@ -557,10 +538,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             )}
 
             {/* Header with Steps */}
-            <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm h-16 justify-between px-4">
-                <div className="flex items-center gap-4">
-                    <Film className="w-6 h-6 text-blue-500" />
-                    <span className="font-bold text-lg text-gray-900 dark:text-white truncate max-w-[150px]">{script.title}</span>
+            <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm h-14 justify-between px-4">
+                <div className="flex items-center gap-3">
+                    <Film className="w-5 h-5 text-blue-500" />
+                    <span className="font-bold text-base text-gray-900 dark:text-white truncate max-w-[150px]">{script.title}</span>
                 </div>
                 
                 <div className="flex-1 flex items-center justify-center overflow-x-auto no-scrollbar mx-4">
@@ -612,18 +593,21 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 {/* Main Content Area */}
                 <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden">
                      {/* Content Header & Toolbar */}
-                     <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-2 flex justify-between items-center shrink-0">
-                         <div className="flex items-center gap-4 pl-4">
-                             <h2 className="text-lg font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                     <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-2 flex justify-between items-center shrink-0 h-12 relative">
+                         <div className="flex items-center gap-4 pl-4 w-1/3">
+                             <h2 className="text-base font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2 truncate">
                                  {activeScene?.title || '剧本正文'}
                              </h2>
-                             {saveStatus === 'saving' && <span className="text-xs text-blue-500 animate-pulse">保存中...</span>}
-                             {saveStatus === 'saved' && <span className="text-xs text-green-500">已保存</span>}
+                             {saveStatus === 'saving' && <span className="text-xs text-blue-500 animate-pulse whitespace-nowrap">保存中...</span>}
+                             {saveStatus === 'saved' && <span className="text-xs text-green-500 whitespace-nowrap">已保存</span>}
                          </div>
                          
-                         <div className="flex items-center gap-2">
+                         {/* Centered Toolbar */}
+                         <div className="absolute left-1/2 -translate-x-1/2">
                              <WritingToolbar onAction={() => {}} alignment={alignment} />
-                             <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
+                         </div>
+
+                         <div className="flex items-center gap-2 w-1/3 justify-end">
                              <div className="relative">
                                  <button 
                                     onClick={() => setIsEpisodeSelectorOpen(!isEpisodeSelectorOpen)}
@@ -636,7 +620,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                  {isEpisodeSelectorOpen && (
                                      <>
                                          <div className="fixed inset-0 z-40" onClick={() => setIsEpisodeSelectorOpen(false)} />
-                                         <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-1 max-h-60 overflow-y-auto custom-scrollbar">
+                                         <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-1 max-h-60 overflow-y-auto custom-scrollbar animate-fade-in">
                                              <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase border-b border-gray-100 dark:border-gray-700 mb-1 flex justify-between items-center">
                                                  <span>剧本集数</span>
                                                  <button onClick={() => { handleCreateEpisode(); setIsEpisodeSelectorOpen(false); }} className="text-blue-500 hover:underline">+ 新建</button>
