@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Workflow, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
@@ -241,7 +240,8 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, fieldVar: string) => {
         if (e.target.files && e.target.files.length > 0) {
             const files = Array.from(e.target.files);
-            const readers = files.map(file => {
+            const readers = files.map((f) => {
+                const file = f as File;
                 return new Promise<string>((resolve) => {
                     const reader = new FileReader();
                     reader.onload = (ev) => {
@@ -268,6 +268,50 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         setIsLoading(false);
         setShowOverlay(false);
         setExecutionStatus('paused');
+    };
+
+    const handleContinueStepGeneration = async (index: number) => {
+        if (isLoading) return;
+        
+        const step = workflow.steps![index];
+        const currentContent = stepResults[step.outputVariable] || '';
+        if (!currentContent) return;
+
+        setIsLoading(true);
+        setCurrentStepIndex(index);
+        setError('');
+        
+        if (abortControllerRef.current) abortControllerRef.current.abort();
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        const tail = currentContent.slice(-2000);
+        const continuePrompt = `IMPORTANT: Output ONLY the continued content. Do NOT include any filler.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
+
+        try {
+             const stream = generateTextStream(continuePrompt, { 
+                model: modelRef.current, 
+                temperature, 
+                topP, 
+                maxOutputTokens, 
+                signal: controller.signal 
+            });
+            
+            for await (const chunk of stream) {
+                setStepResults(prev => ({ 
+                    ...prev, 
+                    [step.outputVariable]: (prev[step.outputVariable] || '') + chunk 
+                }));
+            }
+        } catch (e: any) {
+             if (e.message !== 'Aborted') {
+                setError(e.message || '生成失败');
+            }
+        } finally {
+            setIsLoading(false);
+            setCurrentStepIndex(null);
+            abortControllerRef.current = null;
+        }
     };
 
     const handleRunWorkflow = async (startIndex: number = 0) => {
@@ -623,6 +667,14 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
                                             {/* Buttons moved to header row */}
                                             {result && (
                                                 <div className="flex items-center gap-2">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => handleContinueStepGeneration(idx)} 
+                                                        className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-900/20 rounded-lg transition-colors border border-transparent hover:border-sky-100"
+                                                        title="接续生成"
+                                                    >
+                                                        <Play className="w-3.5 h-3.5" /> 继续
+                                                    </button>
                                                     <button 
                                                         type="button"
                                                         onClick={() => handleTriggerFollowUp(result, step.outputVariable)} 

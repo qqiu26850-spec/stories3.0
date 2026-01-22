@@ -318,8 +318,6 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
                 />
             )}
 
-            {/* Removed the blue info box */}
-
             <div className="grid grid-cols-1 gap-3">
                 {SETTING_TYPES.map(config => {
                     const rawValue = settings[config.id];
@@ -331,20 +329,20 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
                         <button 
                             key={config.id}
                             onClick={() => setActiveSetting(config)}
-                            className={`group relative w-full text-left p-4 rounded-xl border transition-all duration-300 flex flex-col gap-2 ${hasValue ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm hover:border-sky-400 hover:shadow-md' : 'bg-gray-50 dark:bg-gray-900/30 border-dashed border-gray-300 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800 hover:border-sky-400'}`}
+                            className={`group relative w-full text-left p-2.5 rounded-xl border transition-all duration-300 flex flex-col gap-1.5 ${hasValue ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm hover:border-sky-400 hover:shadow-md' : 'bg-gray-50 dark:bg-gray-900/30 border-dashed border-gray-300 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800 hover:border-sky-400'}`}
                         >
                             <div className="flex items-center justify-between w-full">
                                 <div className="flex items-center gap-2">
-                                    <div className={`p-1.5 rounded-lg ${hasValue ? 'bg-gray-100 dark:bg-gray-700' : 'bg-transparent'}`}>
-                                        <Icon className={`w-4 h-4 ${config.color} ${!hasValue && 'opacity-50'}`} />
+                                    <div className={`p-1 rounded-lg ${hasValue ? 'bg-gray-100 dark:bg-gray-700' : 'bg-transparent'}`}>
+                                        <Icon className={`w-3.5 h-3.5 ${config.color} ${!hasValue && 'opacity-50'}`} />
                                     </div>
-                                    <span className={`text-sm font-bold ${hasValue ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>{config.label}</span>
+                                    <span className={`text-xs font-bold ${hasValue ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>{config.label}</span>
                                 </div>
                                 {hasValue ? <Pencil className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" /> : <Plus className="w-4 h-4 text-gray-400" />}
                             </div>
                             
                             {hasValue && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed pl-1">
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed pl-1">
                                     {previewText}
                                 </p>
                             )}

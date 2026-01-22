@@ -210,6 +210,12 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }, 1000);
     }, [activeChapter, chapterTitle]);
 
+    const handleSelectionChange = () => {
+        const selection = window.getSelection();
+        const text = selection?.toString() || '';
+        setCurrentSelection(text);
+    };
+
     const handleCreateChapter = async () => {
         const newOrder = novel.chapters.length + 1;
         const tempId = `new-${Date.now()}`;
@@ -462,7 +468,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                      <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 shadow-sm border-x border-gray-100 dark:border-gray-800 w-full h-full overflow-hidden relative">
                         {activeChapter ? (
                             <>
-                                <div className="pt-1.5 px-8 pb-1 flex-shrink-0 bg-white dark:bg-gray-900 z-10 flex flex-col gap-1">
+                                <div className="pt-1.5 px-8 pb-1 flex-shrink-0 bg-white dark:bg-gray-900 z-10 flex flex-col gap-1 border-b border-gray-100 dark:border-gray-800">
                                      <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
                                 </div>
 
@@ -490,6 +496,8 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                             contentEditable 
                                             onInput={handleContentInput}
                                             onContextMenu={handleContextMenu}
+                                            onMouseUp={handleSelectionChange}
+                                            onKeyUp={handleSelectionChange}
                                             suppressContentEditableWarning={true}
                                             spellCheck={false}
                                             autoCorrect="off"

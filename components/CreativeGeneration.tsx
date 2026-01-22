@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
@@ -212,7 +211,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, fieldId: string) => {
         if (e.target.files && e.target.files.length > 0) {
             const files = Array.from(e.target.files);
-            const readers = files.map(file => {
+            const readers = files.map((file: File) => {
                 return new Promise<string>((resolve) => {
                     const reader = new FileReader();
                     reader.onload = (ev) => {
