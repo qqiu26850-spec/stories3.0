@@ -1,9 +1,9 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Script, Scene, ScriptSettings, Workflow, Asset } from '../../types';
-import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Copy, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, InformationCircle, ChatBubbleOvalLeftEllipsis, DocumentPlus, UserCircle, Fire, Tag } from '../Icon';
+import { Script, Scene, ScriptSettings, Workflow, Asset, PromptCategory } from '../../types';
+import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Copy, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, InformationCircle, ChatBubbleOvalLeftEllipsis, DocumentPlus, UserCircle, Fire, Tag, Heart } from '../Icon';
 import WritingToolbar from './WritingToolbar';
-import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, deleteChapterFromDB, updateChapterOrder, fetchMaterials, incrementWorkflowUsage, fetchWorkflows } from '../../services/supabaseService';
+import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, deleteChapterFromDB, updateChapterOrder, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
 import CustomSelect from '../CustomSelect';
@@ -60,6 +60,10 @@ const LANGUAGE_OPTIONS = [
     { value: "en", label: "English" }
 ];
 
+const CATEGORY_LABELS: Record<string, string> = {
+    'long-story': '长篇', 'short-story': '短篇', 'script': '剧本', 'general': '通用',
+};
+
 // Helper to look up genre label
 const getGenreLabel = (id: string) => {
     const found = GENRE_TAGS.find(g => g.id === id);
@@ -70,6 +74,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     // Core Data
     const [script, setScript] = useState<Script>(initialScript);
     const [activeScene, setActiveScene] = useState<Scene | null>(null);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     
     // Setup State
     const [settings, setSettings] = useState<ScriptSettings>({
@@ -124,6 +129,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     // --- Initialization ---
     useEffect(() => {
         const loadInitialData = async () => {
+            const uid = await getCurrentUserId();
+            setCurrentUserId(uid);
+
             // Load Chapters
             const data = await fetchChapters(script.id);
             if (data) {
@@ -150,13 +158,37 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 tags: item.tags || []
             })));
 
-            // Load Workflows - Fetch ALL categories to ensure list is populated
-            const workflows = await fetchWorkflows({ category: 'all' });
-            setAvailableWorkflows(workflows);
-            // Default to first available workflow if none selected
-            if (workflows.length > 0 && !selectedWorkflow) {
-                // Try to find one with 'outline' in subcategories for default, or just first
-                setSelectedWorkflow(null); // Explicitly null to force user selection for better UX
+            // Load Workflows with proper parsing
+            const workflowsData = await fetchWorkflows({ category: 'all' });
+            if (workflowsData) {
+                const mappedWorkflows = workflowsData.map((wf: any) => {
+                    let content: any = {};
+                    try {
+                        content = typeof wf.content === 'string' ? JSON.parse(wf.content) : wf.content;
+                    } catch(e) {
+                        console.error("Workflow content parse error", e);
+                    }
+                    
+                    let authorName = '匿名用户';
+                    if (wf.profiles?.username) authorName = wf.profiles.username;
+                    else if (wf.user_id === uid) authorName = '我';
+
+                    return {
+                        id: wf.id,
+                        title: wf.title,
+                        description: wf.description,
+                        usageCount: wf.usage_count || 0,
+                        heat: wf.usage_count || 0,
+                        author: authorName,
+                        userId: wf.user_id,
+                        category: wf.main_category,
+                        subCategories: wf.sub_categories || [],
+                        fields: content?.fields || [], // IMPORTANT: Parse fields for form generation
+                        steps: content?.steps || [],   // IMPORTANT: Parse steps for execution
+                        createdAt: wf.created_at
+                    };
+                });
+                setAvailableWorkflows(mappedWorkflows);
             }
         };
         loadInitialData();
@@ -439,11 +471,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                             </button>
                         </div>
                         
-                        {/* Dynamic Workflow Form - Now properly rendered */}
+                        {/* Dynamic Workflow Form - Properly Rendered */}
                         {selectedWorkflow && selectedWorkflow.fields && selectedWorkflow.fields.length > 0 && (
-                            <div className="p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800 space-y-4 animate-fade-in">
-                                <div className="flex justify-between items-center border-b border-blue-100 dark:border-blue-800 pb-2">
-                                    <span className="text-xs font-black text-blue-600 dark:text-blue-400 flex items-center gap-1"><AdjustmentsHorizontal className="w-3 h-3"/> 参数填写</span>
+                            <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4 animate-fade-in shadow-sm">
+                                <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
+                                    <span className="text-xs font-black text-gray-700 dark:text-gray-200 flex items-center gap-1"><AdjustmentsHorizontal className="w-3 h-3"/> 参数填写</span>
                                     <button onClick={() => { setSelectedWorkflow(null); setWorkflowFormState({}); }} className="text-[10px] text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
                                 </div>
                                 {selectedWorkflow.fields.map((field) => (
@@ -463,7 +495,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                             <textarea 
                                                 value={workflowFormState[field.variable] || ''}
                                                 onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))}
-                                                className="w-full p-2.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none h-20"
+                                                className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none h-24"
                                                 placeholder={field.description || `请输入${field.label}...`}
                                                 maxLength={field.maxLength}
                                             />
@@ -472,13 +504,21 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                 type="text"
                                                 value={workflowFormState[field.variable] || ''}
                                                 onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))}
-                                                className="w-full p-2.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                                 placeholder={field.description || `请输入${field.label}...`}
                                                 maxLength={field.maxLength}
                                             />
                                         )}
+                                        {field.description && <p className="text-[10px] text-gray-400 leading-tight">{field.description}</p>}
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                        
+                        {/* Empty state prompt */}
+                        {selectedWorkflow && (!selectedWorkflow.fields || selectedWorkflow.fields.length === 0) && (
+                            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700 text-center text-xs text-gray-400 italic">
+                                此工作流无需额外参数输入，请直接点击下方按钮开始生成。
                             </div>
                         )}
                     </div>
@@ -539,7 +579,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             {/* Selection Modals */}
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             
-            {/* WORKFLOW SELECTION MODAL */}
+            {/* WORKFLOW SELECTION MODAL - UPDATED CARD UI */}
             {isWorkflowModalOpen && createPortal(
                 <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setWorkflowModalOpen(false)}>
                     <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
@@ -556,32 +596,51 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                             {availableWorkflows.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {availableWorkflows.map(wf => (
-                                        <button
-                                            key={wf.id}
+                                        <div 
+                                            key={wf.id} 
                                             onClick={() => { setSelectedWorkflow(wf); setWorkflowModalOpen(false); }}
-                                            className={`w-full text-left p-5 rounded-2xl border transition-all flex flex-col gap-2 group hover:shadow-xl hover:-translate-y-1 ${selectedWorkflow?.id === wf.id ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-500/20 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700'}`}
+                                            className={`bg-white dark:bg-gray-900 rounded-2xl p-4 border transition-all cursor-pointer group flex flex-col h-[210px] ${
+                                                selectedWorkflow?.id === wf.id 
+                                                ? 'border-blue-500 ring-2 ring-blue-500/20' 
+                                                : 'border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xl'
+                                            }`}
                                         >
-                                            <div className="flex justify-between items-start w-full mb-1">
-                                                <div className="font-bold text-gray-900 dark:text-white text-base group-hover:text-blue-600 transition-colors line-clamp-1">{wf.title}</div>
-                                                {selectedWorkflow?.id === wf.id && <div className="bg-blue-500 text-white rounded-full p-0.5"><Check className="w-3 h-3" /></div>}
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex gap-2 mb-1 opacity-0"></div>
+                                                {/* Placeholder for favorite button position if needed */}
+                                                <div className="h-6"></div>
                                             </div>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed h-12">{wf.description || '暂无描述'}</p>
                                             
-                                            <div className="mt-auto pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between w-full">
-                                                <div className="flex items-center gap-3 text-[10px] text-gray-400">
-                                                    <span className="flex items-center gap-1"><UserCircle className="w-3 h-3"/> {wf.author || '未知'}</span>
-                                                    <span className="flex items-center gap-1"><Fire className="w-3 h-3 text-orange-400"/> {wf.usageCount || 0}</span>
+                                            <div className="-mt-8">
+                                                <div className="flex justify-between items-start">
+                                                    <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-2 line-clamp-1 group-hover:text-blue-600 transition-colors pr-2">{wf.title}</h3>
+                                                    {selectedWorkflow?.id === wf.id && <div className="bg-blue-500 text-white rounded-full p-0.5 shrink-0 mt-1"><Check className="w-3 h-3" /></div>}
                                                 </div>
-                                                
-                                                <div className="flex gap-1">
-                                                    {wf.subCategories?.slice(0, 2).map((tag, i) => (
-                                                        <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">
-                                                            {getGenreLabel(tag as string)}
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-4 leading-relaxed flex-grow">
+                                                    {wf.description || '暂无描述'}
+                                                </p>
+                                            </div>
+                                            
+                                            <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-100 dark:border-gray-800 gap-2">
+                                                {/* Left Side: Tags and Info */}
+                                                <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
+                                                    <div className="flex gap-1 flex-shrink-0">
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold border border-blue-100 whitespace-nowrap dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800">
+                                                            {CATEGORY_LABELS[wf.category] || '全类型'}
                                                         </span>
-                                                    ))}
+                                                        {wf.subCategories && wf.subCategories.length > 0 && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-bold border border-purple-100 whitespace-nowrap dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800">
+                                                                {getGenreLabel(wf.subCategories[0] as string)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-[10px] text-gray-400 flex-shrink-0 truncate">
+                                                        <div className="flex items-center gap-0.5"><Fire className="w-3 h-3 text-orange-400" /> {wf.usageCount}</div>
+                                                        <div className="flex items-center gap-0.5 truncate"><UserCircle className="w-3 h-3" /> {wf.author}</div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </button>
+                                        </div>
                                     ))}
                                 </div>
                             ) : (
