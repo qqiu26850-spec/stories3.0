@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Novel, Chapter, NovelSettings } from '../../types';
-import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight, X, DocumentText } from '../Icon'; // Removed PanelLeft/Right as they might not be used or used differently
+import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight, X, DocumentText, AdjustmentsHorizontal } from '../Icon'; 
 import NovelSettingsPanel from './NovelSettingsPanel';
 import ChapterManager from './ChapterManager';
 import AIFunctionPanel from './AIFunctionPanel';
@@ -103,14 +104,30 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     isContentLoaded: false
                 }));
                 setNovel(prev => ({ ...prev, chapters: mapped }));
+                
                 if (mapped.length > 0 && !activeChapter) {
                     setActiveChapter(mapped[0]);
+                } else if (mapped.length === 0 && mode === 'short') {
+                    // Auto-create chapter for short story mode if empty
+                    const newId = await saveChapterToDB(novel.id, `new-${Date.now()}`, '正文', '', 1);
+                    if (newId) {
+                        const newChapter: Chapter = {
+                            id: newId,
+                            title: '正文',
+                            content: '',
+                            wordCount: 0,
+                            lastModified: new Date().toISOString(),
+                            isContentLoaded: true
+                        };
+                        setNovel(prev => ({ ...prev, chapters: [newChapter] }));
+                        setActiveChapter(newChapter);
+                    }
                 }
                 setIsLoadingChapters(false);
              }
         };
         loadInitialChapters();
-    }, [novel.id]);
+    }, [novel.id, mode]);
 
     useEffect(() => {
         const loadContent = async () => {
@@ -402,23 +419,30 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 </button>
 
                 <aside className={`flex-shrink-0 flex flex-col bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-64' : 'w-0'}`}>
-                    <div className="flex border-b border-gray-200 dark:border-gray-800">
-                        <button 
-                            onClick={() => setOpenModule('chapters')}
-                            className={`flex-1 py-3 text-sm font-bold transition-colors border-b-2 ${openModule === 'chapters' ? 'border-sky-500 text-sky-600 bg-sky-50 dark:bg-sky-900/10' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
-                        >
-                            章节列表
-                        </button>
-                        <button 
-                            onClick={() => setOpenModule('settings')}
-                            className={`flex-1 py-3 text-sm font-bold transition-colors border-b-2 ${openModule === 'settings' ? 'border-sky-500 text-sky-600 bg-sky-50 dark:bg-sky-900/10' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
-                        >
+                    {mode === 'long' ? (
+                        <div className="flex border-b border-gray-200 dark:border-gray-800">
+                            <button 
+                                onClick={() => setOpenModule('chapters')}
+                                className={`flex-1 py-3 text-sm font-bold transition-colors border-b-2 ${openModule === 'chapters' ? 'border-sky-500 text-sky-600 bg-sky-50 dark:bg-sky-900/10' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+                            >
+                                章节列表
+                            </button>
+                            <button 
+                                onClick={() => setOpenModule('settings')}
+                                className={`flex-1 py-3 text-sm font-bold transition-colors border-b-2 ${openModule === 'settings' ? 'border-sky-500 text-sky-600 bg-sky-50 dark:bg-sky-900/10' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+                            >
+                                作品设定
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/10 font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                            <AdjustmentsHorizontal className="w-4 h-4" />
                             作品设定
-                        </button>
-                    </div>
+                        </div>
+                    )}
                     
                     <div className="flex-1 overflow-y-auto">
-                        {openModule === 'chapters' ? (
+                        {mode === 'long' && openModule === 'chapters' ? (
                             <ChapterManager 
                                 chapters={novel.chapters} 
                                 activeChapterId={activeChapter?.id || null} 
@@ -443,14 +467,18 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto dynamic-scrollbar px-12 pb-12 pt-1" ref={scrollContainerRef}>
-                                    <input 
-                                        value={chapterTitle} 
-                                        onChange={(e) => setChapterTitle(e.target.value)} 
-                                        placeholder="输入章节标题..." 
-                                        maxLength={30}
-                                        className="w-full py-1 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-1.5" 
-                                    />
-                                    <div className="border-b border-gray-100 dark:border-gray-800 mb-6" />
+                                    {mode === 'long' && (
+                                        <>
+                                            <input 
+                                                value={chapterTitle} 
+                                                onChange={(e) => setChapterTitle(e.target.value)} 
+                                                placeholder="输入章节标题..." 
+                                                maxLength={30}
+                                                className="w-full py-1 text-2xl font-bold bg-transparent focus:outline-none text-gray-900 dark:text-white mb-1.5" 
+                                            />
+                                            <div className="border-b border-gray-100 dark:border-gray-800 mb-6" />
+                                        </>
+                                    )}
                                     
                                     {isContentLoading ? (
                                         <div className="w-full h-96 flex items-center justify-center">

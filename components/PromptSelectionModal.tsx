@@ -20,6 +20,7 @@ const CATEGORY_TABS: { id: PromptCategory | 'all' | 'favorites'; label: string }
   { id: 'long-story', label: '长篇小说' },
   { id: 'script', label: '剧本' },
   { id: 'general', label: '全类型' },
+  { id: 'favorites', label: '我的收藏' },
 ];
 
 const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onClose, onSelect, initialSubCategory }) => {
@@ -145,8 +146,8 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col relative animate-fade-in-up overflow-hidden" onClick={e => e.stopPropagation()}>
                 
-                {/* Header Area */}
-                <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex flex-col gap-4 bg-gray-50/50 dark:bg-gray-900/50">
+                {/* Header Area - Compacted */}
+                <div className="p-5 border-b border-gray-200 dark:border-gray-800 flex flex-col gap-3 bg-gray-50/50 dark:bg-gray-900/50">
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-6">
                             <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -165,19 +166,11 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                         }`}
                                     >
-                                        {tab.id === 'favorites' ? '我的收藏' : tab.label}
+                                        {tab.id === 'favorites' ? (
+                                            <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5"/> 我的收藏</span>
+                                        ) : tab.label}
                                     </button>
                                 ))}
-                                <button
-                                    onClick={() => setActiveTab('favorites')}
-                                    className={`px-3 py-1.5 text-sm font-bold rounded-md transition-all flex items-center gap-1 ${
-                                        activeTab === 'favorites'
-                                        ? 'bg-white dark:bg-gray-700 text-red-500 shadow-sm'
-                                        : 'text-gray-500 dark:text-gray-400 hover:text-red-500'
-                                    }`}
-                                >
-                                    <Heart className="w-3.5 h-3.5" />
-                                </button>
                             </div>
                         </div>
                         
@@ -199,8 +192,8 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                         </div>
                     </div>
 
-                    {/* Tag Rows */}
-                    <div className="flex flex-col gap-2">
+                    {/* Tag Rows - Removed horizontal separator line, reduced vertical spacing */}
+                    <div className="flex flex-col gap-1.5">
                         {/* Row 1: Functional Tags */}
                         <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide items-center">
                             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">功能:</span>
@@ -212,8 +205,8 @@ const PromptSelectionModal: React.FC<PromptSelectionModalProps> = ({ isOpen, onC
                             {FUNCTIONAL_TAGS.map(cat => renderTagButton(cat, false))}
                         </div>
                         
-                        {/* Row 2: Genre Tags */}
-                        <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide items-center border-t border-gray-200 dark:border-gray-700 pt-2">
+                        {/* Row 2: Genre Tags - Removed border-t and padding-top */}
+                        <div className="flex flex-wrap gap-2 overflow-x-auto pb-1 scrollbar-hide items-center">
                             <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">题材:</span>
                             {GENRE_TAGS.map(cat => renderTagButton(cat, true))}
                         </div>

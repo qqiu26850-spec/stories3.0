@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Script, Scene, ScriptSettings, Workflow, Asset } from '../../types';
-import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Copy, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, InformationCircle, ChatBubbleOvalLeftEllipsis, DocumentPlus, UserCircle, Fire } from '../Icon';
+import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Copy, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, InformationCircle, ChatBubbleOvalLeftEllipsis, DocumentPlus, UserCircle, Fire, Tag } from '../Icon';
 import WritingToolbar from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, deleteChapterFromDB, updateChapterOrder, fetchMaterials, incrementWorkflowUsage, fetchWorkflows } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
@@ -10,6 +10,7 @@ import CustomSelect from '../CustomSelect';
 import { generateTextStream } from '../../services/geminiService';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
+import { GENRE_TAGS } from '../../constants';
 
 interface ScriptWritingPageProps {
     script: Script;
@@ -59,6 +60,12 @@ const LANGUAGE_OPTIONS = [
     { value: "en", label: "English" }
 ];
 
+// Helper to look up genre label
+const getGenreLabel = (id: string) => {
+    const found = GENRE_TAGS.find(g => g.id === id);
+    return found ? found.label : id;
+};
+
 const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialScript, onBack }) => {
     // Core Data
     const [script, setScript] = useState<Script>(initialScript);
@@ -73,6 +80,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         outputLanguage: 'zh',
         model: 'deepseek-chat'
     });
+
+    // Model Config State
+    const [temperature, setTemperature] = useState(1);
+    const [topP, setTopP] = useState(0.95);
+    const [maxOutputTokens, setMaxOutputTokens] = useState(8192);
+    const [showModelConfig, setShowModelConfig] = useState(false);
     
     // Workflow State
     const [availableWorkflows, setAvailableWorkflows] = useState<Workflow[]>([]);
@@ -140,12 +153,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             // Load Workflows - Fetch ALL categories to ensure list is populated
             const workflows = await fetchWorkflows({ category: 'all' });
             setAvailableWorkflows(workflows);
-            // Default to first available workflow if none selected and filtered by script logic ideally
+            // Default to first available workflow if none selected
             if (workflows.length > 0 && !selectedWorkflow) {
-                // Try to find script workflows first
-                const scriptWfs = workflows.filter(w => w.category === 'script');
-                if (scriptWfs.length > 0) setSelectedWorkflow(scriptWfs[0]);
-                else setSelectedWorkflow(workflows[0]);
+                // Try to find one with 'outline' in subcategories for default, or just first
+                setSelectedWorkflow(null); // Explicitly null to force user selection for better UX
             }
         };
         loadInitialData();
@@ -162,8 +173,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 }));
                 setActiveScene(prev => prev ? { ...prev, content, isContentLoaded: true } : null);
                 
-                // When loading a scene, populate step 1 with content if it's empty? 
-                // Or just keep workflow state separate. For now, workflow state is transient for generation.
                 setIsContentLoading(false);
             }
         };
@@ -191,7 +200,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 synopsis: '', 
                 characterSettings: '',
                 worldview: '',
-                outline: '' // Removed specific outline field storage, relying on scene content or workflow step results
+                outline: '' 
             }
         };
         await updateProject(script.id, { 
@@ -210,8 +219,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         let targetScene = activeScene;
         if (!targetScene) {
             await handleCreateEpisode();
-            // Need to wait for state update or use the newly created ref
-            // For simplicity, we just created it, next render will pick it up or we proceed with basic assumption
+            // In a real implementation we would wait for state update or use the returned ID
         }
 
         setIsGenerating(true);
@@ -245,8 +253,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 let stepOutput = '';
                 const stream = generateTextStream(finalPrompt, { 
                     model: settings.model, 
-                    temperature: 0.8, 
-                    topP: 0.95, 
+                    temperature: temperature, 
+                    topP: topP, 
+                    maxOutputTokens: maxOutputTokens,
                     signal: controller.signal 
                 });
 
@@ -262,13 +271,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
                 // Store result for next steps
                 currentContext[step.outputVariable] = stepOutput;
-            }
-
-            // Auto-save the final result to the active scene if it's a script generation workflow
-            // Assuming the last step is the "content"
-            if (activeScene) {
-                const finalContent = Object.values(currentContext).join('\n\n');
-                // Optional: Save to DB logic here
             }
 
         } catch (e) {
@@ -331,18 +333,53 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-6 space-y-8">
                 {/* 1. Model Configuration */}
                 <div className="space-y-3">
-                    <h3 className="text-sm font-black text-blue-600 dark:text-blue-400 flex items-center gap-2">
-                        <AdjustmentsHorizontal className="w-4 h-4" />
-                        1. 模型配置
-                    </h3>
-                    <div className="pl-1">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">选择基座模型</label>
-                        <CustomSelect 
-                            value={settings.model} 
-                            onChange={(v) => setSettings(s => ({...s, model: v}))} 
-                            options={MODEL_OPTIONS} 
-                            className="z-50"
-                        />
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-black text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                            <AdjustmentsHorizontal className="w-4 h-4" />
+                            1. 模型配置
+                        </h3>
+                        <button 
+                            onClick={() => setShowModelConfig(!showModelConfig)} 
+                            className={`text-xs font-bold px-2 py-1 rounded transition-colors ${showModelConfig ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                        >
+                            参数
+                        </button>
+                    </div>
+                    <div className="pl-1 space-y-3">
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">选择基座模型</label>
+                            <CustomSelect 
+                                value={settings.model} 
+                                onChange={(v) => setSettings(s => ({...s, model: v}))} 
+                                options={MODEL_OPTIONS} 
+                                className="z-50"
+                            />
+                        </div>
+                        
+                        {showModelConfig && (
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800 space-y-3 animate-fade-in">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex justify-between">
+                                        <span>随机度 (Temperature): {temperature}</span>
+                                    </label>
+                                    <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                                    <p className="text-[10px] text-gray-400">控制创造性。值越高越发散、有创意；值越低越严谨。</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex justify-between">
+                                        <span>核采样 (Top P): {topP}</span>
+                                    </label>
+                                    <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                                    <p className="text-[10px] text-gray-400">控制词汇多样性。值较低时，倾向于选择常见词汇。</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex justify-between">
+                                        <span>最大长度 (Tokens): {maxOutputTokens}</span>
+                                    </label>
+                                    <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -402,14 +439,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                             </button>
                         </div>
                         
-                        {/* Dynamic Workflow Form */}
-                        {selectedWorkflow && (
+                        {/* Dynamic Workflow Form - Now properly rendered */}
+                        {selectedWorkflow && selectedWorkflow.fields && selectedWorkflow.fields.length > 0 && (
                             <div className="p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800 space-y-4 animate-fade-in">
                                 <div className="flex justify-between items-center border-b border-blue-100 dark:border-blue-800 pb-2">
                                     <span className="text-xs font-black text-blue-600 dark:text-blue-400 flex items-center gap-1"><AdjustmentsHorizontal className="w-3 h-3"/> 参数填写</span>
                                     <button onClick={() => { setSelectedWorkflow(null); setWorkflowFormState({}); }} className="text-[10px] text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
                                 </div>
-                                {selectedWorkflow.fields && selectedWorkflow.fields.map((field) => (
+                                {selectedWorkflow.fields.map((field) => (
                                     <div key={field.id} className="space-y-1.5">
                                         <div className="flex justify-between items-center">
                                             <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300 block">
@@ -505,7 +542,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             {/* WORKFLOW SELECTION MODAL */}
             {isWorkflowModalOpen && createPortal(
                 <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setWorkflowModalOpen(false)}>
-                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
                         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                 <WorkflowIcon className="w-5 h-5 text-blue-500" />
@@ -515,23 +552,34 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 <X className="w-5 h-5"/>
                             </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-gray-50 dark:bg-black/20">
+                        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-gray-50 dark:bg-black/20">
                             {availableWorkflows.length > 0 ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {availableWorkflows.map(wf => (
                                         <button
                                             key={wf.id}
                                             onClick={() => { setSelectedWorkflow(wf); setWorkflowModalOpen(false); }}
-                                            className={`w-full text-left p-4 rounded-xl border transition-all flex flex-col gap-2 group hover:shadow-lg hover:-translate-y-1 ${selectedWorkflow?.id === wf.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700'}`}
+                                            className={`w-full text-left p-5 rounded-2xl border transition-all flex flex-col gap-2 group hover:shadow-xl hover:-translate-y-1 ${selectedWorkflow?.id === wf.id ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-500/20 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700'}`}
                                         >
                                             <div className="flex justify-between items-start w-full mb-1">
-                                                <div className="font-bold text-gray-900 dark:text-white text-sm group-hover:text-blue-600 transition-colors line-clamp-1">{wf.title}</div>
+                                                <div className="font-bold text-gray-900 dark:text-white text-base group-hover:text-blue-600 transition-colors line-clamp-1">{wf.title}</div>
                                                 {selectedWorkflow?.id === wf.id && <div className="bg-blue-500 text-white rounded-full p-0.5"><Check className="w-3 h-3" /></div>}
                                             </div>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed h-8">{wf.description || '暂无描述'}</p>
-                                            <div className="mt-auto pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center gap-3 text-[10px] text-gray-400 w-full">
-                                                <span className="flex items-center gap-1"><UserCircle className="w-3 h-3"/> {wf.author || '未知'}</span>
-                                                <span className="flex items-center gap-1"><Fire className="w-3 h-3 text-orange-400"/> {wf.usageCount || 0}</span>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed h-12">{wf.description || '暂无描述'}</p>
+                                            
+                                            <div className="mt-auto pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between w-full">
+                                                <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                                                    <span className="flex items-center gap-1"><UserCircle className="w-3 h-3"/> {wf.author || '未知'}</span>
+                                                    <span className="flex items-center gap-1"><Fire className="w-3 h-3 text-orange-400"/> {wf.usageCount || 0}</span>
+                                                </div>
+                                                
+                                                <div className="flex gap-1">
+                                                    {wf.subCategories?.slice(0, 2).map((tag, i) => (
+                                                        <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">
+                                                            {getGenreLabel(tag as string)}
+                                                        </span>
+                                                    ))}
+                                                </div>
                                             </div>
                                         </button>
                                     ))}

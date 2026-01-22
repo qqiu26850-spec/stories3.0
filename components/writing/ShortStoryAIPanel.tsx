@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Asset, Prompt, Workflow, NovelSettings } from '../../types';
+import { Asset, Prompt, Workflow, NovelSettings, PromptSubCategory } from '../../types';
 import { generateText, generateTextStream } from '../../services/geminiService';
 import { fetchMaterials, incrementPromptHeat } from '../../services/supabaseService';
 import { PROMPTS, WORKFLOWS as MOCK_WORKFLOWS } from '../../constants';
-import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, InformationCircle, Check, Database, ArrowPath, Plus, Play, DocumentText } from '../Icon';
+import { Sparkles, DocumentPlus, Pencil, ClipboardDocumentCheck, X, ChevronDown, Workflow as WorkflowIcon, BookOpen, Copy, Trash, Stop, AdjustmentsHorizontal, Search, Database, InformationCircle, Check, ArrowPath, Plus, Play, DocumentText } from '../Icon';
 import PromptSelectionModal from '../PromptSelectionModal';
 import AssetSelectionModal from '../AssetSelectionModal';
 import { createPortal } from 'react-dom';
@@ -65,7 +65,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
     const [isPromptModalOpen, setPromptModalOpen] = useState(false);
-    const [promptFilterType, setPromptFilterType] = useState<'requirements' | 'style' | 'polish'>('requirements');
+    const [promptFilterType, setPromptFilterType] = useState<PromptSubCategory>('requirements');
     
     const [promptInput, setPromptInput] = useState('');
     const [referenceText, setReferenceText] = useState('');
@@ -161,7 +161,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         setIsGenerating(false);
     };
 
-    const handleOpenPromptModal = (filter: 'requirements' | 'style' | 'polish') => {
+    const handleOpenPromptModal = (filter: PromptSubCategory) => {
         setPromptFilterType(filter);
         setPromptModalOpen(true);
     };
@@ -317,7 +317,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         { value: "doubao-flash", label: "速写版 (豆包)" }
     ];
 
-    // If there is result text or it is generating, show result view in full panel
+    // Result View rendering logic remains similar to previous version, ensuring we return early if showing result
     if (resultText || isGenerating) {
         return (
             <div className="flex flex-col h-full bg-white dark:bg-gray-900 relative">
@@ -376,7 +376,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                         </button>
                     ) : (
                         <>
-                            <button onClick={handleContinue} className="flex-1 px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm font-sans flex items-center justify-center gap-1" title="续写更多内容">
+                            <button onClick={handleContinue} className="flex-1 px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-xs flex items-center gap-1" title="续写更多内容">
                                 <Play className="w-3 h-3" /> 继续生成
                             </button>
                             <button onClick={handleGenerate} className="flex-1 px-3 py-2.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold rounded-lg hover:bg-orange-200 transition-colors text-sm font-sans flex items-center justify-center gap-1">
@@ -403,9 +403,8 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
 
             <div className="flex-1 overflow-y-auto p-3 space-y-4 font-sans dynamic-scrollbar relative">
                 
-                {/* Module 1: Parameter Config - White bg */}
+                {/* Module 1: Parameter Config */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
-                    {/* ... config content ... */}
                     <button 
                         onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} 
                         className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
@@ -419,7 +418,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     
                     {!isConfigCollapsed && (
                         <div className="px-3 pb-4 space-y-4">
-                            {/* Model Config */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型选择</label>
                                 <div className="flex gap-2 font-sans">
@@ -439,21 +437,18 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                                 <span>随机度 (Temperature): {temperature}</span>
                                             </label>
                                             <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                            <p className="text-[10px] text-gray-400">控制创造性。值越高越发散、有创意；值越低越严谨、稳定。</p>
                                         </div>
                                         <div className="space-y-1">
                                             <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between">
                                                 <span>核采样 (Top P): {topP}</span>
                                             </label>
                                             <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                            <p className="text-[10px] text-gray-400">控制词汇多样性。值较低时，模型倾向于选择常见词汇。</p>
                                         </div>
                                         <div className="space-y-1">
                                             <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between">
                                                 <span>最大长度 (Tokens): {maxOutputTokens}</span>
                                             </label>
                                             <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                            <p className="text-[10px] text-gray-400">限制单次生成的最大文本量。</p>
                                         </div>
                                     </div>
                                 )}
@@ -501,7 +496,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">提示词选择</label>
                             {activeTab === 'polish' || activeTab === 'review' ? (
-                                <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread' as any)} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
+                                <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
                                     <div className="flex items-center justify-between">
                                         <span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>
                                             {selectedPrompt ? selectedPrompt.title : (activeTab === 'polish' ? '选择润色提示词...' : '选择评审提示词...')}
@@ -510,7 +505,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                     </div>
                                 </button>
                             ) : (
-                                <button onClick={() => handleOpenPromptModal('requirements')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
+                                <button onClick={() => handleOpenPromptModal(activeTab === 'original' ? 'expand' : 'requirements')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
                                     <div className="flex items-center justify-between">
                                         <span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>
                                             {selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}
