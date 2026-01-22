@@ -9,6 +9,88 @@ interface GenerationOptions {
     signal?: AbortSignal;
 }
 
+// Helper: Enhanced fetch with retry logic
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3, baseDelay = 2000): Promise<Response> {
+    let lastError: any;
+    
+    for (let i = 0; i <= maxRetries; i++) {
+        try {
+            if (options.signal?.aborted) {
+                throw new Error("Aborted");
+            }
+
+            const response = await fetch(url, options);
+
+            // If successful, return immediately
+            if (response.ok) {
+                return response;
+            }
+
+            // Clone response to read text for error analysis
+            const errorText = await response.clone().text();
+            
+            // Check for retryable conditions:
+            // 503: Service Unavailable (Overloaded)
+            // 429: Too Many Requests (Rate Limit)
+            // 500: Internal Server Error (Often wraps upstream 503s)
+            const isRetryableStatus = [500, 503, 429].includes(response.status);
+            const isOverloaded = errorText.includes('overloaded') || errorText.includes('503') || errorText.includes('quota') || errorText.includes('rate limit');
+
+            if (isRetryableStatus && isOverloaded && i < maxRetries) {
+                const delay = baseDelay * Math.pow(2, i); // Exponential backoff: 2s, 4s, 8s
+                console.warn(`Gemini API overloaded/busy (Attempt ${i + 1}/${maxRetries + 1}). Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+
+            // If not retryable or retries exhausted, return the error response to be handled by caller
+            return response;
+
+        } catch (err: any) {
+            if (err.message === "Aborted") throw err;
+            
+            lastError = err;
+            // Retry on network errors (fetch throws on network failure)
+            if (i < maxRetries) {
+                const delay = baseDelay * Math.pow(2, i);
+                console.warn(`Network error (Attempt ${i + 1}/${maxRetries + 1}). Retrying in ${delay}ms...`, err);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+        }
+    }
+    
+    throw lastError || new Error("Failed to fetch after retries");
+}
+
+// Helper: Format error messages for users
+function formatGeminiError(errorMsg: string): string {
+    if (errorMsg.includes('overloaded') || errorMsg.includes('503')) {
+        return "⚠️ 模型当前负载过高 (Google Server Overloaded)，请稍后再试或尝试切换其他模型。";
+    }
+    if (errorMsg.includes('429') || errorMsg.includes('quota')) {
+        return "⚠️ API 调用次数超限 (Quota Exceeded)，请稍后再试。";
+    }
+    // Attempt to clean up nested JSON error messages
+    try {
+        // Matches typical nested structure: {"error": "..."}
+        if (errorMsg.trim().startsWith('{')) {
+            const parsed = JSON.parse(errorMsg);
+            if (parsed.error && typeof parsed.error === 'string') {
+                return formatGeminiError(parsed.error); // Recursive check
+            }
+            if (parsed.error?.message) {
+                return formatGeminiError(parsed.error.message);
+            }
+        }
+    } catch (e) {
+        // Ignore parse errors
+    }
+    
+    // Fallback: Truncate very long error messages
+    return `服务请求失败: ${errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg}`;
+}
+
 export const generateText = async (prompt: string, options: GenerationOptions): Promise<string> => {
   // Default to a higher token limit if not specified to prevent short responses
   // Increased default to 8192 for Gemini/DeepSeek V3 support
@@ -16,7 +98,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 
   if (options.model.startsWith('gemini')) {
     try {
-        const response = await fetch("/api/gemini", {
+        const response = await fetchWithRetry("/api/gemini", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -33,18 +115,18 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Server Error: ${response.status}`);
+            const errorData = await response.text();
+            throw new Error(errorData);
         }
 
         const data = await response.json();
         return data.text || "";
     } catch (error: any) {
-        if (error.name === 'AbortError') {
+        if (error.name === 'AbortError' || error.message === 'Aborted') {
             throw new Error("Aborted");
         }
         console.error("Error generating text with Gemini:", error);
-        return `Gemini 生成内容时出错：${error.message}`;
+        return formatGeminiError(error.message || String(error));
     }
   } else if (options.model.startsWith('deepseek') || options.model.startsWith('doubao')) {
     const endpoint = options.model.startsWith('doubao') ? "/api/doubao" : "/api/deepseek";
@@ -54,7 +136,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
     const effectiveMaxTokens = Math.min(maxOutputTokens, 8192);
 
     try {
-        const response = await fetch(endpoint, {
+        const response = await fetchWithRetry(endpoint, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -84,7 +166,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
         return content;
     } catch (error: any) {
-        if (error.name === 'AbortError') {
+        if (error.name === 'AbortError' || error.message === 'Aborted') {
             throw new Error('已停止生成');
         }
         console.error(`Error generating text with ${options.model}:`, error);
@@ -110,7 +192,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
 
     if (options.model.startsWith('gemini')) {
         try {
-            const response = await fetch("/api/gemini", {
+            const response = await fetchWithRetry("/api/gemini", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -128,7 +210,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
 
             if (!response.ok) {
                  const errorText = await response.text().catch(() => '');
-                 throw new Error(`Server Error: ${response.status} ${errorText}`);
+                 throw new Error(errorText || `Server Error: ${response.status}`);
             }
             
             if (!response.body) throw new Error("No response body");
@@ -150,11 +232,12 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             }
 
         } catch (error: any) {
-            if (error.name === 'AbortError' || options.signal?.aborted) {
+            if (error.name === 'AbortError' || error.message === 'Aborted' || options.signal?.aborted) {
                 return; 
             }
             console.error("Error generating text stream with Gemini:", error);
-            yield `Gemini 生成内容时出错：${error.message}`;
+            // Use the formatter to yield a user-friendly error message directly to the stream UI
+            yield formatGeminiError(error.message || String(error));
         }
     } else if (options.model.startsWith('deepseek') || options.model.startsWith('doubao')) {
         const endpoint = options.model.startsWith('doubao') ? "/api/doubao" : "/api/deepseek";
@@ -163,7 +246,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
         const effectiveMaxTokens = Math.min(maxOutputTokens, 8192);
 
         try {
-            const response = await fetch(endpoint, {
+            const response = await fetchWithRetry(endpoint, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -244,7 +327,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
                 }
             }
         } catch (error: any) {
-            if (error.name === 'AbortError' || options.signal?.aborted) return;
+            if (error.name === 'AbortError' || error.message === 'Aborted' || options.signal?.aborted) return;
             console.error(`Error generating text stream with ${options.model}:`, error);
             yield `${options.model} 连接出错：${error.message}`;
         }
