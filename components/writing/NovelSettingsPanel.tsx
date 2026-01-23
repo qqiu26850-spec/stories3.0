@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { NovelSettings } from '../../types';
 import { createPortal } from 'react-dom';
-import { X, Plus, Pencil, Trash, UserCircle, Tag, Globe, BookOpen, ListBullet } from '../Icon';
+import { X, Plus, Pencil, Trash, UserCircle, Tag, Globe, BookOpen, ListBullet, Sparkles } from '../Icon';
 
 interface NovelSettingsPanelProps {
     settings: NovelSettings;
@@ -20,6 +20,7 @@ interface SettingConfig {
     description: string;
     mode: SettingMode;
     color: string;
+    bgColor: string;
 }
 
 const SETTING_TYPES: SettingConfig[] = [
@@ -29,6 +30,7 @@ const SETTING_TYPES: SettingConfig[] = [
         icon: Tag,
         mode: 'text',
         color: 'text-purple-600',
+        bgColor: 'bg-purple-100',
         placeholder: '例如：科幻 / 赛博朋克 / 反乌托邦', 
         description: '定义作品的流派与核心元素，帮助保持风格统一。'
     },
@@ -38,6 +40,7 @@ const SETTING_TYPES: SettingConfig[] = [
         icon: BookOpen,
         mode: 'text',
         color: 'text-rose-600',
+        bgColor: 'bg-rose-100',
         placeholder: '例如：探讨科技与人性的边界，关于救赎与牺牲',
         description: '作品想要传达的思想内核或中心主旨。'
     },
@@ -47,6 +50,7 @@ const SETTING_TYPES: SettingConfig[] = [
         icon: ListBullet,
         mode: 'text',
         color: 'text-amber-600',
+        bgColor: 'bg-amber-100',
         placeholder: '起承转合：故事发生在2077年的新东京，主角是一名非法义体医生...',
         description: '简要概括故事的主要情节发展脉络。'
     },
@@ -56,6 +60,7 @@ const SETTING_TYPES: SettingConfig[] = [
         icon: Globe,
         mode: 'text',
         color: 'text-emerald-600',
+        bgColor: 'bg-emerald-100',
         placeholder: '详细描述世界规则、地理环境、社会体系、力量体系...',
         description: '故事发生的舞台背景、法则与社会形态。'
     },
@@ -65,6 +70,7 @@ const SETTING_TYPES: SettingConfig[] = [
         icon: UserCircle,
         mode: 'list',
         color: 'text-blue-600',
+        bgColor: 'bg-blue-100',
         placeholder: '',
         description: '主要角色的性格、外貌、背景故事。支持创建多个人物卡片。'
     },
@@ -74,6 +80,7 @@ const SETTING_TYPES: SettingConfig[] = [
         icon: Tag,
         mode: 'list',
         color: 'text-cyan-600',
+        bgColor: 'bg-cyan-100',
         placeholder: '',
         description: '作品中专有的名词、术语、道具或组织设定。'
     },
@@ -295,7 +302,7 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
     const isShortMode = mode === 'short';
 
     return (
-        <div className={`space-y-3 animate-fade-in ${isShortMode ? 'p-2 pb-20' : 'p-4 pb-20'}`}>
+        <div className={`animate-fade-in ${isShortMode ? 'p-2' : 'p-4 pb-20 space-y-3'}`}>
             {/* Modal Dispatcher */}
             {activeSetting?.mode === 'text' && (
                 <TextModal 
@@ -320,59 +327,65 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
                 />
             )}
 
-            <div className={`grid ${isShortMode ? 'gap-2' : 'gap-3'} grid-cols-1`}>
+            <div className={`grid ${isShortMode ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-3'}`}>
                 {SETTING_TYPES.map(config => {
                     const rawValue = settings[config.id];
                     const hasValue = !!rawValue && rawValue !== '[]' && rawValue !== '{}';
                     const Icon = config.icon;
                     const previewText = formatPreviewText(rawValue || '');
 
-                    return (
-                        <button 
-                            key={config.id}
-                            onClick={() => setActiveSetting(config)}
-                            className={`group relative w-full rounded-xl border transition-all duration-300 flex flex-col 
-                                ${isShortMode 
-                                    ? 'bg-sky-50 dark:bg-sky-900/10 border-sky-100 dark:border-sky-800 hover:border-sky-300 hover:shadow-sm p-2 items-center text-center justify-center min-h-[60px]' 
-                                    : `text-left p-2.5 gap-1.5 ${hasValue ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm hover:border-sky-400 hover:shadow-md' : 'bg-gray-50 dark:bg-gray-900/30 border-dashed border-gray-300 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800 hover:border-sky-400'}`
-                                }
-                            `}
-                        >
-                            {isShortMode ? (
-                                // Short Mode Compact Design
-                                <>
-                                    <div className="flex items-center gap-1.5">
-                                        <Icon className={`w-3.5 h-3.5 ${hasValue ? 'text-sky-600 dark:text-sky-400' : 'text-gray-400'}`} />
-                                        <span className={`text-xs font-bold ${hasValue ? 'text-sky-800 dark:text-sky-200' : 'text-gray-500'}`}>{config.label}</span>
-                                    </div>
-                                    {hasValue && (
-                                        <div className="text-[9px] text-gray-500 dark:text-gray-400 truncate max-w-full px-2 opacity-80">
-                                            {previewText}
+                    if (isShortMode) {
+                        // Short Mode: Grid Layout with Icons (Figure 1 Style)
+                        return (
+                            <button 
+                                key={config.id}
+                                onClick={() => setActiveSetting(config)}
+                                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-300 group hover:-translate-y-0.5
+                                    ${hasValue 
+                                        ? 'bg-white dark:bg-gray-800 border-sky-200 dark:border-sky-800 shadow-sm' 
+                                        : 'bg-gray-50/50 dark:bg-gray-900/30 border-transparent hover:bg-white dark:hover:bg-gray-800'
+                                    }
+                                `}
+                            >
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1.5 transition-colors ${hasValue ? config.bgColor.replace('100', '50') : 'bg-gray-100 dark:bg-gray-800'}`}>
+                                    <Icon className={`w-4 h-4 ${hasValue ? config.color : 'text-gray-400 group-hover:text-gray-600'}`} />
+                                </div>
+                                <span className={`text-xs font-bold ${hasValue ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500'}`}>{config.label}</span>
+                                {hasValue && (
+                                    <div className="w-1 h-1 rounded-full bg-sky-500 mt-1" />
+                                )}
+                            </button>
+                        );
+                    } else {
+                        // Long Mode: Standard List Design
+                        return (
+                            <button 
+                                key={config.id}
+                                onClick={() => setActiveSetting(config)}
+                                className={`group relative w-full rounded-xl border transition-all duration-300 flex flex-col text-left p-2.5 gap-1.5 
+                                    ${hasValue 
+                                        ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm hover:border-sky-400 hover:shadow-md' 
+                                        : 'bg-gray-50 dark:bg-gray-900/30 border-dashed border-gray-300 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800 hover:border-sky-400'
+                                    }`}
+                            >
+                                <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`p-1 rounded-lg ${hasValue ? 'bg-gray-100 dark:bg-gray-700' : 'bg-transparent'}`}>
+                                            <Icon className={`w-3.5 h-3.5 ${config.color} ${!hasValue && 'opacity-50'}`} />
                                         </div>
-                                    )}
-                                </>
-                            ) : (
-                                // Long Mode Standard Design
-                                <>
-                                    <div className="flex items-center justify-between w-full">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`p-1 rounded-lg ${hasValue ? 'bg-gray-100 dark:bg-gray-700' : 'bg-transparent'}`}>
-                                                <Icon className={`w-3.5 h-3.5 ${config.color} ${!hasValue && 'opacity-50'}`} />
-                                            </div>
-                                            <span className={`text-xs font-bold ${hasValue ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>{config.label}</span>
-                                        </div>
-                                        {hasValue ? <Pencil className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" /> : <Plus className="w-4 h-4 text-gray-400" />}
+                                        <span className={`text-xs font-bold ${hasValue ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>{config.label}</span>
                                     </div>
-                                    
-                                    {hasValue && (
-                                        <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed pl-1">
-                                            {previewText}
-                                        </p>
-                                    )}
-                                </>
-                            )}
-                        </button>
-                    );
+                                    {hasValue ? <Pencil className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" /> : <Plus className="w-4 h-4 text-gray-400" />}
+                                </div>
+                                
+                                {hasValue && (
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed pl-1">
+                                        {previewText}
+                                    </p>
+                                )}
+                            </button>
+                        );
+                    }
                 })}
             </div>
         </div>
