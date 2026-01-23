@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Script, Scene, ScriptSettings, Workflow, Asset } from '../../types';
-import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus } from '../Icon';
+import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle } from '../Icon';
 import WritingToolbar from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
@@ -31,15 +31,11 @@ const EditableStepContent: React.FC<{
     // Initial render formatting helper (simple HTML conversion)
     const formatInitial = (text: string) => {
         const clean = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        // Simply return the clean text wrapped in divs to maintain reading flow, avoiding complex MD parsing
+        // since we asked AI for plain text. 
         return clean.split('\n').map(line => {
             const trimmed = line.trim();
             if(!trimmed) return '<div><br/></div>';
-            if(/^(EXT\.|INT\.|内景|外景|场景)/i.test(trimmed)) {
-                return `<div style="font-weight:900; margin-top:1em; margin-bottom:0.25em; color:#111;">${trimmed}</div>`;
-            }
-            if(/^[A-Z\u4e00-\u9fa5]+(\s*\(.*?\))?：/.test(trimmed)) {
-                return `<div style="font-weight:700; margin-top:0.25em;">${trimmed}</div>`;
-            }
             return `<div>${trimmed}</div>`;
         }).join('');
     };
@@ -75,7 +71,7 @@ const EditableStepContent: React.FC<{
             suppressContentEditableWarning
             onBlur={handleBlur}
             onContextMenu={handleRightClick}
-            className="whitespace-pre-wrap font-sans leading-relaxed text-sm outline-none focus:bg-yellow-50/10 transition-colors p-1 rounded min-h-[50px]"
+            className="whitespace-pre-wrap font-sans leading-relaxed text-sm outline-none focus:bg-yellow-50/10 transition-colors p-1 rounded min-h-[50px] max-w-none"
         />
     );
 };
@@ -98,6 +94,17 @@ const CATEGORY_LABELS: Record<string, string> = {
 const getGenreLabel = (id: string) => {
     const found = GENRE_TAGS.find(g => g.id === id);
     return found ? found.label : id;
+};
+
+// Helper function to strip markdown manually just in case
+const stripMarkdown = (text: string) => {
+    return text
+        .replace(/#+\s/g, '') // Remove headers
+        .replace(/\*\*|\*/g, '') // Remove bold/italic
+        .replace(/>\s/g, '') // Remove blockquotes
+        .replace(/`{1,3}.*?`{1,3}/gs, '') // Remove code blocks
+        .replace(/<think>[\s\S]*?<\/think>/g, '') // Remove thinking blocks
+        .trim();
 };
 
 // Context Menu Component
@@ -136,6 +143,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [script, setScript] = useState<Script>(initialScript);
     const [activeScene, setActiveScene] = useState<Scene | null>(null);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [isScriptLoading, setIsScriptLoading] = useState(true); // Loading state for the script itself
     
     // Setup State
     const [settings, setSettings] = useState<ScriptSettings>({
@@ -228,9 +236,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         }
     }, [stepResults, visibleStepIndex, isGenerating]);
 
-    // ... (Initialization effects same as before, abbreviated for brevity) ...
     useEffect(() => {
         const loadInitialData = async () => {
+            setIsScriptLoading(true);
             const uid = await getCurrentUserId();
             setCurrentUserId(uid);
             const data = await fetchChapters(script.id);
@@ -276,6 +284,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     setVisibleStepIndex(savedState.visible_index ?? -1);
                 }
             }
+            setIsScriptLoading(false);
         };
         loadInitialData();
     }, [script.id]);
@@ -335,6 +344,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     // --- New Features Implementation ---
 
     const handleDownloadWord = (content: string, title: string) => {
+        // Strip markdown BEFORE generating HTML for Word to ensure plain text reading view
+        const plainText = stripMarkdown(content);
+        
         const htmlContent = `
             <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
             <head><meta charset='utf-8'><title>${title}</title>
@@ -343,7 +355,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 div { margin-bottom: 0.5em; }
             </style>
             </head><body>
-            ${content.split('\n').map(line => {
+            ${plainText.split('\n').map(line => {
                 const l = line.trim();
                 if(!l) return '<p><br/></p>';
                 if(/^(EXT\.|INT\.|内景|外景|场景)/i.test(l)) return `<p style="font-weight:bold; background:#f0f0f0; padding:5px;">${l}</p>`;
@@ -369,28 +381,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
     const handleContextMenuAction = (action: 'polish' | 'expand' | 'ask') => {
         if (action === 'ask' && contextMenu.text) {
-            // Find which step this text belongs to (approximate logic or rely on clicked location context if available)
-            // For now, assume it applies to the currently visible step content context
-            // But we need to know WHICH step variable it is.
-            // Since ContextMenu is global, we might need to store stepId when right clicking.
-            // Simplified: "Ask" will open FollowUpModal for the specific text.
-            // We pass an empty stepVar here, we'll need to improve EditableStepContent to pass variable back up.
-            // Actually, we can assume the user just wants an answer, not direct replacement in this flow unless specified.
-            // But requirement 3 says "like workflow follow up".
-            // Let's open the FollowUpModal.
-            
-            // To properly identify context, we assume the user is clicking within a step. 
-            // We'll iterate steps to find where the text is? No, selection is global. 
-            // Ideally EditableStepContent passes the ID.
-            // For this implementation, we will use a generic modal and apply back to the active/last touched step if possible, 
-            // or just copy to clipboard if ambiguous.
-            // However, the cleanest way is for the ContextMenu to know the source.
-            // Let's adapt EditableStepContent to pass the variable name up to onContextMenu.
-            
             setFollowUpModal({
                 open: true,
                 targetText: contextMenu.text,
-                context: '', // We can try to find context from stepResults if we knew the key.
+                context: '', 
                 stepVar: '' 
             });
         } else if (contextMenu.text) {
@@ -463,7 +457,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const renderSetupSidebar = () => (
         <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-[300px] relative">
             <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-6 space-y-8">
-                {/* ... (Model Config, Basic Info Sections remain same as before) ... */}
                 {/* 1. Model Configuration */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -531,8 +524,20 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 </div>
                                 {selectedWorkflow.fields.map((field) => (
                                     <div key={field.id} className="space-y-1.5">
-                                        <div className="flex justify-between items-center"><label className="text-[11px] font-bold text-gray-600 dark:text-gray-300 block">{field.label}{field.required !== false && <span className="text-red-500 ml-0.5">*</span>}</label>{field.maxLength && <span className={`text-[9px] ${(workflowFormState[field.variable]?.length || 0) > field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>{workflowFormState[field.variable]?.length || 0}/{field.maxLength}</span>}</div>
+                                        <div className="flex justify-between items-center">
+                                            <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300 block">
+                                                {field.label}
+                                                {field.required !== false && <span className="text-red-500 ml-0.5">* (必填)</span>}
+                                            </label>
+                                            {field.maxLength && <span className={`text-[9px] ${(workflowFormState[field.variable]?.length || 0) > field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>{workflowFormState[field.variable]?.length || 0}/{field.maxLength}</span>}
+                                        </div>
                                         {field.type === 'textarea' ? <textarea value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none h-24" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} /> : <input type="text" value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} />}
+                                        {field.description && (
+                                            <p className="text-[9px] text-blue-500 dark:text-blue-400 flex items-start gap-1 leading-tight mt-0.5">
+                                                <InformationCircle className="w-3 h-3 shrink-0" />
+                                                {field.description}
+                                            </p>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -576,7 +581,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             
-            {/* ... Workflow Modal (Kept same) ... */}
+            {/* ... Workflow Modal ... */}
             {isWorkflowModalOpen && createPortal(
                 <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setWorkflowModalOpen(false)}>
                     <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
@@ -767,16 +772,26 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                          </div>
                      </div>
                      
-                     {/* Main Output Container - Zero Padding */}
+                     {/* Main Output Container */}
                      <div className="flex-1 overflow-y-auto p-0 custom-scrollbar relative scroll-smooth" ref={scrollContainerRef}>
-                         {!selectedWorkflow && (
+                         {/* Loading State for Script Body */}
+                         {isScriptLoading && (
+                             <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 z-50">
+                                 <div className="flex flex-col items-center gap-3">
+                                     <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                                     <p className="text-xs font-bold text-gray-500">剧本加载中...</p>
+                                 </div>
+                             </div>
+                         )}
+
+                         {!selectedWorkflow && !isScriptLoading && (
                              <div className="flex flex-col items-center justify-center h-full text-gray-400">
                                  <WorkflowIcon className="w-16 h-16 mb-4 opacity-20" />
                                  <p>请在左侧选择一个工作流开始创作</p>
                              </div>
                          )}
 
-                         {selectedWorkflow && (
+                         {selectedWorkflow && !isScriptLoading && (
                              <div className="space-y-0 pb-32 w-full mx-auto">
                                  {selectedWorkflow.steps?.map((step, index) => {
                                      if (index > visibleStepIndex && !stepResults[step.outputVariable]) return null;
@@ -834,7 +849,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                              </div>
 
                                              {!isCollapsed && (
-                                                 <div className="p-8 relative group min-h-[100px]">
+                                                 // Ensure step content scrolls independently if needed within a reasonable max height, but mostly flows in main container
+                                                 // The requirement "each step scrollbar only works for that step" suggests max-height per step
+                                                 <div className="p-8 relative group min-h-[100px] max-h-[500px] overflow-y-auto custom-scrollbar">
                                                      {result ? (
                                                          <EditableStepContent 
                                                             initialContent={result} 

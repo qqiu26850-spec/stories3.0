@@ -41,16 +41,20 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
     const fetchAndMapScripts = async (pageNum: number) => {
         const data = await fetchProjects(pageNum);
         if (data) {
-            const filtered = data.filter((p: any) => p.type === 'script');
+            // Filter by specific script types or the generic 'script' for legacy support
+            const filtered = data.filter((p: any) => 
+                p.type === 'script' || p.type === 'script_original' || p.type === 'script_adaptation'
+            );
             const mappedScripts: Script[] = filtered.map((p: any) => ({
                 id: p.id,
                 title: p.title,
                 coverImage: null, 
                 wordCount: p.word_count || 0,
-                type: p.description?.includes('Adaptation') ? 'adaptation' : 'original', 
+                // Determine type based on DB type or fallback logic
+                type: p.type === 'script_adaptation' ? 'adaptation' : 'original', 
                 creationDate: p.created_at || new Date().toISOString(),
                 scenes: [],
-                scriptData: p.script_data || undefined // Map the new column
+                scriptData: p.script_data || undefined 
             }));
             return mappedScripts;
         }
@@ -104,9 +108,12 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
         setIsProcessing(true);
         
         try {
-            // Call Supabase with null cover
+            // Explicitly set dbType to separate storage
+            const dbType = scriptType === 'adaptation' ? 'script_adaptation' : 'script_original';
             const description = scriptType === 'adaptation' ? "Adaptation Project" : "Original Script";
-            const { id: dbId, error } = await createProject(title, description, 'script', null);
+            
+            // @ts-ignore - passing specific string type
+            const { id: dbId, error } = await createProject(title, description, dbType, null);
 
             if (error) {
                 throw error;
@@ -189,9 +196,7 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
     // Filter logic updated to handle local state properly
     const filteredScripts = useMemo(() => {
         if (!scriptType) return scripts;
-        // In a real app, you might filter by type property if you store it strictly
-        // For now we show all scripts as the "type" property in mappedScripts is derived
-        return scripts; 
+        return scripts.filter(s => s.type === scriptType); 
     }, [scripts, scriptType]);
 
     if (editingScript) {

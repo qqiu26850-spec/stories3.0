@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Novel, Chapter, NovelSettings } from '../../types';
-import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight, X, DocumentText, AdjustmentsHorizontal } from '../Icon'; 
+import { BookSolid, BookOpen, Pencil, ChevronDoubleLeft, ArrowPath, Check, Sparkles, ChevronLeft, ChevronRight, X, DocumentText, AdjustmentsHorizontal, FloppyDisk } from '../Icon'; 
 import NovelSettingsPanel from './NovelSettingsPanel';
 import ChapterManager from './ChapterManager';
 import AIFunctionPanel from './AIFunctionPanel';
@@ -185,6 +185,12 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 setSaveStatus('error');
             }
         }
+    };
+
+    const handleManualSave = () => {
+        if (!editorRef.current) return;
+        const html = editorRef.current.innerHTML;
+        handleSaveToCloud(html);
     };
 
     const handleContentInput = useCallback(() => {
@@ -389,23 +395,26 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 </div>
                 
                 <div className="w-[29%] flex-shrink-0 flex items-center justify-end px-4 border-l border-gray-200 dark:border-gray-800 gap-3">
+                    <button onClick={handleManualSave} className="p-2 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors" title="手动保存">
+                        <FloppyDisk className="w-5 h-5" />
+                    </button>
                     <div className="flex items-center gap-2 mr-2">
                          {saveStatus === 'saving' && (
                             <div className="flex items-center gap-1.5 text-sky-500 animate-pulse whitespace-nowrap">
                                 <ArrowPath className="w-4.5 h-4.5 animate-spin" />
-                                <span className="text-sm font-bold">正在保存...</span>
+                                <span className="text-sm font-bold">保存中</span>
                             </div>
                         )}
                         {saveStatus === 'saved' && (
                             <div className="flex flex-row items-center gap-1.5 text-green-500 whitespace-nowrap">
                                 <Check className="w-5 h-5" />
-                                <span className="text-sm font-bold">已实时保存</span>
+                                <span className="text-sm font-bold">已保存</span>
                             </div>
                         )}
                         {saveStatus === 'error' && (
                             <div className="flex flex-row items-center gap-1.5 text-red-500 whitespace-nowrap">
                                 <X className="w-5 h-5" />
-                                <span className="text-sm font-bold">保存失败</span>
+                                <span className="text-sm font-bold">失败</span>
                             </div>
                         )}
                     </div>
@@ -441,7 +450,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                             </button>
                         </div>
                     ) : (
-                        <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/10 font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                        <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-sky-50/50 dark:bg-sky-900/20 font-bold text-sky-700 dark:text-sky-200 flex items-center gap-2 justify-center shadow-sm">
                             <AdjustmentsHorizontal className="w-4 h-4" />
                             作品设定
                         </div>
@@ -458,7 +467,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                                 onReorderChapters={handleReorderChapters}
                             />
                         ) : (
-                            <NovelSettingsPanel settings={novel.settings} onUpdate={handleUpdateSettings} />
+                            <NovelSettingsPanel settings={novel.settings} onUpdate={handleUpdateSettings} mode={mode} />
                         )}
                     </div>
                 </aside>

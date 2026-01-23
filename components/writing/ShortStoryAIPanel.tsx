@@ -90,9 +90,14 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                 setActiveTab(externalAction.type);
                 setPolishContent(externalAction.text);
             }
-        } else {
-            // Strictly follow user selection for "Polish/Review" box content
+        } else if (selectedText) {
+            // Only update if selectedText is not empty.
+            // This prevents clearing the box if the user clicks the editor without selecting text.
             setPolishContent(selectedText);
+            // Auto switch to polish tab if user selects text while in original mode
+            if (activeTab === 'original') {
+                setActiveTab('polish');
+            }
         }
     }, [externalAction, selectedText]);
 
@@ -317,7 +322,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
         { value: "doubao-flash", label: "速写版 (豆包)" }
     ];
 
-    // Result View rendering logic remains similar to previous version, ensuring we return early if showing result
+    // Result View rendering logic
     if (resultText || isGenerating) {
         return (
             <div className="flex flex-col h-full bg-white dark:bg-gray-900 relative">
@@ -352,13 +357,11 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     </div>
                 </div>
 
-                {/* Content rendered as plain reading text, not markdown */}
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                     <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">{resultText}</div>
                 </div>
 
                 <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-2">
-                    {/* Insert Button */}
                     <button 
                         onClick={handleInsertCheck} 
                         className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
@@ -366,7 +369,6 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                         {lastGeneratedTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
                     </button>
                     
-                    {/* Stop / Retry Button */}
                     {isGenerating ? (
                         <button 
                             onClick={handleStop}
@@ -437,18 +439,21 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                                 <span>随机度 (Temperature): {temperature}</span>
                                             </label>
                                             <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <p className="text-[10px] text-gray-400">控制创造性。值越高越发散、有创意；值越低越严谨、稳定。</p>
                                         </div>
                                         <div className="space-y-1">
                                             <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between">
                                                 <span>核采样 (Top P): {topP}</span>
                                             </label>
                                             <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <p className="text-[10px] text-gray-400">控制词汇多样性。值较低时，模型倾向于选择常见词汇。</p>
                                         </div>
                                         <div className="space-y-1">
                                             <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between">
                                                 <span>最大长度 (Tokens): {maxOutputTokens}</span>
                                             </label>
                                             <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <p className="text-[10px] text-gray-400">限制单次生成的最大文本量。</p>
                                         </div>
                                     </div>
                                 )}
@@ -523,7 +528,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                                     <div className="flex items-center justify-between text-[11px] font-semibold truncate">
                                         <div className="flex items-center gap-1.5 overflow-hidden">
                                             <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
-                                            <span className="truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '点击关联素材...'}</span>
+                                            <span className="truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '点击关联设定...'}</span>
                                         </div>
                                         <ChevronDown className="w-3 h-3 text-sky-400 opacity-50 flex-shrink-0" />
                                     </div>

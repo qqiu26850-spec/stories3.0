@@ -93,8 +93,9 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
             if (externalAction.type === 'polish' || externalAction.type === 'review') {
                 setPolishContent(externalAction.text);
             }
-        } else {
-            // Strictly only update if selectedText exists
+        } else if (selectedText) {
+            // Only update if selectedText is not empty.
+            // This prevents clearing the box if the user clicks the editor without selecting text.
             setPolishContent(selectedText);
         }
     }, [externalAction, selectedText]);
@@ -523,6 +524,7 @@ ${textToProcess}`;
                     </div>
                 </div>
 
+                {/* ... (Rest of the file remains unchanged) ... */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
                     <div className="p-3 border-b border-gray-100 dark:border-gray-800">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
