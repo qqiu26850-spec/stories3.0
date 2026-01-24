@@ -25,7 +25,7 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'expand': '扩写', 'imitate': '仿写',
     'general': '通用', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
     'apocalypse': '末世', 'urban': '都市', 'fantasy': '玄幻', 'history': '历史', 'social': '世情',
-    'suspense': '悬疑', 'sci-fi': '科幻'
+    'suspense': '悬疑', 'sci-fi': '科幻', 'comic-drama': '漫剧', 'live-action': '实拍剧'
 };
 
 const isGenre = (tag: string) => GENRE_TAGS.some(g => g.id === tag);

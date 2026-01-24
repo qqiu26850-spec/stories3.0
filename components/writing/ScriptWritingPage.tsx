@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory } from '../../types';
-import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search } from '../Icon';
+import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search, CloudArrowUp, Settings } from '../Icon';
 import WritingToolbar from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
@@ -41,23 +41,21 @@ const EditableStepContent: React.FC<{
     // Initial render formatting helper (simple HTML conversion)
     const formatInitial = (text: string) => {
         const clean = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-        // Simply return the clean text wrapped in divs to maintain reading flow, avoiding complex MD parsing
-        // since we asked AI for plain text. 
-        return clean.split('\n').map(line => {
+        // Reduce excessive newlines
+        const normalized = clean.replace(/\n\s*\n\s*\n/g, '\n\n');
+        
+        return normalized.split('\n').map(line => {
             const trimmed = line.trim();
-            if(!trimmed) return '<div><br/></div>';
-            return `<div>${trimmed}</div>`;
+            if(!trimmed) return '<div class="mb-4"><br/></div>';
+            return `<div class="mb-4">${trimmed}</div>`;
         }).join('');
     };
 
     useEffect(() => {
-        if (editorRef.current && initialContent) {
-            // Only set HTML initially to avoid cursor jumps on re-renders if we controlled it
-            if (editorRef.current.innerText.trim() === '') {
-                 editorRef.current.innerHTML = formatInitial(initialContent);
-            }
+        if (editorRef.current) {
+             editorRef.current.innerHTML = formatInitial(initialContent);
         }
-    }, []);
+    }, []); // Only runs once on mount for editing
 
     const handleBlur = () => {
         if (editorRef.current) {
@@ -81,25 +79,35 @@ const EditableStepContent: React.FC<{
             suppressContentEditableWarning
             onBlur={handleBlur}
             onContextMenu={handleRightClick}
-            className="whitespace-pre-wrap font-sans leading-relaxed text-sm outline-none focus:bg-yellow-50/10 transition-colors p-1 rounded min-h-[50px] max-w-none"
+            className="whitespace-pre-wrap font-sans leading-relaxed text-sm outline-none focus:bg-yellow-50/10 transition-colors p-2 rounded min-h-[50px] max-w-none text-gray-800 dark:text-gray-200"
         />
     );
 };
 
-// FormattedText for non-editable display (Prompt Mode Result)
+// Streaming Text Component - optimized for updates
+const StreamingText: React.FC<{ text: string }> = ({ text }) => {
+    return (
+        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm p-2 animate-pulse">
+            {text}
+            <span className="inline-block w-2 h-4 bg-sky-500 ml-1 align-middle animate-blink"></span>
+        </div>
+    );
+};
+
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    // Reduce excessive newlines to improve spacing
+    const normalizedText = cleanedText.replace(/\n\s*\n\s*\n/g, '\n\n');
 
     return (
         <div className="whitespace-pre-wrap font-mono text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
-            {cleanedText.split('\n').map((line, index) => {
-                // Heuristic formatting for script-like content
+            {normalizedText.split('\n').map((line, index) => {
                 const isSceneHeader = /^(EXT\.|INT\.|内景|外景|场景)/i.test(line);
-                const isCharacter = /^[A-Z\u4e00-\u9fa5]+(\s*\(.*?\))?：/.test(line); // Name + colon
+                const isCharacter = /^[A-Z\u4e00-\u9fa5]+(\s*\(.*?\))?：/.test(line);
                 
-                let className = "";
-                if (isSceneHeader) className = "font-bold bg-gray-100 dark:bg-gray-800/50 p-1 rounded my-2";
-                else if (isCharacter) className = "font-bold mt-2";
+                let className = "mb-4 min-h-[1em]"; // Increased default margin-bottom
+                if (isSceneHeader) className += " font-bold bg-gray-100 dark:bg-gray-800/50 p-1 rounded";
+                else if (isCharacter) className += " font-bold mt-2";
                 
                 return <div key={index} className={className}>{line || <br/>}</div>;
             })}
@@ -115,7 +123,7 @@ const MODEL_OPTIONS = [
 
 const LANGUAGE_OPTIONS = [
     { value: "zh", label: "中文" },
-    { value: "en", label: "English" }
+    { value: "en", label: "英文" }
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -127,18 +135,16 @@ const getGenreLabel = (id: string) => {
     return found ? found.label : id;
 };
 
-// Helper function to strip markdown manually just in case
 const stripMarkdown = (text: string) => {
     return text
-        .replace(/#+\s/g, '') // Remove headers
-        .replace(/\*\*|\*/g, '') // Remove bold/italic
-        .replace(/>\s/g, '') // Remove blockquotes
-        .replace(/`{1,3}.*?`{1,3}/gs, '') // Remove code blocks
-        .replace(/<think>[\s\S]*?<\/think>/g, '') // Remove thinking blocks
+        .replace(/#+\s/g, '')
+        .replace(/\*\*|\*/g, '')
+        .replace(/>\s/g, '')
+        .replace(/`{1,3}.*?`{1,3}/gs, '')
+        .replace(/<think>[\s\S]*?<\/think>/g, '')
         .trim();
 };
 
-// Context Menu Component
 const ContextMenu: React.FC<{
     x: number;
     y: number;
@@ -174,14 +180,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [script, setScript] = useState<Script>(initialScript);
     const [activeScene, setActiveScene] = useState<Scene | null>(null);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-    const [isScriptLoading, setIsScriptLoading] = useState(true); // Loading state for the script itself
+    const [isScriptLoading, setIsScriptLoading] = useState(true);
     
     // Setup State
     const [settings, setSettings] = useState<ScriptSettings>({
         format: 'live_action',
-        totalEpisodes: '12',
-        durationPerEpisode: '45',
-        scenesPerEpisodeLimit: '30',
+        totalEpisodes: '40',
+        durationPerEpisode: '1',
+        scenesPerEpisodeLimit: '3',
         outputLanguage: 'zh',
         model: 'deepseek-chat'
     });
@@ -199,14 +205,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [availableWorkflows, setAvailableWorkflows] = useState<Workflow[]>([]);
     const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
     const [workflowFormState, setWorkflowFormState] = useState<Record<string, string>>({});
-    const [stepResults, setStepResults] = useState<Record<string, string>>({}); // Store result per step
+    const [stepResults, setStepResults] = useState<Record<string, string>>({});
     const [currentStepIndex, setCurrentStepIndex] = useState<number | null>(null);
-    const [visibleStepIndex, setVisibleStepIndex] = useState<number>(-1); // Control how many steps are visible
-    const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({}); // Control collapse state
+    const [visibleStepIndex, setVisibleStepIndex] = useState<number>(-1);
+    const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({});
 
-    // Independent Execution State (Decoupling)
-    // executedWorkflow holds the workflow structure that is currently being displayed in the right panel.
-    // It updates when a generation starts.
     const [executedWorkflow, setExecutedWorkflow] = useState<Workflow | null>(null);
     const [executedPrompt, setExecutedPrompt] = useState<Prompt | null>(null);
 
@@ -214,13 +217,13 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [promptInput, setPromptInput] = useState('');
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const [promptFormState, setPromptFormState] = useState<Record<string, string>>({});
-    const [promptResultText, setPromptResultText] = useState(''); // Store result for simple prompt mode
+    const [promptResultText, setPromptResultText] = useState('');
 
     // Asset Selection
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
-    const [isWorkflowModalOpen, setWorkflowModalOpen] = useState(false); // Changed to Modal state
+    const [isWorkflowModalOpen, setWorkflowModalOpen] = useState(false);
     const [isPromptSelectionModalOpen, setIsPromptSelectionModalOpen] = useState(false);
 
     // Workflow Modal specific states
@@ -231,7 +234,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
     // UI State
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
-    const [isRightSidebarOpen, setRightSidebarOpen] = useState(false); // New Right Sidebar
+    const [isRightSidebarOpen, setRightSidebarOpen] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('正在处理...');
@@ -241,11 +244,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
     const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
 
-    // Context Menu & AI interaction
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string }>({ x: 0, y: 0, visible: false, text: '' });
     const [aiTrigger, setAiTrigger] = useState<{ type: 'polish' | 'expand' | 'ask', text: string } | null>(null);
     
-    // FollowUp Modal State
     const [followUpModal, setFollowUpModal] = useState<{ open: boolean; targetText: string; context: string; stepVar: string; }>({
         open: false, targetText: '', context: '', stepVar: ''
     });
@@ -256,7 +257,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const dbSaveTimeoutRef = useRef<any>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
 
-    // Filter available workflows for the modal
     const filteredWorkflows = useMemo(() => {
         return availableWorkflows.filter(wf => {
             const matchesCategory = workflowCategory === 'all' || wf.category === workflowCategory || (workflowCategory === 'script' && wf.category === 'script');
@@ -266,15 +266,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         });
     }, [availableWorkflows, workflowCategory, workflowSearch, showFavoritesOnly, workflowFavorites]);
 
-    // Load favorites when modal opens
     useEffect(() => {
         if (isWorkflowModalOpen) {
             fetchWorkflowFavorites().then(ids => setWorkflowFavorites(new Set(ids)));
         }
     }, [isWorkflowModalOpen]);
 
-    // --- Persistence Helper ---
-    // Debounced save to Supabase
     const persistState = useCallback(() => {
         if (!script.id) return;
         if (dbSaveTimeoutRef.current) clearTimeout(dbSaveTimeoutRef.current);
@@ -294,12 +291,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
     useEffect(() => { persistState(); }, [persistState]);
 
-    // Scroll to bottom on load and generation
     useEffect(() => {
         if (scrollContainerRef.current && isGenerating) {
-            // Check if user is near bottom or if it's initial load/generation
             const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-            const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+            const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
             
             if (isNearBottom) {
                 scrollContainerRef.current.scrollTo({ top: scrollHeight, behavior: 'smooth' });
@@ -350,7 +345,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 const wf = mappedWorkflows.find(w => w.id === savedState.workflow_id);
                 if (wf) {
                     setSelectedWorkflow(wf);
-                    // Also restore execution context to show previous results
                     setExecutedWorkflow(wf);
                     setWorkflowFormState(savedState.form_state || {});
                     setStepResults(savedState.step_results || {});
@@ -373,59 +367,105 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
     const handlePromptChange = (prompt: Prompt) => {
         setSelectedPrompt(prompt);
-        // Reset form
         const initial: Record<string, string> = {};
         prompt.fields?.forEach(f => { initial[f.id] = ''; });
         setPromptFormState(initial);
     };
 
-    const handleRunGeneration = async () => {
-        if (isGenerating) { handleStop(); return; }
+    const runStepGeneration = async (stepIndex: number, context: Record<string, string>, assetContext: string, basicInfo: string, isContinue = false) => {
+        if (!selectedWorkflow || !selectedWorkflow.steps) return;
+        const step = selectedWorkflow.steps[stepIndex];
         
-        setIsGenerating(true);
         const controller = new AbortController(); 
         abortControllerRef.current = controller;
+        setIsGenerating(true);
+        setCurrentStepIndex(stepIndex);
+        
+        // STRICTLY sequential visibility: only reveal up to current step
+        setVisibleStepIndex(stepIndex);
+
+        try {
+            let finalPrompt = '';
+            if (isContinue) {
+                const currentResult = stepResults[step.outputVariable] || '';
+                const tail = currentResult.slice(-3000);
+                finalPrompt = `IMPORTANT: Output ONLY the continued script content.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
+            } else {
+                let prompt = step.prompt;
+                Object.keys(context).forEach(key => { prompt = prompt.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), context[key] || ''); });
+                finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${prompt}${NO_MARKDOWN_INSTRUCTION}`;
+            }
+
+            let stepOutput = isContinue ? (stepResults[step.outputVariable] || '') : '';
+            const stream = generateTextStream(finalPrompt, { model: settings.model, temperature, topP, maxOutputTokens, signal: controller.signal });
+            
+            for await (const chunk of stream) { 
+                stepOutput += chunk; 
+                setStepResults(prev => ({ ...prev, [step.outputVariable]: stepOutput })); 
+            }
+            return stepOutput;
+        } catch (e) {
+            console.error(e);
+            throw e;
+        } finally {
+            setIsGenerating(false);
+            setCurrentStepIndex(null);
+        }
+    };
+
+    const handleRunGeneration = async (startFromIndex?: number, isContinue = false) => {
+        if (isGenerating && !isContinue) { handleStop(); return; }
+        
+        // Prepare contexts
         const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考素材：${a!.name}】\n${a!.content}`).join('\n\n');
-        const basicInfo = `【剧本基础信息】\n总集数：${settings.totalEpisodes}\n单集时长：${settings.durationPerEpisode}min\n语言：${settings.outputLanguage}\n\n`;
+        // Updated Basic Info Construction
+        const basicInfo = `【剧本基础信息】\n总集数：${settings.totalEpisodes}\n单集时长：${settings.durationPerEpisode}分钟\n单集场景数限制：${settings.scenesPerEpisodeLimit}\n输出语言：${settings.outputLanguage === 'zh' ? '中文' : '英文'}\n\n`;
 
         if (generationMode === 'workflow') {
             if (!selectedWorkflow || !selectedWorkflow.steps) return;
-            
-            // Set executed workflow to decouple from selection
             setExecutedWorkflow(selectedWorkflow);
 
-            const startStepIndex = Object.keys(stepResults).length < selectedWorkflow.steps.length ? Object.keys(stepResults).length : 0;
-            if (startStepIndex === 0) { setStepResults({}); setVisibleStepIndex(-1); }
-
-            setCurrentStepIndex(startStepIndex);
-            setVisibleStepIndex(Math.max(visibleStepIndex, startStepIndex));
-
-            let currentContext: Record<string, string> = { ...workflowFormState };
-            if (startStepIndex > 0) {
-                 selectedWorkflow.steps.forEach((s, idx) => { if (idx < startStepIndex && stepResults[s.outputVariable]) currentContext[s.outputVariable] = stepResults[s.outputVariable]; });
+            let startStepIndex = 0;
+            if (typeof startFromIndex === 'number') {
+                startStepIndex = startFromIndex;
+            } else {
+                // Auto determine start based on existing results length
+                startStepIndex = Object.keys(stepResults).length < selectedWorkflow.steps.length ? Object.keys(stepResults).length : 0;
+                
+                // If restarting from 0, clear results and reset visibility
+                if (startStepIndex === 0 && !isContinue) { 
+                    setStepResults({}); 
+                    setVisibleStepIndex(-1); 
+                }
             }
 
+            let currentContext: Record<string, string> = { ...workflowFormState };
+            
+            // Hydrate context with previous results
+            selectedWorkflow.steps.forEach((s, idx) => { 
+                if (idx < startStepIndex && stepResults[s.outputVariable]) currentContext[s.outputVariable] = stepResults[s.outputVariable]; 
+            });
+
             try {
-                incrementWorkflowUsage(selectedWorkflow.id);
-                for (let i = startStepIndex; i < selectedWorkflow.steps!.length; i++) {
-                    if (controller.signal.aborted) break;
-                    setCurrentStepIndex(i);
-                    setVisibleStepIndex(i);
-                    const step = selectedWorkflow.steps![i];
-                    let prompt = step.prompt;
-                    Object.keys(currentContext).forEach(key => { prompt = prompt.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), currentContext[key] || ''); });
-                    
-                    const finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${prompt}${NO_MARKDOWN_INSTRUCTION}`;
-                    
-                    let stepOutput = '';
-                    const stream = generateTextStream(finalPrompt, { model: settings.model, temperature, topP, maxOutputTokens, signal: controller.signal });
-                    for await (const chunk of stream) { stepOutput += chunk; setStepResults(prev => ({ ...prev, [step.outputVariable]: stepOutput })); }
-                    currentContext[step.outputVariable] = stepOutput;
+                if (startStepIndex === 0) incrementWorkflowUsage(selectedWorkflow.id);
+                
+                // If continuing specific step (usually the last visible one)
+                if (isContinue) {
+                     await runStepGeneration(startStepIndex, currentContext, assetContext, basicInfo, true);
+                     return; 
                 }
-            } catch (e) { console.error(e); } finally { setIsGenerating(false); setCurrentStepIndex(null); }
+
+                // Normal sequential flow
+                for (let i = startStepIndex; i < selectedWorkflow.steps.length; i++) {
+                    if (abortControllerRef.current?.signal.aborted) break;
+                    
+                    const output = await runStepGeneration(i, currentContext, assetContext, basicInfo);
+                    if (output) currentContext[selectedWorkflow.steps[i].outputVariable] = output;
+                }
+            } catch (e) { console.error(e); }
 
         } else {
-            // Prompt Mode
+            // Prompt Mode Logic (Existing)
             setExecutedPrompt(selectedPrompt);
             setPromptResultText('');
             let promptText = selectedPrompt ? (selectedPrompt.template || selectedPrompt.content) : promptInput;
@@ -439,6 +479,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
             const finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${promptText}${FORCE_LONG_INSTRUCTION}`;
 
+            setIsGenerating(true);
+            const controller = new AbortController();
+            abortControllerRef.current = controller;
+
             try {
                 const stream = generateTextStream(finalPrompt, { model: settings.model, temperature, topP, maxOutputTokens, signal: controller.signal });
                 for await (const chunk of stream) { 
@@ -450,10 +494,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
     const handleStop = () => { if (abortControllerRef.current) abortControllerRef.current.abort(); setIsGenerating(false); setCurrentStepIndex(null); };
 
-    // --- New Features Implementation ---
-
     const handleDownloadWord = (content: string, title: string) => {
-        // Strip markdown BEFORE generating HTML for Word to ensure plain text reading view
         const plainText = stripMarkdown(content);
         
         const htmlContent = `
@@ -478,7 +519,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${title}.doc`; // Word opens .doc as HTML seamlessly
+        link.download = `${title}.doc`; 
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -505,7 +546,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const handleOpenDeepAsk = (text: string, stepVar: string) => {
         setFollowUpModal({
             open: true,
-            targetText: '', // Full context mode usually
+            targetText: '', 
             context: text,
             stepVar: stepVar
         });
@@ -524,10 +565,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 return { ...prev, [followUpModal.stepVar]: updatedContent };
             });
         } else if (generationMode === 'prompt') {
-             // For prompt mode, simplistic append
              setPromptResultText(prev => prev + '\n\n' + newText);
         } else {
-            // Fallback: Copy to clipboard or alert
             navigator.clipboard.writeText(newText);
             alert("结果已复制到剪贴板。");
         }
@@ -560,101 +599,103 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         }
     };
 
-    const toggleCollapse = (stepId: string) => {
-        setCollapsedSteps(prev => ({ ...prev, [stepId]: !prev[stepId] }));
-    };
-
     const handleInsertToScript = (text: string) => {
-        // Insert generated text into current episode
         if (!editorRef.current) {
             alert('请先选择一个集数进行编辑');
             return;
         }
-        
-        // This is a simplified insertion. In a real rich editor, we'd use selection ranges.
-        // For contentEditable, we append or replace.
         const currentText = editorRef.current.innerText;
         editorRef.current.innerText = currentText ? currentText + '\n\n' + text : text;
-        
-        // Trigger save logic handled by parent effect monitoring changes on title/content if needed
-        // Since we don't have direct access to handleContentInput from here easily without refactoring,
-        // we assume the user will make further edits or we rely on specific event triggers if we were fully rigorous.
-        // For now, this updates the DOM which is what matters for visual confirmation.
     };
 
     // --- Render ---
 
     const renderSetupSidebar = () => (
-        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-[380px] relative">
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-6 space-y-8">
+        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-[280px] relative">
+            
+            {/* Fixed Header for Alignment */}
+            <div className="flex-shrink-0 h-12 flex items-center px-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+                <span className="text-sm font-black text-sky-700 dark:text-sky-200 flex items-center gap-2">
+                    <AdjustmentsHorizontal className="w-4 h-4 text-sky-500" /> 创作配置
+                </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-4 space-y-6">
                 {/* 1. Model Configuration */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-black text-blue-600 dark:text-blue-400 flex items-center gap-2">
-                            <AdjustmentsHorizontal className="w-4 h-4" />
-                            1. 模型配置
+                        <h3 className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">
+                            1. 模型
                         </h3>
                         <button 
                             onClick={() => setShowModelConfig(!showModelConfig)} 
-                            className={`text-xs font-bold px-2 py-1 rounded transition-colors ${showModelConfig ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                            className={`text-xs font-bold px-2 py-1 rounded transition-colors ${showModelConfig ? 'bg-sky-100 text-sky-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
                         >
                             参数
                         </button>
                     </div>
                     <div className="pl-1 space-y-3">
                         <div>
-                            <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">选择基座模型</label>
                             <CustomSelect value={settings.model} onChange={(v) => setSettings(s => ({...s, model: v}))} options={MODEL_OPTIONS} className="z-50" />
                         </div>
                         {showModelConfig && (
-                            <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800 space-y-3 animate-fade-in">
-                                {/* ... Range inputs ... */}
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex justify-between"><span>随机度 (Temperature): {temperature}</span></label><input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-500" /></div>
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex justify-between"><span>核采样 (Top P): {topP}</span></label><input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-500" /></div>
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex justify-between"><span>最大长度 (Tokens): {maxOutputTokens}</span></label><input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-500" /></div>
+                            <div className="p-3 bg-sky-50 dark:bg-sky-900/10 rounded-xl border border-sky-100 dark:border-sky-800 space-y-3 animate-fade-in">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 flex justify-between"><span>随机度 (Temperature): {temperature}</span></label>
+                                    <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                    <p className="text-[9px] text-gray-400 mt-0.5">控制创造性：值越高越发散（适合创意），值越低越严谨（适合逻辑）。</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 flex justify-between"><span>核采样 (Top P): {topP}</span></label>
+                                    <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                    <p className="text-[9px] text-gray-400 mt-0.5">控制词汇多样性：降低该值可减少偏门词汇的出现。</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 flex justify-between"><span>最大长度 (Tokens): {maxOutputTokens}</span></label>
+                                    <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                    <p className="text-[9px] text-gray-400 mt-0.5">限制单次请求生成的最大文本量（包括标点和换行）。</p>
+                                </div>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* 2. Basic Info */}
+                {/* 2. Basic Info - Updated Labels and Defaults handled in State */}
                 <div className="space-y-3">
-                    <h3 className="text-sm font-black text-blue-600 dark:text-blue-400 flex items-center gap-2"><DocumentText className="w-4 h-4" /> 2. 剧本基本信息</h3>
+                    <h3 className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">2. 基础信息</h3>
                     <div className="grid grid-cols-2 gap-3 pl-1">
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">总集数</label><input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none" /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">单集时长(min)</label><input type="text" value={settings.durationPerEpisode} onChange={e => setSettings(s => ({...s, durationPerEpisode: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none" /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">场次限制</label><input type="number" value={settings.scenesPerEpisodeLimit} onChange={e => setSettings(s => ({...s, scenesPerEpisodeLimit: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none" /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">总集数</label><input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">单集时长(min)</label><input type="text" value={settings.durationPerEpisode} onChange={e => setSettings(s => ({...s, durationPerEpisode: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">单集场景限制</label><input type="number" value={settings.scenesPerEpisodeLimit} onChange={e => setSettings(s => ({...s, scenesPerEpisodeLimit: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
                         <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">语言</label><div className="relative z-40"><CustomSelect value={settings.outputLanguage} onChange={(v) => setSettings(s => ({...s, outputLanguage: v as 'zh' | 'en'}))} options={LANGUAGE_OPTIONS} /></div></div>
                     </div>
                 </div>
 
                 {/* 3. Generation Mode Config */}
                 <div className="space-y-4">
-                    <h3 className="text-sm font-black text-blue-600 dark:text-blue-400 flex items-center gap-2"><WorkflowIcon className="w-4 h-4" /> 3. 创作配置</h3>
+                    <h3 className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">3. 创作配置</h3>
                     
-                    {/* Mode Switcher */}
                     <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
                         <button 
                             onClick={() => setGenerationMode('workflow')}
-                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${generationMode === 'workflow' ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${generationMode === 'workflow' ? 'bg-white dark:bg-gray-700 text-sky-600 shadow-sm' : 'text-gray-500'}`}
                         >
                             工作流模式
                         </button>
                         <button 
                             onClick={() => setGenerationMode('prompt')}
-                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${generationMode === 'prompt' ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${generationMode === 'prompt' ? 'bg-white dark:bg-gray-700 text-sky-600 shadow-sm' : 'text-gray-500'}`}
                         >
                             提示词模式
                         </button>
                     </div>
 
                     <div className="space-y-4 pl-1">
-                        {/* Common Asset Selection */}
                         <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">关联素材</label>
-                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-xl border border-dashed text-xs transition-all text-left flex justify-between items-center group ${selectedAssetIds.size > 0 ? 'border-blue-300 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : 'border-gray-300 dark:border-gray-700 text-gray-500 hover:border-blue-300'}`}>
+                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-xl border border-dashed text-xs transition-all text-left flex justify-between items-center group ${selectedAssetIds.size > 0 ? 'border-sky-300 bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400' : 'border-gray-300 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
                                 <span className="truncate font-bold">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 项素材` : '选择角色/剧情/世界观...'}</span>
-                                <Database className={`w-4 h-4 group-hover:scale-110 transition-transform ${selectedAssetIds.size > 0 ? 'text-blue-500' : 'text-gray-400'}`} />
+                                <Database className={`w-4 h-4 group-hover:scale-110 transition-transform ${selectedAssetIds.size > 0 ? 'text-sky-500' : 'text-gray-400'}`} />
                             </button>
                         </div>
 
@@ -662,9 +703,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                             <>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">选择工作流</label>
-                                    <button onClick={() => setWorkflowModalOpen(true)} className={`w-full p-3 rounded-xl border text-xs text-left flex justify-between items-center group shadow-sm transition-all ${selectedWorkflow ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-300'}`}>
+                                    <button onClick={() => setWorkflowModalOpen(true)} className={`w-full p-3 rounded-xl border text-xs text-left flex justify-between items-center group shadow-sm transition-all ${selectedWorkflow ? 'bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-sky-300'}`}>
                                         <span className="truncate font-bold">{selectedWorkflow ? selectedWorkflow.title : '选择生成流程...'}</span>
-                                        <ChevronDown className={`w-4 h-4 ${selectedWorkflow ? 'text-blue-500' : 'text-gray-400'}`} />
+                                        <ChevronDown className={`w-4 h-4 ${selectedWorkflow ? 'text-sky-500' : 'text-gray-400'}`} />
                                     </button>
                                 </div>
                                 {selectedWorkflow && selectedWorkflow.fields && selectedWorkflow.fields.length > 0 && (
@@ -682,9 +723,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                     </label>
                                                     {field.maxLength && <span className={`text-[9px] ${(workflowFormState[field.variable]?.length || 0) > field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>{workflowFormState[field.variable]?.length || 0}/{field.maxLength}</span>}
                                                 </div>
-                                                {field.type === 'textarea' ? <textarea value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none h-24" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} /> : <input type="text" value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} />}
+                                                {field.type === 'textarea' ? <textarea value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none h-24" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} /> : <input type="text" value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} />}
                                                 {field.description && (
-                                                    <p className="text-[9px] text-blue-500 dark:text-blue-400 flex items-start gap-1 leading-tight mt-0.5">
+                                                    <p className="text-[9px] text-sky-500 dark:text-sky-400 flex items-start gap-1 leading-tight mt-0.5">
                                                         <InformationCircle className="w-3 h-3 shrink-0" />
                                                         {field.description}
                                                     </p>
@@ -695,7 +736,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 )}
                             </>
                         ) : (
-                            // Prompt Mode UI
                             <>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">选择提示词</label>
@@ -711,14 +751,15 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                             <span className="text-xs font-black text-gray-700 dark:text-gray-200 flex items-center gap-1"><AdjustmentsHorizontal className="w-3 h-3"/> 模板参数</span>
                                             <button onClick={() => { setSelectedPrompt(null); setPromptFormState({}); }} className="text-[10px] text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
                                         </div>
-                                        {selectedPrompt.fields.map((field) => (
+                                        {selectedPrompt.fields.map((field, index) => (
                                             <div key={field.id} className="space-y-1.5">
                                                 <div className="flex justify-between items-center">
                                                     <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300 block">
+                                                        <span className="mr-1 opacity-50">{index + 1}.</span>
                                                         {field.label}
                                                     </label>
                                                 </div>
-                                                {field.type === 'textarea' ? <textarea value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none h-20" placeholder={field.placeholder || `请输入${field.label}...`} /> : <input type="text" value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.placeholder || `请输入${field.label}...`} />}
+                                                {field.type === 'textarea' ? <textarea value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none h-20" placeholder={field.placeholder || `请输入${field.label}...`} /> : <input type="text" value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.placeholder || `请输入${field.label}...`} />}
                                             </div>
                                         ))}
                                     </div>
@@ -729,7 +770,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                             value={promptInput}
                                             onChange={e => setPromptInput(e.target.value)}
                                             placeholder="请输入具体的剧本创作要求，例如：写一场关于..."
-                                            className="w-full h-32 p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none shadow-sm"
+                                            className="w-full h-32 p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
                                         />
                                     </div>
                                 )}
@@ -743,12 +784,24 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 {isGenerating ? (
                     <button onClick={handleStop} className="w-full py-2 bg-red-500 text-white font-bold rounded-xl shadow-lg hover:bg-red-600 transition-all flex items-center justify-center gap-2 active:scale-95 text-xs"><Stop className="w-3.5 h-3.5" /> 停止生成</button>
                 ) : (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-col">
                         {generationMode === 'workflow' ? (
-                            <>
-                                <button onClick={() => handleRunGeneration()} className="flex-1 py-2 bg-blue-50 text-blue-600 border border-blue-200 font-bold rounded-xl hover:bg-blue-100 transition-all flex items-center justify-center gap-1 shadow-sm text-xs"><Film className="w-3.5 h-3.5" /> 分集创作</button>
-                                <button onClick={() => handleRunGeneration()} className="flex-1 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-1 text-xs"><Play className="w-3.5 h-3.5" /> 一键全集</button>
-                            </>
+                            (!selectedWorkflow && !executedWorkflow) ? (
+                                <>
+                                    <button onClick={() => handleRunGeneration()} className="w-full py-2 bg-sky-50 text-sky-600 border border-sky-200 font-bold rounded-xl hover:bg-sky-100 transition-all flex items-center justify-center gap-1 shadow-sm text-xs"><Film className="w-3.5 h-3.5" /> 分集创作</button>
+                                    <button onClick={() => handleRunGeneration()} className="w-full py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-1 text-xs"><Play className="w-3.5 h-3.5" /> 一键全集</button>
+                                </>
+                            ) : (
+                                // When workflow is active/done, show Resume/Regenerate options
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => handleRunGeneration()} className="py-2 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center gap-1 text-xs">
+                                        <ArrowPath className="w-3.5 h-3.5" /> 重新生成
+                                    </button>
+                                    <button onClick={() => handleRunGeneration(undefined, true)} className="py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 transition-all flex items-center justify-center gap-1 text-xs">
+                                        <Play className="w-3.5 h-3.5" /> 继续生成
+                                    </button>
+                                </div>
+                            )
                         ) : (
                             <button onClick={() => handleRunGeneration()} className="w-full py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-1 text-xs"><Sparkles className="w-3.5 h-3.5" /> 立即生成</button>
                         )}
@@ -789,7 +842,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-4 bg-gray-50/50 dark:bg-gray-900/50">
                             <div className="flex justify-between items-center">
                                 <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <WorkflowIcon className="w-5 h-5 text-blue-500" />
+                                    <WorkflowIcon className="w-5 h-5 text-sky-500" />
                                     选择剧本工作流
                                 </h3>
                                 <button onClick={() => setWorkflowModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
@@ -804,7 +857,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         <button 
                                             key={cat.id} 
                                             onClick={() => setWorkflowCategory(cat.id)} 
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${workflowCategory === cat.id ? 'bg-blue-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${workflowCategory === cat.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
                                         >
                                             {cat.label}
                                         </button>
@@ -826,7 +879,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         placeholder="搜索工作流..." 
                                         value={workflowSearch} 
                                         onChange={e => setWorkflowSearch(e.target.value)} 
-                                        className="w-full pl-9 pr-4 py-1.5 bg-white dark:bg-gray-800 text-xs rounded-lg border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none" 
+                                        className="w-full pl-9 pr-4 py-1.5 bg-white dark:bg-gray-800 text-xs rounded-lg border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none" 
                                     />
                                 </div>
                             </div>
@@ -842,8 +895,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                             onClick={() => { setSelectedWorkflow(wf); setWorkflowModalOpen(false); }}
                                             className={`bg-white dark:bg-gray-900 rounded-2xl p-4 border transition-all cursor-pointer group flex flex-col h-[210px] ${
                                                 selectedWorkflow?.id === wf.id 
-                                                ? 'border-blue-500 ring-2 ring-blue-500/20' 
-                                                : 'border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xl'
+                                                ? 'border-sky-500 ring-2 ring-sky-500/20' 
+                                                : 'border-gray-100 dark:border-gray-800 hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-xl'
                                             }`}
                                         >
                                             <div className="flex justify-between items-start mb-2">
@@ -853,8 +906,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                             
                                             <div className="-mt-8">
                                                 <div className="flex justify-between items-start">
-                                                    <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-2 line-clamp-1 group-hover:text-blue-600 transition-colors pr-2">{wf.title}</h3>
-                                                    {selectedWorkflow?.id === wf.id && <div className="bg-blue-500 text-white rounded-full p-0.5 shrink-0 mt-1"><Check className="w-3 h-3" /></div>}
+                                                    <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-2 line-clamp-1 group-hover:text-sky-600 transition-colors pr-2">{wf.title}</h3>
+                                                    {selectedWorkflow?.id === wf.id && <div className="bg-sky-500 text-white rounded-full p-0.5 shrink-0 mt-1"><Check className="w-3 h-3" /></div>}
                                                 </div>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-4 leading-relaxed flex-grow">
                                                     {wf.description || '暂无描述'}
@@ -864,7 +917,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                             <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-100 dark:border-gray-800 gap-2">
                                                 <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
                                                     <div className="flex gap-1 flex-shrink-0">
-                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold border border-blue-100 whitespace-nowrap dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800">
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-600 font-bold border border-sky-100 whitespace-nowrap dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800">
                                                             {CATEGORY_LABELS[wf.category] || '全类型'}
                                                         </span>
                                                         {wf.subCategories && wf.subCategories.length > 0 && (
@@ -894,17 +947,16 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 document.body
             )}
 
-            {/* Header */}
+            {/* Header - Updated Layout */}
             <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm h-14 justify-between px-4">
                 <div className="flex items-center gap-3">
-                    <Film className="w-5 h-5 text-blue-500" />
+                    <Film className="w-5 h-5 text-sky-500" />
                     <span className="font-bold text-base text-gray-900 dark:text-white truncate max-w-[150px]">{script.title}</span>
                 </div>
                 
                 <div className="flex-1 flex items-center justify-center overflow-x-auto no-scrollbar mx-4">
                     <div className="flex items-center bg-gray-50 dark:bg-gray-900 p-1 rounded-lg">
                         {generationMode === 'workflow' ? (
-                            // Use executedWorkflow to allow persistence of stepper even if input selectedWorkflow is cleared
                             (executedWorkflow || selectedWorkflow)?.steps ? (
                                 (executedWorkflow || selectedWorkflow)?.steps?.map((step, idx) => (
                                     <div key={step.id} className="flex items-center">
@@ -916,13 +968,19 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                             }}
                                             className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
                                                 currentStepIndex === idx 
-                                                ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm ring-1 ring-blue-500/20' 
-                                                : (stepResults[step.outputVariable] ? 'text-green-600' : 'text-gray-500 hover:text-gray-900')
+                                                ? 'bg-white dark:bg-gray-800 text-sky-600 shadow-sm ring-1 ring-sky-500/20' 
+                                                : (stepResults[step.outputVariable] ? 'text-green-600' : 'text-gray-400 hover:text-gray-900')
                                             }`}
                                         >
-                                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${stepResults[step.outputVariable] ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-500'}`}>
-                                                {idx + 1}
-                                            </span>
+                                            {stepResults[step.outputVariable] ? (
+                                                <div className="w-4 h-4 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+                                                    <Check className="w-2.5 h-2.5" />
+                                                </div>
+                                            ) : (
+                                                <span className="w-4 h-4 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[9px]">
+                                                    {idx + 1}
+                                                </span>
+                                            )}
                                             {step.name}
                                         </button>
                                         {idx < ((executedWorkflow || selectedWorkflow)?.steps?.length || 0) - 1 && <ChevronRight className="w-3 h-3 text-gray-300 mx-1" />}
@@ -938,33 +996,40 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 </div>
                 
                 <div className="flex items-center gap-3">
-                    <button onClick={onBack} className="px-4 py-1.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">返回</button>
+                    <div className="flex items-center gap-1 mr-2">
+                        <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-gray-500" title="手动保存">
+                            <CloudArrowUp className="w-5 h-5" />
+                        </button>
+                        <span className="text-xs font-bold text-gray-500">手动保存</span>
+                        <span className="text-xs text-green-500 font-bold ml-1">
+                            {saveStatus === 'saving' ? '保存中...' : '已保存'}
+                        </span>
+                    </div>
+                    <button onClick={onBack} className="px-4 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm">返回</button>
                 </div>
             </header>
 
             <div className="flex-1 flex overflow-hidden relative">
                 {/* Left Sidebar */}
-                <aside className={`flex-shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-[380px]' : 'w-0'}`}>
+                <aside className={`flex-shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-[280px]' : 'w-0'}`}>
                     {renderSetupSidebar()}
                 </aside>
 
                 <button 
                     onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
-                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-[380px]' : 'left-0'}`}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-[280px]' : 'left-0'}`}
                 >
                     {isLeftSidebarOpen ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                 </button>
 
                 {/* Main Content Area */}
-                <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden">
+                <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden h-full">
                      {/* Toolbar */}
                      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-2 flex justify-between items-center shrink-0 h-12 relative">
                          <div className="flex items-center gap-4 pl-4 w-1/3">
                              <h2 className="text-base font-bold text-sky-500 dark:text-sky-400 flex items-center gap-2 truncate">
                                  {activeScene?.title || '剧本正文'}
                              </h2>
-                             {saveStatus === 'saving' && <span className="text-xs text-blue-500 animate-pulse whitespace-nowrap">保存中...</span>}
-                             {saveStatus === 'saved' && <span className="text-xs text-green-500 whitespace-nowrap">已保存</span>}
                          </div>
                          
                          <div className="absolute left-1/2 -translate-x-1/2">
@@ -987,7 +1052,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                          <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-1 max-h-60 overflow-y-auto custom-scrollbar animate-fade-in">
                                              <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase border-b border-gray-100 dark:border-gray-700 mb-1 flex justify-between items-center">
                                                  <span>剧本集数</span>
-                                                 <button onClick={() => { handleCreateEpisode(); setIsEpisodeSelectorOpen(false); }} className="text-blue-500 hover:underline">+ 新建</button>
+                                                 <button onClick={() => { handleCreateEpisode(); setIsEpisodeSelectorOpen(false); }} className="text-sky-500 hover:underline">+ 新建</button>
                                              </div>
                                              {script.scenes.length > 0 ? (
                                                  episodeGroups.map((group, groupIdx) => (
@@ -1000,7 +1065,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                                  <button 
                                                                      key={scene.id}
                                                                      onClick={() => { setActiveScene(scene); setIsEpisodeSelectorOpen(false); }}
-                                                                     className={`w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors truncate ${activeScene?.id === scene.id ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                                                                     className={`w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors truncate ${activeScene?.id === scene.id ? 'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400' : 'text-gray-600 dark:text-gray-400 hover:bg-sky-50 dark:hover:bg-gray-700'}`}
                                                                  >
                                                                      {scene.title}
                                                                  </button>
@@ -1016,8 +1081,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                          </div>
                      </div>
                      
-                     {/* Main Output Container */}
-                     <div className="flex-1 overflow-y-auto p-0 custom-scrollbar relative scroll-smooth" ref={scrollContainerRef}>
+                     {/* Main Output Container - Full Height, Separators */}
+                     <div className="flex-1 overflow-y-auto p-0 custom-scrollbar relative scroll-smooth bg-white dark:bg-gray-900 h-full" ref={scrollContainerRef}>
                          {/* Loading State for Script Body */}
                          {isScriptLoading && (
                              <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 z-50">
@@ -1030,59 +1095,13 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
                          {/* Mode: Prompt Generation - Single Result Display */}
                          {generationMode === 'prompt' && (
-                             <div className="w-full h-full flex flex-col bg-white dark:bg-gray-900">
-                                 {/* Result Header */}
-                                 <div className="flex items-center justify-between gap-3 px-6 py-3 sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shrink-0">
-                                     <div className="flex items-center gap-3">
-                                         <div className="w-6 h-6 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-xs font-bold shrink-0">
-                                             <Sparkles className="w-3.5 h-3.5" />
-                                         </div>
-                                         <h3 className="text-sm font-bold text-gray-800 dark:text-white uppercase tracking-wide truncate">生成结果</h3>
-                                         {isGenerating && <ArrowPath className="w-4 h-4 text-sky-500 animate-spin" />}
-                                     </div>
-                                     
-                                     {promptResultText && (
-                                         <div className="flex items-center gap-2">
-                                             <button 
-                                                 type="button"
-                                                 onClick={() => handleDownloadWord(promptResultText, `${script.title}_Generated`)}
-                                                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-900/20 rounded-lg transition-colors"
-                                                 title="下载为 Word"
-                                             >
-                                                 <DocumentArrowDown className="w-3.5 h-3.5" /> 
-                                                 <span className="hidden sm:inline">下载</span>
-                                             </button>
-                                             
-                                             <button 
-                                                 type="button"
-                                                 onClick={() => {
-                                                     navigator.clipboard.writeText(promptResultText);
-                                                     alert('已复制到剪贴板');
-                                                 }}
-                                                 className="p-1.5 text-gray-400 hover:text-sky-500 rounded-lg transition-colors"
-                                                 title="复制"
-                                             >
-                                                 <Copy className="w-4 h-4" />
-                                             </button>
-                                             <button 
-                                                 type="button"
-                                                 onClick={() => {
-                                                     if(window.confirm('确定要清空结果吗？')) setPromptResultText('');
-                                                 }}
-                                                 className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
-                                                 title="清空"
-                                             >
-                                                 <Trash className="w-4 h-4" />
-                                             </button>
-                                         </div>
-                                     )}
-                                 </div>
-
+                             <div className="w-full min-h-full flex flex-col bg-white dark:bg-gray-900">
+                                 {/* Result Header Removed */}
                                  {/* Result Body - Full height */}
                                  <div className="flex-1 p-8 relative group overflow-y-auto custom-scrollbar min-h-[500px]">
                                      {promptResultText ? (
                                          <div className="mb-8">
-                                             <FormattedText text={promptResultText} />
+                                             {isGenerating ? <StreamingText text={promptResultText} /> : <FormattedText text={promptResultText} />}
                                          </div>
                                      ) : (
                                          <div className="flex flex-col items-center justify-center h-full text-gray-400 pt-20">
@@ -1091,13 +1110,45 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                          </div>
                                      )}
                                      
+                                     {/* Overlay Actions for Prompt Mode */}
                                      {!isGenerating && promptResultText && (
-                                         <div className="mt-8 pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-center gap-4 pb-8">
+                                         <div className="fixed bottom-8 right-8 flex gap-2 z-50 animate-fade-in-up">
+                                             <button 
+                                                 type="button"
+                                                 onClick={() => handleDownloadWord(promptResultText, `${script.title}_Generated`)}
+                                                 className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full shadow-lg hover:text-sky-600 dark:hover:text-sky-400 transition-colors border border-gray-100 dark:border-gray-700"
+                                                 title="下载为 Word"
+                                             >
+                                                 <DocumentArrowDown className="w-5 h-5" />
+                                             </button>
+                                             
+                                             <button 
+                                                 type="button"
+                                                 onClick={() => {
+                                                     navigator.clipboard.writeText(promptResultText);
+                                                     alert('已复制到剪贴板');
+                                                 }}
+                                                 className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full shadow-lg hover:text-sky-600 dark:hover:text-sky-400 transition-colors border border-gray-100 dark:border-gray-700"
+                                                 title="复制"
+                                             >
+                                                 <Copy className="w-5 h-5" />
+                                             </button>
+                                             <button 
+                                                 type="button"
+                                                 onClick={() => {
+                                                     if(window.confirm('确定要清空结果吗？')) setPromptResultText('');
+                                                 }}
+                                                 className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full shadow-lg hover:text-red-500 transition-colors border border-gray-100 dark:border-gray-700"
+                                                 title="清空"
+                                             >
+                                                 <Trash className="w-5 h-5" />
+                                             </button>
+                                             
                                              <button 
                                                  onClick={() => handleInsertToScript(promptResultText)}
-                                                 className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-full shadow-lg hover:bg-emerald-500 transition-all active:scale-95 flex items-center gap-2 text-sm"
+                                                 className="px-6 py-3 bg-emerald-600 text-white font-bold rounded-full shadow-lg hover:bg-emerald-500 transition-all active:scale-95 flex items-center gap-2 text-sm"
                                              >
-                                                 <Plus className="w-4 h-4" /> 插入到正文
+                                                 <Plus className="w-5 h-5" /> 插入到正文
                                              </button>
                                          </div>
                                      )}
@@ -1105,12 +1156,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                              </div>
                          )}
 
-                         {/* Mode: Workflow Generation */}
-                         {/* Use executedWorkflow to persist output even if input selectedWorkflow is cleared */}
+                         {/* Mode: Workflow Generation - Single Container with Dividers */}
                          {generationMode === 'workflow' && (executedWorkflow || selectedWorkflow) && !isScriptLoading && (
-                             <div className="space-y-0 pb-32 w-full mx-auto">
+                             <div className="w-full mx-auto min-h-full flex flex-col bg-white dark:bg-gray-900 pb-32">
                                  {(executedWorkflow || selectedWorkflow)?.steps?.map((step, index) => {
-                                     if (index > visibleStepIndex && !stepResults[step.outputVariable]) return null;
+                                     if (index > visibleStepIndex) return null;
 
                                      const result = stepResults[step.outputVariable];
                                      const isGeneratingThis = currentStepIndex === index && isGenerating;
@@ -1120,15 +1170,18 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                          <div 
                                             key={step.id} 
                                             ref={(el: HTMLDivElement | null) => { stepRefs.current[index] = el; }}
-                                            className={`transition-opacity duration-500 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 ${!result && !isGeneratingThis ? 'opacity-50' : 'opacity-100'}`}
+                                            className={`transition-opacity duration-500 ${index > 0 ? 'border-t-4 border-gray-100 dark:border-gray-800' : ''}`}
                                          >
-                                             {/* 3. Hide Headers, keep container for scroll ref */}
-                                             
                                              {!isCollapsed && (
-                                                 <div className="p-8 relative group min-h-[100px] overflow-y-auto custom-scrollbar">
+                                                 <div className="p-8 relative group min-h-[100px]">
+                                                     {/* Floating Step Badge - Optional for context */}
+                                                     <div className="absolute left-2 top-2 text-[10px] font-bold text-gray-300 pointer-events-none select-none">
+                                                         Step {index + 1}
+                                                     </div>
+
                                                      {result ? (
                                                          <div className="relative">
-                                                             {/* Optional: Add hover controls since header is gone */}
+                                                             {/* Controls */}
                                                              <div className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 bg-white/90 dark:bg-black/80 p-1 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 z-10">
                                                                  <button 
                                                                     type="button"
@@ -1139,21 +1192,26 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                                  <button 
                                                                     type="button"
                                                                     onClick={() => handleDownloadWord(result, `${script.title}_${step.name}`)}
-                                                                    className="p-1.5 text-sky-500 hover:bg-sky-50 rounded"
+                                                                    className="p-1.5 text-purple-500 hover:bg-purple-50 rounded"
                                                                     title="下载"
                                                                  ><DocumentArrowDown className="w-4 h-4"/></button>
                                                              </div>
                                                              
-                                                             <EditableStepContent 
-                                                                initialContent={result} 
-                                                                onSave={(newContent) => handleStepContentChange(step.outputVariable, newContent)}
-                                                                onContextMenu={(e, text) => {
-                                                                    setContextMenu({ x: e.clientX, y: e.clientY, visible: true, text });
-                                                                }}
-                                                             />
+                                                             {/* Streaming vs Static */}
+                                                             {isGeneratingThis ? (
+                                                                 <StreamingText text={result} />
+                                                             ) : (
+                                                                 <EditableStepContent 
+                                                                    initialContent={result} 
+                                                                    onSave={(newContent) => handleStepContentChange(step.outputVariable, newContent)}
+                                                                    onContextMenu={(e, text) => {
+                                                                        setContextMenu({ x: e.clientX, y: e.clientY, visible: true, text });
+                                                                    }}
+                                                                 />
+                                                             )}
                                                          </div>
                                                      ) : isGeneratingThis ? (
-                                                         <div className="flex flex-col items-center justify-center py-8 text-blue-500 text-sm animate-pulse gap-2">
+                                                         <div className="flex flex-col items-center justify-center py-8 text-sky-500 text-sm animate-pulse gap-2">
                                                              <Sparkles className="w-6 h-6" /> 
                                                              <span>正在生成内容...</span>
                                                          </div>
@@ -1168,7 +1226,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                              </div>
                          )}
                          
-                         {/* Fallback for Workflow mode if nothing selected AND no executed workflow */}
+                         {/* Fallback */}
                          {generationMode === 'workflow' && !selectedWorkflow && !executedWorkflow && !isScriptLoading && (
                              <div className="flex flex-col items-center justify-center h-full text-gray-400 pt-20">
                                  <WorkflowIcon className="w-16 h-16 mb-4 opacity-20" />
@@ -1176,13 +1234,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                              </div>
                          )}
                          
-                         {isGenerating && generationMode === 'workflow' && (
-                             <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full shadow-lg flex items-center gap-2 animate-pulse z-50">
-                                 <ArrowPath className="w-4 h-4 animate-spin" />
-                                 正在按步骤生成剧本...
-                                 <button onClick={handleStop} className="ml-2 hover:text-red-200"><X className="w-4 h-4"/></button>
-                             </div>
-                         )}
                      </div>
                 </main>
 

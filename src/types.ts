@@ -1,0 +1,218 @@
+
+export type View = 
+  'creative-generation' | 
+  'novel-management' | 
+  'script-management' | 
+  'hit-copywriting' | 
+  'prompt-library' | 
+  'workflow' |
+  'character-library' |
+  'plot-library' |
+  'inspiration-library' |
+  'personal-center' |
+  'help';
+
+export interface ModulePromptTemplate {
+  id: string;
+  name: string;
+  description: string;
+  promptPrefix: string;
+  placeholder:string;
+}
+
+export interface CreativeModule {
+  id: string;
+  title: string;
+  description: string;
+  content: string;
+  category: PromptCategory;
+  subCategories: PromptSubCategory[];
+  fields: PromptField[];
+  template: string;
+  heat: number;
+  creator: 'system' | 'user';
+}
+
+export interface PromptField {
+  id: string;
+  label: string;
+  type: 'text' | 'textarea' | 'file';
+  placeholder: string;
+  required?: boolean;
+  description?: string;
+  maxLength?: number;
+}
+
+export type PromptCategory = 'general' | 'short-story' | 'long-story' | 'script';
+
+export type PromptSubCategory = 
+  'style' | 'requirements' | 'continue' | 'polish' | 'expand' | 'proofread' | 'imitate' |
+  'idea' | 'golden_finger' | 'character_design' | 'worldview' | 'outline' | 'detailed_outline' | 'synopsis' | 'writing' | 'short_story_lead' |
+  'general' | 'modern-romance' | 'ancient-romance' | 'period' | 'apocalypse' | 
+  'urban' | 'fantasy' | 'history' | 'social' | 'suspense' | 'sci-fi' | 'comic-drama' | 'live-action';
+
+
+export interface Prompt {
+  id: string;
+  title: string;
+  description: string;
+  example?: string;
+  content: string;
+  category: PromptCategory;
+  subCategories: PromptSubCategory[];
+  fields: PromptField[];
+  template: string;
+  heat: number;
+  creator: 'system' | 'user';
+  userId?: string;
+  authorName?: string;
+  createdAt?: string;
+}
+
+export interface WorkflowField {
+    id: string;
+    label: string;
+    variable: string;
+    type: 'text' | 'textarea' | 'file';
+    required?: boolean;
+    description?: string;
+    maxLength?: number;
+}
+
+export interface WorkflowStep {
+  id: string;
+  name: string;
+  prompt: string;
+  outputVariable: string;
+  manualConfirmation?: boolean;
+}
+
+export interface Workflow {
+  id: string;
+  title: string;
+  description: string;
+  usageCount: string | number;
+  heat: number;
+  author: string;
+  userId?: string;
+  category: PromptCategory;
+  subCategories?: PromptSubCategory[];
+  fields?: WorkflowField[];
+  steps?: WorkflowStep[];
+  template?: string; // 旧版兼容
+  createdAt?: string;
+}
+
+export type AssetFormData = {
+  name: string;
+  personality?: string;
+  relationships?: string;
+  plotPoints?: string;
+  scene?: string;
+  genre?: string;
+  elements?: string;
+  coreTrope?: string;
+  goldenFinger?: string;
+  notes?: string;
+  tags?: string;
+};
+
+export interface Asset {
+  id: string;
+  name: string;
+  type: 'character' | 'inspiration' | 'plot';
+  content: string;
+  tags: string[];
+  data?: AssetFormData;
+  isFavorite?: boolean; // Added field
+}
+
+export interface Chapter {
+  id: string;
+  title: string;
+  content: string;
+  wordCount: number;
+  lastModified: string;
+  isContentLoaded?: boolean; // New field for lazy loading state
+}
+
+export interface NovelSettings {
+  typeElements: string;
+  theme: string;
+  targetAudience: string;
+  synopsis: string;
+  worldview: string;
+  characterSettings: string;
+  specificTerms?: string; // New field for Specific Terms
+}
+
+export interface Novel {
+  id: string;
+  title: string;
+  coverImage: string | null;
+  wordCount: number;
+  creationDate: string;
+  settings: NovelSettings;
+  chapters: Chapter[];
+}
+
+export interface Scene {
+    id: string;
+    title: string;
+    content: string;
+    isContentLoaded?: boolean; // New field for lazy loading state
+}
+
+// Updated Script Interfaces
+export interface ScriptSettings {
+    format: 'live_action' | 'animation';
+    totalEpisodes: string;
+    durationPerEpisode: string;
+    scenesPerEpisodeLimit: string;
+    outputLanguage: 'zh' | 'en';
+    model: string;
+}
+
+export interface ScriptPlanning {
+    synopsis: string;
+    characterSettings: string;
+    worldview: string;
+    outline: string;
+}
+
+export interface Script {
+  id: string;
+  title: string;
+  coverImage: string | null;
+  wordCount: number;
+  type: 'original' | 'adaptation';
+  creationDate: string;
+  scenes: Scene[];
+  scriptData?: {
+      settings: ScriptSettings;
+      planning: ScriptPlanning;
+  };
+}
+
+export type Project = Novel | Script;
+
+export interface UserProfile {
+  id: string;
+  nickname: string;
+  email?: string;
+  avatarUrl: string | null;
+}
+
+export interface RechargeRecord {
+  id: string;
+  date: string;
+  amount: number;
+  status: 'Success' | 'Failed';
+}
+
+export interface FavoriteItem {
+  id: string;
+  title: string;
+  type: 'prompt' | 'novel' | 'script' | 'character';
+  description: string;
+}

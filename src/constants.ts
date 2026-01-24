@@ -1,5 +1,39 @@
 
-import { CreativeModule, Prompt, Asset, Workflow } from './types';
+import { CreativeModule, Prompt, Asset, Workflow, PromptSubCategory } from './types';
+
+export const FUNCTIONAL_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
+    { id: 'idea', label: '创意' },
+    { id: 'golden_finger', label: '金手指' },
+    { id: 'character_design', label: '人物设定' },
+    { id: 'worldview', label: '世界观' },
+    { id: 'outline', label: '大纲' },
+    { id: 'detailed_outline', label: '细纲' },
+    { id: 'synopsis', label: '简介' },
+    { id: 'short_story_lead', label: '短篇导语' },
+    { id: 'requirements', label: '写作要求' },
+    { id: 'style', label: '写作风格' },
+    { id: 'continue', label: '续写' },
+    { id: 'polish', label: '润色' },
+    { id: 'expand', label: '扩写' },
+    { id: 'imitate', label: '仿写' },
+    { id: 'proofread', label: '审稿' },
+];
+
+export const GENRE_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
+    { id: 'general', label: '通用' },
+    { id: 'modern-romance', label: '现言' },
+    { id: 'ancient-romance', label: '古言' },
+    { id: 'period', label: '年代' },
+    { id: 'apocalypse', label: '末世' },
+    { id: 'urban', label: '都市' },
+    { id: 'fantasy', label: '玄幻' },
+    { id: 'history', label: '历史' },
+    { id: 'social', label: '世情' },
+    { id: 'suspense', label: '悬疑' },
+    { id: 'sci-fi', label: '科幻' },
+    { id: 'comic-drama', label: '漫剧' },
+    { id: 'live-action', label: '实拍剧' },
+];
 
 export const CREATIVE_MODULES: CreativeModule[] = [
   {
@@ -8,7 +42,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成小说故事雏形和简要故事梗概。',
     content: '生成小说故事雏形和简要故事梗概。',
     category: 'long-story',
-    subCategories: ['requirements'],
+    subCategories: ['idea'],
     fields: [],
     template: '',
     heat: 5000,
@@ -20,7 +54,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成人物的附加功能、系统、特殊设定。',
     content: '生成人物的附加功能、系统、特殊设定。',
     category: 'long-story',
-    subCategories: ['requirements'],
+    subCategories: ['golden_finger'],
     fields: [],
     template: '',
     heat: 4500,
@@ -32,7 +66,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成人物的爆款标签、社会&自然属性、人物关系。',
     content: '生成人物的爆款标签、社会&自然属性、人物关系。',
     category: 'long-story',
-    subCategories: ['requirements'],
+    subCategories: ['character_design'],
     fields: [],
     template: '',
     heat: 4800,
@@ -44,7 +78,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成特殊的世界规则、社会背景设定。',
     content: '生成特殊的世界规则、社会背景设定。',
     category: 'long-story',
-    subCategories: ['requirements'],
+    subCategories: ['worldview'],
     fields: [],
     template: '',
     heat: 3200,
@@ -56,7 +90,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成小说的创作简单纲要。',
     content: '生成小说的创作简单纲要。',
     category: 'long-story',
-    subCategories: ['requirements'],
+    subCategories: ['outline'],
     fields: [],
     template: '',
     heat: 6000,
@@ -68,10 +102,34 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成具有丰富细节和章节纲要。',
     content: '生成具有丰富细节和章节纲要。',
     category: 'long-story',
-    subCategories: ['requirements'],
+    subCategories: ['detailed_outline'],
     fields: [],
     template: '',
     heat: 5500,
+    creator: 'system',
+  },
+  {
+    id: 'short-story-lead',
+    title: '短篇导语',
+    description: '生成吸引人的短篇小说开篇导语或钩子。',
+    content: '生成吸引人的短篇小说开篇导语。',
+    category: 'short-story',
+    subCategories: ['short_story_lead'],
+    fields: [],
+    template: '',
+    heat: 4600,
+    creator: 'system',
+  },
+  {
+    id: 'imitate-style',
+    title: '文风仿写',
+    description: '分析并模仿特定作家或作品的文字风格。',
+    content: '分析并模仿特定作家或作品的文字风格。',
+    category: 'general',
+    subCategories: ['imitate'],
+    fields: [],
+    template: '',
+    heat: 4300,
     creator: 'system',
   },
   {
@@ -80,7 +138,7 @@ export const CREATIVE_MODULES: CreativeModule[] = [
     description: '生成爆款小说介绍。',
     content: '生成爆款小说介绍。',
     category: 'short-story',
-    subCategories: ['requirements'],
+    subCategories: ['synopsis'],
     fields: [],
     template: '',
     heat: 4200,
@@ -155,7 +213,7 @@ export const PROMPTS: Prompt[] = [
     description: '根据当前故事背景和核心冲突，生成详细的章节大纲。',
     content: '请为下一章写一个详细的大纲。',
     category: 'long-story',
-    subCategories: ['requirements'],
+    subCategories: ['outline'],
     fields: [
         { id: 'goal', label: '核心冲突/目标', type: 'textarea', placeholder: '例如：主角潜入敌营，发现惊人秘密...' },
         { id: 'context', label: '背景/前情 (可选)', type: 'textarea', placeholder: '默认为当前正文内容...' }
@@ -170,7 +228,7 @@ export const PROMPTS: Prompt[] = [
     description: '为一个场景提供多个不同的创意构思。',
     content: '请为一个场景提供3个不同的创意构思。',
     category: 'long-story', 
-    subCategories: ['requirements'],
+    subCategories: ['idea'],
     fields: [
         { id: 'location', label: '地点', type: 'text', placeholder: '例如：废弃的地铁站' },
         { id: 'characters', label: '人物', type: 'text', placeholder: '例如：林夜，神秘黑客' },
@@ -201,7 +259,7 @@ export const PROMPTS: Prompt[] = [
     description: '对文本进行扩写，增加环境、心理或动作描写。',
     content: '请对以下文本进行扩写。',
     category: 'long-story',
-    subCategories: ['polish'],
+    subCategories: ['expand'],
     fields: [
         { id: 'focus', label: '扩写侧重', type: 'text', placeholder: '例如：环境细节、心理活动、动作描写...' },
         { id: 'text', label: '选中文本 (自动读取)', type: 'textarea', placeholder: '请在编辑器中选择文本...' }
@@ -230,7 +288,7 @@ export const PROMPTS: Prompt[] = [
     description: '将小说文本改编为标准的影视剧本格式。',
     content: '请将以下小说片段改编为标准剧本格式。',
     category: 'script',
-    subCategories: ['requirements'],
+    subCategories: ['imitate'],
     fields: [
         { id: 'novel_text', label: '小说原文', type: 'textarea', placeholder: '粘贴需要改编的小说片段...' },
         { id: 'format_req', label: '格式要求', type: 'text', placeholder: '例如：标准电影剧本、电视剧本...' }

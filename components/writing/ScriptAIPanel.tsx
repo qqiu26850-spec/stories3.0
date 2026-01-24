@@ -237,7 +237,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
     const renderTabButton = (type: ScriptTab, label: string, Icon: React.ElementType) => (
         <button
             onClick={() => { setActiveTab(type); setGeneratedText(''); }}
-            className={`flex-1 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors border-b-2 font-sans ${
+            className={`flex-1 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors border-b-2 font-sans h-12 ${
                 activeTab === type 
                     ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-white dark:bg-gray-800' 
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
@@ -336,8 +336,8 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 {/* Module 1: Model Config */}
                 <div className="border-b border-gray-100 dark:border-gray-800">
                     <button onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                        <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">1</span>
+                        <span className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-[10px]">1</span>
                             模型参数配置
                         </span>
                         <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isConfigCollapsed ? 'rotate-180' : ''}`} />
@@ -357,10 +357,17 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                                         <div className="space-y-1">
                                             <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between"><span>随机度 (Temperature): {temperature}</span></label>
                                             <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <p className="text-[9px] text-gray-400 mt-0.5">控制创造性：值越高越发散（适合创意），值越低越严谨（适合逻辑）。</p>
                                         </div>
                                         <div className="space-y-1">
                                             <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between"><span>核采样 (Top P): {topP}</span></label>
                                             <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <p className="text-[9px] text-gray-400 mt-0.5">控制词汇多样性：降低该值可减少偏门词汇的出现。</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between"><span>最大长度 (Tokens): {maxOutputTokens}</span></label>
+                                            <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <p className="text-[9px] text-gray-400 mt-0.5">限制单次请求生成的最大文本量（包括标点和换行）。</p>
                                         </div>
                                     </div>
                                 )}
@@ -372,8 +379,8 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 {/* Module 2: Text to Process */}
                 <div className="border-b border-gray-100 dark:border-gray-800">
                     <div className="p-4 flex items-center justify-between">
-                        <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>
+                        <span className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-[10px]">2</span>
                             需修改的正文内容
                         </span>
                     </div>
@@ -395,8 +402,8 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 {/* Module 3: Prompts & Assets */}
                 <div className="border-b border-gray-100 dark:border-gray-800">
                     <div className="p-4">
-                        <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">3</span>
+                        <span className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-[10px]">3</span>
                             提示词选择 & 关联素材
                         </span>
                     </div>
@@ -441,11 +448,22 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                                                     {index + 1}. {field.label}
                                                     {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
                                                 </label>
+                                                {field.maxLength && (
+                                                    <span className={`text-[9px] font-bold ${formState[field.id]?.length > field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
+                                                        {formState[field.id]?.length || 0} / {field.maxLength}
+                                                    </span>
+                                                )}
                                             </div>
                                             {field.type === 'textarea' ? (
-                                                <textarea rows={3} value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" />
+                                                <textarea rows={3} value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" maxLength={field.maxLength} />
                                             ) : (
-                                                <input type="text" value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" />
+                                                <input type="text" value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" maxLength={field.maxLength} />
+                                            )}
+                                            {field.description && (
+                                                <p className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5 ml-1 leading-tight flex items-start gap-1">
+                                                    <InformationCircle className="w-3 h-3 shrink-0" />
+                                                    {field.description}
+                                                </p>
                                             )}
                                         </div>
                                     );
