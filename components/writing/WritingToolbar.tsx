@@ -33,6 +33,7 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
         return (
             <button
                 key={btn.id}
+                onMouseDown={(e) => e.preventDefault()} // Prevent focus loss from editor
                 onClick={() => onAction(btn.id as ToolbarAction)}
                 title={btn.label}
                 className={`p-1.5 rounded transition-colors ${
@@ -47,8 +48,8 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
     };
 
     return (
-        <div className="flex items-center justify-between mb-2 w-full px-1">
-            <div className="flex items-center gap-1">
+        <div className="flex items-center justify-between w-full px-1">
+            <div className="flex items-center gap-1 flex-wrap">
                 {formattingButtons.map((btn) => renderButton(btn))}
             </div>
         </div>

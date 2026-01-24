@@ -1,9 +1,9 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory } from '../../types';
+import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory, PromptSubCategory } from '../../types';
 import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search, CloudArrowUp, Settings } from '../Icon';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
-import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
+import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, deleteScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
 import CustomSelect from '../CustomSelect';
@@ -90,27 +90,6 @@ const StreamingText: React.FC<{ text: string }> = ({ text }) => {
         <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm p-2 animate-pulse">
             {text}
             <span className="inline-block w-2 h-4 bg-sky-500 ml-1 align-middle animate-blink"></span>
-        </div>
-    );
-};
-
-const FormattedText: React.FC<{ text: string }> = ({ text }) => {
-    const cleanedText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    // Reduce excessive newlines to improve spacing
-    const normalizedText = cleanedText.replace(/\n\s*\n\s*\n/g, '\n\n');
-
-    return (
-        <div className="whitespace-pre-wrap font-mono text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
-            {normalizedText.split('\n').map((line, index) => {
-                const isSceneHeader = /^(EXT\.|INT\.|内景|外景|场景)/i.test(line);
-                const isCharacter = /^[A-Z\u4e00-\u9fa5]+(\s*\(.*?\))?：/.test(line);
-                
-                let className = "mb-1 min-h-[1em]"; // Reduced margin from mb-2 to mb-1 for even tighter spacing
-                if (isSceneHeader) className += " font-bold bg-gray-100 dark:bg-gray-800/50 p-1 rounded";
-                else if (isCharacter) className += " font-bold mt-1";
-                
-                return <div key={index} className={className}>{line || <br/>}</div>;
-            })}
         </div>
     );
 };
@@ -228,6 +207,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
     // Workflow Modal specific states
     const [workflowCategory, setWorkflowCategory] = useState<string>('all');
+    const [workflowGenre, setWorkflowGenre] = useState<string>('all');
     const [workflowSearch, setWorkflowSearch] = useState('');
     const [workflowFavorites, setWorkflowFavorites] = useState<Set<string>>(new Set());
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -252,7 +232,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     });
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const editorRef = useRef<HTMLDivElement>(null);
     const stepRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const dbSaveTimeoutRef = useRef<any>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -260,11 +239,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const filteredWorkflows = useMemo(() => {
         return availableWorkflows.filter(wf => {
             const matchesCategory = workflowCategory === 'all' || wf.category === workflowCategory || (workflowCategory === 'script' && wf.category === 'script');
+            const matchesGenre = workflowGenre === 'all' || (wf.subCategories && wf.subCategories.includes(workflowGenre as PromptSubCategory));
             const matchesSearch = !workflowSearch || wf.title.toLowerCase().includes(workflowSearch.toLowerCase());
             const matchesFavorite = !showFavoritesOnly || workflowFavorites.has(wf.id);
-            return matchesCategory && matchesSearch && matchesFavorite;
+            return matchesCategory && matchesSearch && matchesFavorite && matchesGenre;
         });
-    }, [availableWorkflows, workflowCategory, workflowSearch, showFavoritesOnly, workflowFavorites]);
+    }, [availableWorkflows, workflowCategory, workflowGenre, workflowSearch, showFavoritesOnly, workflowFavorites]);
 
     useEffect(() => {
         if (isWorkflowModalOpen) {
@@ -272,11 +252,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         }
     }, [isWorkflowModalOpen]);
 
-    const persistState = useCallback(() => {
+    const saveCurrentState = useCallback(async () => {
         if (!script.id) return;
-        if (dbSaveTimeoutRef.current) clearTimeout(dbSaveTimeoutRef.current);
-        
-        dbSaveTimeoutRef.current = setTimeout(async () => {
+        setSaveStatus('saving');
+        try {
             if (selectedWorkflow || Object.keys(stepResults).length > 0) {
                 await saveScriptWorkflowState(
                     script.id,
@@ -286,8 +265,21 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     visibleStepIndex
                 );
             }
-        }, 1500); 
+            setSaveStatus('saved');
+        } catch (e) {
+            console.error("Save failed", e);
+            setSaveStatus('error');
+        }
     }, [script.id, selectedWorkflow?.id, workflowFormState, stepResults, visibleStepIndex]);
+
+    const persistState = useCallback(() => {
+        if (!script.id) return;
+        if (dbSaveTimeoutRef.current) clearTimeout(dbSaveTimeoutRef.current);
+        setSaveStatus('saving');
+        dbSaveTimeoutRef.current = setTimeout(() => {
+            saveCurrentState();
+        }, 1500); 
+    }, [saveCurrentState]);
 
     useEffect(() => { persistState(); }, [persistState]);
 
@@ -356,6 +348,16 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         loadInitialData();
     }, [script.id]);
 
+    const handleBack = async () => {
+        // Clear timeout to prevent saving
+        if (dbSaveTimeoutRef.current) clearTimeout(dbSaveTimeoutRef.current);
+        // Delete persisted state on exit to ensure fresh start next time
+        if (script.id) {
+            await deleteScriptWorkflowState(script.id);
+        }
+        onBack();
+    };
+
     const handleWorkflowChange = (wf: Workflow) => {
         setSelectedWorkflow(wf);
         if (Object.keys(workflowFormState).length === 0) {
@@ -373,8 +375,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     };
 
     const runStepGeneration = async (stepIndex: number, context: Record<string, string>, assetContext: string, basicInfo: string, isContinue = false) => {
-        if (!selectedWorkflow || !selectedWorkflow.steps) return;
-        const step = selectedWorkflow.steps[stepIndex];
+        // Use executedWorkflow if set, otherwise fallback to selectedWorkflow
+        const activeWorkflow = executedWorkflow || selectedWorkflow;
+        if (!activeWorkflow || !activeWorkflow.steps) return;
+        const step = activeWorkflow.steps[stepIndex];
         
         const controller = new AbortController(); 
         abortControllerRef.current = controller;
@@ -423,6 +427,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
         if (generationMode === 'workflow') {
             if (!selectedWorkflow || !selectedWorkflow.steps) return;
+            // Lock in the workflow for execution
             setExecutedWorkflow(selectedWorkflow);
 
             let startStepIndex = 0;
@@ -432,6 +437,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 // If regenerating (no index provided), force reset state
                 setStepResults({});
                 setVisibleStepIndex(-1);
+                // Important: Ensure we are using the freshly selected workflow logic
+                // The loop below will use 'selectedWorkflow' reference which is correct
             }
 
             let currentContext: Record<string, string> = { ...workflowFormState };
@@ -538,15 +545,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         }
     };
 
-    const handleOpenDeepAsk = (text: string, stepVar: string) => {
-        setFollowUpModal({
-            open: true,
-            targetText: '', 
-            context: text,
-            stepVar: stepVar
-        });
-    };
-
     const handleFollowUpApply = (newText: string, type: 'insert' | 'replace') => {
         if (followUpModal.stepVar) {
              setStepResults(prev => {
@@ -568,19 +566,22 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     };
 
     const handleInsertToScript = (text: string) => {
-        if (!editorRef.current) {
-            alert('请先选择一个集数进行编辑');
-            return;
+        if (generationMode === 'prompt') {
+             setPromptResultText(prev => prev + '\n' + text);
+        } else {
+             navigator.clipboard.writeText(text);
+             alert('已复制到剪贴板，请手动粘贴到目标位置');
         }
-        const currentText = editorRef.current.innerText;
-        editorRef.current.innerText = currentText ? currentText + '\n\n' + text : text;
     };
 
     const handleToolbarAction = (action: ToolbarAction) => {
-        // Basic implementation for formatting
         if (['bold', 'italic'].includes(action)) {
             document.execCommand(action);
         }
+    };
+
+    const handleManualSave = async () => {
+        await saveCurrentState();
     };
 
     // --- Render ---
@@ -815,19 +816,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         
                         {/* 1. Modal Top Bar */}
                         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-4 bg-gray-50/50 dark:bg-gray-900/50">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <div className="flex items-center justify-between gap-4">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 shrink-0">
                                     <WorkflowIcon className="w-5 h-5 text-sky-500" />
                                     选择剧本工作流
                                 </h3>
-                                <button onClick={() => setWorkflowModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
-                                    <X className="w-5 h-5"/>
-                                </button>
-                            </div>
-                            
-                            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                                {/* Categories */}
-                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 w-full sm:w-auto">
+                                
+                                {/* Categories Tabs Inline */}
+                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-1 min-w-0">
                                     {WORKFLOW_CATEGORIES.map(cat => (
                                         <button 
                                             key={cat.id} 
@@ -842,12 +838,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         onClick={() => setShowFavoritesOnly(!showFavoritesOnly)} 
                                         className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 whitespace-nowrap ${showFavoritesOnly ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
                                     >
-                                        <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-current' : ''}`} /> 我的收藏
+                                        <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-current' : ''}`} /> 收藏
                                     </button>
                                 </div>
 
-                                {/* Search */}
-                                <div className="relative w-full sm:w-64">
+                                {/* Search Inline */}
+                                <div className="relative w-48 shrink-0">
                                     <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-3.5 h-3.5 text-gray-400" /></span>
                                     <input 
                                         type="text" 
@@ -857,6 +853,25 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         className="w-full pl-9 pr-4 py-1.5 bg-white dark:bg-gray-800 text-xs rounded-lg border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none" 
                                     />
                                 </div>
+
+                                <button onClick={() => setWorkflowModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400 shrink-0">
+                                    <X className="w-5 h-5"/>
+                                </button>
+                            </div>
+                            
+                            {/* Row 2: Genre Tags */}
+                            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                                <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">题材:</span>
+                                <button onClick={() => setWorkflowGenre('all')} className={`px-2.5 py-1 text-[10px] font-medium rounded-full border transition-all whitespace-nowrap ${workflowGenre === 'all' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}>全部</button>
+                                {GENRE_TAGS.map(tag => (
+                                    <button 
+                                        key={tag.id} 
+                                        onClick={() => setWorkflowGenre(tag.id)} 
+                                        className={`px-2.5 py-1 text-[10px] font-medium rounded-full border transition-all whitespace-nowrap ${workflowGenre === tag.id ? 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-900/50 dark:text-purple-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}
+                                    >
+                                        {tag.label}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
@@ -868,7 +883,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         <div 
                                             key={wf.id} 
                                             onClick={() => { setSelectedWorkflow(wf); setWorkflowModalOpen(false); }}
-                                            className={`bg-white dark:bg-gray-900 rounded-2xl p-4 border transition-all cursor-pointer group flex flex-col h-[210px] ${
+                                            className={`bg-white dark:bg-gray-900 rounded-2xl p-4 border transition-all cursor-pointer group flex flex-col h-[190px] ${
                                                 selectedWorkflow?.id === wf.id 
                                                 ? 'border-sky-500 ring-2 ring-sky-500/20' 
                                                 : 'border-gray-100 dark:border-gray-800 hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-xl'
@@ -929,9 +944,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     <span className="font-bold text-base text-gray-900 dark:text-white truncate max-w-[150px]">{script.title}</span>
                 </div>
                 
-                {/* Updated Toolbar Alignment: Placed directly in the center of the header flex container */}
+                {/* Center - Workflow Navigation or Empty */}
                 <div className="flex-1 flex items-center justify-center overflow-x-auto no-scrollbar mx-4">
-                    {generationMode === 'workflow' ? (
+                    {generationMode === 'workflow' && (
                         <div className="flex items-center bg-gray-50 dark:bg-gray-900 p-1 rounded-lg">
                             {(executedWorkflow || selectedWorkflow)?.steps ? (
                                 (executedWorkflow || selectedWorkflow)?.steps?.map((step, idx) => (
@@ -966,25 +981,21 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 <span className="text-xs text-gray-400 px-4">请先选择工作流</span>
                             )}
                         </div>
-                    ) : (
-                        <div className="flex items-center gap-4">
-                            <span className="text-xs font-bold text-sky-600 px-4 flex items-center gap-1 border-r border-gray-200 dark:border-gray-800"><Sparkles className="w-3 h-3"/> 提示词创作模式</span>
-                            <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
-                        </div>
                     )}
                 </div>
                 
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1 mr-2">
-                        <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-gray-500" title="手动保存">
-                            <CloudArrowUp className="w-5 h-5" />
-                        </button>
-                        <span className="text-xs font-bold text-gray-500">手动保存</span>
-                        <span className="text-xs text-green-500 font-bold ml-1">
-                            {saveStatus === 'saving' ? '保存中...' : '已保存'}
+                    <button 
+                        onClick={handleManualSave}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300" 
+                        title="手动保存"
+                    >
+                        <CloudArrowUp className={`w-4 h-4 ${saveStatus === 'saving' ? 'animate-bounce' : ''}`} />
+                        <span className="text-xs font-bold">
+                            {saveStatus === 'saving' ? '保存中...' : (saveStatus === 'saved' ? '已保存' : '手动保存')}
                         </span>
-                    </div>
-                    <button onClick={onBack} className="px-4 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm">返回</button>
+                    </button>
+                    <button onClick={handleBack} className="px-4 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm">返回</button>
                 </div>
             </header>
 
@@ -1005,18 +1016,18 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden h-full">
                      {/* Content Header Area */}
                      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-2 flex justify-between items-center shrink-0 h-12 relative">
-                         <div className="flex items-center gap-4 pl-4 w-1/3">
+                         <div className="flex items-center gap-4 pl-4 w-1/4">
                              <h2 className="text-base font-bold text-sky-500 dark:text-sky-400 flex items-center gap-2 truncate">
                                  {activeScene?.title || '剧本正文'}
                              </h2>
                          </div>
                          
-                         {/* Centered area available if needed, currently used by toolbar in header or here */}
-                         <div className="flex-1 text-center">
-                             
+                         {/* Centered area: Toolbar */}
+                         <div className="flex-1 flex justify-center">
+                             <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
                          </div>
 
-                         <div className="flex items-center gap-2 w-1/3 justify-end">
+                         <div className="flex items-center gap-2 w-1/4 justify-end">
                              <div className="relative">
                                  {/* Replace Episode Selector with Download */}
                                  <button 
@@ -1091,7 +1102,17 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                  <div className="flex-1 p-8 relative group overflow-y-auto custom-scrollbar min-h-[500px]">
                                      {promptResultText ? (
                                          <div className="mb-8">
-                                             {isGenerating ? <StreamingText text={promptResultText} /> : <FormattedText text={promptResultText} />}
+                                             {isGenerating ? (
+                                                 <StreamingText text={promptResultText} />
+                                             ) : (
+                                                 <EditableStepContent 
+                                                     initialContent={promptResultText}
+                                                     onSave={(val) => setPromptResultText(val)}
+                                                     onContextMenu={(e, text) => {
+                                                         setContextMenu({ x: e.clientX, y: e.clientY, visible: true, text });
+                                                     }}
+                                                 />
+                                             )}
                                          </div>
                                      ) : (
                                          <div className="flex flex-col items-center justify-center h-full text-gray-400 pt-20">
