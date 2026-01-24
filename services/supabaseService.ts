@@ -1,5 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
+import { PROMPTS, ASSETS, WORKFLOWS } from '../constants';
 
 // Mock Supabase Client Structure (to satisfy types if referenced directly, though we use mock functions)
 export const supabase = {
@@ -26,13 +27,92 @@ export const supabase = {
     }
 };
 
+// --- Data Transformation Helpers for Initial Seeding ---
+
+const transformPrompts = (prompts: any[]) => {
+    return prompts.map(p => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        content: JSON.stringify({
+            template: p.template || p.content,
+            fields: p.fields,
+            description: p.description,
+            subCategories: p.subCategories,
+            example: p.example,
+            authorName: '系统'
+        }),
+        main_category: p.category,
+        sub_category: p.subCategories?.[0] || 'general',
+        usage_count: p.heat,
+        user_id: 'system',
+        created_at: new Date().toISOString()
+    }));
+};
+
+const transformWorkflows = (workflows: any[]) => {
+    return workflows.map(w => ({
+        id: w.id,
+        title: w.title,
+        description: w.description,
+        main_category: w.category,
+        sub_categories: w.subCategories,
+        content: JSON.stringify({
+            fields: w.fields,
+            steps: w.steps
+        }),
+        usage_count: typeof w.usageCount === 'string' ? parseInt(w.usageCount) * 1000 : w.usageCount || 0,
+        user_id: 'system',
+        created_at: new Date().toISOString()
+    }));
+};
+
+const transformAssets = (assets: any[]) => {
+    return assets.map(a => ({
+        id: a.id,
+        name: a.name,
+        content: a.content,
+        // Convert 'inspiration' back to DB type 'idea' if needed, though frontend uses 'inspiration' mostly.
+        // We stick to 'idea' for consistency with fetchMaterials logic below.
+        type: a.type === 'inspiration' ? 'idea' : a.type, 
+        tags: a.tags,
+        user_id: 'system',
+        created_at: new Date().toISOString(),
+        isFavorite: false
+    }));
+};
+
 // Helper for LocalStorage
 const getStore = (key: string) => {
     try {
         if (typeof window === 'undefined') return [];
-        return JSON.parse(localStorage.getItem(key) || '[]');
+        const stored = localStorage.getItem(key);
+        
+        if (stored) {
+            return JSON.parse(stored);
+        }
+
+        // Initialize Defaults if Empty
+        if (key === 'mock_prompts') {
+            const defaults = transformPrompts(PROMPTS);
+            localStorage.setItem(key, JSON.stringify(defaults));
+            return defaults;
+        }
+        if (key === 'mock_workflows') {
+            const defaults = transformWorkflows(WORKFLOWS);
+            localStorage.setItem(key, JSON.stringify(defaults));
+            return defaults;
+        }
+        if (key === 'mock_materials') {
+            const defaults = transformAssets(ASSETS);
+            localStorage.setItem(key, JSON.stringify(defaults));
+            return defaults;
+        }
+
+        return [];
     } catch { return []; }
 };
+
 const setStore = (key: string, data: any[]) => {
     if (typeof window !== 'undefined') localStorage.setItem(key, JSON.stringify(data));
 };

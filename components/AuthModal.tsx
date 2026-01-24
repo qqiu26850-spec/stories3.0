@@ -60,7 +60,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                 const { data, error: signInError } = await signIn(email, password);
                 if (signInError) throw signInError;
 
-                if (data.user?.user_metadata?.is_deleted) {
+                if ((data.user?.user_metadata as any)?.is_deleted) {
                     await signOut();
                     throw new Error("该账号已注销，无法登录。");
                 }
