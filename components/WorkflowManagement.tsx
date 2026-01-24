@@ -286,7 +286,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
   if (view === 'run' && selectedWorkflow) return <WorkflowRun workflow={selectedWorkflow} onBack={() => { setView('list'); loadData(true); }} />;
 
   return (
-    <div className="h-full animate-fade-in flex flex-col font-sans bg-white dark:bg-black">
+    <div className="h-full animate-fade-in flex flex-col font-sans bg-white dark:bg-black p-4 sm:p-6 lg:p-8">
       <WorkflowDetailModal 
         isOpen={isDetailModalOpen} 
         onClose={() => setDetailModalOpen(false)} 
@@ -296,7 +296,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
       <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleConfirmDelete} />
 
       {/* Top Bar */}
-      <div className="flex flex-col gap-3 px-6 py-4 bg-white dark:bg-black border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+      <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
         <div className="flex flex-col xl:flex-row justify-between xl:items-center gap-4">
             <div className="flex items-center gap-4 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide">
                 {[
@@ -309,7 +309,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                     <button 
                         key={tab.id} 
                         onClick={() => setActiveTab(tab.id as any)} 
-                        className={`px-5 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-xs sm:text-sm ${activeTab === tab.id ? 'bg-blue-100 text-blue-600 shadow-md shadow-blue-500/10' : 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/10'}`}
+                        className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
                     >
                         {tab.label}
                     </button>
@@ -318,53 +318,60 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
             
             <div className="flex items-center gap-3 flex-shrink-0 self-end xl:self-auto">
                 {showSuccess && (
-                    <span className="text-base font-bold text-emerald-500 animate-fade-in transition-all whitespace-nowrap">
+                    <span className="text-xs font-bold text-emerald-500 animate-fade-in transition-all whitespace-nowrap flex items-center gap-1.5">
+                        <div className="w-5 h-5 bg-emerald-50 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
+                            <Check className="w-3 h-3" />
+                        </div>
                         {successMessage}
                     </span>
                 )}
                 
                 <div className="relative w-full sm:w-56">
                     <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-4 h-4 text-gray-400" /></span>
-                    <input type="text" placeholder="搜索工作流..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 text-sm rounded-xl border border-transparent focus:bg-white dark:focus:bg-black focus:border-blue-500 outline-none transition-all" />
+                    <input type="text" placeholder="搜索工作流..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 text-sm rounded-xl border border-gray-200 focus:ring-2 focus:ring-sky-500 outline-none transition-all" />
                 </div>
 
                 <button onClick={() => loadData(true)} className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="刷新列表">
                     <ArrowPath className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                 </button>
 
-                <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'my-workflows' ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><UserCircle className="w-4 h-4" />我的</button>
-                <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold transition-all text-sm whitespace-nowrap ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100'}`}><Heart className="w-4 h-4" />收藏</button>
-                <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-5 py-2 rounded-xl font-black bg-blue-100 text-blue-600 hover:bg-blue-200 shadow-lg shadow-blue-500/10 text-sm flex items-center gap-2 whitespace-nowrap active:scale-95 transition-all">
+                <button onClick={() => setActiveTab('my-workflows')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm whitespace-nowrap ${activeTab === 'my-workflows' ? 'bg-sky-100 text-sky-600' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100'}`}><UserCircle className="w-4 h-4" />我的</button>
+                <button onClick={() => setActiveTab('favorites')} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all text-sm whitespace-nowrap ${activeTab === 'favorites' ? 'bg-red-100 text-red-600' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100'}`}><Heart className="w-4 h-4" />收藏</button>
+                <button onClick={() => { setWorkflowToEdit(null); setView('create'); }} className="px-4 py-2 rounded-xl font-bold bg-sky-600 text-white hover:bg-sky-500 shadow-lg shadow-sky-500/20 text-sm flex items-center gap-1 whitespace-nowrap active:scale-95 transition-all">
                     <Plus className="w-4 h-4" /> 创建
                 </button>
             </div>
         </div>
 
-        <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-hide">
-            <span className="text-xs font-bold text-gray-400 mr-1 shrink-0 uppercase tracking-wider">题材分类:</span>
-            <button onClick={() => setActiveSubCategory('all')} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>全部</button>
-            {GENRE_TAGS.map(cat => (
-                <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-50 dark:bg-gray-900 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
-                    {cat.label}
-                </button>
-            ))}
+        <div className="flex flex-col gap-4 justify-between items-start bg-gray-100 dark:bg-gray-900/50 p-3 rounded-xl">
+            <div className="w-full space-y-2">
+                <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">题材分类:</span>
+                    <button onClick={() => setActiveSubCategory('all')} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === 'all' ? 'bg-sky-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>全部</button>
+                    {GENRE_TAGS.map(cat => (
+                        <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${activeSubCategory === cat.id ? 'bg-purple-100 text-purple-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>
+                            {cat.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
         </div>
       </div>
 
       {/* Grid Content */}
-      <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-black/20 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto pr-2 -mr-2">
           {isLoading ? (
               <div className="flex items-center justify-center h-64">
-                  <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
+                  <div className="w-10 h-10 border-4 border-t-sky-500 rounded-full animate-spin"></div>
               </div>
           ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-6">
                     {filteredWorkflows.map(wf => (
                         <div 
                             key={wf.id} 
                             onClick={() => handleSelectWorkflow(wf)}
-                            className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-[210px]"
+                            className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-[210px]"
                         >
                             <div className="flex justify-between items-start mb-2">
                                 <div className="flex gap-2 mb-1 opacity-0">
@@ -378,7 +385,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                             </div>
                             
                             <div className="-mt-8">
-                                <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-2 line-clamp-1 group-hover:text-blue-600 transition-colors">{wf.title}</h3>
+                                <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-2 line-clamp-1 group-hover:text-sky-600 transition-colors pr-2">{wf.title}</h3>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-4 leading-relaxed flex-grow">
                                     {wf.description || '暂无描述'}
                                 </p>
@@ -388,9 +395,9 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                                 {/* Left Side: Tags and Info */}
                                 <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
                                     <div className="flex gap-1 flex-shrink-0">
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold border border-blue-100 whitespace-nowrap">{CATEGORY_LABELS[wf.category] || '全类型'}</span>
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-600 font-bold border border-sky-100 whitespace-nowrap dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800">{CATEGORY_LABELS[wf.category] || '全类型'}</span>
                                         {wf.subCategories && wf.subCategories.length > 0 && (
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-bold border border-purple-100 whitespace-nowrap">
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-bold border border-purple-100 whitespace-nowrap dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800">
                                                 {getGenreLabel(wf.subCategories[0] as string)}
                                             </span>
                                         )}
@@ -404,13 +411,13 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                     {wf.userId === currentUserId && (
                                         <>
-                                            <button onClick={(e) => handleEdit(e, wf)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                                            <button onClick={(e) => handleEdit(e, wf)} className="p-1.5 text-gray-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
                                             <button onClick={(e) => handleOpenDelete(e, wf)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash className="w-3.5 h-3.5" /></button>
                                         </>
                                     )}
                                     <button 
                                         onClick={(e) => handleRunClick(e, wf)}
-                                        className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm group-hover:scale-105 active:scale-95 ml-1"
+                                        className="flex items-center gap-1 px-2 py-1 bg-sky-100 text-sky-600 rounded-lg hover:bg-sky-600 hover:text-white transition-all shadow-sm group-hover:scale-105 active:scale-95 ml-1"
                                         title="立即运行"
                                     >
                                         <Play className="w-3 h-3" />
@@ -431,7 +438,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                 {/* Infinite Scroll Sentinel */}
                 {hasMore && (
                     <div ref={observerTarget} className="py-6 text-center flex justify-center">
-                        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
                     </div>
                 )}
               </>

@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory } from '../../types';
 import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search, CloudArrowUp, Settings } from '../Icon';
-import WritingToolbar from './WritingToolbar';
+import WritingToolbar, { ToolbarAction } from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
@@ -46,8 +46,8 @@ const EditableStepContent: React.FC<{
         
         return normalized.split('\n').map(line => {
             const trimmed = line.trim();
-            if(!trimmed) return '<div class="mb-2"><br/></div>'; // Reduced margin
-            return `<div class="mb-2">${trimmed}</div>`; // Reduced margin
+            if(!trimmed) return '<div class="mb-1"><br/></div>'; // Reduced margin from mb-2 to mb-1
+            return `<div class="mb-1">${trimmed}</div>`; // Reduced margin from mb-2 to mb-1
         }).join('');
     };
 
@@ -105,9 +105,9 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
                 const isSceneHeader = /^(EXT\.|INT\.|内景|外景|场景)/i.test(line);
                 const isCharacter = /^[A-Z\u4e00-\u9fa5]+(\s*\(.*?\))?：/.test(line);
                 
-                let className = "mb-2 min-h-[1em]"; // Reduced margin-bottom from mb-4 to mb-2 for tighter "reading text" feel
+                let className = "mb-1 min-h-[1em]"; // Reduced margin from mb-2 to mb-1 for even tighter spacing
                 if (isSceneHeader) className += " font-bold bg-gray-100 dark:bg-gray-800/50 p-1 rounded";
-                else if (isCharacter) className += " font-bold mt-2";
+                else if (isCharacter) className += " font-bold mt-1";
                 
                 return <div key={index} className={className}>{line || <br/>}</div>;
             })}
@@ -182,12 +182,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [isScriptLoading, setIsScriptLoading] = useState(true);
     
-    // Setup State
+    // Setup State - Updated Defaults
     const [settings, setSettings] = useState<ScriptSettings>({
         format: 'live_action',
-        totalEpisodes: '40',
-        durationPerEpisode: '1',
-        scenesPerEpisodeLimit: '3',
+        totalEpisodes: '40', // Updated Default
+        durationPerEpisode: '1', // Updated Default
+        scenesPerEpisodeLimit: '3', // Updated Default
         outputLanguage: 'zh',
         model: 'deepseek-chat'
     });
@@ -576,6 +576,13 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         editorRef.current.innerText = currentText ? currentText + '\n\n' + text : text;
     };
 
+    const handleToolbarAction = (action: ToolbarAction) => {
+        // Basic implementation for formatting
+        if (['bold', 'italic'].includes(action)) {
+            document.execCommand(action);
+        }
+    };
+
     // --- Render ---
 
     const renderSetupSidebar = () => (
@@ -804,7 +811,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             {/* ... Workflow Modal with Top Bar ... */}
             {isWorkflowModalOpen && createPortal(
                 <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setWorkflowModalOpen(false)}>
-                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
                         
                         {/* 1. Modal Top Bar */}
                         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-4 bg-gray-50/50 dark:bg-gray-900/50">
@@ -922,10 +929,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     <span className="font-bold text-base text-gray-900 dark:text-white truncate max-w-[150px]">{script.title}</span>
                 </div>
                 
+                {/* Updated Toolbar Alignment: Placed directly in the center of the header flex container */}
                 <div className="flex-1 flex items-center justify-center overflow-x-auto no-scrollbar mx-4">
-                    <div className="flex items-center bg-gray-50 dark:bg-gray-900 p-1 rounded-lg">
-                        {generationMode === 'workflow' ? (
-                            (executedWorkflow || selectedWorkflow)?.steps ? (
+                    {generationMode === 'workflow' ? (
+                        <div className="flex items-center bg-gray-50 dark:bg-gray-900 p-1 rounded-lg">
+                            {(executedWorkflow || selectedWorkflow)?.steps ? (
                                 (executedWorkflow || selectedWorkflow)?.steps?.map((step, idx) => (
                                     <div key={step.id} className="flex items-center">
                                         <button 
@@ -956,11 +964,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 ))
                             ) : (
                                 <span className="text-xs text-gray-400 px-4">请先选择工作流</span>
-                            )
-                        ) : (
-                            <span className="text-xs font-bold text-sky-600 px-4 flex items-center gap-1"><Sparkles className="w-3 h-3"/> 提示词创作模式</span>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-4">
+                            <span className="text-xs font-bold text-sky-600 px-4 flex items-center gap-1 border-r border-gray-200 dark:border-gray-800"><Sparkles className="w-3 h-3"/> 提示词创作模式</span>
+                            <WritingToolbar onAction={handleToolbarAction} alignment={alignment} />
+                        </div>
+                    )}
                 </div>
                 
                 <div className="flex items-center gap-3">
@@ -992,7 +1003,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
                 {/* Main Content Area */}
                 <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden h-full">
-                     {/* Toolbar */}
+                     {/* Content Header Area */}
                      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-2 flex justify-between items-center shrink-0 h-12 relative">
                          <div className="flex items-center gap-4 pl-4 w-1/3">
                              <h2 className="text-base font-bold text-sky-500 dark:text-sky-400 flex items-center gap-2 truncate">
@@ -1000,8 +1011,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                              </h2>
                          </div>
                          
-                         <div className="absolute left-1/2 -translate-x-1/2">
-                             <WritingToolbar onAction={() => {}} alignment={alignment} />
+                         {/* Centered area available if needed, currently used by toolbar in header or here */}
+                         <div className="flex-1 text-center">
+                             
                          </div>
 
                          <div className="flex items-center gap-2 w-1/3 justify-end">
@@ -1012,7 +1024,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                     className="flex items-center gap-2 px-3 py-1.5 bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 rounded-lg text-xs font-bold hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors"
                                  >
                                      <DocumentArrowDown className="w-3.5 h-3.5" />
-                                     下载结果
+                                     下载选择
                                      <ChevronDown className="w-3 h-3" />
                                  </button>
                                  
