@@ -1,9 +1,9 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory, PromptSubCategory } from '../../types';
+import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory } from '../../types';
 import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search, CloudArrowUp, Settings } from '../Icon';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
-import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, deleteScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
+import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
 import CustomSelect from '../CustomSelect';
@@ -207,7 +207,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
     // Workflow Modal specific states
     const [workflowCategory, setWorkflowCategory] = useState<string>('all');
-    const [workflowGenre, setWorkflowGenre] = useState<string>('all');
     const [workflowSearch, setWorkflowSearch] = useState('');
     const [workflowFavorites, setWorkflowFavorites] = useState<Set<string>>(new Set());
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -239,12 +238,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const filteredWorkflows = useMemo(() => {
         return availableWorkflows.filter(wf => {
             const matchesCategory = workflowCategory === 'all' || wf.category === workflowCategory || (workflowCategory === 'script' && wf.category === 'script');
-            const matchesGenre = workflowGenre === 'all' || (wf.subCategories && wf.subCategories.includes(workflowGenre as PromptSubCategory));
             const matchesSearch = !workflowSearch || wf.title.toLowerCase().includes(workflowSearch.toLowerCase());
             const matchesFavorite = !showFavoritesOnly || workflowFavorites.has(wf.id);
-            return matchesCategory && matchesSearch && matchesFavorite && matchesGenre;
+            return matchesCategory && matchesSearch && matchesFavorite;
         });
-    }, [availableWorkflows, workflowCategory, workflowGenre, workflowSearch, showFavoritesOnly, workflowFavorites]);
+    }, [availableWorkflows, workflowCategory, workflowSearch, showFavoritesOnly, workflowFavorites]);
 
     useEffect(() => {
         if (isWorkflowModalOpen) {
@@ -348,16 +346,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         loadInitialData();
     }, [script.id]);
 
-    const handleBack = async () => {
-        // Clear timeout to prevent saving
-        if (dbSaveTimeoutRef.current) clearTimeout(dbSaveTimeoutRef.current);
-        // Delete persisted state on exit to ensure fresh start next time
-        if (script.id) {
-            await deleteScriptWorkflowState(script.id);
-        }
-        onBack();
-    };
-
     const handleWorkflowChange = (wf: Workflow) => {
         setSelectedWorkflow(wf);
         if (Object.keys(workflowFormState).length === 0) {
@@ -375,10 +363,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     };
 
     const runStepGeneration = async (stepIndex: number, context: Record<string, string>, assetContext: string, basicInfo: string, isContinue = false) => {
-        // Use executedWorkflow if set, otherwise fallback to selectedWorkflow
-        const activeWorkflow = executedWorkflow || selectedWorkflow;
-        if (!activeWorkflow || !activeWorkflow.steps) return;
-        const step = activeWorkflow.steps[stepIndex];
+        if (!selectedWorkflow || !selectedWorkflow.steps) return;
+        const step = selectedWorkflow.steps[stepIndex];
         
         const controller = new AbortController(); 
         abortControllerRef.current = controller;
@@ -427,7 +413,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
         if (generationMode === 'workflow') {
             if (!selectedWorkflow || !selectedWorkflow.steps) return;
-            // Lock in the workflow for execution
             setExecutedWorkflow(selectedWorkflow);
 
             let startStepIndex = 0;
@@ -437,8 +422,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 // If regenerating (no index provided), force reset state
                 setStepResults({});
                 setVisibleStepIndex(-1);
-                // Important: Ensure we are using the freshly selected workflow logic
-                // The loop below will use 'selectedWorkflow' reference which is correct
             }
 
             let currentContext: Record<string, string> = { ...workflowFormState };
@@ -566,11 +549,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     };
 
     const handleInsertToScript = (text: string) => {
+        // Logic to insert text into the active chapter editor would go here
+        // Since ScriptWritingPage is primarily for generation, we can either copy to clipboard or prompt user.
+        // For now, let's copy to clipboard as a fallback or append to the current active step if appropriate.
         if (generationMode === 'prompt') {
-             setPromptResultText(prev => prev + '\n' + text);
+             setPromptResultText(prev => prev + '\n\n' + text);
         } else {
              navigator.clipboard.writeText(text);
-             alert('已复制到剪贴板，请手动粘贴到目标位置');
+             alert('已复制到剪贴板，请粘贴到目标位置');
         }
     };
 
@@ -816,14 +802,19 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         
                         {/* 1. Modal Top Bar */}
                         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-4 bg-gray-50/50 dark:bg-gray-900/50">
-                            <div className="flex items-center justify-between gap-4">
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 shrink-0">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     <WorkflowIcon className="w-5 h-5 text-sky-500" />
                                     选择剧本工作流
                                 </h3>
-                                
-                                {/* Categories Tabs Inline */}
-                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-1 min-w-0">
+                                <button onClick={() => setWorkflowModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
+                                    <X className="w-5 h-5"/>
+                                </button>
+                            </div>
+                            
+                            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                                {/* Categories */}
+                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 w-full sm:w-auto">
                                     {WORKFLOW_CATEGORIES.map(cat => (
                                         <button 
                                             key={cat.id} 
@@ -838,12 +829,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         onClick={() => setShowFavoritesOnly(!showFavoritesOnly)} 
                                         className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 whitespace-nowrap ${showFavoritesOnly ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
                                     >
-                                        <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-current' : ''}`} /> 收藏
+                                        <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-current' : ''}`} /> 我的收藏
                                     </button>
                                 </div>
 
-                                {/* Search Inline */}
-                                <div className="relative w-48 shrink-0">
+                                {/* Search */}
+                                <div className="relative w-full sm:w-64">
                                     <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-3.5 h-3.5 text-gray-400" /></span>
                                     <input 
                                         type="text" 
@@ -853,25 +844,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         className="w-full pl-9 pr-4 py-1.5 bg-white dark:bg-gray-800 text-xs rounded-lg border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none" 
                                     />
                                 </div>
-
-                                <button onClick={() => setWorkflowModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400 shrink-0">
-                                    <X className="w-5 h-5"/>
-                                </button>
-                            </div>
-                            
-                            {/* Row 2: Genre Tags */}
-                            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                                <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">题材:</span>
-                                <button onClick={() => setWorkflowGenre('all')} className={`px-2.5 py-1 text-[10px] font-medium rounded-full border transition-all whitespace-nowrap ${workflowGenre === 'all' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}>全部</button>
-                                {GENRE_TAGS.map(tag => (
-                                    <button 
-                                        key={tag.id} 
-                                        onClick={() => setWorkflowGenre(tag.id)} 
-                                        className={`px-2.5 py-1 text-[10px] font-medium rounded-full border transition-all whitespace-nowrap ${workflowGenre === tag.id ? 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-900/50 dark:text-purple-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}
-                                    >
-                                        {tag.label}
-                                    </button>
-                                ))}
                             </div>
                         </div>
 
@@ -883,7 +855,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         <div 
                                             key={wf.id} 
                                             onClick={() => { setSelectedWorkflow(wf); setWorkflowModalOpen(false); }}
-                                            className={`bg-white dark:bg-gray-900 rounded-2xl p-4 border transition-all cursor-pointer group flex flex-col h-[190px] ${
+                                            className={`bg-white dark:bg-gray-900 rounded-2xl p-4 border transition-all cursor-pointer group flex flex-col h-[210px] ${
                                                 selectedWorkflow?.id === wf.id 
                                                 ? 'border-sky-500 ring-2 ring-sky-500/20' 
                                                 : 'border-gray-100 dark:border-gray-800 hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-xl'
@@ -995,7 +967,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                             {saveStatus === 'saving' ? '保存中...' : (saveStatus === 'saved' ? '已保存' : '手动保存')}
                         </span>
                     </button>
-                    <button onClick={handleBack} className="px-4 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm">返回</button>
+                    <button onClick={onBack} className="px-4 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm">返回</button>
                 </div>
             </header>
 
