@@ -49,7 +49,7 @@ export type PromptSubCategory =
   'style' | 'requirements' | 'continue' | 'polish' | 'expand' | 'proofread' | 'imitate' |
   'idea' | 'golden_finger' | 'character_design' | 'worldview' | 'outline' | 'detailed_outline' | 'synopsis' | 'writing' | 'short_story_lead' |
   'general' | 'modern-romance' | 'ancient-romance' | 'period' | 'apocalypse' | 
-  'urban' | 'fantasy' | 'history' | 'social' | 'suspense' | 'sci-fi';
+  'urban' | 'fantasy' | 'history' | 'social' | 'suspense' | 'sci-fi' | 'comic-drama' | 'live-action';
 
 
 export interface Prompt {

@@ -31,6 +31,8 @@ export const GENRE_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
     { id: 'social', label: '世情' },
     { id: 'suspense', label: '悬疑' },
     { id: 'sci-fi', label: '科幻' },
+    { id: 'comic-drama', label: '漫剧' },
+    { id: 'live-action', label: '实拍剧' },
 ];
 
 export const CREATIVE_MODULES: CreativeModule[] = [
@@ -311,7 +313,7 @@ export const ASSETS: Asset[] = [
             personality: '冷静、内敛、重情义',
             relationships: '末代传人',
             notes: '表面是图书管理员',
-            tags: '男主, 高冷,异能者'
+            tags: '男主, 高冷, 异能者'
         }
     },
     { 
