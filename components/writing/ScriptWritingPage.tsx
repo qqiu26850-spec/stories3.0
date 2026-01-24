@@ -1,9 +1,9 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt } from '../../types';
-import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash } from '../Icon';
+import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory } from '../../types';
+import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search } from '../Icon';
 import WritingToolbar from './WritingToolbar';
-import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, incrementPromptHeat } from '../../services/supabaseService';
+import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
 import CustomSelect from '../CustomSelect';
@@ -21,6 +21,14 @@ interface ScriptWritingPageProps {
 
 const NO_MARKDOWN_INSTRUCTION = "\n\n【重要指令】：请以纯文本格式输出剧本，严禁使用Markdown格式（如 **加粗**、# 标题 等）。请直接按剧本格式输出场景、动作和对白。";
 const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
+
+const WORKFLOW_CATEGORIES: { id: string; label: string }[] = [
+    { id: 'all', label: '全部' },
+    { id: 'short-story', label: '短篇' },
+    { id: 'long-story', label: '长篇' },
+    { id: 'script', label: '剧本' },
+    { id: 'general', label: '通用' },
+];
 
 // Editable Content Component for each step
 const EditableStepContent: React.FC<{
@@ -196,6 +204,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [visibleStepIndex, setVisibleStepIndex] = useState<number>(-1); // Control how many steps are visible
     const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({}); // Control collapse state
 
+    // Independent Execution State (Decoupling)
+    // executedWorkflow holds the workflow structure that is currently being displayed in the right panel.
+    // It updates when a generation starts.
+    const [executedWorkflow, setExecutedWorkflow] = useState<Workflow | null>(null);
+    const [executedPrompt, setExecutedPrompt] = useState<Prompt | null>(null);
+
     // Prompt Mode State
     const [promptInput, setPromptInput] = useState('');
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
@@ -208,6 +222,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
     const [isWorkflowModalOpen, setWorkflowModalOpen] = useState(false); // Changed to Modal state
     const [isPromptSelectionModalOpen, setIsPromptSelectionModalOpen] = useState(false);
+
+    // Workflow Modal specific states
+    const [workflowCategory, setWorkflowCategory] = useState<string>('all');
+    const [workflowSearch, setWorkflowSearch] = useState('');
+    const [workflowFavorites, setWorkflowFavorites] = useState<Set<string>>(new Set());
+    const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
     // UI State
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
@@ -235,6 +255,23 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const stepRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const dbSaveTimeoutRef = useRef<any>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
+
+    // Filter available workflows for the modal
+    const filteredWorkflows = useMemo(() => {
+        return availableWorkflows.filter(wf => {
+            const matchesCategory = workflowCategory === 'all' || wf.category === workflowCategory || (workflowCategory === 'script' && wf.category === 'script');
+            const matchesSearch = !workflowSearch || wf.title.toLowerCase().includes(workflowSearch.toLowerCase());
+            const matchesFavorite = !showFavoritesOnly || workflowFavorites.has(wf.id);
+            return matchesCategory && matchesSearch && matchesFavorite;
+        });
+    }, [availableWorkflows, workflowCategory, workflowSearch, showFavoritesOnly, workflowFavorites]);
+
+    // Load favorites when modal opens
+    useEffect(() => {
+        if (isWorkflowModalOpen) {
+            fetchWorkflowFavorites().then(ids => setWorkflowFavorites(new Set(ids)));
+        }
+    }, [isWorkflowModalOpen]);
 
     // --- Persistence Helper ---
     // Debounced save to Supabase
@@ -313,6 +350,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 const wf = mappedWorkflows.find(w => w.id === savedState.workflow_id);
                 if (wf) {
                     setSelectedWorkflow(wf);
+                    // Also restore execution context to show previous results
+                    setExecutedWorkflow(wf);
                     setWorkflowFormState(savedState.form_state || {});
                     setStepResults(savedState.step_results || {});
                     setVisibleStepIndex(savedState.visible_index ?? -1);
@@ -351,6 +390,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
         if (generationMode === 'workflow') {
             if (!selectedWorkflow || !selectedWorkflow.steps) return;
+            
+            // Set executed workflow to decouple from selection
+            setExecutedWorkflow(selectedWorkflow);
+
             const startStepIndex = Object.keys(stepResults).length < selectedWorkflow.steps.length ? Object.keys(stepResults).length : 0;
             if (startStepIndex === 0) { setStepResults({}); setVisibleStepIndex(-1); }
 
@@ -383,6 +426,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
         } else {
             // Prompt Mode
+            setExecutedPrompt(selectedPrompt);
             setPromptResultText('');
             let promptText = selectedPrompt ? (selectedPrompt.template || selectedPrompt.content) : promptInput;
             
@@ -655,9 +699,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                             <>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">选择提示词</label>
-                                    <button onClick={() => setIsPromptSelectionModalOpen(true)} className={`w-full p-3 rounded-xl border text-xs text-left flex justify-between items-center group shadow-sm transition-all ${selectedPrompt ? 'bg-purple-50 border-purple-300 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-purple-300'}`}>
+                                    <button onClick={() => setIsPromptSelectionModalOpen(true)} className={`w-full p-3 rounded-xl border text-xs text-left flex justify-between items-center group shadow-sm transition-all ${selectedPrompt ? 'bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-sky-300'}`}>
                                         <span className="truncate font-bold">{selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}</span>
-                                        <Box className={`w-4 h-4 ${selectedPrompt ? 'text-purple-500' : 'text-gray-400'}`} />
+                                        <Box className={`w-4 h-4 ${selectedPrompt ? 'text-sky-500' : 'text-gray-400'}`} />
                                     </button>
                                 </div>
 
@@ -674,7 +718,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                         {field.label}
                                                     </label>
                                                 </div>
-                                                {field.type === 'textarea' ? <textarea value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none h-20" placeholder={field.placeholder || `请输入${field.label}...`} /> : <input type="text" value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" placeholder={field.placeholder || `请输入${field.label}...`} />}
+                                                {field.type === 'textarea' ? <textarea value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none h-20" placeholder={field.placeholder || `请输入${field.label}...`} /> : <input type="text" value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.placeholder || `请输入${field.label}...`} />}
                                             </div>
                                         ))}
                                     </div>
@@ -706,7 +750,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 <button onClick={() => handleRunGeneration()} className="flex-1 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-1 text-xs"><Play className="w-3.5 h-3.5" /> 一键全集</button>
                             </>
                         ) : (
-                            <button onClick={() => handleRunGeneration()} className="w-full py-2 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-500 shadow-lg shadow-purple-500/20 transition-all flex items-center justify-center gap-1 text-xs"><Sparkles className="w-3.5 h-3.5" /> 立即生成</button>
+                            <button onClick={() => handleRunGeneration()} className="w-full py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-1 text-xs"><Sparkles className="w-3.5 h-3.5" /> 立即生成</button>
                         )}
                     </div>
                 )}
@@ -734,25 +778,65 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             />
 
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
-            <PromptSelectionModal isOpen={isPromptSelectionModalOpen} onClose={() => setIsPromptSelectionModalOpen(false)} onSelect={handlePromptChange} initialSubCategory='script' />
+            <PromptSelectionModal isOpen={isPromptSelectionModalOpen} onClose={() => setIsPromptSelectionModalOpen(false)} onSelect={handlePromptChange} />
             
-            {/* ... Workflow Modal ... */}
+            {/* ... Workflow Modal with Top Bar ... */}
             {isWorkflowModalOpen && createPortal(
                 <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setWorkflowModalOpen(false)}>
                     <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
-                        <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                <WorkflowIcon className="w-5 h-5 text-blue-500" />
-                                选择剧本工作流
-                            </h3>
-                            <button onClick={() => setWorkflowModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
-                                <X className="w-5 h-5"/>
-                            </button>
+                        
+                        {/* 1. Modal Top Bar */}
+                        <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-4 bg-gray-50/50 dark:bg-gray-900/50">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <WorkflowIcon className="w-5 h-5 text-blue-500" />
+                                    选择剧本工作流
+                                </h3>
+                                <button onClick={() => setWorkflowModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
+                                    <X className="w-5 h-5"/>
+                                </button>
+                            </div>
+                            
+                            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                                {/* Categories */}
+                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 w-full sm:w-auto">
+                                    {WORKFLOW_CATEGORIES.map(cat => (
+                                        <button 
+                                            key={cat.id} 
+                                            onClick={() => setWorkflowCategory(cat.id)} 
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${workflowCategory === cat.id ? 'bg-blue-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
+                                        >
+                                            {cat.label}
+                                        </button>
+                                    ))}
+                                    <div className="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2 hidden sm:block"></div>
+                                    <button 
+                                        onClick={() => setShowFavoritesOnly(!showFavoritesOnly)} 
+                                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 whitespace-nowrap ${showFavoritesOnly ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
+                                    >
+                                        <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-current' : ''}`} /> 我的收藏
+                                    </button>
+                                </div>
+
+                                {/* Search */}
+                                <div className="relative w-full sm:w-64">
+                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-3.5 h-3.5 text-gray-400" /></span>
+                                    <input 
+                                        type="text" 
+                                        placeholder="搜索工作流..." 
+                                        value={workflowSearch} 
+                                        onChange={e => setWorkflowSearch(e.target.value)} 
+                                        className="w-full pl-9 pr-4 py-1.5 bg-white dark:bg-gray-800 text-xs rounded-lg border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none" 
+                                    />
+                                </div>
+                            </div>
                         </div>
+
+                        {/* Modal Content */}
                         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-gray-50 dark:bg-black/20">
-                            {availableWorkflows.length > 0 ? (
+                            {filteredWorkflows.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {availableWorkflows.map(wf => (
+                                    {filteredWorkflows.map(wf => (
                                         <div 
                                             key={wf.id} 
                                             onClick={() => { setSelectedWorkflow(wf); setWorkflowModalOpen(false); }}
@@ -820,8 +904,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 <div className="flex-1 flex items-center justify-center overflow-x-auto no-scrollbar mx-4">
                     <div className="flex items-center bg-gray-50 dark:bg-gray-900 p-1 rounded-lg">
                         {generationMode === 'workflow' ? (
-                            selectedWorkflow?.steps ? (
-                                selectedWorkflow.steps.map((step, idx) => (
+                            // Use executedWorkflow to allow persistence of stepper even if input selectedWorkflow is cleared
+                            (executedWorkflow || selectedWorkflow)?.steps ? (
+                                (executedWorkflow || selectedWorkflow)?.steps?.map((step, idx) => (
                                     <div key={step.id} className="flex items-center">
                                         <button 
                                             onClick={() => {
@@ -840,14 +925,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                             </span>
                                             {step.name}
                                         </button>
-                                        {idx < selectedWorkflow.steps!.length - 1 && <ChevronRight className="w-3 h-3 text-gray-300 mx-1" />}
+                                        {idx < ((executedWorkflow || selectedWorkflow)?.steps?.length || 0) - 1 && <ChevronRight className="w-3 h-3 text-gray-300 mx-1" />}
                                     </div>
                                 ))
                             ) : (
                                 <span className="text-xs text-gray-400 px-4">请先选择工作流</span>
                             )
                         ) : (
-                            <span className="text-xs font-bold text-purple-500 px-4 flex items-center gap-1"><Sparkles className="w-3 h-3"/> 提示词创作模式</span>
+                            <span className="text-xs font-bold text-sky-600 px-4 flex items-center gap-1"><Sparkles className="w-3 h-3"/> 提示词创作模式</span>
                         )}
                     </div>
                 </div>
@@ -949,11 +1034,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                  {/* Result Header */}
                                  <div className="flex items-center justify-between gap-3 px-6 py-3 sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shrink-0">
                                      <div className="flex items-center gap-3">
-                                         <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold shrink-0">
+                                         <div className="w-6 h-6 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-xs font-bold shrink-0">
                                              <Sparkles className="w-3.5 h-3.5" />
                                          </div>
                                          <h3 className="text-sm font-bold text-gray-800 dark:text-white uppercase tracking-wide truncate">生成结果</h3>
-                                         {isGenerating && <ArrowPath className="w-4 h-4 text-purple-500 animate-spin" />}
+                                         {isGenerating && <ArrowPath className="w-4 h-4 text-sky-500 animate-spin" />}
                                      </div>
                                      
                                      {promptResultText && (
@@ -961,7 +1046,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                              <button 
                                                  type="button"
                                                  onClick={() => handleDownloadWord(promptResultText, `${script.title}_Generated`)}
-                                                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                                                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-900/20 rounded-lg transition-colors"
                                                  title="下载为 Word"
                                              >
                                                  <DocumentArrowDown className="w-3.5 h-3.5" /> 
@@ -1021,9 +1106,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                          )}
 
                          {/* Mode: Workflow Generation */}
-                         {generationMode === 'workflow' && selectedWorkflow && !isScriptLoading && (
+                         {/* Use executedWorkflow to persist output even if input selectedWorkflow is cleared */}
+                         {generationMode === 'workflow' && (executedWorkflow || selectedWorkflow) && !isScriptLoading && (
                              <div className="space-y-0 pb-32 w-full mx-auto">
-                                 {selectedWorkflow.steps?.map((step, index) => {
+                                 {(executedWorkflow || selectedWorkflow)?.steps?.map((step, index) => {
                                      if (index > visibleStepIndex && !stepResults[step.outputVariable]) return null;
 
                                      const result = stepResults[step.outputVariable];
@@ -1036,60 +1122,36 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                             ref={(el: HTMLDivElement | null) => { stepRefs.current[index] = el; }}
                                             className={`transition-opacity duration-500 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 ${!result && !isGeneratingThis ? 'opacity-50' : 'opacity-100'}`}
                                          >
-                                             {/* Sticky Header */}
-                                             <div className="flex items-center justify-between gap-3 px-6 py-3 sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
-                                                 <div className="flex items-center gap-3">
-                                                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${result ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                                                         {result ? <Check className="w-3 h-3"/> : index + 1}
-                                                     </div>
-                                                     <h3 className="text-sm font-bold text-gray-800 dark:text-white uppercase tracking-wide truncate">{step.name}</h3>
-                                                     {isGeneratingThis && <ArrowPath className="w-4 h-4 text-blue-500 animate-spin" />}
-                                                 </div>
-                                                 
-                                                 <div className="flex items-center gap-2">
-                                                     {result && (
-                                                         <>
-                                                            <button 
-                                                                type="button"
-                                                                onClick={() => handleOpenDeepAsk(result, step.outputVariable)} 
-                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 dark:hover:bg-sky-900/40 rounded-lg transition-colors"
-                                                                title="使用侧边栏深度追问"
-                                                            >
-                                                                <ChatBubbleOvalLeftEllipsis className="w-3.5 h-3.5" /> 
-                                                                <span className="hidden sm:inline">追问</span>
-                                                            </button>
-                                                            <button 
-                                                                type="button"
-                                                                onClick={() => handleDownloadWord(result, `${script.title}_${step.name}`)}
-                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                                                                title="下载为 Word"
-                                                            >
-                                                                <DocumentArrowDown className="w-3.5 h-3.5" /> 
-                                                                <span className="hidden sm:inline">下载</span>
-                                                            </button>
-                                                         </>
-                                                     )}
-                                                     <button 
-                                                        onClick={() => toggleCollapse(step.id)}
-                                                        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors"
-                                                     >
-                                                         {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-                                                     </button>
-                                                 </div>
-                                             </div>
-
+                                             {/* 3. Hide Headers, keep container for scroll ref */}
+                                             
                                              {!isCollapsed && (
-                                                 // Ensure step content scrolls independently if needed within a reasonable max height, but mostly flows in main container
-                                                 // The requirement "each step scrollbar only works for that step" suggests max-height per step
-                                                 <div className="p-8 relative group min-h-[100px] max-h-[500px] overflow-y-auto custom-scrollbar">
+                                                 <div className="p-8 relative group min-h-[100px] overflow-y-auto custom-scrollbar">
                                                      {result ? (
-                                                         <EditableStepContent 
-                                                            initialContent={result} 
-                                                            onSave={(newContent) => handleStepContentChange(step.outputVariable, newContent)}
-                                                            onContextMenu={(e, text) => {
-                                                                setContextMenu({ x: e.clientX, y: e.clientY, visible: true, text });
-                                                            }}
-                                                         />
+                                                         <div className="relative">
+                                                             {/* Optional: Add hover controls since header is gone */}
+                                                             <div className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 bg-white/90 dark:bg-black/80 p-1 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 z-10">
+                                                                 <button 
+                                                                    type="button"
+                                                                    onClick={() => handleOpenDeepAsk(result, step.outputVariable)} 
+                                                                    className="p-1.5 text-sky-500 hover:bg-sky-50 rounded"
+                                                                    title="追问"
+                                                                 ><ChatBubbleOvalLeftEllipsis className="w-4 h-4"/></button>
+                                                                 <button 
+                                                                    type="button"
+                                                                    onClick={() => handleDownloadWord(result, `${script.title}_${step.name}`)}
+                                                                    className="p-1.5 text-sky-500 hover:bg-sky-50 rounded"
+                                                                    title="下载"
+                                                                 ><DocumentArrowDown className="w-4 h-4"/></button>
+                                                             </div>
+                                                             
+                                                             <EditableStepContent 
+                                                                initialContent={result} 
+                                                                onSave={(newContent) => handleStepContentChange(step.outputVariable, newContent)}
+                                                                onContextMenu={(e, text) => {
+                                                                    setContextMenu({ x: e.clientX, y: e.clientY, visible: true, text });
+                                                                }}
+                                                             />
+                                                         </div>
                                                      ) : isGeneratingThis ? (
                                                          <div className="flex flex-col items-center justify-center py-8 text-blue-500 text-sm animate-pulse gap-2">
                                                              <Sparkles className="w-6 h-6" /> 
@@ -1106,8 +1168,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                              </div>
                          )}
                          
-                         {/* Fallback for Workflow mode if nothing selected */}
-                         {generationMode === 'workflow' && !selectedWorkflow && !isScriptLoading && (
+                         {/* Fallback for Workflow mode if nothing selected AND no executed workflow */}
+                         {generationMode === 'workflow' && !selectedWorkflow && !executedWorkflow && !isScriptLoading && (
                              <div className="flex flex-col items-center justify-center h-full text-gray-400 pt-20">
                                  <WorkflowIcon className="w-16 h-16 mb-4 opacity-20" />
                                  <p>请在左侧选择一个工作流开始创作</p>

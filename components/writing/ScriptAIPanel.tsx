@@ -237,9 +237,9 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
     const renderTabButton = (type: ScriptTab, label: string, Icon: React.ElementType) => (
         <button
             onClick={() => { setActiveTab(type); setGeneratedText(''); }}
-            className={`flex-1 py-2 flex flex-col items-center justify-center gap-1 transition-colors border-b-2 font-sans ${
+            className={`flex-1 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors border-b-2 font-sans ${
                 activeTab === type 
-                    ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20' 
+                    ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-white dark:bg-gray-800' 
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
             }`}
         >
@@ -288,7 +288,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                    <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">{generatedText}</div>
+                    <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">{generatedText}</div>
                 </div>
 
                 <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-2">
@@ -322,20 +322,20 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
     }
 
     return (
-        <div className="flex flex-col h-full bg-gray-50 dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full font-sans">
+        <div className="flex flex-col h-full bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 w-full font-sans">
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             <PromptSelectionModal isOpen={isPromptModalOpen} onClose={() => setPromptModalOpen(false)} onSelect={(prompt) => { setSelectedPrompt(prompt); setPromptModalOpen(false); }} initialSubCategory={promptFilterType} />
             
-            <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans flex-shrink-0">
+            <div className="flex border-b border-gray-200 dark:border-gray-800 font-sans flex-shrink-0 bg-gray-50/50 dark:bg-gray-900">
                 {renderTabButton('polish', '润色', Pencil)}
                 {renderTabButton('review', '评审', ClipboardDocumentCheck)}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-4 font-sans dynamic-scrollbar">
+            <div className="flex-1 overflow-y-auto font-sans dynamic-scrollbar bg-white dark:bg-gray-900">
                 
                 {/* Module 1: Model Config */}
-                <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
-                    <button onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                <div className="border-b border-gray-100 dark:border-gray-800">
+                    <button onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
                             <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">1</span>
                             模型参数配置
@@ -343,7 +343,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                         <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isConfigCollapsed ? 'rotate-180' : ''}`} />
                     </button>
                     {!isConfigCollapsed && (
-                        <div className="px-3 pb-4 space-y-4">
+                        <div className="px-4 pb-4 space-y-4">
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型选择</label>
                                 <div className="flex gap-2 font-sans">
@@ -370,14 +370,14 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 </div>
 
                 {/* Module 2: Text to Process */}
-                <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
-                    <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                <div className="border-b border-gray-100 dark:border-gray-800">
+                    <div className="p-4 flex items-center justify-between">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
                             <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>
                             需修改的正文内容
                         </span>
                     </div>
-                    <div className="p-3">
+                    <div className="px-4 pb-4">
                         <textarea 
                             value={polishContent} 
                             onChange={(e) => setPolishContent(e.target.value)} 
@@ -393,17 +393,17 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 </div>
 
                 {/* Module 3: Prompts & Assets */}
-                <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
-                    <div className="p-3 border-b border-gray-100 dark:border-gray-800">
+                <div className="border-b border-gray-100 dark:border-gray-800">
+                    <div className="p-4">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
                             <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">3</span>
                             提示词选择 & 关联素材
                         </span>
                     </div>
-                    <div className="p-3 space-y-4">
+                    <div className="px-4 pb-4 space-y-4">
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">提示词选择</label>
-                            <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
+                            <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread')} className="w-full p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-left transition-all hover:border-sky-300 group hover:shadow-sm">
                                 <div className="flex items-center justify-between">
                                     <span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>
                                         {selectedPrompt ? selectedPrompt.title : (activeTab === 'polish' ? '选择润色提示词...' : '选择评审提示词...')}
@@ -415,7 +415,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
 
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">关联素材</label>
-                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
+                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-lg border text-left transition-all font-sans hover:shadow-sm ${selectedAssetIds.size > 0 ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
                                 <div className="flex items-center justify-between text-[11px] font-semibold truncate">
                                     <div className="flex items-center gap-1.5 overflow-hidden">
                                         <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
@@ -455,11 +455,13 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                     </div>
                 </div>
 
-                {!isGenerating && !generatedText && (
-                    <button onClick={handleGenerate} className="w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                        <Sparkles className="w-5 h-5" /> {activeTab === 'review' ? '开始智能评审' : '立即生成内容'}
-                    </button>
-                )}
+                <div className="p-4">
+                    {!isGenerating && !generatedText && (
+                        <button onClick={handleGenerate} className="w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                            <Sparkles className="w-5 h-5" /> {activeTab === 'review' ? '开始智能评审' : '立即生成内容'}
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
     );
