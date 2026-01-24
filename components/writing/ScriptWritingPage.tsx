@@ -46,8 +46,8 @@ const EditableStepContent: React.FC<{
         
         return normalized.split('\n').map(line => {
             const trimmed = line.trim();
-            if(!trimmed) return '<div class="mb-4"><br/></div>';
-            return `<div class="mb-4">${trimmed}</div>`;
+            if(!trimmed) return '<div class="mb-2"><br/></div>'; // Reduced margin
+            return `<div class="mb-2">${trimmed}</div>`; // Reduced margin
         }).join('');
     };
 
@@ -105,7 +105,7 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
                 const isSceneHeader = /^(EXT\.|INT\.|内景|外景|场景)/i.test(line);
                 const isCharacter = /^[A-Z\u4e00-\u9fa5]+(\s*\(.*?\))?：/.test(line);
                 
-                let className = "mb-4 min-h-[1em]"; // Increased default margin-bottom
+                let className = "mb-2 min-h-[1em]"; // Reduced margin-bottom from mb-4 to mb-2 for tighter "reading text" feel
                 if (isSceneHeader) className += " font-bold bg-gray-100 dark:bg-gray-800/50 p-1 rounded";
                 else if (isCharacter) className += " font-bold mt-2";
                 
@@ -238,7 +238,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [isGenerating, setIsGenerating] = useState(false);
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('正在处理...');
-    const [isEpisodeSelectorOpen, setIsEpisodeSelectorOpen] = useState(false);
+    const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
     
     // Editor State
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
@@ -429,19 +429,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             if (typeof startFromIndex === 'number') {
                 startStepIndex = startFromIndex;
             } else {
-                // Auto determine start based on existing results length
-                startStepIndex = Object.keys(stepResults).length < selectedWorkflow.steps.length ? Object.keys(stepResults).length : 0;
-                
-                // If restarting from 0, clear results and reset visibility
-                if (startStepIndex === 0 && !isContinue) { 
-                    setStepResults({}); 
-                    setVisibleStepIndex(-1); 
-                }
+                // If regenerating (no index provided), force reset state
+                setStepResults({});
+                setVisibleStepIndex(-1);
             }
 
             let currentContext: Record<string, string> = { ...workflowFormState };
             
-            // Hydrate context with previous results
+            // Hydrate context with previous results if resuming/partial run
             selectedWorkflow.steps.forEach((s, idx) => { 
                 if (idx < startStepIndex && stepResults[s.outputVariable]) currentContext[s.outputVariable] = stepResults[s.outputVariable]; 
             });
@@ -572,33 +567,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         }
     };
 
-    const episodeGroups = useMemo(() => {
-        const groups = [];
-        for (let i = 0; i < script.scenes.length; i += 5) {
-            groups.push(script.scenes.slice(i, i + 5));
-        }
-        return groups;
-    }, [script.scenes]);
-
-    const handleCreateEpisode = async () => {
-        const newOrder = script.scenes.length + 1;
-        const tempId = `new-${Date.now()}`;
-        const newTitle = `第 ${newOrder} 集`;
-        const newId = await saveChapterToDB(script.id, tempId, newTitle, '', newOrder);
-
-        if (newId) {
-            const newScene: Scene = {
-                id: newId,
-                title: newTitle,
-                content: '',
-                isContentLoaded: true
-            };
-            setScript(prev => ({ ...prev, scenes: [...prev.scenes, newScene] }));
-            setActiveScene(newScene);
-            setSaveStatus('saved');
-        }
-    };
-
     const handleInsertToScript = (text: string) => {
         if (!editorRef.current) {
             alert('请先选择一个集数进行编辑');
@@ -611,7 +579,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     // --- Render ---
 
     const renderSetupSidebar = () => (
-        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-[280px] relative">
+        <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 font-sans w-[320px] relative">
             
             {/* Fixed Header for Alignment */}
             <div className="flex-shrink-0 h-12 flex items-center px-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
@@ -664,10 +632,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 <div className="space-y-3">
                     <h3 className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">2. 基础信息</h3>
                     <div className="grid grid-cols-2 gap-3 pl-1">
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">总集数</label><input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">单集时长(min)</label><input type="text" value={settings.durationPerEpisode} onChange={e => setSettings(s => ({...s, durationPerEpisode: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">单集场景限制</label><input type="number" value={settings.scenesPerEpisodeLimit} onChange={e => setSettings(s => ({...s, scenesPerEpisodeLimit: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400">语言</label><div className="relative z-40"><CustomSelect value={settings.outputLanguage} onChange={(v) => setSettings(s => ({...s, outputLanguage: v as 'zh' | 'en'}))} options={LANGUAGE_OPTIONS} /></div></div>
+                        <div className="space-y-1"><label className="text-xs font-bold text-gray-400">总集数</label><input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
+                        <div className="space-y-1"><label className="text-xs font-bold text-gray-400">单集时长(min)</label><input type="text" value={settings.durationPerEpisode} onChange={e => setSettings(s => ({...s, durationPerEpisode: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
+                        <div className="space-y-1"><label className="text-xs font-bold text-gray-400">单集场景限制</label><input type="number" value={settings.scenesPerEpisodeLimit} onChange={e => setSettings(s => ({...s, scenesPerEpisodeLimit: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
+                        <div className="space-y-1"><label className="text-xs font-bold text-gray-400">语言</label><div className="relative z-40"><CustomSelect value={settings.outputLanguage} onChange={(v) => setSettings(s => ({...s, outputLanguage: v as 'zh' | 'en'}))} options={LANGUAGE_OPTIONS} /></div></div>
                     </div>
                 </div>
 
@@ -692,7 +660,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
                     <div className="space-y-4 pl-1">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">关联素材</label>
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">关联素材</label>
                             <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-xl border border-dashed text-xs transition-all text-left flex justify-between items-center group ${selectedAssetIds.size > 0 ? 'border-sky-300 bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400' : 'border-gray-300 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
                                 <span className="truncate font-bold">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 项素材` : '选择角色/剧情/世界观...'}</span>
                                 <Database className={`w-4 h-4 group-hover:scale-110 transition-transform ${selectedAssetIds.size > 0 ? 'text-sky-500' : 'text-gray-400'}`} />
@@ -702,28 +670,28 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         {generationMode === 'workflow' ? (
                             <>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">选择工作流</label>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">选择工作流</label>
                                     <button onClick={() => setWorkflowModalOpen(true)} className={`w-full p-3 rounded-xl border text-xs text-left flex justify-between items-center group shadow-sm transition-all ${selectedWorkflow ? 'bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-sky-300'}`}>
                                         <span className="truncate font-bold">{selectedWorkflow ? selectedWorkflow.title : '选择生成流程...'}</span>
                                         <ChevronDown className={`w-4 h-4 ${selectedWorkflow ? 'text-sky-500' : 'text-gray-400'}`} />
                                     </button>
                                 </div>
                                 {selectedWorkflow && selectedWorkflow.fields && selectedWorkflow.fields.length > 0 && (
-                                    <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4 animate-fade-in shadow-sm">
-                                        <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
+                                    <div className="space-y-4 animate-fade-in">
+                                        <div className="flex justify-between items-center pb-2">
                                             <span className="text-xs font-black text-gray-700 dark:text-gray-200 flex items-center gap-1"><AdjustmentsHorizontal className="w-3 h-3"/> 参数填写</span>
-                                            <button onClick={() => { setSelectedWorkflow(null); setWorkflowFormState({}); }} className="text-[10px] text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
+                                            <button onClick={() => { setSelectedWorkflow(null); setWorkflowFormState({}); }} className="text-xs text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
                                         </div>
                                         {selectedWorkflow.fields.map((field) => (
                                             <div key={field.id} className="space-y-1.5">
                                                 <div className="flex justify-between items-center">
-                                                    <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300 block">
+                                                    <label className="text-xs font-bold text-gray-600 dark:text-gray-300 block">
                                                         {field.label}
-                                                        {field.required !== false && <span className="text-red-500 ml-0.5">* (必填)</span>}
+                                                        {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
                                                     </label>
                                                     {field.maxLength && <span className={`text-[9px] ${(workflowFormState[field.variable]?.length || 0) > field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>{workflowFormState[field.variable]?.length || 0}/{field.maxLength}</span>}
                                                 </div>
-                                                {field.type === 'textarea' ? <textarea value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none h-24" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} /> : <input type="text" value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} />}
+                                                {field.type === 'textarea' ? <textarea value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none h-24 resize-y" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} /> : <input type="text" value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} />}
                                                 {field.description && (
                                                     <p className="text-[9px] text-sky-500 dark:text-sky-400 flex items-start gap-1 leading-tight mt-0.5">
                                                         <InformationCircle className="w-3 h-3 shrink-0" />
@@ -738,7 +706,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         ) : (
                             <>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">选择提示词</label>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">选择提示词</label>
                                     <button onClick={() => setIsPromptSelectionModalOpen(true)} className={`w-full p-3 rounded-xl border text-xs text-left flex justify-between items-center group shadow-sm transition-all ${selectedPrompt ? 'bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-sky-300'}`}>
                                         <span className="truncate font-bold">{selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}</span>
                                         <Box className={`w-4 h-4 ${selectedPrompt ? 'text-sky-500' : 'text-gray-400'}`} />
@@ -746,10 +714,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 </div>
 
                                 {selectedPrompt ? (
-                                    <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4 animate-fade-in shadow-sm">
-                                        <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
+                                    <div className="space-y-4 animate-fade-in">
+                                        <div className="flex justify-between items-center pb-2">
                                             <span className="text-xs font-black text-gray-700 dark:text-gray-200 flex items-center gap-1"><AdjustmentsHorizontal className="w-3 h-3"/> 模板参数</span>
-                                            <button onClick={() => { setSelectedPrompt(null); setPromptFormState({}); }} className="text-[10px] text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
+                                            <button onClick={() => { setSelectedPrompt(null); setPromptFormState({}); }} className="text-xs text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
                                         </div>
                                         {selectedPrompt.fields.map((field, index) => (
                                             <div key={field.id} className="space-y-1.5">
@@ -759,18 +727,18 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                         {field.label}
                                                     </label>
                                                 </div>
-                                                {field.type === 'textarea' ? <textarea value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none h-20" placeholder={field.placeholder || `请输入${field.label}...`} /> : <input type="text" value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.placeholder || `请输入${field.label}...`} />}
+                                                {field.type === 'textarea' ? <textarea value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none h-24 resize-y" placeholder={field.placeholder || `请输入${field.label}...`} /> : <input type="text" value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.placeholder || `请输入${field.label}...`} />}
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">自定义要求</label>
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">自定义要求</label>
                                         <textarea 
                                             value={promptInput}
                                             onChange={e => setPromptInput(e.target.value)}
                                             placeholder="请输入具体的剧本创作要求，例如：写一场关于..."
-                                            className="w-full h-32 p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
+                                            className="w-full h-32 p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-sm"
                                         />
                                     </div>
                                 )}
@@ -1009,15 +977,15 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 </div>
             </header>
 
-            <div className="flex-1 flex overflow-hidden relative">
-                {/* Left Sidebar */}
-                <aside className={`flex-shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-[280px]' : 'w-0'}`}>
+            <div className="flex-1 flex overflow-hidden relative gap-1"> {/* Gap added here */}
+                {/* Left Sidebar - Width increased to 320px */}
+                <aside className={`flex-shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 transition-all duration-300 overflow-hidden ${isLeftSidebarOpen ? 'w-[320px]' : 'w-0'}`}>
                     {renderSetupSidebar()}
                 </aside>
 
                 <button 
                     onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
-                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-[280px]' : 'left-0'}`}
+                    className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-[320px]' : 'left-0'}`}
                 >
                     {isLeftSidebarOpen ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                 </button>
@@ -1038,42 +1006,52 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
                          <div className="flex items-center gap-2 w-1/3 justify-end">
                              <div className="relative">
+                                 {/* Replace Episode Selector with Download */}
                                  <button 
-                                    onClick={() => setIsEpisodeSelectorOpen(!isEpisodeSelectorOpen)}
+                                    onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
                                     className="flex items-center gap-2 px-3 py-1.5 bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 rounded-lg text-xs font-bold hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors"
                                  >
-                                     {activeScene?.title || "选择集数"}
+                                     <DocumentArrowDown className="w-3.5 h-3.5" />
+                                     下载结果
                                      <ChevronDown className="w-3 h-3" />
                                  </button>
                                  
-                                 {isEpisodeSelectorOpen && (
+                                 {isDownloadMenuOpen && (
                                      <>
-                                         <div className="fixed inset-0 z-40" onClick={() => setIsEpisodeSelectorOpen(false)} />
+                                         <div className="fixed inset-0 z-40" onClick={() => setIsDownloadMenuOpen(false)} />
                                          <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-1 max-h-60 overflow-y-auto custom-scrollbar animate-fade-in">
-                                             <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase border-b border-gray-100 dark:border-gray-700 mb-1 flex justify-between items-center">
-                                                 <span>剧本集数</span>
-                                                 <button onClick={() => { handleCreateEpisode(); setIsEpisodeSelectorOpen(false); }} className="text-sky-500 hover:underline">+ 新建</button>
+                                             <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase border-b border-gray-100 dark:border-gray-700 mb-1">
+                                                 选择下载内容
                                              </div>
-                                             {script.scenes.length > 0 ? (
-                                                 episodeGroups.map((group, groupIdx) => (
-                                                     <div key={groupIdx} className="mb-1">
-                                                         <button className="w-full text-left px-3 py-1.5 text-xs font-bold text-sky-600 bg-sky-50/50 hover:bg-sky-100 dark:text-sky-400 dark:bg-sky-900/20 dark:hover:bg-sky-900/40 rounded-md mb-1 cursor-default">
-                                                             第 {groupIdx * 5 + 1} - {Math.min((groupIdx + 1) * 5, script.scenes.length)} 集
+                                             {generationMode === 'workflow' && (executedWorkflow || selectedWorkflow)?.steps ? (
+                                                 (executedWorkflow || selectedWorkflow)?.steps?.map((step) => {
+                                                     const result = stepResults[step.outputVariable];
+                                                     return (
+                                                         <button 
+                                                             key={step.id}
+                                                             onClick={() => { 
+                                                                 if(result) handleDownloadWord(result, `${script.title}_${step.name}`); 
+                                                                 else alert("该步骤暂无生成内容");
+                                                                 setIsDownloadMenuOpen(false); 
+                                                             }}
+                                                             className={`w-full text-left px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors truncate ${result ? 'text-gray-700 dark:text-gray-200 hover:bg-sky-50 dark:hover:bg-gray-700' : 'text-gray-400 cursor-not-allowed'}`}
+                                                         >
+                                                             {step.name}
                                                          </button>
-                                                         <div className="pl-2 space-y-0.5 border-l-2 border-sky-100 dark:border-sky-900 ml-2">
-                                                             {group.map((scene) => (
-                                                                 <button 
-                                                                     key={scene.id}
-                                                                     onClick={() => { setActiveScene(scene); setIsEpisodeSelectorOpen(false); }}
-                                                                     className={`w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors truncate ${activeScene?.id === scene.id ? 'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400' : 'text-gray-600 dark:text-gray-400 hover:bg-sky-50 dark:hover:bg-gray-700'}`}
-                                                                 >
-                                                                     {scene.title}
-                                                                 </button>
-                                                             ))}
-                                                         </div>
-                                                     </div>
-                                                 ))
-                                             ) : ( <div className="p-3 text-center text-xs text-gray-400">暂无集数</div> )}
+                                                     );
+                                                 })
+                                             ) : (
+                                                 promptResultText ? (
+                                                     <button 
+                                                         onClick={() => { handleDownloadWord(promptResultText, `${script.title}_生成结果`); setIsDownloadMenuOpen(false); }}
+                                                         className="w-full text-left px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors truncate text-gray-700 dark:text-gray-200 hover:bg-sky-50 dark:hover:bg-gray-700"
+                                                     >
+                                                         提示词生成结果
+                                                     </button>
+                                                 ) : (
+                                                     <div className="p-2 text-center text-xs text-gray-400">暂无内容可下载</div>
+                                                 )
+                                             )}
                                          </div>
                                      </>
                                  )}
@@ -1113,15 +1091,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                      {/* Overlay Actions for Prompt Mode */}
                                      {!isGenerating && promptResultText && (
                                          <div className="fixed bottom-8 right-8 flex gap-2 z-50 animate-fade-in-up">
-                                             <button 
-                                                 type="button"
-                                                 onClick={() => handleDownloadWord(promptResultText, `${script.title}_Generated`)}
-                                                 className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full shadow-lg hover:text-sky-600 dark:hover:text-sky-400 transition-colors border border-gray-100 dark:border-gray-700"
-                                                 title="下载为 Word"
-                                             >
-                                                 <DocumentArrowDown className="w-5 h-5" />
-                                             </button>
-                                             
                                              <button 
                                                  type="button"
                                                  onClick={() => {
@@ -1174,28 +1143,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                          >
                                              {!isCollapsed && (
                                                  <div className="p-8 relative group min-h-[100px]">
-                                                     {/* Floating Step Badge - Optional for context */}
+                                                     {/* Floating Step Badge */}
                                                      <div className="absolute left-2 top-2 text-[10px] font-bold text-gray-300 pointer-events-none select-none">
                                                          Step {index + 1}
                                                      </div>
 
                                                      {result ? (
                                                          <div className="relative">
-                                                             {/* Controls */}
-                                                             <div className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 bg-white/90 dark:bg-black/80 p-1 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 z-10">
-                                                                 <button 
-                                                                    type="button"
-                                                                    onClick={() => handleOpenDeepAsk(result, step.outputVariable)} 
-                                                                    className="p-1.5 text-sky-500 hover:bg-sky-50 rounded"
-                                                                    title="追问"
-                                                                 ><ChatBubbleOvalLeftEllipsis className="w-4 h-4"/></button>
-                                                                 <button 
-                                                                    type="button"
-                                                                    onClick={() => handleDownloadWord(result, `${script.title}_${step.name}`)}
-                                                                    className="p-1.5 text-purple-500 hover:bg-purple-50 rounded"
-                                                                    title="下载"
-                                                                 ><DocumentArrowDown className="w-4 h-4"/></button>
-                                                             </div>
+                                                             {/* Removed Hover Controls as requested */}
                                                              
                                                              {/* Streaming vs Static */}
                                                              {isGeneratingThis ? (
