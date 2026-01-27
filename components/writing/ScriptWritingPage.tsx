@@ -1,9 +1,9 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory } from '../../types';
+import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory, PromptSubCategory } from '../../types';
 import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search, CloudArrowUp, Settings } from '../Icon';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
-import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
+import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, deleteScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
 import CustomSelect from '../CustomSelect';
@@ -87,9 +87,9 @@ const EditableStepContent: React.FC<{
 // Streaming Text Component - optimized for updates
 const StreamingText: React.FC<{ text: string }> = ({ text }) => {
     return (
-        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm p-2 animate-pulse">
+        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm p-2">
             {text}
-            <span className="inline-block w-2 h-4 bg-sky-500 ml-1 align-middle animate-blink"></span>
+            <span className="inline-block w-2 h-4 bg-sky-500 ml-1 align-middle animate-blink animate-pulse"></span>
         </div>
     );
 };
@@ -207,13 +207,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
     // Workflow Modal specific states
     const [workflowCategory, setWorkflowCategory] = useState<string>('all');
+    const [workflowGenre, setWorkflowGenre] = useState<string>('all');
     const [workflowSearch, setWorkflowSearch] = useState('');
     const [workflowFavorites, setWorkflowFavorites] = useState<Set<string>>(new Set());
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
     // UI State
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
-    const [isRightSidebarOpen, setRightSidebarOpen] = useState(false);
+    const [isRightSidebarOpen, setRightSidebarOpen] = useState(true); // Changed default to true
     const [isGenerating, setIsGenerating] = useState(false);
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('正在处理...');
@@ -230,6 +231,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         open: false, targetText: '', context: '', stepVar: ''
     });
 
+    // Title editing state
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [tempTitle, setTempTitle] = useState(script.title);
+
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const stepRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const dbSaveTimeoutRef = useRef<any>(null);
@@ -238,11 +243,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const filteredWorkflows = useMemo(() => {
         return availableWorkflows.filter(wf => {
             const matchesCategory = workflowCategory === 'all' || wf.category === workflowCategory || (workflowCategory === 'script' && wf.category === 'script');
+            const matchesGenre = workflowGenre === 'all' || (wf.subCategories && wf.subCategories.includes(workflowGenre as PromptSubCategory));
             const matchesSearch = !workflowSearch || wf.title.toLowerCase().includes(workflowSearch.toLowerCase());
             const matchesFavorite = !showFavoritesOnly || workflowFavorites.has(wf.id);
-            return matchesCategory && matchesSearch && matchesFavorite;
+            return matchesCategory && matchesSearch && matchesFavorite && matchesGenre;
         });
-    }, [availableWorkflows, workflowCategory, workflowSearch, showFavoritesOnly, workflowFavorites]);
+    }, [availableWorkflows, workflowCategory, workflowGenre, workflowSearch, showFavoritesOnly, workflowFavorites]);
 
     useEffect(() => {
         if (isWorkflowModalOpen) {
@@ -346,6 +352,16 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         loadInitialData();
     }, [script.id]);
 
+    const handleBack = async () => {
+        // Clear timeout to prevent saving
+        if (dbSaveTimeoutRef.current) clearTimeout(dbSaveTimeoutRef.current);
+        // Delete persisted state on exit to ensure fresh start next time
+        if (script.id) {
+            await deleteScriptWorkflowState(script.id);
+        }
+        onBack();
+    };
+
     const handleWorkflowChange = (wf: Workflow) => {
         setSelectedWorkflow(wf);
         if (Object.keys(workflowFormState).length === 0) {
@@ -362,9 +378,43 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         setPromptFormState(initial);
     };
 
+    // New Helper: Handle File Input
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, fieldId: string, isWorkflow: boolean) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const files = Array.from(e.target.files);
+            const readers = files.map((f: any) => { // 'file' here is inferred as File
+                const file = f as File;
+                return new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        resolve(`【文件: ${file.name}】\n${ev.target?.result as string}\n`);
+                    };
+                    reader.readAsText(file);
+                });
+            });
+
+            Promise.all(readers).then(contents => {
+                const combinedContent = contents.join('\n');
+                if (isWorkflow) {
+                    setWorkflowFormState(prev => ({
+                        ...prev,
+                        [fieldId]: (prev[fieldId] || '') + combinedContent
+                    }));
+                } else {
+                    setPromptFormState(prev => ({
+                        ...prev,
+                        [fieldId]: (prev[fieldId] || '') + combinedContent
+                    }));
+                }
+            });
+        }
+    };
+
     const runStepGeneration = async (stepIndex: number, context: Record<string, string>, assetContext: string, basicInfo: string, isContinue = false) => {
-        if (!selectedWorkflow || !selectedWorkflow.steps) return;
-        const step = selectedWorkflow.steps[stepIndex];
+        // Use executedWorkflow if set, otherwise fallback to selectedWorkflow
+        const activeWorkflow = executedWorkflow || selectedWorkflow;
+        if (!activeWorkflow || !activeWorkflow.steps) return;
+        const step = activeWorkflow.steps[stepIndex];
         
         const controller = new AbortController(); 
         abortControllerRef.current = controller;
@@ -411,28 +461,36 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         // Updated Basic Info Construction
         const basicInfo = `【剧本基础信息】\n总集数：${settings.totalEpisodes}\n单集时长：${settings.durationPerEpisode}分钟\n单集场景数限制：${settings.scenesPerEpisodeLimit}\n输出语言：${settings.outputLanguage === 'zh' ? '中文' : '英文'}\n\n`;
 
+        // Use executedWorkflow or fallback to selectedWorkflow
+        const activeWorkflow = executedWorkflow || selectedWorkflow;
+
         if (generationMode === 'workflow') {
-            if (!selectedWorkflow || !selectedWorkflow.steps) return;
-            setExecutedWorkflow(selectedWorkflow);
+            if (!activeWorkflow || !activeWorkflow.steps) return;
+            // Lock in the workflow for execution if not already
+            if (!executedWorkflow && selectedWorkflow) {
+                setExecutedWorkflow(selectedWorkflow);
+            }
 
             let startStepIndex = 0;
             if (typeof startFromIndex === 'number') {
                 startStepIndex = startFromIndex;
             } else {
                 // If regenerating (no index provided), force reset state
-                setStepResults({});
-                setVisibleStepIndex(-1);
+                if (!isContinue) {
+                    setStepResults({});
+                    setVisibleStepIndex(-1);
+                }
             }
 
             let currentContext: Record<string, string> = { ...workflowFormState };
             
             // Hydrate context with previous results if resuming/partial run
-            selectedWorkflow.steps.forEach((s, idx) => { 
+            activeWorkflow.steps.forEach((s, idx) => { 
                 if (idx < startStepIndex && stepResults[s.outputVariable]) currentContext[s.outputVariable] = stepResults[s.outputVariable]; 
             });
 
             try {
-                if (startStepIndex === 0) incrementWorkflowUsage(selectedWorkflow.id);
+                if (startStepIndex === 0) incrementWorkflowUsage(activeWorkflow.id);
                 
                 // If continuing specific step (usually the last visible one)
                 if (isContinue) {
@@ -441,11 +499,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 }
 
                 // Normal sequential flow
-                for (let i = startStepIndex; i < selectedWorkflow.steps.length; i++) {
+                for (let i = startStepIndex; i < activeWorkflow.steps.length; i++) {
                     if (abortControllerRef.current?.signal.aborted) break;
                     
                     const output = await runStepGeneration(i, currentContext, assetContext, basicInfo);
-                    if (output) currentContext[selectedWorkflow.steps[i].outputVariable] = output;
+                    if (output) currentContext[activeWorkflow.steps[i].outputVariable] = output;
                 }
             } catch (e) { console.error(e); }
 
@@ -549,14 +607,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     };
 
     const handleInsertToScript = (text: string) => {
-        // Logic to insert text into the active chapter editor would go here
-        // Since ScriptWritingPage is primarily for generation, we can either copy to clipboard or prompt user.
-        // For now, let's copy to clipboard as a fallback or append to the current active step if appropriate.
         if (generationMode === 'prompt') {
-             setPromptResultText(prev => prev + '\n\n' + text);
+             setPromptResultText(prev => prev + '\n' + text);
         } else {
              navigator.clipboard.writeText(text);
-             alert('已复制到剪贴板，请粘贴到目标位置');
+             alert('已复制到剪贴板，请手动粘贴到目标位置');
         }
     };
 
@@ -566,8 +621,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         }
     };
 
-    const handleManualSave = async () => {
-        await saveCurrentState();
+    const handleTitleSave = async () => {
+        setScript(p => ({...p, title: tempTitle}));
+        await updateProject(script.id, { title: tempTitle });
+        setIsEditingTitle(false);
     };
 
     // --- Render ---
@@ -685,7 +742,22 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                     </label>
                                                     {field.maxLength && <span className={`text-[9px] ${(workflowFormState[field.variable]?.length || 0) > field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>{workflowFormState[field.variable]?.length || 0}/{field.maxLength}</span>}
                                                 </div>
-                                                {field.type === 'textarea' ? <textarea value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none h-24 resize-y" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} /> : <input type="text" value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} />}
+                                                {field.type === 'file' ? (
+                                                    <div className="w-full">
+                                                        <input 
+                                                            type="file"
+                                                            multiple
+                                                            accept=".txt,.md,.json,.csv"
+                                                            onChange={(e) => handleFileChange(e, field.variable, true)}
+                                                            className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 transition-colors"
+                                                        />
+                                                        {workflowFormState[field.variable] && (
+                                                            <div className="mt-1 text-[10px] text-green-600 dark:text-green-400 truncate pl-2">
+                                                                已加载 {workflowFormState[field.variable].length} 字符
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : field.type === 'textarea' ? <textarea value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none h-24 resize-y" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} /> : <input type="text" value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} />}
                                                 {field.description && (
                                                     <p className="text-[9px] text-sky-500 dark:text-sky-400 flex items-start gap-1 leading-tight mt-0.5">
                                                         <InformationCircle className="w-3 h-3 shrink-0" />
@@ -721,7 +793,22 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                         {field.label}
                                                     </label>
                                                 </div>
-                                                {field.type === 'textarea' ? <textarea value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none h-24 resize-y" placeholder={field.placeholder || `请输入${field.label}...`} /> : <input type="text" value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.placeholder || `请输入${field.label}...`} />}
+                                                {field.type === 'file' ? (
+                                                    <div className="w-full">
+                                                        <input 
+                                                            type="file"
+                                                            multiple
+                                                            accept=".txt,.md,.json,.csv"
+                                                            onChange={(e) => handleFileChange(e, field.id, false)}
+                                                            className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 transition-colors"
+                                                        />
+                                                        {promptFormState[field.id] && (
+                                                            <div className="mt-1 text-[10px] text-green-600 dark:text-green-400 truncate pl-2">
+                                                                已加载 {promptFormState[field.id].length} 字符
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : field.type === 'textarea' ? <textarea value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none h-24 resize-y" placeholder={field.placeholder || `请输入${field.label}...`} /> : <input type="text" value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.placeholder || `请输入${field.label}...`} />}
                                             </div>
                                         ))}
                                     </div>
@@ -802,24 +889,19 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         
                         {/* 1. Modal Top Bar */}
                         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex flex-col gap-4 bg-gray-50/50 dark:bg-gray-900/50">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <WorkflowIcon className="w-5 h-5 text-sky-500" />
+                            <div className="flex items-center justify-between gap-4">
+                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2 shrink-0">
+                                    <WorkflowIcon className="w-6 h-6 text-sky-500" />
                                     选择剧本工作流
                                 </h3>
-                                <button onClick={() => setWorkflowModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
-                                    <X className="w-5 h-5"/>
-                                </button>
-                            </div>
-                            
-                            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                                {/* Categories */}
-                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 w-full sm:w-auto">
+                                
+                                {/* Categories Tabs Inline */}
+                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-1 min-w-0">
                                     {WORKFLOW_CATEGORIES.map(cat => (
                                         <button 
                                             key={cat.id} 
                                             onClick={() => setWorkflowCategory(cat.id)} 
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${workflowCategory === cat.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
+                                            className={`px-3 py-1.5 text-sm font-bold rounded-lg transition-all whitespace-nowrap ${workflowCategory === cat.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
                                         >
                                             {cat.label}
                                         </button>
@@ -827,14 +909,14 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                     <div className="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-2 hidden sm:block"></div>
                                     <button 
                                         onClick={() => setShowFavoritesOnly(!showFavoritesOnly)} 
-                                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 whitespace-nowrap ${showFavoritesOnly ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
+                                        className={`px-3 py-1.5 text-sm font-bold rounded-lg transition-all flex items-center gap-1 whitespace-nowrap ${showFavoritesOnly ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}
                                     >
-                                        <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-current' : ''}`} /> 我的收藏
+                                        <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-current' : ''}`} /> 收藏
                                     </button>
                                 </div>
 
-                                {/* Search */}
-                                <div className="relative w-full sm:w-64">
+                                {/* Search Inline */}
+                                <div className="relative w-48 shrink-0">
                                     <span className="absolute inset-y-0 left-0 pl-3 flex items-center"><Search className="w-3.5 h-3.5 text-gray-400" /></span>
                                     <input 
                                         type="text" 
@@ -844,6 +926,25 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         className="w-full pl-9 pr-4 py-1.5 bg-white dark:bg-gray-800 text-xs rounded-lg border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-sky-500 outline-none" 
                                     />
                                 </div>
+
+                                <button onClick={() => setWorkflowModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400 shrink-0">
+                                    <X className="w-5 h-5"/>
+                                </button>
+                            </div>
+                            
+                            {/* Row 2: Genre Tags */}
+                            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                                <span className="text-sm font-bold text-gray-400 mr-1 shrink-0">题材:</span>
+                                <button onClick={() => setWorkflowGenre('all')} className={`px-2.5 py-1 text-[10px] font-medium rounded-full border transition-all whitespace-nowrap ${workflowGenre === 'all' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}>全部</button>
+                                {GENRE_TAGS.map(tag => (
+                                    <button 
+                                        key={tag.id} 
+                                        onClick={() => setWorkflowGenre(tag.id)} 
+                                        className={`px-2.5 py-1 text-[10px] font-medium rounded-full border transition-all whitespace-nowrap ${workflowGenre === tag.id ? 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-900/50 dark:text-purple-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}
+                                    >
+                                        {tag.label}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
@@ -855,7 +956,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                         <div 
                                             key={wf.id} 
                                             onClick={() => { setSelectedWorkflow(wf); setWorkflowModalOpen(false); }}
-                                            className={`bg-white dark:bg-gray-900 rounded-2xl p-4 border transition-all cursor-pointer group flex flex-col h-[210px] ${
+                                            className={`bg-white dark:bg-gray-900 rounded-2xl p-4 border transition-all cursor-pointer group flex flex-col h-[190px] ${
                                                 selectedWorkflow?.id === wf.id 
                                                 ? 'border-sky-500 ring-2 ring-sky-500/20' 
                                                 : 'border-gray-100 dark:border-gray-800 hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-xl'
@@ -913,7 +1014,22 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             <header className="flex-shrink-0 bg-white dark:bg-black flex border-b border-gray-200 dark:border-gray-800 z-20 shadow-sm h-14 justify-between px-4">
                 <div className="flex items-center gap-3">
                     <Film className="w-5 h-5 text-sky-500" />
-                    <span className="font-bold text-base text-gray-900 dark:text-white truncate max-w-[150px]">{script.title}</span>
+                    {/* Editable Title */}
+                    {isEditingTitle ? (
+                        <input 
+                            value={tempTitle} 
+                            onChange={(e) => setTempTitle(e.target.value)} 
+                            onBlur={handleTitleSave}
+                            onKeyDown={(e) => { if(e.key === 'Enter') handleTitleSave(); }}
+                            autoFocus 
+                            className="text-base font-bold bg-gray-50 dark:bg-gray-800 border border-sky-300 rounded px-2 py-0.5 focus:outline-none min-w-[150px] max-w-[200px]" 
+                        />
+                    ) : (
+                        <div className="flex items-center gap-1 group cursor-pointer" onClick={() => setIsEditingTitle(true)}>
+                            <span className="font-bold text-base text-gray-900 dark:text-white truncate max-w-[150px]">{script.title}</span>
+                            <Pencil className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100" />
+                        </div>
+                    )}
                 </div>
                 
                 {/* Center - Workflow Navigation or Empty */}
@@ -957,17 +1073,16 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 </div>
                 
                 <div className="flex items-center gap-3">
-                    <button 
-                        onClick={handleManualSave}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300" 
-                        title="手动保存"
-                    >
-                        <CloudArrowUp className={`w-4 h-4 ${saveStatus === 'saving' ? 'animate-bounce' : ''}`} />
-                        <span className="text-xs font-bold">
-                            {saveStatus === 'saving' ? '保存中...' : (saveStatus === 'saved' ? '已保存' : '手动保存')}
-                        </span>
-                    </button>
-                    <button onClick={onBack} className="px-4 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm">返回</button>
+                    <div className="flex items-center gap-1.5 text-xs font-bold mr-2">
+                        {saveStatus === 'saving' ? (
+                            <span className="text-sky-500 animate-pulse flex items-center gap-1"><CloudArrowUp className="w-3.5 h-3.5" /> 保存中...</span>
+                        ) : saveStatus === 'saved' ? (
+                            <span className="text-gray-400 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> 已自动保存</span>
+                        ) : (
+                            <span className="text-red-400">保存失败</span>
+                        )}
+                    </div>
+                    <button onClick={handleBack} className="px-4 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm">返回</button>
                 </div>
             </header>
 
@@ -1007,7 +1122,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                     className="flex items-center gap-2 px-3 py-1.5 bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 rounded-lg text-xs font-bold hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors"
                                  >
                                      <DocumentArrowDown className="w-3.5 h-3.5" />
-                                     下载选择
+                                     下载
                                      <ChevronDown className="w-3 h-3" />
                                  </button>
                                  

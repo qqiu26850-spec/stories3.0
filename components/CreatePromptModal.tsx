@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Prompt, PromptCategory, PromptField, PromptSubCategory } from '../types';
 import { Trash, Sparkles, Check, ChevronDown, ChevronUp, X, InformationCircle, Tag, Bolt, Plus, BookOpen, DocumentText, ArrowPath, Stop } from './Icon';
@@ -201,15 +200,9 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
         if (!description.trim()) { setError('请填写简介'); return; }
         if (!template.trim()) { setError('请填写模板'); return; }
         
-        // Tag Validation
-        const functionalTags = FUNCTIONAL_TAGS.map(t => t.id);
-        const genreTags = GENRE_TAGS.map(t => t.id);
-        
-        const hasFunctional = subCategories.some(t => functionalTags.includes(t as any));
-        const hasGenre = subCategories.some(t => genreTags.includes(t as any));
-
-        if (!hasFunctional || !hasGenre) {
-            setError('请至少选择一种“功能类型”和一种“题材属性”标签');
+        // Tag Validation - Relaxed rule
+        if (subCategories.length === 0) {
+            setError('请至少选择一个标签');
             return;
         }
 
@@ -274,13 +267,13 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                             <div className="flex justify-between items-center">
                                 <h4 className="text-sm font-bold text-purple-600 flex items-center gap-2"><Tag className="w-4 h-4"/> 标签配置</h4>
                                 <span className={`text-xs font-medium ${subCategories.length >= 5 ? 'text-red-500' : 'text-gray-400'}`}>
-                                    已选 {subCategories.length}/5 (需各选至少一个)
+                                    已选 {subCategories.length}/5 (需至少选一个)
                                 </span>
                             </div>
                             
                             <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">功能类型 (至少选1个)</span>
+                                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">功能类型</span>
                                     <div className="flex flex-wrap gap-2">
                                         {FUNCTIONAL_TAGS.filter(t => t.id !== 'all').map(tag => (
                                             <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id as PromptSubCategory)} className={`px-4 py-1.5 text-xs rounded-full border transition-all ${subCategories.includes(tag.id as any) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}>{tag.label}</button>
@@ -289,7 +282,7 @@ const CreatePromptModal: React.FC<CreatePromptModalProps> = ({ isOpen, onClose, 
                                 </div>
                                 <div className="w-full h-px bg-purple-100 dark:bg-purple-900/30"></div>
                                 <div className="space-y-2">
-                                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">题材属性 (至少选1个)</span>
+                                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">题材属性</span>
                                     <div className="flex flex-wrap gap-2">
                                         {GENRE_TAGS.filter(t => t.id !== 'all').map(tag => (
                                             <button key={tag.id} type="button" onClick={() => toggleSubCategory(tag.id as PromptSubCategory)} className={`px-4 py-1.5 text-xs rounded-full border transition-all ${subCategories.includes(tag.id as any) ? 'bg-purple-600 text-white border-purple-600 shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-purple-300'}`}>{tag.label}</button>

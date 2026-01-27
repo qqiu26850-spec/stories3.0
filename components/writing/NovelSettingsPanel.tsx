@@ -302,7 +302,7 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
     const isShortMode = mode === 'short';
 
     return (
-        <div className={`animate-fade-in ${isShortMode ? 'p-2' : 'p-4 pb-20 space-y-3'}`}>
+        <div className={`animate-fade-in ${isShortMode ? 'p-2 space-y-2' : 'p-4 pb-20 space-y-3'}`}>
             {/* Modal Dispatcher */}
             {activeSetting?.mode === 'text' && (
                 <TextModal 
@@ -327,7 +327,7 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
                 />
             )}
 
-            <div className={`grid ${isShortMode ? 'grid-cols-2 gap-2' : 'grid-cols-1 gap-3'}`}>
+            <div className={`grid grid-cols-1 gap-3`}>
                 {SETTING_TYPES.map(config => {
                     const rawValue = settings[config.id];
                     const hasValue = !!rawValue && rawValue !== '[]' && rawValue !== '{}';
@@ -335,24 +335,31 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
                     const previewText = formatPreviewText(rawValue || '');
 
                     if (isShortMode) {
-                        // Short Mode: Grid Layout with Icons (Figure 1 Style)
                         return (
                             <button 
                                 key={config.id}
                                 onClick={() => setActiveSetting(config)}
-                                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-300 group hover:-translate-y-0.5
+                                className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 group relative
                                     ${hasValue 
-                                        ? 'bg-white dark:bg-gray-800 border-sky-200 dark:border-sky-800 shadow-sm' 
-                                        : 'bg-gray-50/50 dark:bg-gray-900/30 border-transparent hover:bg-white dark:hover:bg-gray-800'
+                                        ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm' 
+                                        : 'bg-white dark:bg-gray-800 border-dashed border-gray-300 dark:border-gray-700 hover:border-sky-400'
                                     }
                                 `}
                             >
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1.5 transition-colors ${hasValue ? config.bgColor.replace('100', '50') : 'bg-gray-100 dark:bg-gray-800'}`}>
-                                    <Icon className={`w-4 h-4 ${hasValue ? config.color : 'text-gray-400 group-hover:text-gray-600'}`} />
+                                <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-2">
+                                         <div className={`p-1.5 rounded-lg ${hasValue ? config.bgColor.replace('100', '50') : 'bg-gray-100 dark:bg-gray-800'} transition-colors`}>
+                                             <Icon className={`w-4 h-4 ${hasValue ? config.color : 'text-gray-400'}`} />
+                                         </div>
+                                         <span className={`text-sm font-bold ${hasValue ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500'}`}>{config.label}</span>
+                                    </div>
+                                    <Plus className="w-4 h-4 text-gray-300 group-hover:text-sky-500 transition-colors" />
                                 </div>
-                                <span className={`text-xs font-bold ${hasValue ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500'}`}>{config.label}</span>
+                                
                                 {hasValue && (
-                                    <div className="w-1 h-1 rounded-full bg-sky-500 mt-1" />
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 line-clamp-3 leading-relaxed pl-1">
+                                        {previewText}
+                                    </div>
                                 )}
                             </button>
                         );

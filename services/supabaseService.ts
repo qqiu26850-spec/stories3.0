@@ -328,6 +328,17 @@ export async function fetchScriptWorkflowState(projectId: string) {
     }
 }
 
+export async function deleteScriptWorkflowState(projectId: string) {
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+        
+        await supabase.from('script_workflow_states').delete().eq('project_id', projectId);
+    } catch (e) {
+        console.error("Failed to delete workflow state", e);
+    }
+}
+
 // ----------------------------------
 
 export async function saveMaterial(name: string, content: string, type: 'character' | 'plot' | 'idea' | 'inspiration', tags: string[] = []) {

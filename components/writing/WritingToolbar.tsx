@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Copy, AlignLeft, AlignCenter, AlignRight, AlignJustify, IndentIncrease, IndentDecrease, Bold, Italic, ArrowUturnLeft, ArrowUturnRight, TextIncrease, TextDecrease } from '../Icon';
 
@@ -48,8 +47,8 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
     };
 
     return (
-        <div className="flex items-center justify-between w-full px-1">
-            <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center justify-between w-full px-1 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1 whitespace-nowrap">
                 {formattingButtons.map((btn) => renderButton(btn))}
             </div>
         </div>

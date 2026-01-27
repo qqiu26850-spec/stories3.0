@@ -187,12 +187,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }
     };
 
-    const handleManualSave = () => {
-        if (!editorRef.current) return;
-        const html = editorRef.current.innerHTML;
-        handleSaveToCloud(html);
-    };
-
     const handleContentInput = useCallback(() => {
         if (!editorRef.current) return;
         setSaveStatus('saving');
@@ -395,9 +389,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 </div>
                 
                 <div className="w-[29%] flex-shrink-0 flex items-center justify-end px-4 border-l border-gray-200 dark:border-gray-800 gap-3">
-                    <button onClick={handleManualSave} className="p-2 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors" title="手动保存">
-                        <FloppyDisk className="w-5 h-5" />
-                    </button>
                     <div className="flex items-center gap-2 mr-2">
                          {saveStatus === 'saving' && (
                             <div className="flex items-center gap-1.5 text-sky-500 animate-pulse whitespace-nowrap">
@@ -450,8 +441,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                             </button>
                         </div>
                     ) : (
-                        <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-sky-50/50 dark:bg-sky-900/20 font-bold text-sky-700 dark:text-sky-200 flex items-center gap-2 justify-center shadow-sm">
-                            <AdjustmentsHorizontal className="w-4 h-4" />
+                        <div className="p-3 my-4 mx-4 rounded-xl bg-sky-500 text-white font-bold text-center shadow-lg shadow-sky-500/20">
                             作品设定
                         </div>
                     )}
