@@ -32,7 +32,7 @@ interface AIFunctionPanelProps {
     onStream?: (text: string, isFirst: boolean) => void;
     projectSettings?: NovelSettings;
     externalAction?: { type: TabType; text: string } | null;
-    chapters?: Chapter[]; // Added prop
+    chapters?: Chapter[];
 }
 
 const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
@@ -61,8 +61,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [isProjectSettingsAssociated, setProjectSettingsAssociated] = useState(false);
     const [associatedChapterIds, setAssociatedChapterIds] = useState<Set<string>>(new Set());
     const [isChapterSelectorOpen, setIsChapterSelectorOpen] = useState(false);
-    
-    // Key fix: Use this state to track if we should include full text (current chapter context)
     const [isFullTextAssociated, setIsFullTextAssociated] = useState(false);
 
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
@@ -72,11 +70,7 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [promptFilterType, setPromptFilterType] = useState<'requirements' | 'style' | 'polish'>('requirements');
     const [formState, setFormState] = useState<Record<string, string>>({});
     const [customInput, setCustomInput] = useState('');
-    
-    // Polish specific state
     const [polishContent, setPolishContent] = useState('');
-    
-    // New Loading & Display Logic
     const [isGenerating, setIsGenerating] = useState(false);
     const [resultText, setResultText] = useState('');
     const [error, setError] = useState('');
@@ -85,8 +79,8 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
     const [lastGeneratedTab, setLastGeneratedTab] = useState<TabType | null>(null);
     
     const abortControllerRef = useRef<AbortController | null>(null);
+    const resultContainerRef = useRef<HTMLDivElement>(null);
 
-    // Handle external trigger (Context Menu) and initial selection
     useEffect(() => {
         if (externalAction) {
             setActiveTab(externalAction.type);
@@ -94,13 +88,10 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                 setPolishContent(externalAction.text);
             }
         } else if (selectedText) {
-            // Only update if selectedText is not empty.
-            // This prevents clearing the box if the user clicks the editor without selecting text.
             setPolishContent(selectedText);
         }
     }, [externalAction, selectedText]);
 
-    // Strategies Rotation
     useEffect(() => {
         let interval: any;
         if (isGenerating) {
@@ -126,25 +117,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         };
         loadAssets();
     }, []);
-
-    // Also refresh assets when opening modal
-    useEffect(() => {
-        if (isAssetModalOpen) {
-            const loadAssets = async () => {
-                const data = await fetchMaterials();
-                const mappedAssets: Asset[] = data.map((item: any) => ({
-                    id: item.id,
-                    name: item.name || item.title,
-                    type: item.type === 'idea' ? 'inspiration' : item.type,
-                    content: item.content,
-                    tags: item.tags || [],
-                    data: { name: item.name }
-                }));
-                setAssets(mappedAssets);
-            };
-            loadAssets();
-        }
-    }, [isAssetModalOpen]);
 
     const selectedAssetNames = useMemo(() => {
         return Array.from(selectedAssetIds)
@@ -176,12 +148,6 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         setCustomInput('');
     }, [activeTab, defaultTabPrompts]);
 
-    useEffect(() => {
-        if (!selectedPrompt) return;
-        const newFormState = { ...formState };
-        setFormState(prev => ({ ...prev, ...newFormState }));
-    }, [selectedPrompt]);
-
     const handleInputChange = (id: string, val: string) => {
         setFormState(prev => ({ ...prev, [id]: val }));
     };
@@ -212,74 +178,47 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
         const controller = new AbortController();
         abortControllerRef.current = controller;
         try {
-            // 1. Asset Context
             const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考素材：${a!.name}】\n${a!.content}`).join('\n\n');
-            
-            // 2. Settings Context
             let settingsContext = '';
             if (isProjectSettingsAssociated && projectSettings) {
                 settingsContext = `【作品背景设定】\n题材：${projectSettings.typeElements}\n主题：${projectSettings.theme}\n世界观：${projectSettings.worldview}\n人物基础设定：${projectSettings.characterSettings}\n梗概：${projectSettings.synopsis}\n特定词条：${projectSettings.specificTerms}\n\n`;
             }
 
-            // 3. Chapter/Full Text Context
             let chapterContext = '';
-            // Associated chapters
             if (associatedChapterIds.size > 0 && chapters.length > 0) {
                 const selectedChaptersContent = chapters
                     .filter(c => associatedChapterIds.has(c.id))
                     .map(c => `【参考章节：${c.title}】\n${c.content}`)
                     .join('\n\n');
-                if (selectedChaptersContent) {
-                    chapterContext += `${selectedChaptersContent}\n\n`;
-                }
+                if (selectedChaptersContent) chapterContext += `${selectedChaptersContent}\n\n`;
             }
-            // "Associate Full Text" usually means the CURRENT chapter context (passed via contextText prop)
             if (isFullTextAssociated && contextText) {
                 chapterContext += `【当前正文背景】\n${contextText}\n\n`;
             }
 
-            // 4. Determine Text to Process (Selection or Custom)
             const textToProcess = (activeTab === 'polish' || activeTab === 'review') 
                 ? polishContent 
-                : (selectedText || contextText.slice(-2000)); // Default fallback if no selection for other modes
+                : (selectedText || contextText.slice(-2000));
 
             let finalPrompt = '';
 
-            // 5. Construct Prompt Logic
             if (selectedPrompt) {
                 incrementPromptHeat(selectedPrompt.id);
-                
-                // Start with the raw template
                 let basePrompt = selectedPrompt.template || selectedPrompt.content;
-                
-                // Replace variables from Form State
                 for (const field of selectedPrompt.fields) {
                     let val = formState[field.id] || '';
-                    
-                    // Smart injection for common context variables if empty
                     if (!val && (field.id === 'context' || field.id === 'text' || field.id === 'content' || field.id === 'selection')) {
                         val = textToProcess;
                     }
                     basePrompt = basePrompt.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
                 }
-
-                // Construct final prompt combining all contexts
-                // Structure: Contexts -> Assets -> Task (Prompt)
                 finalPrompt = `${settingsContext}${chapterContext}${assetContext ? `【关联素材】\n${assetContext}\n\n---\n\n` : ''}${basePrompt}`;
-
             } else {
-                // No template selected - Custom Mode
                 const instruction = activeTab === 'continue' ? '请根据上文续写' : (activeTab === 'polish' ? '请润色以下文本' : (activeTab === 'expand' ? '请扩写以下文本' : '请评审以下文本'));
                 const userReq = customInput ? `\n【用户具体要求】：${customInput}` : '';
-                
-                finalPrompt = `${settingsContext}${chapterContext}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}
-${instruction}${userReq}。
-
-【待处理文本/上下文】：
-${textToProcess}`;
+                finalPrompt = `${settingsContext}${chapterContext}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${instruction}${userReq}。\n\n【待处理文本/上下文】：\n${textToProcess}`;
             }
 
-            // Append force long instruction
             finalPrompt += FORCE_LONG_INSTRUCTION;
 
             const stream = generateTextStream(finalPrompt, { 
@@ -294,9 +233,7 @@ ${textToProcess}`;
                 setResultText(prev => prev + chunk);
             }
         } catch (err: any) {
-            if (err.message !== 'Aborted') {
-                setError(err.message || '生成失败');
-            }
+            if (err.message !== 'Aborted') setError(err.message || '生成失败');
         } finally {
             setIsGenerating(false);
             abortControllerRef.current = null;
@@ -307,28 +244,15 @@ ${textToProcess}`;
         if (isGenerating) return;
         setIsGenerating(true);
         setError('');
-        
         const tail = resultText.slice(-3000); 
         const continuePrompt = `IMPORTANT: Output ONLY the continued story content. Do NOT include any filler.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
-
         const controller = new AbortController();
         abortControllerRef.current = controller;
-
         try {
-            const stream = generateTextStream(continuePrompt, { 
-                model, 
-                temperature, 
-                topP, 
-                maxOutputTokens, 
-                signal: controller.signal 
-            });
-            for await (const chunk of stream) {
-                setResultText(prev => prev + chunk);
-            }
+            const stream = generateTextStream(continuePrompt, { model, temperature, topP, maxOutputTokens, signal: controller.signal });
+            for await (const chunk of stream) setResultText(prev => prev + chunk);
         } catch (err: any) {
-            if (err.message !== 'Aborted') {
-                setError(err.message || '生成失败');
-            }
+            if (err.message !== 'Aborted') setError(err.message || '生成失败');
         } finally {
             setIsGenerating(false);
             abortControllerRef.current = null;
@@ -336,9 +260,20 @@ ${textToProcess}`;
     };
 
     const handleInsertCheck = () => {
-        showToast(lastGeneratedTab === 'polish' ? '将替换选中的文本...' : '请确保光标定位在您想插入的地方');
-        if (lastGeneratedTab === 'polish') onReplace(resultText);
-        else onInsert(resultText);
+        // Logic to support specific segment insertion
+        const selection = window.getSelection();
+        let textToInsert = resultText;
+        
+        // If user selected text within the result container, only insert that part
+        if (selection && selection.toString().trim() && resultContainerRef.current?.contains(selection.anchorNode)) {
+            textToInsert = selection.toString().trim();
+            showToast('已插入选定片段...');
+        } else {
+            showToast(lastGeneratedTab === 'polish' ? '将替换选中的文本...' : '请确保光标定位在您想插入的地方');
+        }
+
+        if (lastGeneratedTab === 'polish') onReplace(textToInsert);
+        else onInsert(textToInsert);
     };
 
     const renderTabButton = (type: TabType, label: string, Icon: React.ElementType) => (
@@ -361,70 +296,41 @@ ${textToProcess}`;
         { value: "doubao-flash", label: "速写版 (豆包)" }
     ];
 
-    // If there is result text or it is generating, show result view in full panel
     if (resultText || isGenerating) {
         return (
             <div className="flex flex-col h-full bg-white dark:bg-gray-900 relative">
                 <Toast message={toastMsg} isVisible={!!toastMsg} />
-                
                 {isGenerating && !resultText && (
                     <div className="absolute inset-0 z-50 bg-white/95 dark:bg-gray-900/95 flex flex-col items-center justify-center text-center p-6">
                         <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
                         <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">AI 正在创作中...</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 italic px-4">
-                            {WRITING_STRATEGIES[strategyIndex]}
-                        </p>
-                        <button 
-                            onClick={handleStop}
-                            className="px-6 py-2 bg-red-50 text-red-600 border border-red-200 rounded-full hover:bg-red-100 transition-colors text-sm font-bold flex items-center gap-2"
-                        >
-                            <Stop className="w-4 h-4" /> 停止生成
-                        </button>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 italic px-4">{WRITING_STRATEGIES[strategyIndex]}</p>
+                        <button onClick={handleStop} className="px-6 py-2 bg-red-50 text-red-600 border border-red-200 rounded-full hover:bg-red-100 transition-colors text-sm font-bold flex items-center gap-2"><Stop className="w-4 h-4" /> 停止生成</button>
                     </div>
                 )}
-
                 <div className="flex justify-between items-center p-4 border-b border-sky-100 dark:border-sky-900 bg-sky-50/50 dark:bg-sky-900/20">
                     <h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-sky-500" />
-                        生成结果
+                        <Sparkles className="w-4 h-4 text-sky-500" />生成结果
                         {isGenerating && <ArrowPath className="w-3.5 h-3.5 text-sky-500 animate-spin" />}
-                        {!isGenerating && resultText && <span className="text-xs text-green-500 font-bold ml-1">已完成</span>}
                     </h3>
                     <div className="flex gap-2 items-center">
-                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-white rounded transition-colors flex items-center gap-1" title="复制">
-                            <Copy className="w-4 h-4" />
-                        </button>
+                        <button onClick={() => navigator.clipboard.writeText(resultText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-white rounded transition-colors flex items-center gap-1" title="复制全选"><Copy className="w-4 h-4" /></button>
                         <button onClick={() => setResultText('')} className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-white rounded transition-colors" title="关闭"><X className="w-4 h-4" /></button>
                     </div>
                 </div>
-
-                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                <div ref={resultContainerRef} className="flex-1 overflow-y-auto p-4 custom-scrollbar select-text">
                     <div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">{resultText}</div>
                 </div>
-
                 <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-2">
-                    <button 
-                        onClick={handleInsertCheck} 
-                        className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
-                    >
+                    <button onClick={handleInsertCheck} className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1">
                         {activeTab === 'polish' ? '替换选中' : <><Plus className="w-3 h-3" /> 插入正文</>}
                     </button>
-                    
                     {isGenerating ? (
-                        <button 
-                            onClick={handleStop}
-                            className="flex-1 px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"
-                        >
-                            <Stop className="w-3 h-3" /> 停止生成
-                        </button>
+                        <button onClick={handleStop} className="flex-1 px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"><Stop className="w-3 h-3" /> 停止</button>
                     ) : (
                         <>
-                            <button onClick={handleContinue} className="flex-1 px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm font-sans flex items-center justify-center gap-1" title="续写更多内容">
-                                <Play className="w-3 h-3" /> 继续生成
-                            </button>
-                            <button onClick={handleGenerate} className="flex-1 px-3 py-2.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold rounded-lg hover:bg-orange-200 transition-colors text-sm font-sans flex items-center justify-center gap-1">
-                                <ArrowPath className="w-3 h-3" /> 重试
-                            </button>
+                            <button onClick={handleContinue} className="flex-1 px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"><Play className="w-3 h-3" /> 续写</button>
+                            <button onClick={handleGenerate} className="flex-1 px-3 py-2.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold rounded-lg hover:bg-orange-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"><ArrowPath className="w-3 h-3" /> 重试</button>
                         </>
                     )}
                 </div>
@@ -446,53 +352,33 @@ ${textToProcess}`;
 
             <div className="flex-1 overflow-y-auto p-3 space-y-4 font-sans dynamic-scrollbar relative">
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
-                    <button 
-                        onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} 
-                        className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                    >
+                    <button onClick={() => setIsConfigCollapsed(!isConfigCollapsed)} className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">1</span>
-                            模型参数配置
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">1</span>模型参数配置
                         </span>
                         <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isConfigCollapsed ? 'rotate-180' : ''}`} />
                     </button>
-                    
                     {!isConfigCollapsed && (
                         <div className="px-3 pb-4 space-y-4">
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型选择</label>
                                 <div className="flex gap-2 font-sans">
-                                    <div className="relative flex-1">
-                                        <CustomSelect 
-                                            value={model} 
-                                            onChange={setModel} 
-                                            options={MODEL_OPTIONS}
-                                        />
-                                    </div>
+                                    <div className="relative flex-1"><CustomSelect value={model} onChange={setModel} options={MODEL_OPTIONS}/></div>
                                     <button onClick={() => setShowConfig(!showConfig)} className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 ${showConfig ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>参数</button>
                                 </div>
                                 {showConfig && (
                                     <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 grid grid-cols-1 gap-4 animate-fade-in text-xs">
                                         <div className="space-y-1">
-                                            <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between">
-                                                <span>随机度 (Temperature): {temperature}</span>
-                                            </label>
+                                            <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between"><span>随机度 (Temperature): {temperature}</span></label>
                                             <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                            <p className="text-[10px] text-gray-400">控制创造性。值越高越发散、有创意；值越低越严谨、稳定。</p>
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between">
-                                                <span>核采样 (Top P): {topP}</span>
-                                            </label>
+                                            <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between"><span>核采样 (Top P): {topP}</span></label>
                                             <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                            <p className="text-[10px] text-gray-400">控制词汇多样性。值较低时，模型倾向于选择常见词汇。</p>
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between">
-                                                <span>最大长度 (Tokens): {maxOutputTokens}</span>
-                                            </label>
+                                            <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between"><span>最大长度 (Tokens): {maxOutputTokens}</span></label>
                                             <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                            <p className="text-[10px] text-gray-400">限制单次生成的最大文本量。</p>
                                         </div>
                                     </div>
                                 )}
@@ -501,209 +387,47 @@ ${textToProcess}`;
                     )}
                 </div>
 
-                {/* Module 2: Text to Process */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
                     <div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                         <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>
-                            需修改的正文内容
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>需修改的正文内容
                         </span>
                     </div>
                     <div className="p-3">
-                        <textarea 
-                            value={polishContent} 
-                            onChange={(e) => setPolishContent(e.target.value)} 
-                            placeholder={activeTab === 'continue' ? "上文内容..." : "请在正文中选择一段文本，内容将自动填充至此..."}
-                            className="w-full h-32 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner"
-                        />
-                        {polishContent.length === 0 && (
-                            <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1 font-medium">
-                                <InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本
-                            </p>
-                        )}
+                        <textarea value={polishContent} onChange={(e) => setPolishContent(e.target.value)} placeholder={activeTab === 'continue' ? "上文内容..." : "请在正文中选择一段文本，内容将自动填充至此..."} className="w-full h-32 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner" />
+                        {polishContent.length === 0 && <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1 font-medium"><InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本</p>}
                     </div>
                 </div>
 
-                {/* ... (Rest of the file remains unchanged) ... */}
                 <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
-                    <div className="p-3 border-b border-gray-100 dark:border-gray-800">
-                        <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">3</span>
-                            提示词选择 & 关联素材
-                        </span>
-                    </div>
+                    <div className="p-3 border-b border-gray-100 dark:border-gray-800"><span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">3</span>提示词选择 & 关联素材</span></div>
                     <div className="p-3 space-y-4">
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">提示词选择</label>
-                            {activeTab === 'polish' || activeTab === 'review' ? (
-                                <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread' as any)} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
-                                    <div className="flex items-center justify-between">
-                                        <span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                                            {selectedPrompt ? selectedPrompt.title : (activeTab === 'polish' ? '选择润色提示词...' : '选择评审提示词...')}
-                                        </span>
-                                        <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-sky-500" />
-                                    </div>
-                                </button>
-                            ) : (
-                                <button onClick={() => handleOpenPromptModal('requirements')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
-                                    <div className="flex items-center justify-between">
-                                        <span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                                            {selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}
-                                        </span>
-                                        <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-sky-500" />
-                                    </div>
-                                </button>
-                            )}
+                            <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread' as any)} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
+                                <div className="flex items-center justify-between"><span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>{selectedPrompt ? selectedPrompt.title : (activeTab === 'polish' ? '选择润色提示词...' : '选择评审提示词...')}</span><ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-sky-500" /></div>
+                            </button>
                         </div>
-
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">关联素材与上下文</label>
                             <div className="flex flex-col gap-2">
-                                <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2 overflow-hidden">
-                                            <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
-                                            <span className="font-semibold text-xs truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '关联人物/剧情...'}</span>
-                                        </div>
-                                        <ChevronDown className="w-3 h-3 text-gray-400 opacity-50 flex-shrink-0" />
-                                    </div>
-                                </button>
-                                
+                                <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}><div className="flex items-center justify-between"><div className="flex items-center gap-2 overflow-hidden"><Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} /><span className="font-semibold text-xs truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '关联人物/剧情...'}</span></div><ChevronDown className="w-3 h-3 text-gray-400 opacity-50 flex-shrink-0" /></div></button>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <button 
-                                        onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} 
-                                        className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-sky-600' : 'text-gray-400'}`} />
-                                            <span className="font-semibold text-xs whitespace-nowrap">关联作品设定</span>
-                                        </div>
-                                        {isProjectSettingsAssociated && <Check className="w-3.5 h-3.5 text-sky-500" />}
-                                    </button>
-
+                                    <button onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}><div className="flex items-center gap-2"><BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-sky-600' : 'text-gray-400'}`} /><span className="font-semibold text-xs whitespace-nowrap">作品设定</span></div>{isProjectSettingsAssociated && <Check className="w-3.5 h-3.5 text-sky-500" />}</button>
                                     <div className="relative">
-                                        <button 
-                                            onClick={() => setIsChapterSelectorOpen(!isChapterSelectorOpen)}
-                                            className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${associatedChapterIds.size > 0 ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${associatedChapterIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
-                                                <span className="font-semibold text-xs whitespace-nowrap">{associatedChapterIds.size > 0 ? `已关联 ${associatedChapterIds.size} 章` : '关联章节'}</span>
-                                            </div>
-                                            <ChevronDown className="w-3 h-3 text-gray-400 opacity-50 flex-shrink-0" />
-                                        </button>
-                                        
-                                        {isChapterSelectorOpen && (
-                                            <>
-                                                <div className="fixed inset-0 z-40" onClick={() => setIsChapterSelectorOpen(false)} />
-                                                <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-2 animate-fade-in max-h-60 overflow-y-auto custom-scrollbar">
-                                                    {/* Full text toggle */}
-                                                    <label className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors border-b border-gray-100 dark:border-gray-700 mb-1">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={isFullTextAssociated} 
-                                                            onChange={() => setIsFullTextAssociated(!isFullTextAssociated)}
-                                                            className="rounded border-gray-300 text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
-                                                        />
-                                                        <span className="text-xs font-bold text-sky-600 dark:text-sky-400">当前正文 (全文)</span>
-                                                    </label>
-
-                                                    <div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase">其他章节</div>
-                                                    {chapters.length > 0 ? chapters.map(ch => (
-                                                        <label key={ch.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={associatedChapterIds.has(ch.id)} 
-                                                                onChange={() => setAssociatedChapterIds(prev => {
-                                                                    const next = new Set(prev);
-                                                                    if (next.has(ch.id)) next.delete(ch.id);
-                                                                    else next.add(ch.id);
-                                                                    return next;
-                                                                })}
-                                                                className="rounded border-gray-300 text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
-                                                            />
-                                                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{ch.title || '未命名'}</span>
-                                                        </label>
-                                                    )) : (
-                                                        <div className="p-2 text-xs text-gray-400 text-center">暂无章节</div>
-                                                    )}
-                                                </div>
-                                            </>
-                                        )}
+                                        <button onClick={() => setIsChapterSelectorOpen(!isChapterSelectorOpen)} className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${associatedChapterIds.size > 0 || isFullTextAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}><div className="flex items-center gap-2"><BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${associatedChapterIds.size > 0 || isFullTextAssociated ? 'text-sky-600' : 'text-gray-400'}`} /><span className="font-semibold text-xs whitespace-nowrap">关联章节</span></div><ChevronDown className="w-3 h-3 text-gray-400 opacity-50 flex-shrink-0" /></button>
+                                        {isChapterSelectorOpen && (<><div className="fixed inset-0 z-40" onClick={() => setIsChapterSelectorOpen(false)} /><div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 p-2 animate-fade-in max-h-60 overflow-y-auto custom-scrollbar"><label className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors border-b border-gray-100 dark:border-gray-700 mb-1"><input type="checkbox" checked={isFullTextAssociated} onChange={() => setIsFullTextAssociated(!isFullTextAssociated)} className="rounded border-gray-300 text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"/><span className="text-xs font-bold text-sky-600 dark:text-sky-400">当前全文</span></label><div className="text-[10px] font-bold text-gray-400 px-2 py-1 uppercase">其他章节</div>{chapters.length > 0 ? chapters.map(ch => (<label key={ch.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors"><input type="checkbox" checked={associatedChapterIds.has(ch.id)} onChange={() => setAssociatedChapterIds(prev => { const next = new Set(prev); if(next.has(ch.id)) next.delete(ch.id); else next.add(ch.id); return next; })} className="rounded border-gray-300 text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"/><span className="text-xs text-gray-700 dark:text-gray-300 truncate">{ch.title || '未命名'}</span></label>)) : <div className="p-2 text-xs text-gray-400 text-center">暂无章节</div>}</div></>)}
                                     </div>
                                 </div>
                             </div>
                         </div>
-
-                        {selectedPrompt ? (
-                            <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模板参数填写</span>
-                                    <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500 font-medium">重置模板</button>
-                                </div>
-                                {selectedPrompt.fields.map((field, index) => {
-                                    if (field.id === 'context' || field.id === 'text') return null;
-                                    return (
-                                        <div key={field.id} className="space-y-1.5">
-                                            <div className="flex justify-between items-center">
-                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
-                                                    {index + 1}. {field.label}
-                                                    {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
-                                                </label>
-                                                {field.maxLength && (
-                                                    <span className={`text-[9px] ${(formState[field.id]?.length || 0) >= field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>
-                                                        {formState[field.id]?.length || 0}/{field.maxLength}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            {field.type === 'textarea' ? (
-                                                <textarea 
-                                                    rows={3}
-                                                    value={formState[field.id] || ''} 
-                                                    onChange={e => handleInputChange(field.id, e.target.value)} 
-                                                    placeholder={field.placeholder || "请输入..."}
-                                                    maxLength={field.maxLength}
-                                                    className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" 
-                                                />
-                                            ) : (
-                                                <input 
-                                                    type="text" 
-                                                    value={formState[field.id] || ''} 
-                                                    onChange={e => handleInputChange(field.id, e.target.value)} 
-                                                    placeholder={field.placeholder || "请输入..."}
-                                                    maxLength={field.maxLength}
-                                                    className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" 
-                                                />
-                                            )}
-                                            {field.description && (
-                                                <p className="text-[10px] text-blue-500 dark:text-blue-400 flex items-start gap-1 leading-tight">
-                                                    <InformationCircle className="w-3 h-3 mt-0.5 shrink-0" />
-                                                    {field.description}
-                                                </p>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-                                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">自定义要求</label>
-                                <textarea 
-                                    value={customInput} 
-                                    onChange={(e) => setCustomInput(e.target.value)} 
-                                    placeholder="请输入具体的创作要求..."
-                                    className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner"
-                                />
-                            </div>
+                        {selectedPrompt && (
+                            <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-700"><div className="flex items-center justify-between"><span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模板参数</span><button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500 font-medium">重置</button></div>{selectedPrompt.fields.map((field, index) => { if (field.id === 'context' || field.id === 'text') return null; return (<div key={field.id} className="space-y-1.5"><div className="flex justify-between items-center"><label className="block text-sm font-bold text-gray-700 dark:text-gray-300">{index + 1}. {field.label}{field.required !== false && <span className="ml-0.5 text-red-500">*</span>}</label></div>{field.type === 'textarea' ? <textarea rows={3} value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" /> : <input type="text" value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" />}</div>); })}</div>
                         )}
+                        {!selectedPrompt && <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800"><label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">自定义要求</label><textarea value={customInput} onChange={(e) => setCustomInput(e.target.value)} placeholder="请输入具体的创作要求..." className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner" /></div>}
                     </div>
                 </div>
-                
-                {!isGenerating && !resultText && (
-                    <button onClick={handleGenerate} className={`w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/20 disabled:bg-gray-400 disabled:cursor-not-allowed`}>
-                        <Sparkles className="w-5 h-5" />{activeTab === 'review' ? '开始智能评审' : '立即生成内容'}
-                    </button>
-                )}
+                {!isGenerating && !resultText && <button onClick={handleGenerate} className="w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans bg-sky-600 hover:bg-sky-500 text-white disabled:bg-gray-400"><Sparkles className="w-5 h-5" />{activeTab === 'review' ? '开始智能评审' : '立即生成内容'}</button>}
             </div>
         </div>
     );

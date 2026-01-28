@@ -9,6 +9,12 @@ export const Sparkles: Icon = (props) => (
   </svg>
 );
 
+export const PaintBrush: Icon = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.4 2.245 4.5 4.5 0 0 0 8.4-2.245c0-.399-.078-.78-.22-1.128Zm0 0a15.998 15.998 0 0 0 3.388-1.62m-5.043-.025a15.975 15.975 0 0 1-3.418-1.611m11.385-2.148C17.062 10.428 17.5 8.761 17.5 7a7 7 0 1 0-14 0c0 1.762.438 3.428 1.244 4.88m11.385-2.148A15.91 15.91 0 0 0 20.25 15m-14.866-5.12A15.911 15.911 0 0 1 3.75 15m7.5-3v2m0-6V5m0 6a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+  </svg>
+);
+
 export const CloudArrowUp: Icon = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />

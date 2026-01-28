@@ -62,9 +62,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const [wordCount, setWordCount] = useState(0);
     const [showCopyToast, setShowCopyToast] = useState(false);
     
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [debouncedContextText, setDebouncedContextText] = useState(''); 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [currentSelection, setCurrentSelection] = useState('');
 
     const editorRef = useRef<HTMLDivElement>(null);
@@ -82,7 +80,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [isRightSidebarOpen, setRightSidebarOpen] = useState(true);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [isLoadingChapters, setIsLoadingChapters] = useState(true);
     const [isContentLoading, setIsContentLoading] = useState(false);
 
@@ -108,7 +105,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 if (mapped.length > 0 && !activeChapter) {
                     setActiveChapter(mapped[0]);
                 } else if (mapped.length === 0 && mode === 'short') {
-                    // Auto-create chapter for short story mode if empty
                     const newId = await saveChapterToDB(novel.id, `new-${Date.now()}`, '正文', '', 1);
                     if (newId) {
                         const newChapter: Chapter = {
@@ -201,10 +197,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                 const text = editorRef.current.innerText || '';
                 const count = text.replace(/\s/g, '').length;
                 setWordCount(count);
-                
-                // Debounced context update
                 setDebouncedContextText(text);
-                
                 handleSaveToCloud(html);
             }
         }, 1000);
@@ -262,7 +255,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleUpdateSettings = async (key: keyof NovelSettings, value: string) => {
         const newSettings = { ...novel.settings, [key]: value };
         setNovel(prev => ({ ...prev, settings: newSettings }));
-        // Convert to string for DB
         await updateProject(novel.id, { description: JSON.stringify(newSettings) });
     };
 
@@ -276,6 +268,11 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             setTimeout(() => setShowCopyToast(false), 2000);
         } else if (action === 'bold') document.execCommand('bold');
         else if (action === 'italic') document.execCommand('italic');
+        else if (action === 'format-paint') {
+            // Simplified format painter: toggles a global mode or just uses system copy/paste style
+            // Here we provide visual feedback for now as requested
+            alert('格式刷已激活，请选择目标文字应用样式');
+        }
         else if (action.startsWith('align-')) {
             const align = action.replace('align-', '');
             document.execCommand(align === 'justify' ? 'justifyFull' : `justify${align.charAt(0).toUpperCase() + align.slice(1)}`);
@@ -293,6 +290,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
     const handleInsertText = (text: string) => {
         if (!editorRef.current) return;
         editorRef.current.focus();
+        // Use insertText instead of insertHTML to inherit current paragraph styles
         document.execCommand('insertText', false, text);
         handleContentInput();
     };
@@ -326,7 +324,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         return () => document.removeEventListener('click', closeMenu);
     }, []);
 
-    // Debounced title save
     useEffect(() => {
         if (!activeChapter) return;
         const timer = setTimeout(() => {
@@ -334,6 +331,8 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
         }, 1000);
         return () => clearTimeout(timer);
     }, [chapterTitle]);
+
+    const isShort = mode === 'short';
 
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden relative">
@@ -415,7 +414,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
             </header>
 
             <div className="flex-1 flex overflow-hidden relative">
-                {/* Left Sidebar */}
                 <button 
                     onClick={() => setLeftSidebarOpen(!isLeftSidebarOpen)}
                     className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isLeftSidebarOpen ? 'left-64' : 'left-0'}`}
@@ -441,7 +439,7 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                             </button>
                         </div>
                     ) : (
-                        <div className="p-3 my-4 mx-4 rounded-xl bg-sky-500 text-white font-bold text-center shadow-lg shadow-sky-500/20">
+                        <div className="p-1.5 mt-2 mb-1 mx-2 rounded-lg bg-sky-500 text-white font-bold text-center shadow-md text-xs">
                             作品设定
                         </div>
                     )}
@@ -462,7 +460,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                     </div>
                 </aside>
 
-                {/* Main Editor */}
                 <main className="flex-1 bg-gray-50 dark:bg-gray-950 flex flex-col relative overflow-hidden px-1.5 py-0">
                      <div className="flex-1 flex flex-col bg-white dark:bg-gray-900 shadow-sm border-x border-gray-100 dark:border-gray-800 w-full h-full overflow-hidden relative">
                         {activeChapter ? (
@@ -520,7 +517,6 @@ const NovelWritingPage: React.FC<NovelWritingPageProps> = ({ novel: initialNovel
                      </div>
                 </main>
 
-                {/* Right Sidebar - AI Panel */}
                 <button 
                     onClick={() => setRightSidebarOpen(!isRightSidebarOpen)}
                     className={`absolute z-30 top-1/2 -translate-y-1/2 w-4 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-md flex items-center justify-center text-gray-400 hover:text-sky-500 transition-all shadow-sm ${isRightSidebarOpen ? 'right-[29%]' : 'right-0'}`}

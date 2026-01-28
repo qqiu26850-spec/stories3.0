@@ -7,7 +7,7 @@ import { X, Plus, Pencil, Trash, UserCircle, Tag, Globe, BookOpen, ListBullet, S
 interface NovelSettingsPanelProps {
     settings: NovelSettings;
     onUpdate: (key: keyof NovelSettings, value: string) => void;
-    mode?: 'long' | 'short'; // Added mode prop
+    mode?: 'long' | 'short';
 }
 
 type SettingMode = 'text' | 'list';
@@ -149,9 +149,8 @@ const ListModal: React.FC<{
     onSave: (val: string) => void;
 }> = ({ isOpen, title, itemsJson, description, onClose, onSave }) => {
     const [items, setItems] = useState<ListItem[]>([]);
-    const [editingItem, setEditingItem] = useState<ListItem | null>(null); // For sub-modal
+    const [editingItem, setEditingItem] = useState<ListItem | null>(null);
     
-    // Parse JSON or legacy string on open
     useEffect(() => {
         if (isOpen) {
             try {
@@ -159,11 +158,9 @@ const ListModal: React.FC<{
                 if (Array.isArray(parsed)) {
                     setItems(parsed);
                 } else {
-                    // Legacy string support
                     setItems(itemsJson ? [{ id: 'legacy', title: '默认', content: itemsJson }] : []);
                 }
             } catch (e) {
-                // Not JSON, treat as legacy string
                 setItems(itemsJson ? [{ id: 'legacy', title: '默认', content: itemsJson }] : []);
             }
         }
@@ -193,7 +190,6 @@ const ListModal: React.FC<{
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            {/* Sub-modal for editing individual items - Moved to top level via Portal */}
             {editingItem && createPortal(
                 <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setEditingItem(null)}>
                     <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-xl shadow-2xl p-6 space-y-5 animate-fade-in-up border border-gray-200 dark:border-gray-700" onClick={e => e.stopPropagation()}>
@@ -266,11 +262,8 @@ const ListModal: React.FC<{
     );
 };
 
-// Helper function to clean JSON for display
 const formatPreviewText = (text: string): string => {
     if (!text) return "暂未设定";
-    
-    // Check if it's a JSON array of items (List mode)
     if (text.startsWith('[') && text.endsWith(']')) {
         try {
             const list = JSON.parse(text);
@@ -279,21 +272,13 @@ const formatPreviewText = (text: string): string => {
             }
         } catch { }
     }
-
-    // Check if it looks like a JSON object (Legacy settings sometimes stored as JSON)
     if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
         try {
             const obj = JSON.parse(text);
-            // Collect values only, ignoring keys like "typeElements" etc.
             const values = Object.values(obj).filter(v => v && typeof v === 'string' && v.trim() !== '');
-            if (values.length > 0) {
-                return values.join(', ');
-            }
-        } catch (e) {
-            // If parse fails, fall through to raw text
-        }
+            if (values.length > 0) return values.join(', ');
+        } catch (e) { }
     }
-    
     return text;
 };
 
@@ -302,8 +287,7 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
     const isShortMode = mode === 'short';
 
     return (
-        <div className={`animate-fade-in ${isShortMode ? 'p-2 space-y-2' : 'p-4 pb-20 space-y-3'}`}>
-            {/* Modal Dispatcher */}
+        <div className={`animate-fade-in ${isShortMode ? 'p-1 px-2 space-y-1.5' : 'p-4 pb-20 space-y-3'}`}>
             {activeSetting?.mode === 'text' && (
                 <TextModal 
                     isOpen={!!activeSetting}
@@ -327,7 +311,7 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
                 />
             )}
 
-            <div className={`grid grid-cols-1 gap-3`}>
+            <div className={`grid grid-cols-1 ${isShortMode ? 'gap-2' : 'gap-3'}`}>
                 {SETTING_TYPES.map(config => {
                     const rawValue = settings[config.id];
                     const hasValue = !!rawValue && rawValue !== '[]' && rawValue !== '{}';
@@ -339,32 +323,31 @@ const NovelSettingsPanel: React.FC<NovelSettingsPanelProps> = ({ settings, onUpd
                             <button 
                                 key={config.id}
                                 onClick={() => setActiveSetting(config)}
-                                className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 group relative
+                                className={`w-full text-left p-2.5 px-3 rounded-xl border transition-all duration-200 group relative min-h-[56px]
                                     ${hasValue 
                                         ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm' 
                                         : 'bg-white dark:bg-gray-800 border-dashed border-gray-300 dark:border-gray-700 hover:border-sky-400'
                                     }
                                 `}
                             >
-                                <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                         <div className={`p-1.5 rounded-lg ${hasValue ? config.bgColor.replace('100', '50') : 'bg-gray-100 dark:bg-gray-800'} transition-colors`}>
-                                             <Icon className={`w-4 h-4 ${hasValue ? config.color : 'text-gray-400'}`} />
+                                         <div className={`p-1 rounded-lg ${config.bgColor.replace('100', '200')}/40 transition-colors`}>
+                                             <Icon className={`w-3.5 h-3.5 ${config.color}`} />
                                          </div>
-                                         <span className={`text-sm font-bold ${hasValue ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500'}`}>{config.label}</span>
+                                         <span className={`text-xs font-bold ${hasValue ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500'}`}>{config.label}</span>
                                     </div>
-                                    <Plus className="w-4 h-4 text-gray-300 group-hover:text-sky-500 transition-colors" />
+                                    <Plus className="w-3 h-3 text-gray-300 group-hover:text-sky-500 transition-colors" />
                                 </div>
                                 
                                 {hasValue && (
-                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 line-clamp-3 leading-relaxed pl-1">
+                                    <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 line-clamp-1 leading-tight pl-1 opacity-80">
                                         {previewText}
                                     </div>
                                 )}
                             </button>
                         );
                     } else {
-                        // Long Mode: Standard List Design
                         return (
                             <button 
                                 key={config.id}

@@ -1,7 +1,8 @@
-import React from 'react';
-import { Copy, AlignLeft, AlignCenter, AlignRight, AlignJustify, IndentIncrease, IndentDecrease, Bold, Italic, ArrowUturnLeft, ArrowUturnRight, TextIncrease, TextDecrease } from '../Icon';
 
-export type ToolbarAction = 'copy' | 'bold' | 'italic' | 'align-left' | 'align-center' | 'align-right' | 'align-justify' | 'indent-add' | 'indent-decrease' | 'undo' | 'redo' | 'font-increase' | 'font-decrease';
+import React from 'react';
+import { Copy, AlignLeft, AlignCenter, AlignRight, AlignJustify, IndentIncrease, IndentDecrease, Bold, Italic, ArrowUturnLeft, ArrowUturnRight, TextIncrease, TextDecrease, PaintBrush } from '../Icon';
+
+export type ToolbarAction = 'copy' | 'bold' | 'italic' | 'align-left' | 'align-center' | 'align-right' | 'align-justify' | 'indent-add' | 'indent-decrease' | 'undo' | 'redo' | 'font-increase' | 'font-decrease' | 'format-paint';
 
 interface WritingToolbarProps {
     onAction: (action: ToolbarAction) => void;
@@ -9,10 +10,10 @@ interface WritingToolbarProps {
 }
 
 const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) => {
-    // Left side group - Separators removed as requested
     const formattingButtons = [
         { id: 'bold', icon: Bold, label: '加粗' },
         { id: 'italic', icon: Italic, label: '倾斜' },
+        { id: 'format-paint', icon: PaintBrush, label: '格式刷' },
         { id: 'font-increase', icon: TextIncrease, label: '增大字号' },
         { id: 'font-decrease', icon: TextDecrease, label: '缩小字号' },
         { id: 'indent-add', icon: IndentIncrease, label: '增加缩进' },
@@ -32,10 +33,10 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
         return (
             <button
                 key={btn.id}
-                onMouseDown={(e) => e.preventDefault()} // Prevent focus loss from editor
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => onAction(btn.id as ToolbarAction)}
                 title={btn.label}
-                className={`p-1.5 rounded transition-colors ${
+                className={`p-1.5 rounded transition-colors flex-shrink-0 ${
                     isActive 
                         ? 'bg-sky-100 text-sky-600 dark:bg-sky-900/50 dark:text-sky-400' 
                         : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
@@ -47,8 +48,8 @@ const WritingToolbar: React.FC<WritingToolbarProps> = ({ onAction, alignment }) 
     };
 
     return (
-        <div className="flex items-center justify-between w-full px-1 overflow-x-auto no-scrollbar">
-            <div className="flex items-center gap-1 whitespace-nowrap">
+        <div className="flex items-center justify-between w-full px-1 overflow-x-auto no-scrollbar scroll-smooth">
+            <div className="flex items-center gap-0.5 whitespace-nowrap min-w-max">
                 {formattingButtons.map((btn) => renderButton(btn))}
             </div>
         </div>
