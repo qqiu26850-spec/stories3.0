@@ -142,7 +142,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             const data = await fetchMaterials();
             setAssets(data.map((item: any) => ({
                 id: item.id, name: item.name, type: item.type === 'idea' ? 'inspiration' : item.type, content: item.content, tags: item.tags || []
-            })));
+                })));
         };
         loadAssets();
     }, []);
