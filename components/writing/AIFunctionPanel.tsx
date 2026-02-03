@@ -22,7 +22,7 @@ const WRITING_STRATEGIES = [
     "💡 提示：环境描写可以烘托氛围，也是人物心境的投射。",
 ];
 
-const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：\n1. 请尽可能详细、深入地撰写，展开环境、心理、动作等细节。\n2. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n3. **直接输出**创作内容本身，不要有开场白或结束语。\n4. 请充分利用输出长度限制，生成长篇幅的完整内容。";
 
 interface AIFunctionPanelProps {
     contextText: string;
@@ -422,7 +422,21 @@ const AIFunctionPanel: React.FC<AIFunctionPanelProps> = ({ contextText = '', sel
                             </div>
                         </div>
                         {selectedPrompt && (
-                            <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-700"><div className="flex items-center justify-between"><span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模板参数</span><button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500 font-medium">重置</button></div>{selectedPrompt.fields.map((field, index) => { if (field.id === 'context' || field.id === 'text') return null; return (<div key={field.id} className="space-y-1.5"><div className="flex justify-between items-center"><label className="block text-sm font-bold text-gray-700 dark:text-gray-300">{index + 1}. {field.label}{field.required !== false && <span className="ml-0.5 text-red-500">*</span>}</label></div>{field.type === 'textarea' ? <textarea rows={3} value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" /> : <input type="text" value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" />}</div>); })}</div>
+                            <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-700"><div className="flex items-center justify-between"><span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模板参数</span><button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500 font-medium">重置</button></div>{selectedPrompt.fields.map((field, index) => { if (field.id === 'context' || field.id === 'text' || field.id === 'content' || field.id === 'selection') return null; return (
+                                <div key={field.id} className="space-y-1.5">
+                                    <div className="flex justify-between items-center">
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+                                            {index + 1}. {field.label}{field.required !== false && <span className="ml-1 text-[10px] text-red-500 font-normal">* 必填</span>}
+                                        </label>
+                                        {field.maxLength && (
+                                            <span className={`text-[10px] ${(formState[field.id]?.length || 0) > field.maxLength ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
+                                                {formState[field.id]?.length || 0} / {field.maxLength}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {field.type === 'textarea' ? <textarea rows={3} value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} maxLength={field.maxLength} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" /> : <input type="text" value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} maxLength={field.maxLength} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" />}
+                                    {field.description && <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1 ml-1 leading-relaxed">💡 {field.description}</p>}
+                                </div>); })}</div>
                         )}
                         {!selectedPrompt && <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800"><label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">自定义要求</label><textarea value={customInput} onChange={(e) => setCustomInput(e.target.value)} placeholder="请输入具体的创作要求..." className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner" /></div>}
                     </div>

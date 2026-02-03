@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Workflow, Asset, Prompt } from '../types';
 import { generateTextStream } from '../services/geminiService';
@@ -13,7 +14,7 @@ interface WorkflowRunProps {
     onBack: () => void;
 }
 
-const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：\n1. 请尽可能详细、深入地撰写，展开环境、心理、动作等细节。\n2. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n3. **直接输出**创作内容本身，不要有开场白或结束语。\n4. 请充分利用输出长度限制，生成长篇幅的完整内容。";
 
 const stripMarkdown = (text: string) => {
     return text

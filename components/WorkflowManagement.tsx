@@ -286,7 +286,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
   if (view === 'run' && selectedWorkflow) return <WorkflowRun workflow={selectedWorkflow} onBack={() => { setView('list'); loadData(true); }} />;
 
   return (
-    <div className="h-full animate-fade-in flex flex-col font-sans bg-white dark:bg-black p-4 sm:p-6 lg:p-8">
+    <div className="h-full animate-fade-in flex flex-col font-sans dark:bg-black p-4 sm:p-6 lg:p-8">
       <WorkflowDetailModal 
         isOpen={isDetailModalOpen} 
         onClose={() => setDetailModalOpen(false)} 
@@ -371,7 +371,7 @@ const WorkflowManagement: React.FC<WorkflowManagementProps> = ({ isActive = true
                         <div 
                             key={wf.id} 
                             onClick={() => handleSelectWorkflow(wf)}
-                            className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-[210px]"
+                            className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-200 dark:border-gray-700 hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-[210px]"
                         >
                             <div className="flex justify-between items-start mb-2">
                                 <div className="flex gap-2 mb-1 opacity-0">

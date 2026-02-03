@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { CREATIVE_MODULES } from '../constants';
 import CreativeCard from './CreativeCard';
@@ -19,7 +20,8 @@ interface CreativeGenerationProps {
   onClearInitialData?: () => void;
 }
 
-const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
+// 修改：增加更严格的“纯净输出”指令，禁止角色扮演式的开场白
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：\n1. 请尽可能详细、深入地撰写，展开环境、心理、动作等细节。\n2. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n3. **直接输出**创作内容本身，不要有开场白或结束语。\n4. 请充分利用输出长度限制，生成长篇幅的完整内容。";
 
 // 辅助函数：去除 Markdown 标记转为纯文本
 const stripMarkdown = (text: string) => {
@@ -37,25 +39,13 @@ const stripMarkdown = (text: string) => {
 // 辅助函数：清洗 Placeholder，移除英文和变量符号
 const cleanPlaceholder = (text: string | undefined, label: string) => {
     if (!text) return `请输入${label}...`;
-    
-    // 1. 移除模板变量语法 ${variable}
     let cleaned = text.replace(/\$\{[^}]+\}/g, '');
-    
-    // 2. 移除所有英文字母 (a-z, A-Z)
     cleaned = cleaned.replace(/[a-zA-Z]/g, '');
-    
-    // 3. 清理首尾空白
     cleaned = cleaned.trim();
-    
-    // 4. 清理可能残留的起始标点 (如 ": ")
     cleaned = cleaned.replace(/^[:：]\s*/, '');
-    
-    // 5. 如果清理后内容过短或没有有效字符（中文或数字），回退到默认
-    // 检查是否包含中文字符或数字
     if (!/[\u4e00-\u9fa50-9]/.test(cleaned)) {
          return `请输入${label}...`;
     }
-    
     return cleaned;
 };
 
@@ -121,6 +111,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const [assets, setAssets] = useState<Asset[]>([]);
     const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
     
+    // 新增：用于存储上一次完整的 Prompt，以便在“继续生成”时保持上下文一致性
+    const lastPromptRef = useRef<string>('');
     const abortControllerRef = useRef<AbortController | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const isUserScrollingRef = useRef(false);
@@ -129,13 +121,10 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const isLikelyTruncated = useMemo(() => {
         if (!generatedText) return false;
         const trimmed = generatedText.trim();
-        // 常见的句子/段落结束符。如果结尾不是这些符号，很可能是被截断了。
-        // 包括：句号、叹号、问号、省略号、右引号、右括号、破折号等
         const endingPunctuation = /[.!?;:。”！？…—~】]$/;
         return !endingPunctuation.test(trimmed);
     }, [generatedText]);
 
-    // Refresh assets when modal opens to ensure custom assets are available
     useEffect(() => {
         if (assetModalOpen) {
             const loadAssets = async () => {
@@ -169,7 +158,6 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const handleScroll = () => {
         if (scrollContainerRef.current) {
             const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-            // 允许 50px 的误差，如果距离底部超过 50px，则认为用户正在向上查看历史记录
             const isAtBottom = scrollHeight - scrollTop - clientHeight <= 50;
             isUserScrollingRef.current = !isAtBottom;
         }
@@ -192,6 +180,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         setIsGenerating(false);
         setIsWaitingForFirstChunk(false);
         isUserScrollingRef.current = false;
+        lastPromptRef.current = '';
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
@@ -234,8 +223,9 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         if (isGenerating) { handleStop(); return; }
         setIsGenerating(true);
         setIsWaitingForFirstChunk(true);
-        isUserScrollingRef.current = false; // Reset to allow auto-scroll
+        isUserScrollingRef.current = false;
         setGeneratedText('');
+        
         let basePrompt = selectedPrompt ? selectedPrompt.template : freeInput;
         if (selectedPrompt) {
             incrementPromptHeat(selectedPrompt.id);
@@ -244,6 +234,10 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考：${a!.name}】\n${a!.content}`).join('\n\n');
         
         let finalPrompt = assetContext ? `${assetContext}\n\n---\n\n${basePrompt}` : basePrompt;
+        
+        // 保存原始 Prompt 以便续写使用
+        lastPromptRef.current = finalPrompt;
+
         // Append verbose instruction
         finalPrompt += FORCE_LONG_INSTRUCTION;
 
@@ -274,12 +268,29 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const handleContinue = async () => {
         if (isGenerating) return;
         setIsGenerating(true);
-        isUserScrollingRef.current = false; // Reset to allow auto-scroll
+        isUserScrollingRef.current = false;
         
-        // Take the last portion of text to serve as context
-        const tail = generatedText.slice(-2000); 
-        // 强化指令：要求格式和内容必须承接
-        const continuePrompt = `请紧接着上文中断的地方继续生成，保持格式、风格和逻辑的完美连贯，不要重复上文结尾，直接输出后续内容。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
+        // 关键修改：续写时必须带上原始 Prompt，确保 AI 知道自己在写什么（例如：是在写大纲还是正文）
+        // 否则 AI 容易忘记上下文，开始瞎编正文
+        const originalInstruction = lastPromptRef.current;
+        
+        // 取末尾 3000 字作为上下文衔接
+        const tailContext = generatedText.slice(-3000); 
+        
+        const continuePrompt = `
+${originalInstruction}
+
+---
+【系统提示】：
+上文输出因长度限制被中断。请严格基于上方【原始指令】的要求，紧接着下方的【已生成内容末尾】，继续生成剩余内容。
+请保持与上文完全一致的输出格式、风格、人称和逻辑。
+**不要重复**下方已提供的内容，直接无缝接续。
+
+【已生成内容末尾】：
+${tailContext}
+
+${FORCE_LONG_INSTRUCTION}
+`;
 
         const controller = new AbortController(); 
         abortControllerRef.current = controller;
@@ -312,6 +323,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     const MODEL_OPTIONS = [
         { value: "deepseek-chat", label: "奇思版 (DeepSeek)" },
         { value: "gemini-3-flash-preview", label: "妙写版 (Gemini 3.0 Flash)" },
+        { value: "gemini-3-pro-preview", label: "深度版 (Gemini 3.0 Pro)" }, // 新增
         { value: "doubao-flash", label: "速写版 (豆包)" }
     ];
 
@@ -341,7 +353,8 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
             </div>
 
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-                <div className="w-full lg:w-[432px] xl:w-[480px] flex flex-col border-r border-gray-200 bg-white dark:bg-gray-900 overflow-hidden z-10 [scrollbar-gutter:stable] font-sans">
+                {/* 修改：减少左侧栏宽度，约减少 1/7 */}
+                <div className="w-full lg:w-[370px] xl:w-[410px] flex flex-col border-r border-gray-200 bg-white dark:bg-gray-900 overflow-hidden z-10 [scrollbar-gutter:stable] font-sans">
                     <div className="flex-1 overflow-y-auto px-5 py-6 space-y-8">
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400 font-bold text-sm uppercase tracking-wider">
@@ -488,20 +501,21 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                         </div>
                     </div>
 
-                    <div className="p-3 border-t bg-white dark:bg-gray-900 font-sans">
+                    <div className="p-2 border-t bg-white dark:bg-gray-900 font-sans">
                         <button onClick={handleGenerate} className={`w-full py-2 rounded-2xl font-black text-white shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${isGenerating ? 'bg-rose-500 shadow-rose-500/20' : 'bg-sky-600 hover:bg-sky-50 shadow-sky-500/20'}`}>
                             {isGenerating ? <><Stop className="w-5 h-5" />停止生成</> : <><Sparkles className="w-5 h-5" />开始创作</>}
                         </button>
                     </div>
                 </div>
 
-                <div className="flex-1 bg-gray-50 dark:bg-black/50 flex flex-col items-center overflow-hidden font-sans">
-                    <div className="w-full max-w-5xl bg-white dark:bg-gray-900 h-full shadow-sm border-x border-gray-100 dark:border-gray-800 flex flex-col relative overflow-hidden font-sans">
+                <div className="flex-1 bg-gray-50 dark:bg-black/50 flex flex-col overflow-hidden font-sans">
+                    <div className="w-full bg-white dark:bg-gray-900 h-full shadow-sm flex flex-col relative overflow-hidden font-sans">
                         {!generatedText && !isWaitingForFirstChunk ? (
                             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 opacity-50 p-8"><Sparkles className="w-20 h-20 mb-6" /><p className="text-lg font-medium">在左侧输入灵感，开启 AI 创作之旅</p></div>
                         ) : (
                             <>
-                                <div className="flex-shrink-0 bg-white dark:bg-gray-900 px-8 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center z-10 font-sans">
+                                {/* 修改：减少顶部栏高度，padding 从 py-4 改为 py-3 */}
+                                <div className="flex-shrink-0 bg-white dark:bg-gray-900 px-8 py-3 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center z-10 font-sans">
                                     <div className="flex items-center gap-2 text-gray-900 dark:text-white font-bold text-lg">
                                         <Sparkles className="w-5 h-5 text-sky-500" />
                                         <span>生成结果</span>
