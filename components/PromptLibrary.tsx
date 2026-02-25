@@ -7,11 +7,12 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import PromptDetailModal from './PromptDetailModal';
 import { Plus, Heart, UserCircle, Check, Sparkles, Box, Search, ArrowPath } from './Icon';
 import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt, fetchPromptFavorites, togglePromptFavoriteDB } from '../services/supabaseService';
-import { FUNCTIONAL_TAGS, GENRE_TAGS } from '../constants';
+import { FUNCTIONAL_TAGS, GENRE_TAGS, MARKETING_TAGS, IMAGE_TAGS } from '../constants';
 
 interface PromptLibraryProps {
     onNavigateToGeneration?: (prompt: Prompt, values: Record<string, string>) => void;
     isActive: boolean;
+    mode: 'novel' | 'marketing' | 'image';
 }
 
 const SUB_CATEGORY_LABELS: Record<string, string> = {
@@ -21,10 +22,17 @@ const SUB_CATEGORY_LABELS: Record<string, string> = {
     'short_story_lead': '短篇导语',
     'general': '通用', 'modern-romance': '现言', 'ancient-romance': '古言', 'period': '年代',
     'apocalypse': '末世', 'urban': '都市', 'fantasy': '玄幻', 'history': '历史', 'social': '世情',
-    'suspense': '悬疑', 'sci-fi': '科幻', 'comic-drama': '漫剧', 'live-action': '实拍剧'
+    'suspense': '悬疑', 'sci-fi': '科幻', 'comic-drama': '漫剧', 'live-action': '实拍剧',
+    // Marketing
+    'social_media': '社交媒体', 'ad_copy': '广告文案', 'e_commerce': '电商详情', 'email': '邮件营销', 
+    'video_script': '短视频脚本', 'article': '公众号文章', 'slogan': 'Slogan/标语',
+    // Image
+    'realistic': '写实摄影', 'anime': '动漫二次元', 'illustration': '插画', 'cyberpunk': '赛博朋克', 
+    'oil_painting': '油画', 'watercolor': '水彩', '3d_render': '3D渲染', 'pixel_art': '像素风', 
+    'chinese_style': '国风', 'logo_design': 'Logo设计', 'poster': '海报设计'
 };
 
-const CATEGORY_TABS = [
+const NOVEL_TABS = [
   { id: 'all', label: '全部' },
   { id: 'short-story', label: '短篇小说' },
   { id: 'long-story', label: '长篇小说' },
@@ -32,7 +40,7 @@ const CATEGORY_TABS = [
   { id: 'general', label: '全类型' },
 ];
 
-const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive }) => {
+const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, isActive, mode }) => {
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [activeTab, setActiveTab] = useState<PromptCategory | 'all' | 'favorites' | 'my-prompts'>('all');
     const [activeSubCategory, setActiveSubCategory] = useState<PromptSubCategory | 'all'>('all');
@@ -88,7 +96,14 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             if (ids.length === 0) return [];
             options.ids = ids;
         } else {
-            options.category = currentTab;
+            if (mode === 'novel') {
+                if (currentTab !== 'all') options.category = currentTab;
+                else options.categories = ['short-story', 'long-story', 'script', 'general'];
+            } else if (mode === 'marketing') {
+                options.category = 'marketing';
+            } else if (mode === 'image') {
+                options.category = 'image';
+            }
         }
 
         const fetchedData = await fetchPrompts(options);
@@ -104,6 +119,8 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
                 else if(p.main_category === 'script') appCat = 'script';
                 else if(p.main_category === 'short') appCat = 'short-story';
                 else if(p.main_category === 'general') appCat = 'general';
+                else if(p.main_category === 'marketing') appCat = 'marketing';
+                else if(p.main_category === 'image') appCat = 'image';
                 else appCat = p.main_category as PromptCategory;
 
                 return {
@@ -300,9 +317,15 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
             <div className="flex flex-col gap-4 mb-6 flex-shrink-0">
                 <div className="flex justify-between items-center flex-wrap gap-4">
                     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide flex-1 min-w-[300px]">
-                        {CATEGORY_TABS.map(tab => (
+                        {mode === 'novel' && NOVEL_TABS.map(tab => (
                             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === tab.id ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}>{tab.label}</button>
                         ))}
+                        {mode === 'marketing' && (
+                             <button onClick={() => setActiveTab('all')} className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}>全部营销文案</button>
+                        )}
+                        {mode === 'image' && (
+                             <button onClick={() => setActiveTab('all')} className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all text-sm ${activeTab === 'all' ? 'bg-sky-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100'}`}>全部图片风格</button>
+                        )}
                     </div>
                     
                     <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
@@ -330,19 +353,43 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
 
                 <div className="flex flex-col gap-4 justify-between items-start bg-gray-100 dark:bg-gray-900/50 p-3 rounded-xl">
                     <div className="w-full space-y-2">
-                        <div className="flex flex-wrap gap-2 items-center">
-                            <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">功能:</span>
-                            <button onClick={() => setActiveSubCategory('all')} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === 'all' ? 'bg-sky-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>全部</button>
-                            {FUNCTIONAL_TAGS.map(cat => (
-                                <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-sky-100 text-sky-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
-                            ))}
-                        </div>
-                        <div className="flex flex-wrap gap-2 items-center border-t border-gray-200 dark:border-gray-700 pt-2">
-                            <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">题材:</span>
-                            {GENRE_TAGS.map(cat => (
-                                <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-purple-100 text-purple-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
-                            ))}
-                        </div>
+                        {mode === 'novel' && (
+                            <>
+                                <div className="flex flex-wrap gap-2 items-center">
+                                    <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">功能:</span>
+                                    <button onClick={() => setActiveSubCategory('all')} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === 'all' ? 'bg-sky-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>全部</button>
+                                    {FUNCTIONAL_TAGS.map(cat => (
+                                        <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-sky-100 text-sky-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
+                                    ))}
+                                </div>
+                                <div className="flex flex-wrap gap-2 items-center border-t border-gray-200 dark:border-gray-700 pt-2">
+                                    <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">题材:</span>
+                                    {GENRE_TAGS.map(cat => (
+                                        <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-purple-100 text-purple-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                        
+                        {mode === 'marketing' && (
+                            <div className="flex flex-wrap gap-2 items-center">
+                                <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">类型:</span>
+                                <button onClick={() => setActiveSubCategory('all')} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === 'all' ? 'bg-sky-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>全部</button>
+                                {MARKETING_TAGS.map(cat => (
+                                    <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-sky-100 text-sky-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
+                                ))}
+                            </div>
+                        )}
+                        
+                        {mode === 'image' && (
+                            <div className="flex flex-wrap gap-2 items-center">
+                                <span className="text-xs font-bold text-gray-400 mr-1 shrink-0">风格:</span>
+                                <button onClick={() => setActiveSubCategory('all')} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === 'all' ? 'bg-sky-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>全部</button>
+                                {IMAGE_TAGS.map(cat => (
+                                    <button key={cat.id} onClick={() => setActiveSubCategory(cat.id as any)} className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${activeSubCategory === cat.id ? 'bg-sky-100 text-sky-700' : 'bg-white dark:bg-gray-800 text-gray-500'}`}>{cat.label}</button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

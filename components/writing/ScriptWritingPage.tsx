@@ -30,6 +30,17 @@ const WORKFLOW_CATEGORIES: { id: string; label: string }[] = [
     { id: 'general', label: '通用' },
 ];
 
+// Helper to strip markdown
+const stripMarkdown = (text: string) => {
+    return text
+        .replace(/#+\s/g, '')
+        .replace(/\*\*|\*/g, '')
+        .replace(/>\s/g, '')
+        .replace(/`{1,3}.*?`{1,3}/gs, '')
+        .replace(/<think>[\s\S]*?<\/think>/g, '')
+        .trim();
+};
+
 // Editable Content Component for each step
 const EditableStepContent: React.FC<{
     initialContent: string;
@@ -40,7 +51,7 @@ const EditableStepContent: React.FC<{
 
     // Initial render formatting helper (simple HTML conversion)
     const formatInitial = (text: string) => {
-        const clean = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        const clean = stripMarkdown(text.replace(/<think>[\s\S]*?<\/think>/g, '').trim());
         // Reduce excessive newlines
         const normalized = clean.replace(/\n\s*\n\s*\n/g, '\n\n');
         
@@ -85,11 +96,20 @@ const EditableStepContent: React.FC<{
 };
 
 // Streaming Text Component - optimized for updates
-const StreamingText: React.FC<{ text: string }> = ({ text }) => {
+const StreamingText: React.FC<{ text: string; isGenerating: boolean }> = ({ text, isGenerating }) => {
     return (
-        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm p-2">
-            {text}
-            <span className="inline-block w-2 h-4 bg-sky-500 ml-1 align-middle animate-blink animate-pulse"></span>
+        <div className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200 leading-relaxed text-sm p-2 relative">
+            {stripMarkdown(text)}
+            {isGenerating && (
+                <span className="inline-flex items-center ml-2 text-sky-500 align-middle">
+                    <ArrowPath className="w-4 h-4 animate-spin" />
+                </span>
+            )}
+            {!isGenerating && text && (
+                 <div className="mt-4 mb-2 text-xs text-green-600 dark:text-green-400 font-bold flex items-center gap-1 animate-fade-in">
+                    <Check className="w-3.5 h-3.5" /> 生成完成
+                 </div>
+            )}
         </div>
     );
 };
@@ -112,16 +132,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 const getGenreLabel = (id: string) => {
     const found = GENRE_TAGS.find(g => g.id === id);
     return found ? found.label : id;
-};
-
-const stripMarkdown = (text: string) => {
-    return text
-        .replace(/#+\s/g, '')
-        .replace(/\*\*|\*/g, '')
-        .replace(/>\s/g, '')
-        .replace(/`{1,3}.*?`{1,3}/gs, '')
-        .replace(/<think>[\s\S]*?<\/think>/g, '')
-        .trim();
 };
 
 const ContextMenu: React.FC<{
@@ -355,10 +365,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const handleBack = async () => {
         // Clear timeout to prevent saving
         if (dbSaveTimeoutRef.current) clearTimeout(dbSaveTimeoutRef.current);
-        // Delete persisted state on exit to ensure fresh start next time
-        if (script.id) {
-            await deleteScriptWorkflowState(script.id);
-        }
+        // Save state before exit
+        await saveCurrentState();
         onBack();
     };
 
@@ -791,7 +799,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                     <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300 block">
                                                         <span className="mr-1 opacity-50">{index + 1}.</span>
                                                         {field.label}
+                                                        {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
                                                     </label>
+                                                    {field.maxLength && <span className={`text-[9px] ${(promptFormState[field.id]?.length || 0) > field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>{promptFormState[field.id]?.length || 0}/{field.maxLength}</span>}
                                                 </div>
                                                 {field.type === 'file' ? (
                                                     <div className="w-full">
@@ -809,6 +819,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                         )}
                                                     </div>
                                                 ) : field.type === 'textarea' ? <textarea value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none h-24 resize-y" placeholder={field.placeholder || `请输入${field.label}...`} /> : <input type="text" value={promptFormState[field.id] || ''} onChange={(e) => setPromptFormState(p => ({...p, [field.id]: e.target.value}))} maxLength={field.maxLength} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.placeholder || `请输入${field.label}...`} />}
+                                                {field.description && (
+                                                    <p className="text-[9px] text-sky-500 dark:text-sky-400 flex items-start gap-1 leading-tight mt-0.5">
+                                                        <InformationCircle className="w-3 h-3 shrink-0" />
+                                                        {field.description}
+                                                    </p>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -1190,7 +1206,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                      {promptResultText ? (
                                          <div className="mb-8">
                                              {isGenerating ? (
-                                                 <StreamingText text={promptResultText} />
+                                                 <StreamingText text={promptResultText} isGenerating={true} />
                                              ) : (
                                                  <EditableStepContent 
                                                      initialContent={promptResultText}
@@ -1274,7 +1290,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                                              
                                                              {/* Streaming vs Static */}
                                                              {isGeneratingThis ? (
-                                                                 <StreamingText text={result} />
+                                                                 <StreamingText text={result} isGenerating={true} />
                                                              ) : (
                                                                  <EditableStepContent 
                                                                     initialContent={result} 

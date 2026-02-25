@@ -107,10 +107,25 @@ const App: React.FC = () => {
                     </div>
                 )}
 
-                <div className={activeView === 'prompt-library' ? 'block h-full' : 'hidden h-full'}>
+                <div className={activeView === 'prompt-library-novel' ? 'block h-full' : 'hidden h-full'}>
                     <PromptLibrary 
-                        isActive={activeView === 'prompt-library'} 
+                        isActive={activeView === 'prompt-library-novel'} 
                         onNavigateToGeneration={handleNavigateToGeneration} 
+                        mode="novel"
+                    />
+                </div>
+                <div className={activeView === 'prompt-library-marketing' ? 'block h-full' : 'hidden h-full'}>
+                    <PromptLibrary 
+                        isActive={activeView === 'prompt-library-marketing'} 
+                        onNavigateToGeneration={handleNavigateToGeneration} 
+                        mode="marketing"
+                    />
+                </div>
+                <div className={activeView === 'prompt-library-image' ? 'block h-full' : 'hidden h-full'}>
+                    <PromptLibrary 
+                        isActive={activeView === 'prompt-library-image'} 
+                        onNavigateToGeneration={handleNavigateToGeneration} 
+                        mode="image"
                     />
                 </div>
 

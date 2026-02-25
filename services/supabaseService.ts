@@ -454,14 +454,15 @@ export async function updatePrompt(id: string, updates: { title?: string, conten
 // Optimized fetchPrompts with caching and limited columns
 export async function fetchPrompts(options: {
     category?: string;
+    categories?: string[];
     userId?: string;
     ids?: string[];
     page?: number;
     limit?: number;
     search?: string;
 } = {}) {
-    const { category = 'all', userId, ids, page = 1, limit = 20, search } = options;
-    const cacheKey = JSON.stringify({ category, userId, ids, page, limit, search });
+    const { category = 'all', categories, userId, ids, page = 1, limit = 20, search } = options;
+    const cacheKey = JSON.stringify({ category, categories, userId, ids, page, limit, search });
 
     // Check Cache
     if (promptQueryCache.has(cacheKey)) {
@@ -483,6 +484,9 @@ export async function fetchPrompts(options: {
         if (category && category !== 'all' && !ids && !userId) {
             const dbCat = mapPromptCategory(category);
             query = query.eq('main_category', dbCat);
+        } else if (categories && categories.length > 0 && !ids && !userId) {
+            const dbCats = categories.map(mapPromptCategory);
+            query = query.in('main_category', dbCats);
         }
 
         // Filter by User
@@ -517,7 +521,11 @@ export async function fetchPrompts(options: {
             if (category && category !== 'all' && !ids && !userId) {
                 const dbCat = mapPromptCategory(category);
                 fallbackQuery = fallbackQuery.eq('main_category', dbCat);
+            } else if (categories && categories.length > 0 && !ids && !userId) {
+                const dbCats = categories.map(mapPromptCategory);
+                fallbackQuery = fallbackQuery.in('main_category', dbCats);
             }
+
             if (userId) fallbackQuery = fallbackQuery.eq('user_id', userId);
             if (ids && ids.length > 0) fallbackQuery = fallbackQuery.in('id', ids);
             else if (ids && ids.length === 0) return [];

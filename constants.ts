@@ -19,6 +19,30 @@ export const FUNCTIONAL_TAGS: { id: PromptSubCategory | 'all'; label: string }[]
     { id: 'proofread', label: '审稿' },
 ];
 
+export const MARKETING_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
+    { id: 'social_media', label: '社交媒体' },
+    { id: 'ad_copy', label: '广告文案' },
+    { id: 'e_commerce', label: '电商详情' },
+    { id: 'email', label: '邮件营销' },
+    { id: 'video_script', label: '短视频脚本' },
+    { id: 'article', label: '公众号文章' },
+    { id: 'slogan', label: 'Slogan/标语' },
+];
+
+export const IMAGE_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
+    { id: 'realistic', label: '写实摄影' },
+    { id: 'anime', label: '动漫二次元' },
+    { id: 'illustration', label: '插画' },
+    { id: 'cyberpunk', label: '赛博朋克' },
+    { id: 'oil_painting', label: '油画' },
+    { id: 'watercolor', label: '水彩' },
+    { id: '3d_render', label: '3D渲染' },
+    { id: 'pixel_art', label: '像素风' },
+    { id: 'chinese_style', label: '国风' },
+    { id: 'logo_design', label: 'Logo设计' },
+    { id: 'poster', label: '海报设计' },
+];
+
 export const GENRE_TAGS: { id: PromptSubCategory | 'all'; label: string }[] = [
     { id: 'general', label: '通用' },
     { id: 'modern-romance', label: '现言' },

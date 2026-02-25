@@ -5,6 +5,9 @@ export type View =
   'script-management' | 
   'hit-copywriting' | 
   'prompt-library' | 
+  'prompt-library-novel' |
+  'prompt-library-marketing' |
+  'prompt-library-image' |
   'workflow' |
   'character-library' |
   'plot-library' |
@@ -43,13 +46,17 @@ export interface PromptField {
   maxLength?: number;
 }
 
-export type PromptCategory = 'general' | 'short-story' | 'long-story' | 'script';
+export type PromptCategory = 'general' | 'short-story' | 'long-story' | 'script' | 'marketing' | 'image';
 
 export type PromptSubCategory = 
   'style' | 'requirements' | 'continue' | 'polish' | 'expand' | 'proofread' | 'imitate' |
   'idea' | 'golden_finger' | 'character_design' | 'worldview' | 'outline' | 'detailed_outline' | 'synopsis' | 'writing' | 'short_story_lead' |
   'general' | 'modern-romance' | 'ancient-romance' | 'period' | 'apocalypse' | 
-  'urban' | 'fantasy' | 'history' | 'social' | 'suspense' | 'sci-fi' | 'comic-drama' | 'live-action';
+  'urban' | 'fantasy' | 'history' | 'social' | 'suspense' | 'sci-fi' | 'comic-drama' | 'live-action' |
+  // Marketing
+  'social_media' | 'ad_copy' | 'e_commerce' | 'email' | 'video_script' | 'article' | 'slogan' |
+  // Image
+  'realistic' | 'anime' | 'illustration' | 'cyberpunk' | 'oil_painting' | 'watercolor' | '3d_render' | 'pixel_art' | 'chinese_style' | 'logo_design' | 'poster';
 
 
 export interface Prompt {

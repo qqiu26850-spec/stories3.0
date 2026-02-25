@@ -335,13 +335,19 @@ const ScriptAdaptationPanel: React.FC<ScriptAdaptationPanelProps> = ({ onInsert,
                         {generatedText && (
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center font-sans">
-                                    <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">生成结果</h4>
+                                    <h4 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 font-sans">
+                                        生成结果
+                                        {isGenerating && <span className="text-sky-500 text-xs flex items-center gap-1"><div className="w-3 h-3 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div> 生成中...</span>}
+                                        {!isGenerating && <span className="text-green-500 text-xs flex items-center gap-1"><Check className="w-3 h-3" /> 生成完成</span>}
+                                    </h4>
                                     <div className="flex gap-2 font-sans">
                                         <button onClick={() => navigator.clipboard.writeText(generatedText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-white rounded transition-colors font-sans"><Copy className="w-4 h-4" /></button>
                                         <button onClick={() => setGeneratedText('')} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-white rounded transition-colors font-sans"><Trash className="w-4 h-4" /></button>
                                     </div>
                                 </div>
-                                <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-mono">{generatedText}</div>
+                                <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-64 overflow-y-auto shadow-inner font-sans">
+                                    {generatedText.replace(/#+\s/g, '').replace(/\*\*|\*/g, '').replace(/>\s/g, '').replace(/`{1,3}.*?`{1,3}/gs, '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()}
+                                </div>
                                 
                                 <div className="flex gap-2">
                                     <button 

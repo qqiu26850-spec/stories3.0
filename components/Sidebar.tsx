@@ -15,11 +15,13 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, isCollapsed, toggleSidebar, theme, toggleTheme }) => {
   const [isCreationCenterOpen, setCreationCenterOpen] = useState(false);
   const [isAssetManagementOpen, setAssetManagementOpen] = useState(false);
+  const [isPromptLibraryOpen, setPromptLibraryOpen] = useState(false);
   
   useEffect(() => {
     if (isCollapsed) {
         setCreationCenterOpen(false);
         setAssetManagementOpen(false);
+        setPromptLibraryOpen(false);
     }
   }, [isCollapsed]);
 
@@ -176,7 +178,27 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, isCollapse
                 )}
             </GroupItem>
             
-            <div><NavItem view="prompt-library" icon={Box} label="提示词库" /></div>
+            <GroupItem 
+                icon={Box} 
+                label="提示词库" 
+                isOpen={isPromptLibraryOpen} 
+                toggleOpen={() => setPromptLibraryOpen(!isPromptLibraryOpen)}
+                active={isGroupActive(['prompt-library-novel', 'prompt-library-marketing', 'prompt-library-image'])}
+            >
+                {isCollapsed ? (
+                    <>
+                        <FlyoutNavItem view="prompt-library-novel" icon={BookOpen} label="小说剧本" onClick={() => setPromptLibraryOpen(false)} />
+                        <FlyoutNavItem view="prompt-library-marketing" icon={Sparkles} label="营销文案" onClick={() => setPromptLibraryOpen(false)} />
+                        <FlyoutNavItem view="prompt-library-image" icon={Film} label="图片绘制" onClick={() => setPromptLibraryOpen(false)} />
+                    </>
+                ) : (
+                    <>
+                        <NavItem view="prompt-library-novel" icon={BookOpen} label="小说剧本" />
+                        <NavItem view="prompt-library-marketing" icon={Sparkles} label="营销文案" />
+                        <NavItem view="prompt-library-image" icon={Film} label="图片绘制" />
+                    </>
+                )}
+            </GroupItem>
             <div><NavItem view="workflow" icon={Workflow} label="工作流" /></div>
             
             <GroupItem 
