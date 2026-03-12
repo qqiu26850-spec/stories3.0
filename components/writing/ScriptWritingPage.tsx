@@ -20,7 +20,7 @@ interface ScriptWritingPageProps {
 }
 
 const NO_MARKDOWN_INSTRUCTION = "\n\n【重要指令】：请以纯文本格式输出剧本，严禁使用Markdown格式（如 **加粗**、# 标题 等）。请直接按剧本格式输出场景、动作和对白。";
-const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：请尽可能详细、深入地撰写，展开环境、心理、动作等细节，严禁省略或概括。请充分利用输出长度限制，生成长篇幅的完整内容。";
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：\n1. 请尽可能详细、深入地撰写，展开环境、心理、动作等细节。如果用户要求1万字以上，请务必通过极其细腻的描写（如心理活动、环境烘托、动作拆解）来达到字数要求，严禁敷衍或提前收尾。\n2. **字数要求**：请严格遵守用户要求的字数（如1万字以上指1万个中文字符），充分发挥想象力，确保内容充实且逻辑严密。\n3. 请直接按剧本格式输出场景、动作和对白，严禁使用Markdown格式（如 **加粗**、# 标题 等）。";
 
 const WORKFLOW_CATEGORIES: { id: string; label: string }[] = [
     { id: 'all', label: '全部' },

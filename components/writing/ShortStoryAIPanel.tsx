@@ -20,7 +20,7 @@ const WRITING_STRATEGIES = [
     "💡 提示：每一个字都应该为主题服务。",
 ];
 
-const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：\n1. 请尽可能详细、深入地撰写，展开环境、心理、动作等细节。\n2. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n3. **直接输出**创作内容本身，不要有开场白或结束语。\n4. 请充分利用输出长度限制，生成长篇幅的完整内容。";
+const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：\n1. 请尽可能详细、深入地撰写，展开环境、心理、动作等细节。如果用户要求1万字以上，请务必通过极其细腻的描写（如心理活动、环境烘托、动作拆解）来达到字数要求，严禁敷衍或提前收尾。\n2. **字数要求**：请严格遵守用户要求的字数（如1万字以上指1万个中文字符），充分发挥想象力，确保内容充实且逻辑严密。\n3. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n4. **直接输出**创作内容本身，不要有开场白或结束语。\n5. 请充分利用输出长度限制，生成长篇幅的完整内容。";
 
 interface ShortStoryAIPanelProps {
     contextText: string;
@@ -243,7 +243,7 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
     };
 
     const renderTabButton = (type: ShortStoryTab, label: string, Icon: React.ElementType) => (
-        <button onClick={() => setActiveTab(type)} className={`flex-1 py-2 flex flex-col items-center justify-center gap-1 transition-colors border-b-2 font-sans ${activeTab === type ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'}`}><Icon className="w-4 h-4" /><span className="text-xs font-bold">{label}</span></button>
+        <button key={type} onClick={() => setActiveTab(type)} className={`flex-1 py-2 flex flex-col items-center justify-center gap-1 transition-colors border-b-2 font-sans ${activeTab === type ? 'border-sky-500 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'}`}><Icon className="w-4 h-4" /><span className="text-xs font-bold">{label}</span></button>
     );
 
     const MODEL_OPTIONS = [
@@ -277,8 +277,130 @@ const ShortStoryAIPanel: React.FC<ShortStoryAIPanelProps> = ({ contextText = '',
                     {!isConfigCollapsed && <div className="px-3 pb-4 space-y-4"><div className="space-y-1.5"><label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模型选择</label><div className="flex gap-2 font-sans"><div className="relative flex-1"><CustomSelect value={model} onChange={setModel} options={MODEL_OPTIONS}/></div><button onClick={() => setShowConfig(!showConfig)} className={`px-3 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1 font-sans ${showConfig ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>参数</button></div>{showConfig && <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 grid grid-cols-1 gap-4 animate-fade-in text-xs"><div className="space-y-1"><label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between"><span>温度: {temperature}</span></label><input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" /></div><div className="space-y-1"><label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between"><span>核采样: {topP}</span></label><input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" /></div><div className="space-y-1"><label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between"><span>最大长度: {maxOutputTokens}</span></label><input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" /></div></div>}</div></div>}
                 </div>
                 {activeTab !== 'original' && <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm"><div className="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between"><span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">2</span>需修改的正文内容</span></div><div className="p-3"><textarea value={polishContent} onChange={(e) => setPolishContent(e.target.value)} placeholder={activeTab === 'imitate' ? "参考文本风格..." : "请在正文中选择一段文本..."} className="w-full h-32 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner" />{activeTab !== 'imitate' && polishContent.length === 0 && <p className="text-[10px] text-orange-500 mt-1.5 ml-1 flex items-center gap-1 font-medium"><InformationCircle className="w-3 h-3" /> 请先在左侧编辑器中选择文本</p>}</div></div>}
-                <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm"><div className="p-3 border-b border-gray-100 dark:border-gray-800"><span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">{activeTab === 'original' ? '2' : '3'}</span>提示词选择 & 关联素材</span></div><div className="p-3 space-y-4"><div className="space-y-1.5"><label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">提示词选择</label>{activeTab === 'polish' || activeTab === 'review' ? <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread' as any)} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group"><div className="flex items-center justify-between"><span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>{selectedPrompt ? selectedPrompt.title : (activeTab === 'polish' ? '选择润色提示词...' : '选择评审提示词...')}</span><ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-sky-500" /></div></button> : <button onClick={() => handleOpenPromptModal(activeTab === 'original' ? 'expand' : 'requirements')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group"><div className="flex items-center justify-between"><span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>{selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}</span><ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-sky-500" /></div></button>}</div><div className="space-y-1.5"><label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">关联素材与上下文</label><div className="flex flex-col gap-2"><button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}><div className="flex items-center justify-between text-[11px] font-semibold truncate"><div className="flex items-center gap-1.5 overflow-hidden"><Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} /><span className="truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '关联人物/剧情...'}</span></div><ChevronDown className="w-3 h-3 text-gray-400 opacity-50 flex-shrink-0" /></div></button><div className="grid grid-cols-2 gap-2"><button onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}><div className="flex items-center gap-2"><BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-sky-600' : 'text-gray-400'}`} /><span className="font-semibold text-xs whitespace-nowrap">作品设定</span></div>{isProjectSettingsAssociated && <Check className="w-3.5 h-3.5 text-sky-500" />}</button><button onClick={() => setIsFullTextAssociated(!isFullTextAssociated)} className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isFullTextAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}><div className="flex items-center gap-2"><DocumentText className={`w-3.5 h-3.5 flex-shrink-0 ${isFullTextAssociated ? 'text-sky-600' : 'text-gray-400'}`} /><span className="font-semibold text-xs whitespace-nowrap">关联全文</span></div>{isFullTextAssociated && <Check className="w-3.5 h-3.5 text-sky-500" />}</button></div></div></div>{selectedPrompt ? <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-700"><div className="flex items-center justify-between"><span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模板参数</span><button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500 font-medium">重置</button></div>{selectedPrompt.fields.map((field, index) => { if (field.id === 'context' || field.id === 'text') return null; return (<div key={field.id} className="space-y-1.5"><div className="flex justify-between items-center"><label className="block text-sm font-bold text-gray-700 dark:text-gray-300">{index + 1}. {field.label}{field.required !== false && <span className="ml-0.5 text-red-500">*</span>}</label></div>{field.type === 'textarea' ? <textarea rows={3} value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" /> : <input type="text" value={formState[field.id] || ''} onChange={e => handleInputChange(field.id, e.target.value)} placeholder={field.placeholder || "请输入..."} className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" />}</div>); })}</div> : <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800"><label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">自定义要求</label><textarea value={promptInput} onChange={(e) => setPromptInput(e.target.value)} placeholder={activeTab === 'original' ? "例如：想一个背景在火星的故事..." : "例如：写一段主角..."} className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner" /></div>}</div></div>
-                {!isGenerating && !resultText && <button onClick={handleGenerate} className="w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans bg-sky-600 hover:bg-sky-500 text-white mt-2 text-sm"><Sparkles className="w-4 h-4" />{activeTab === 'review' ? '开始智能评审' : '立即生成内容'}</button>}
+                <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden animate-fade-in shadow-sm">
+                    <div className="p-3 border-b border-gray-100 dark:border-gray-800">
+                        <span className="text-sm font-black text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">{activeTab === 'original' ? '2' : '3'}</span>
+                            提示词选择 & 关联素材
+                        </span>
+                    </div>
+                    <div className="p-3 space-y-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">提示词选择</label>
+                            {activeTab === 'polish' || activeTab === 'review' ? (
+                                <button onClick={() => handleOpenPromptModal(activeTab === 'polish' ? 'polish' : 'proofread' as any)} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
+                                    <div className="flex items-center justify-between">
+                                        <span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                            {selectedPrompt ? selectedPrompt.title : (activeTab === 'polish' ? '选择润色提示词...' : '选择评审提示词...')}
+                                        </span>
+                                        <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-sky-500" />
+                                    </div>
+                                </button>
+                            ) : (
+                                <button onClick={() => handleOpenPromptModal(activeTab === 'original' ? 'expand' : 'requirements')} className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-left transition-all hover:border-sky-300 group">
+                                    <div className="flex items-center justify-between">
+                                        <span className={`font-bold text-sm truncate ${selectedPrompt ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                            {selectedPrompt ? selectedPrompt.title : '选择提示词模板...'}
+                                        </span>
+                                        <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-sky-500" />
+                                    </div>
+                                </button>
+                            )}
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">关联素材与上下文</label>
+                            <div className="flex flex-col gap-2">
+                                <button onClick={() => setAssetModalOpen(true)} className={`w-full p-2.5 rounded-lg border text-left transition-all font-sans ${selectedAssetIds.size > 0 ? 'bg-sky-100 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
+                                    <div className="flex items-center justify-between text-[11px] font-semibold truncate">
+                                        <div className="flex items-center gap-1.5 overflow-hidden">
+                                            <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selectedAssetIds.size > 0 ? 'text-sky-600' : 'text-gray-400'}`} />
+                                            <span className="truncate">{selectedAssetIds.size > 0 ? selectedAssetNames : '关联人物/剧情...'}</span>
+                                        </div>
+                                        <ChevronDown className="w-3 h-3 text-gray-400 opacity-50 flex-shrink-0" />
+                                    </div>
+                                </button>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => setProjectSettingsAssociated(!isProjectSettingsAssociated)} className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isProjectSettingsAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
+                                        <div className="flex items-center gap-2">
+                                            <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${isProjectSettingsAssociated ? 'text-sky-600' : 'text-gray-400'}`} />
+                                            <span className="font-semibold text-xs whitespace-nowrap">作品设定</span>
+                                        </div>
+                                        {isProjectSettingsAssociated && <Check className="w-3.5 h-3.5 text-sky-500" />}
+                                    </button>
+                                    <button onClick={() => setIsFullTextAssociated(!isFullTextAssociated)} className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${isFullTextAssociated ? 'bg-sky-50 border-sky-300 text-sky-900' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
+                                        <div className="flex items-center gap-2">
+                                            <DocumentText className={`w-3.5 h-3.5 flex-shrink-0 ${isFullTextAssociated ? 'text-sky-600' : 'text-gray-400'}`} />
+                                            <span className="font-semibold text-xs whitespace-nowrap">关联全文</span>
+                                        </div>
+                                        {isFullTextAssociated && <Check className="w-3.5 h-3.5 text-sky-500" />}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {selectedPrompt ? (
+                        <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                            <div className="flex items-center justify-between px-3">
+                                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">模板参数</span>
+                                <button onClick={() => setSelectedPrompt(null)} className="text-[10px] text-gray-400 hover:text-rose-500 font-medium">重置</button>
+                            </div>
+                            <div className="px-3 pb-3 space-y-4">
+                                {selectedPrompt.fields.map((field, index) => {
+                                    if (field.id === 'context' || field.id === 'text') return null;
+                                    return (
+                                        <div key={field.id} className="space-y-1.5">
+                                            <div className="flex justify-between items-center">
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+                                                    {index + 1}. {field.label}
+                                                    {field.required !== false && <span className="ml-0.5 text-red-500">*</span>}
+                                                </label>
+                                            </div>
+                                            {field.type === 'textarea' ? (
+                                                <textarea 
+                                                    rows={3} 
+                                                    value={formState[field.id] || ''} 
+                                                    onChange={e => handleInputChange(field.id, e.target.value)} 
+                                                    placeholder={field.placeholder || "请输入..."} 
+                                                    className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-y shadow-inner" 
+                                                />
+                                            ) : (
+                                                <input 
+                                                    type="text" 
+                                                    value={formState[field.id] || ''} 
+                                                    onChange={e => handleInputChange(field.id, e.target.value)} 
+                                                    placeholder={field.placeholder || "请输入..."} 
+                                                    className="w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none shadow-inner" 
+                                                />
+                                            )}
+                                            {field.description && (
+                                                <p className="text-[10px] text-sky-500 dark:text-sky-400 flex items-start gap-1 leading-tight mt-0.5">
+                                                    <InformationCircle className="w-3 h-3 shrink-0" />
+                                                    {field.description}
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800 p-3">
+                            <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">自定义要求</label>
+                            <textarea 
+                                value={promptInput} 
+                                onChange={(e) => setPromptInput(e.target.value)} 
+                                placeholder={activeTab === 'original' ? "例如：想一个背景在火星的故事..." : "例如：写一段主角..."} 
+                                className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner" 
+                            />
+                        </div>
+                    )}
+                </div>
+                {!isGenerating && !resultText && (
+                    <button onClick={handleGenerate} className="w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans bg-sky-600 hover:bg-sky-500 text-white mt-2 text-sm">
+                        <Sparkles className="w-4 h-4" />
+                        {activeTab === 'review' ? '开始智能评审' : '立即生成内容'}
+                    </button>
+                )}
             </div>
         </div>
     );
