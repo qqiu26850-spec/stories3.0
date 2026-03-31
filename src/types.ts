@@ -167,8 +167,6 @@ export interface Scene {
 export interface ScriptSettings {
     format: 'live_action' | 'animation';
     totalEpisodes: string;
-    durationPerEpisode: string;
-    scenesPerEpisodeLimit: string;
     outputLanguage: 'zh' | 'en';
     model: string;
 }

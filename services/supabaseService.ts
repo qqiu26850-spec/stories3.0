@@ -686,7 +686,7 @@ export async function incrementWorkflowUsage(id: string) {
 
 export async function incrementPromptHeat(id: string) {
     try {
-        if (!id || id.startsWith('prompt-')) return;
+        if (!id) return;
         const { data } = await supabase.from('prompts').select('usage_count').eq('id', id).single();
         if (data) {
             const newCount = (data.usage_count || 0) + 1;

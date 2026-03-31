@@ -126,6 +126,18 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
     }, [generatedText]);
 
     useEffect(() => {
+        if (initialData?.prompt) {
+            setSelectedPrompt(initialData.prompt);
+            if (initialData.values) {
+                setFormState(initialData.values);
+            }
+            if (onClearInitialData) {
+                onClearInitialData();
+            }
+        }
+    }, [initialData, onClearInitialData]);
+
+    useEffect(() => {
         if (assetModalOpen) {
             const loadAssets = async () => {
                 const data = await fetchMaterials();

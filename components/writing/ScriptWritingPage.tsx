@@ -175,8 +175,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [settings, setSettings] = useState<ScriptSettings>({
         format: 'live_action',
         totalEpisodes: '40', // Updated Default
-        durationPerEpisode: '1', // Updated Default
-        scenesPerEpisodeLimit: '3', // Updated Default
         outputLanguage: 'zh',
         model: 'deepseek-chat'
     });
@@ -467,7 +465,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         // Prepare contexts
         const assetContext = Array.from(selectedAssetIds).map(id => assets.find(a => a.id === id)).filter(Boolean).map(a => `【参考素材：${a!.name}】\n${a!.content}`).join('\n\n');
         // Updated Basic Info Construction
-        const basicInfo = `【剧本基础信息】\n总集数：${settings.totalEpisodes}\n单集时长：${settings.durationPerEpisode}分钟\n单集场景数限制：${settings.scenesPerEpisodeLimit}\n输出语言：${settings.outputLanguage === 'zh' ? '中文' : '英文'}\n\n`;
+        const basicInfo = `【剧本基础信息】\n总集数：${settings.totalEpisodes}\n输出语言：${settings.outputLanguage === 'zh' ? '中文' : '英文'}\n\n`;
 
         // Use executedWorkflow or fallback to selectedWorkflow
         const activeWorkflow = executedWorkflow || selectedWorkflow;
@@ -692,8 +690,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                     <h3 className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">2. 基础信息</h3>
                     <div className="grid grid-cols-2 gap-3 pl-1">
                         <div className="space-y-1"><label className="text-xs font-bold text-gray-400">总集数</label><input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
-                        <div className="space-y-1"><label className="text-xs font-bold text-gray-400">单集时长(min)</label><input type="text" value={settings.durationPerEpisode} onChange={e => setSettings(s => ({...s, durationPerEpisode: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
-                        <div className="space-y-1"><label className="text-xs font-bold text-gray-400">单集场景限制</label><input type="number" value={settings.scenesPerEpisodeLimit} onChange={e => setSettings(s => ({...s, scenesPerEpisodeLimit: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
                         <div className="space-y-1"><label className="text-xs font-bold text-gray-400">语言</label><div className="relative z-40"><CustomSelect value={settings.outputLanguage} onChange={(v) => setSettings(s => ({...s, outputLanguage: v as 'zh' | 'en'}))} options={LANGUAGE_OPTIONS} /></div></div>
                     </div>
                 </div>

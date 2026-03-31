@@ -247,6 +247,10 @@ const PromptLibrary: React.FC<PromptLibraryProps> = ({ onNavigateToGeneration, i
     const handleSelectPrompt = (prompt: Prompt) => {
         setSelectedPrompt(prompt);
         setDetailModalOpen(true);
+        // 修复：选择提示词时即增加热度（使用次数）
+        if (prompt.id) {
+            incrementPromptHeat(prompt.id);
+        }
     };
 
     const handleEditPrompt = (prompt: Prompt) => {
