@@ -17,8 +17,10 @@ const viewToLabel: Record<View, string> = {
     'plot-library': '剧情库',
     'inspiration-library': '灵光库',
     'personal-center': '个人中心',
-    // Fix: Added missing property 'help' to satisfy the View type record constraint
     'help': '使用帮助',
+    'prompt-library-novel': '小说提示词库',
+    'prompt-library-marketing': '营销提示词库',
+    'prompt-library-image': '绘图提示词库',
 };
 
 const Placeholder: React.FC<PlaceholderProps> = ({ view }) => {

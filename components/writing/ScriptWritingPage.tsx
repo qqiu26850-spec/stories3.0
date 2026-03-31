@@ -20,7 +20,7 @@ interface ScriptWritingPageProps {
 }
 
 const NO_MARKDOWN_INSTRUCTION = "\n\n【重要指令】：请以纯文本格式输出剧本，严禁使用Markdown格式（如 **加粗**、# 标题 等）。请直接按剧本格式输出场景、动作和对白。";
-const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：\n1. 请尽可能详细、深入地撰写，展开环境、心理、动作等细节。如果用户要求1万字以上，请务必通过极其细腻的描写（如心理活动、环境烘托、动作拆解）来达到字数要求，严禁敷衍或提前收尾。\n2. **字数要求**：请严格遵守用户要求的字数（如1万字以上指1万个中文字符），充分发挥想象力，确保内容充实且逻辑严密。\n3. 请直接按剧本格式输出场景、动作和对白，严禁使用Markdown格式（如 **加粗**、# 标题 等）。";
+const FORCE_LONG_INSTRUCTION = "\n\n【专业创作指令】：\n1. **深度扩写模式**：请采用“分层迭代生成”策略。不要概括情节，而是通过大量的细节描写（环境烘托、动作拆解、心理独白、感官体验）来丰富内容。如果用户要求长篇幅，请务必通过极其细腻的描写来达到字数要求，严禁敷衍或提前收尾。\n2. **字数突破**：请充分利用输出长度限制，将每一个细小的动作和心理变化都展开撰写，确保单次输出尽可能充实且逻辑严密。\n3. **剧本格式**：请直接按剧本格式输出场景、动作和对白，严禁使用Markdown格式（如 **加粗**、# 标题 等）。\n4. **逻辑一致性**：严格遵循前文设定的角色性格、世界观和逻辑。";
 
 const WORKFLOW_CATEGORIES: { id: string; label: string }[] = [
     { id: 'all', label: '全部' },
@@ -247,6 +247,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const stepRefs = useRef<Record<number, HTMLDivElement | null>>({});
     const dbSaveTimeoutRef = useRef<any>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
+    const lastStepPromptsRef = useRef<Record<string, string>>({});
+    const lastPromptRef = useRef<string>('');
 
     const filteredWorkflows = useMemo(() => {
         return availableWorkflows.filter(wf => {
@@ -435,11 +437,27 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             if (isContinue) {
                 const currentResult = stepResults[step.outputVariable] || '';
                 const tail = currentResult.slice(-3000);
-                finalPrompt = `IMPORTANT: Output ONLY the continued script content.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
+                const originalPrompt = lastStepPromptsRef.current[step.outputVariable] || '';
+                
+                finalPrompt = `
+${originalPrompt}
+
+---
+【系统提示】：
+上文输出因长度限制被中断。请严格基于上方【原始任务】的要求，紧接着下方的【已生成内容末尾】，继续生成剩余内容。
+请保持与上文完全一致的输出格式、风格、人称和逻辑。
+**不要重复**下方已提供的内容，直接无缝接续。
+
+【已生成内容末尾】：
+...${tail}
+
+${FORCE_LONG_INSTRUCTION}
+`;
             } else {
                 let prompt = step.prompt;
                 Object.keys(context).forEach(key => { prompt = prompt.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), context[key] || ''); });
-                finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${prompt}${NO_MARKDOWN_INSTRUCTION}`;
+                finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${prompt}${FORCE_LONG_INSTRUCTION}`;
+                lastStepPromptsRef.current[step.outputVariable] = finalPrompt;
             }
 
             let stepOutput = isContinue ? (stepResults[step.outputVariable] || '') : '';
@@ -516,7 +534,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         } else {
             // Prompt Mode Logic (Existing)
             setExecutedPrompt(selectedPrompt);
-            setPromptResultText('');
+            
             let promptText = selectedPrompt ? (selectedPrompt.template || selectedPrompt.content) : promptInput;
             
             if (selectedPrompt) {
@@ -526,7 +544,29 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 });
             }
 
-            const finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${promptText}${FORCE_LONG_INSTRUCTION}`;
+            let finalPrompt = '';
+            if (isContinue) {
+                const tail = promptResultText.slice(-3000);
+                const originalPrompt = lastPromptRef.current;
+                finalPrompt = `
+${originalPrompt}
+
+---
+【系统提示】：
+上文输出因长度限制被中断。请严格基于上方【原始任务】的要求，紧接着下方的【已生成内容末尾】，继续生成剩余内容。
+请保持与上文完全一致的输出格式、风格、人称和逻辑。
+**不要重复**下方已提供的内容，直接无缝接续。
+
+【已生成内容末尾】：
+...${tail}
+
+${FORCE_LONG_INSTRUCTION}
+`;
+            } else {
+                finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${promptText}${FORCE_LONG_INSTRUCTION}`;
+                lastPromptRef.current = finalPrompt;
+                setPromptResultText('');
+            }
 
             setIsGenerating(true);
             const controller = new AbortController();
@@ -864,7 +904,20 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                                 </div>
                             )
                         ) : (
-                            <button onClick={() => handleRunGeneration()} className="w-full py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-1 text-xs"><Sparkles className="w-3.5 h-3.5" /> 立即生成</button>
+                            <div className="flex gap-2">
+                                {!promptResultText ? (
+                                    <button onClick={() => handleRunGeneration()} className="w-full py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-1 text-xs"><Sparkles className="w-3.5 h-3.5" /> 立即生成</button>
+                                ) : (
+                                    <>
+                                        <button onClick={() => handleRunGeneration()} className="flex-1 py-2 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center gap-1 text-xs">
+                                            <ArrowPath className="w-3.5 h-3.5" /> 重新生成
+                                        </button>
+                                        <button onClick={() => handleRunGeneration(undefined, true)} className="flex-1 py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 transition-all flex items-center justify-center gap-1 text-xs">
+                                            <Play className="w-3.5 h-3.5" /> 继续生成
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         )}
                     </div>
                 )}

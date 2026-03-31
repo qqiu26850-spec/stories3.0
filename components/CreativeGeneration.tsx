@@ -21,7 +21,7 @@ interface CreativeGenerationProps {
 }
 
 // 修改：增加更严格的“纯净输出”指令，禁止角色扮演式的开场白
-const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：\n1. 请尽可能详细、深入地撰写，展开环境、心理、动作等细节。\n2. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n3. **直接输出**创作内容本身，不要有开场白或结束语。\n4. 请充分利用输出长度限制，生成长篇幅的完整内容。";
+const FORCE_LONG_INSTRUCTION = "\n\n【专业创作指令】：\n1. **深度扩写模式**：请采用“分层迭代生成”策略。不要概括情节，而是通过大量的细节描写（环境烘托、动作拆解、心理独白、感官体验）来丰富内容。如果用户要求长篇幅，请务必通过极其细腻的描写来达到字数要求，严禁敷衍或提前收尾。\n2. **字数突破**：请充分利用输出长度限制，将每一个细小的动作和心理变化都展开撰写，确保单次输出尽可能充实且逻辑严密。\n3. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n4. **直接输出**创作内容本身，不要有开场白或结束语。\n5. **逻辑一致性**：严格遵循前文设定的角色性格、世界观和逻辑。";
 
 // 辅助函数：去除 Markdown 标记转为纯文本
 const stripMarkdown = (text: string) => {
@@ -122,7 +122,10 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         if (!generatedText) return false;
         const trimmed = generatedText.trim();
         const endingPunctuation = /[.!?;:。”！？…—~】]$/;
-        return !endingPunctuation.test(trimmed);
+        // 如果没有标点结尾，极大概率是截断
+        if (!endingPunctuation.test(trimmed)) return true;
+        // 即使有标点结尾，如果字数较多，也可能是因为模型单次输出上限导致的“自然”截断，允许用户继续
+        return trimmed.length > 800; 
     }, [generatedText]);
 
     useEffect(() => {
@@ -286,7 +289,7 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
         // 否则 AI 容易忘记上下文，开始瞎编正文
         const originalInstruction = lastPromptRef.current;
         
-        // 取末尾 3000 字作为上下文衔接
+        // 取末尾 3000 字作为上下文衔接（滚动窗口技术）
         const tailContext = generatedText.slice(-3000); 
         
         const continuePrompt = `

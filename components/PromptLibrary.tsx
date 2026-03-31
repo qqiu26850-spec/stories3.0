@@ -6,7 +6,7 @@ import CreatePromptModal from './CreatePromptModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import PromptDetailModal from './PromptDetailModal';
 import { Plus, Heart, UserCircle, Check, Sparkles, Box, Search, ArrowPath } from './Icon';
-import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt, fetchPromptFavorites, togglePromptFavoriteDB } from '../services/supabaseService';
+import { savePrompt, fetchPrompts, deletePrompt, getCurrentUserId, fetchUserProfile, updatePrompt, fetchPromptFavorites, togglePromptFavoriteDB, incrementPromptHeat } from '../services/supabaseService';
 import { FUNCTIONAL_TAGS, GENRE_TAGS, MARKETING_TAGS, IMAGE_TAGS } from '../constants';
 
 interface PromptLibraryProps {

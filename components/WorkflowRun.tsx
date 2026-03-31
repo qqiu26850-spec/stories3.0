@@ -14,7 +14,7 @@ interface WorkflowRunProps {
     onBack: () => void;
 }
 
-const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：\n1. 请尽可能详细、深入地撰写，展开环境、心理、动作等细节。\n2. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n3. **直接输出**创作内容本身，不要有开场白或结束语。\n4. 请充分利用输出长度限制，生成长篇幅的完整内容。";
+const FORCE_LONG_INSTRUCTION = "\n\n【专业创作指令】：\n1. **深度扩写模式**：请采用“分层迭代生成”策略。不要概括情节，而是通过大量的细节描写（环境烘托、动作拆解、心理独白、感官体验）来丰富内容。如果用户要求长篇幅，请务必通过极其细腻的描写来达到字数要求，严禁敷衍或提前收尾。\n2. **字数突破**：请充分利用输出长度限制，将每一个细小的动作和心理变化都展开撰写，确保单次输出尽可能充实且逻辑严密。\n3. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n4. **直接输出**创作内容本身，不要有开场白或结束语。\n5. **逻辑一致性**：严格遵循前文设定的角色性格、世界观和逻辑。";
 
 const stripMarkdown = (text: string) => {
     return text
@@ -176,6 +176,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
     
     const [saveModalOpen, setSaveModalOpen] = useState(false);
     const [saveModalContent, setSaveModalContent] = useState('');
+    const lastStepPromptsRef = useRef<Record<string, string>>({});
 
     const abortControllerRef = useRef<AbortController | null>(null);
     const resultRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -286,8 +287,23 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
         const controller = new AbortController();
         abortControllerRef.current = controller;
 
-        const tail = currentContent.slice(-2000);
-        const continuePrompt = `IMPORTANT: Output ONLY the continued content. Do NOT include any filler.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
+        const tail = currentContent.slice(-3000);
+        const originalPrompt = lastStepPromptsRef.current[step.outputVariable] || '';
+        
+        const continuePrompt = `
+${originalPrompt}
+
+---
+【系统提示】：
+上文输出因长度限制被中断。请严格基于上方【原始任务】的要求，紧接着下方的【已生成内容末尾】，继续生成剩余内容。
+请保持与上文完全一致的输出格式、风格、人称和逻辑。
+**不要重复**下方已提供的内容，直接无缝接续。
+
+【已生成内容末尾】：
+...${tail}
+
+${FORCE_LONG_INSTRUCTION}
+`;
 
         try {
              const stream = generateTextStream(continuePrompt, { 
@@ -351,6 +367,7 @@ const WorkflowRun: React.FC<WorkflowRunProps> = ({ workflow, onBack }) => {
 
                 // Append Force Long Instruction
                 finalPrompt += FORCE_LONG_INSTRUCTION;
+                lastStepPromptsRef.current[step.outputVariable] = finalPrompt;
 
                 let stepContent = '';
                 const stream = generateTextStream(finalPrompt, { 

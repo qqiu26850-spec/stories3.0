@@ -27,7 +27,7 @@ const WRITING_STRATEGIES = [
     "💡 提示：冲突是戏剧的核心。",
 ];
 
-const FORCE_LONG_INSTRUCTION = "\n\n【重要指令】：\n1. 请尽可能详细、深入地撰写，展开环境、心理、动作等细节。\n2. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n3. **直接输出**创作内容本身，不要有开场白或结束语。\n4. 请充分利用输出长度限制，生成长篇幅的完整内容。";
+const FORCE_LONG_INSTRUCTION = "\n\n【专业创作指令】：\n1. **深度扩写模式**：请采用“分层迭代生成”策略。不要概括情节，而是通过大量的细节描写（环境烘托、动作拆解、心理独白、感官体验）来丰富内容。如果用户要求长篇幅，请务必通过极其细腻的描写来达到字数要求，严禁敷衍或提前收尾。\n2. **字数突破**：请充分利用输出长度限制，将每一个细小的动作和心理变化都展开撰写，确保单次输出尽可能充实且逻辑严密。\n3. **严禁输出**任何与正文无关的对话填充内容（如：“你好！我是xx大神”、“根据您的要求...”、“以下是为您生成的...”等）。\n4. **直接输出**创作内容本身，不要有开场白或结束语。\n5. **逻辑一致性**：严格遵循前文设定的角色性格、世界观和逻辑。";
 
 const Toast: React.FC<{ message: string; isVisible: boolean }> = ({ message, isVisible }) => {
     if (!isVisible) return null;
@@ -65,6 +65,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
     const [error, setError] = useState('');
     const [strategyIndex, setStrategyIndex] = useState(0);
     const [toastMsg, setToastMsg] = useState('');
+    const lastPromptRef = useRef<string>('');
     
     const abortControllerRef = useRef<AbortController | null>(null);
     const resultContainerRef = useRef<HTMLDivElement>(null);
@@ -168,6 +169,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 finalPrompt = `${cleanInstruction}\n请作为资深编剧评审以下剧本片段。${assetContext ? `\n参考素材：\n${assetContext}` : ''}\n\n【待评审内容】：\n${polishContent}\n\n${promptContent ? `【关注】：${promptContent}` : ''}`;
             } 
             finalPrompt += FORCE_LONG_INSTRUCTION;
+            lastPromptRef.current = finalPrompt;
             const stream = generateTextStream(finalPrompt, { model, temperature, topP, maxOutputTokens, signal: controller.signal });
             for await (const chunk of stream) setGeneratedText(prev => prev + chunk);
         } catch (err: any) {
@@ -183,7 +185,22 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
         setIsGenerating(true);
         setError('');
         const tail = generatedText.slice(-3000); 
-        const continuePrompt = `IMPORTANT: Output ONLY the continued script content.\n请紧接着以下内容继续生成，保持风格和逻辑连贯，不要重复上文结尾。\n\n【上文回顾】：\n...${tail}\n\n${FORCE_LONG_INSTRUCTION}`;
+        const originalPrompt = lastPromptRef.current;
+        
+        const continuePrompt = `
+${originalPrompt}
+
+---
+【系统提示】：
+上文输出因长度限制被中断。请严格基于上方【原始任务】的要求，紧接着下方的【已生成内容末尾】，继续生成剩余内容。
+请保持与上文完全一致的输出格式、风格、人称和逻辑。
+**不要重复**下方已提供的内容，直接无缝接续。
+
+【已生成内容末尾】：
+...${tail}
+
+${FORCE_LONG_INSTRUCTION}
+`;
         const controller = new AbortController();
         abortControllerRef.current = controller;
         try {
@@ -235,7 +252,25 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 )}
                 <div className="flex justify-between items-center p-4 border-b border-sky-100 dark:border-sky-900 bg-sky-50/50 dark:bg-sky-900/20"><h3 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2"><Sparkles className="w-4 h-4 text-sky-500" />生成结果{isGenerating && <ArrowPath className="w-3.5 h-3.5 text-sky-500 animate-spin" />}</h3><div className="flex gap-2"><button onClick={() => navigator.clipboard.writeText(generatedText)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-white rounded transition-colors" title="复制全选"><Copy className="w-4 h-4" /></button><button onClick={() => setGeneratedText('')} className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-white rounded transition-colors" title="关闭"><X className="w-4 h-4" /></button></div></div>
                 <div ref={resultContainerRef} className="flex-1 overflow-y-auto p-4 custom-scrollbar select-text"><div className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">{generatedText}</div></div>
-                <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-2"><button onClick={handleInsertResult} className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1">{activeTab === 'polish' ? '替换原文' : <><Plus className="w-3 h-3" /> 插入剧本</>}</button>{isGenerating ? <button onClick={handleStop} className="flex-1 px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"><Stop className="w-3 h-3" /> 停止</button> : <button onClick={handleGenerate} className="flex-1 px-3 py-2.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold rounded-lg hover:bg-orange-200 transition-colors text-sm font-sans flex items-center justify-center gap-1"><ArrowPath className="w-3 h-3" /> 重试</button>}</div>
+                <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-2">
+                    <button onClick={handleInsertResult} className="flex-1 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-lg hover:bg-emerald-200 transition-colors text-sm font-sans flex items-center justify-center gap-1">
+                        {activeTab === 'polish' ? '替换原文' : <><Plus className="w-3 h-3" /> 插入剧本</>}
+                    </button>
+                    {isGenerating ? (
+                        <button onClick={handleStop} className="flex-1 px-4 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold rounded-lg hover:bg-red-200 transition-colors text-sm font-sans flex items-center justify-center gap-1">
+                            <Stop className="w-3 h-3" /> 停止
+                        </button>
+                    ) : (
+                        <>
+                            <button onClick={handleContinue} className="flex-1 px-3 py-2.5 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 font-bold rounded-lg hover:bg-sky-200 transition-colors text-sm font-sans flex items-center justify-center gap-1">
+                                <Play className="w-3 h-3" /> 续写
+                            </button>
+                            <button onClick={handleGenerate} className="flex-1 px-3 py-2.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold rounded-lg hover:bg-orange-200 transition-colors text-sm font-sans flex items-center justify-center gap-1">
+                                <ArrowPath className="w-3 h-3" /> 重试
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
         );
     }
