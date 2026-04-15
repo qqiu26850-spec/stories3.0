@@ -677,22 +677,37 @@ export async function deleteWorkflow(id: string) {
 
 export async function incrementWorkflowUsage(id: string) {
     try {
-        const { data } = await supabase.from('workflows').select('usage_count').eq('id', id).single();
-        if (data) {
-            await supabase.from('workflows').update({ usage_count: (data.usage_count || 0) + 1 }).eq('id', id);
+        if (!id) return;
+        const { data, error: fetchError } = await supabase.from('workflows').select('usage_count').eq('id', id).single();
+        if (fetchError) {
+            console.warn("Error fetching workflow usage:", fetchError);
+            return;
         }
-    } catch (e) {}
+        if (data) {
+            const { error: updateError } = await supabase.from('workflows').update({ usage_count: (data.usage_count || 0) + 1 }).eq('id', id);
+            if (updateError) console.warn("Error updating workflow usage:", updateError);
+        }
+    } catch (e) {
+        console.error("Increment workflow usage failed:", e);
+    }
 }
 
 export async function incrementPromptHeat(id: string) {
     try {
         if (!id) return;
-        const { data } = await supabase.from('prompts').select('usage_count').eq('id', id).single();
+        const { data, error: fetchError } = await supabase.from('prompts').select('usage_count').eq('id', id).single();
+        if (fetchError) {
+            console.warn("Error fetching prompt usage:", fetchError);
+            return;
+        }
         if (data) {
             const newCount = (data.usage_count || 0) + 1;
-            await supabase.from('prompts').update({ usage_count: newCount }).eq('id', id);
+            const { error: updateError } = await supabase.from('prompts').update({ usage_count: newCount }).eq('id', id);
+            if (updateError) console.warn("Error updating prompt usage:", updateError);
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error("Increment prompt heat failed:", e);
+    }
 }
 
 export async function deletePrompt(id: string) {

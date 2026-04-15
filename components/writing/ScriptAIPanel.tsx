@@ -169,7 +169,7 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
                 finalPrompt = `${cleanInstruction}\n请作为资深编剧评审以下剧本片段。${assetContext ? `\n参考素材：\n${assetContext}` : ''}\n\n【待评审内容】：\n${polishContent}\n\n${promptContent ? `【关注】：${promptContent}` : ''}`;
             } 
             finalPrompt += FORCE_LONG_INSTRUCTION;
-            lastPromptRef.current = finalPrompt;
+            lastPromptRef.current = finalPrompt.replace(FORCE_LONG_INSTRUCTION, '');
             const stream = generateTextStream(finalPrompt, { model, temperature, topP, maxOutputTokens, signal: controller.signal });
             for await (const chunk of stream) setGeneratedText(prev => prev + chunk);
         } catch (err: any) {
@@ -187,20 +187,20 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
         const tail = generatedText.slice(-3000); 
         const originalPrompt = lastPromptRef.current;
         
-        const continuePrompt = `
+        const continuePrompt = `【原始创作任务】：
 ${originalPrompt}
-
----
-【系统提示】：
-上文输出因长度限制被中断。请严格基于上方【原始任务】的要求，紧接着下方的【已生成内容末尾】，继续生成剩余内容。
-请保持与上文完全一致的输出格式、风格、人称和逻辑。
-**不要重复**下方已提供的内容，直接无缝接续。
 
 【已生成内容末尾】：
 ...${tail}
 
-${FORCE_LONG_INSTRUCTION}
-`;
+【续写指令】：
+请严格基于【原始创作任务】的要求，从【已生成内容末尾】处开始无缝续写。
+要求：
+1. 严禁重复上文内容，严禁从头开始。
+2. 保持与上文完全一致的剧本格式、风格和逻辑。
+3. 直接输出续写内容，不要有任何开场白。
+
+${FORCE_LONG_INSTRUCTION}`;
         const controller = new AbortController();
         abortControllerRef.current = controller;
         try {

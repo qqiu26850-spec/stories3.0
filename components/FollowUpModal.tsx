@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { generateTextStream } from '../services/geminiService';
-import { ChatBubbleOvalLeftEllipsis, X, Stop, Sparkles, Plus, ArrowPath, Copy, Box } from './Icon';
+import { ChatBubbleOvalLeftEllipsis, X, Stop, Sparkles, Plus, ArrowPath, Copy, Box, Pencil } from './Icon';
 import PromptSelectionModal from './PromptSelectionModal';
 import { Prompt } from '../types';
 import CustomSelect from './CustomSelect';
@@ -14,9 +14,10 @@ interface FollowUpModalProps {
     context: string;
     initialMode: 'selection' | 'full';
     onApply: (text: string, type: 'insert' | 'replace') => void;
+    rewriteMode?: boolean;
 }
 
-const FollowUpModal: React.FC<FollowUpModalProps> = ({ isOpen, onClose, targetText, context, initialMode, onApply }) => {
+const FollowUpModal: React.FC<FollowUpModalProps> = ({ isOpen, onClose, targetText, context, initialMode, onApply, rewriteMode }) => {
     const [query, setQuery] = useState('');
     const [result, setResult] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -54,6 +55,8 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({ isOpen, onClose, targetTe
 请基于下方的【全文背景】和用户【选中的文本片段】，回答用户的【追问/指令】。
 你的回答必须针对选中的内容进行处理，同时不脱离全文设定的背景。
 请直接输出修改后或生成的正文内容，不要有任何多余的废话。
+
+${rewriteMode ? '【特别指令】：你现在处于“AI改写”模式。请根据用户的补充要求，对选中的文本进行改写，确保改写后的内容与前文和后文衔接自然，且保持原有的剧本格式。' : ''}
 
 【全文背景】：
 ${context.slice(0, 3000)}${context.length > 3000 ? '...' : ''}
@@ -133,8 +136,8 @@ ${query}`;
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] animate-fade-in-up font-sans" onClick={e => e.stopPropagation()}>
                 <div className="flex-shrink-0 p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <ChatBubbleOvalLeftEllipsis className="w-5 h-5 text-sky-500" />
-                        AI 智能追问
+                        {rewriteMode ? <Pencil className="w-5 h-5 text-sky-500" /> : <ChatBubbleOvalLeftEllipsis className="w-5 h-5 text-sky-500" />}
+                        {rewriteMode ? 'AI 智能改写' : 'AI 智能追问'}
                     </h3>
                     <button type="button" onClick={onClose} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
                         <X className="w-5 h-5" />
@@ -178,14 +181,16 @@ ${query}`;
                     )}
 
                     <div className="space-y-2">
-                        <textarea 
-                            value={query}
-                            onChange={e => setQuery(e.target.value)}
-                            placeholder={activeMode === 'selection' 
-                                ? "请输入针对选中文本的追问或修改指令..." 
-                                : "请输入针对全文/本段的追问..."}
-                            className="w-full h-24 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-sm resize-none"
-                        />
+                            <textarea 
+                                value={query}
+                                onChange={e => setQuery(e.target.value)}
+                                placeholder={rewriteMode 
+                                    ? "请输入改写要求，例如：让这段对话更幽默一点..." 
+                                    : (activeMode === 'selection' 
+                                        ? "请输入针对选中文本的追问或修改指令..." 
+                                        : "请输入针对全文/本段的追问...")}
+                                className="w-full h-24 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-sm resize-none"
+                            />
                         <div className="flex justify-between items-center">
                             <button onClick={() => setPromptModalOpen(true)} className="text-xs text-sky-600 hover:text-sky-500 font-bold flex items-center gap-1">
                                 <Box className="w-3.5 h-3.5" /> 引用提示词
@@ -196,7 +201,7 @@ ${query}`;
                                 </button>
                             ) : (
                                 <button type="button" onClick={handleGenerate} disabled={!query.trim()} className="px-4 py-2 bg-sky-600 text-white rounded-lg text-xs font-bold hover:bg-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">
-                                    <Sparkles className="w-3.5 h-3.5" /> 发送追问
+                                    <Sparkles className="w-3.5 h-3.5" /> {rewriteMode ? '开始改写' : '发送追问'}
                                 </button>
                             )}
                         </div>

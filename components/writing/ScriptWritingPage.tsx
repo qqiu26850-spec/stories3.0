@@ -45,7 +45,7 @@ const stripMarkdown = (text: string) => {
 const EditableStepContent: React.FC<{
     initialContent: string;
     onSave: (newContent: string) => void;
-    onContextMenu: (e: React.MouseEvent, text: string) => void;
+    onContextMenu: (e: React.MouseEvent, text: string, fullText: string) => void;
 }> = ({ initialContent, onSave, onContextMenu }) => {
     const editorRef = useRef<HTMLDivElement>(null);
 
@@ -79,7 +79,7 @@ const EditableStepContent: React.FC<{
         const text = selection?.toString().trim();
         if (text) {
             e.preventDefault();
-            onContextMenu(e, text);
+            onContextMenu(e, text, editorRef.current?.innerText || initialContent);
         }
     };
 
@@ -139,25 +139,34 @@ const ContextMenu: React.FC<{
     y: number;
     visible: boolean;
     onClose: () => void;
-    onAction: (action: 'polish' | 'expand' | 'ask') => void;
+    onAction: (action: 'polish' | 'expand' | 'ask' | 'rewrite-auto' | 'rewrite-req') => void;
 }> = ({ x, y, visible, onClose, onAction }) => {
     if (!visible) return null;
 
     return createPortal(
         <div 
-            className="fixed z-[9999] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 py-1 min-w-[120px] animate-fade-in"
+            className="fixed z-[9999] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 py-1 min-w-[140px] animate-fade-in"
             style={{ top: y, left: x }}
             onMouseLeave={onClose}
             onClick={(e) => e.stopPropagation()}
         >
             <button onClick={() => { onAction('ask'); onClose(); }} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-sky-50 dark:hover:bg-sky-900/30 hover:text-sky-600 transition-colors flex items-center gap-2">
-                <ChatBubbleOvalLeftEllipsis className="w-3.5 h-3.5" /> 追问
+                <ChatBubbleOvalLeftEllipsis className="w-3.5 h-3.5" /> 智能追问
             </button>
+            <div className="h-px bg-gray-100 dark:bg-gray-700 my-1"></div>
+            <div className="px-4 py-1 text-[10px] font-bold text-gray-400 uppercase">AI 改写</div>
+            <button onClick={() => { onAction('rewrite-auto'); onClose(); }} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-sky-50 dark:hover:bg-sky-900/30 hover:text-sky-600 transition-colors flex items-center gap-2">
+                <ArrowPath className="w-3.5 h-3.5" /> 一键重新生成
+            </button>
+            <button onClick={() => { onAction('rewrite-req'); onClose(); }} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-sky-50 dark:hover:bg-sky-900/30 hover:text-sky-600 transition-colors flex items-center gap-2">
+                <Pencil className="w-3.5 h-3.5" /> 输入要求重写
+            </button>
+            <div className="h-px bg-gray-100 dark:bg-gray-700 my-1"></div>
             <button onClick={() => { onAction('polish'); onClose(); }} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-sky-50 dark:hover:bg-sky-900/30 hover:text-sky-600 transition-colors flex items-center gap-2">
-                <Pencil className="w-3.5 h-3.5" /> 润色
+                <Sparkles className="w-3.5 h-3.5" /> 润色
             </button>
             <button onClick={() => { onAction('expand'); onClose(); }} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-sky-50 dark:hover:bg-sky-900/30 hover:text-sky-600 transition-colors flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5" /> 扩写
+                <Plus className="w-3.5 h-3.5" /> 扩写
             </button>
         </div>,
         document.body
@@ -232,11 +241,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
     const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
 
-    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string }>({ x: 0, y: 0, visible: false, text: '' });
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; text: string; fullText: string; stepVar?: string }>({ x: 0, y: 0, visible: false, text: '', fullText: '', stepVar: '' });
     const [aiTrigger, setAiTrigger] = useState<{ type: 'polish' | 'expand' | 'ask', text: string } | null>(null);
     
-    const [followUpModal, setFollowUpModal] = useState<{ open: boolean; targetText: string; context: string; stepVar: string; }>({
-        open: false, targetText: '', context: '', stepVar: ''
+    const [followUpModal, setFollowUpModal] = useState<{ open: boolean; targetText: string; context: string; stepVar: string; rewriteMode?: boolean }>({
+        open: false, targetText: '', context: '', stepVar: '', rewriteMode: false
     });
 
     // Title editing state
@@ -439,25 +448,26 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 const tail = currentResult.slice(-3000);
                 const originalPrompt = lastStepPromptsRef.current[step.outputVariable] || '';
                 
-                finalPrompt = `
+                finalPrompt = `【原始创作任务】：
 ${originalPrompt}
-
----
-【系统提示】：
-上文输出因长度限制被中断。请严格基于上方【原始任务】的要求，紧接着下方的【已生成内容末尾】，继续生成剩余内容。
-请保持与上文完全一致的输出格式、风格、人称和逻辑。
-**不要重复**下方已提供的内容，直接无缝接续。
 
 【已生成内容末尾】：
 ...${tail}
 
-${FORCE_LONG_INSTRUCTION}
-`;
+【续写指令】：
+请严格基于【原始创作任务】的要求，从【已生成内容末尾】处开始无缝续写。
+要求：
+1. 严禁重复上文内容，严禁从头开始。
+2. 保持与上文完全一致的剧本格式、风格和逻辑。
+3. 直接输出续写内容，不要有任何开场白。
+
+${FORCE_LONG_INSTRUCTION}`;
             } else {
                 let prompt = step.prompt;
                 Object.keys(context).forEach(key => { prompt = prompt.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), context[key] || ''); });
-                finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${prompt}${FORCE_LONG_INSTRUCTION}`;
-                lastStepPromptsRef.current[step.outputVariable] = finalPrompt;
+                const corePrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${prompt}`;
+                finalPrompt = `${corePrompt}${FORCE_LONG_INSTRUCTION}`;
+                lastStepPromptsRef.current[step.outputVariable] = corePrompt;
             }
 
             let stepOutput = isContinue ? (stepResults[step.outputVariable] || '') : '';
@@ -548,23 +558,24 @@ ${FORCE_LONG_INSTRUCTION}
             if (isContinue) {
                 const tail = promptResultText.slice(-3000);
                 const originalPrompt = lastPromptRef.current;
-                finalPrompt = `
+                finalPrompt = `【原始创作任务】：
 ${originalPrompt}
-
----
-【系统提示】：
-上文输出因长度限制被中断。请严格基于上方【原始任务】的要求，紧接着下方的【已生成内容末尾】，继续生成剩余内容。
-请保持与上文完全一致的输出格式、风格、人称和逻辑。
-**不要重复**下方已提供的内容，直接无缝接续。
 
 【已生成内容末尾】：
 ...${tail}
 
-${FORCE_LONG_INSTRUCTION}
-`;
+【续写指令】：
+请严格基于【原始创作任务】的要求，从【已生成内容末尾】处开始无缝续写。
+要求：
+1. 严禁重复上文内容，严禁从头开始。
+2. 保持与上文完全一致的剧本格式、风格和逻辑。
+3. 直接输出续写内容，不要有任何开场白。
+
+${FORCE_LONG_INSTRUCTION}`;
             } else {
-                finalPrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${promptText}${FORCE_LONG_INSTRUCTION}`;
-                lastPromptRef.current = finalPrompt;
+                const corePrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${promptText}`;
+                finalPrompt = `${corePrompt}${FORCE_LONG_INSTRUCTION}`;
+                lastPromptRef.current = corePrompt;
                 setPromptResultText('');
             }
 
@@ -618,15 +629,75 @@ ${FORCE_LONG_INSTRUCTION}
         setStepResults(prev => ({ ...prev, [stepVar]: newContent }));
     };
 
-    const handleContextMenuAction = (action: 'polish' | 'expand' | 'ask') => {
-        if (action === 'ask' && contextMenu.text) {
+    const handleAiRewrite = async (targetText: string, fullText: string, requirements?: string, stepVar?: string) => {
+        if (isGenerating) return;
+        setIsGenerating(true);
+        
+        // Find context
+        const index = fullText.indexOf(targetText);
+        const before = fullText.slice(Math.max(0, index - 1000), index);
+        const after = fullText.slice(index + targetText.length, index + targetText.length + 1000);
+
+        const prompt = `【原始任务背景】：
+${lastPromptRef.current || (stepVar ? lastStepPromptsRef.current[stepVar] : '')}
+
+【上下文 - 前文】：
+...${before}
+
+【待改写片段】：
+${targetText}
+
+【上下文 - 后文】：
+${after}...
+
+【改写指令】：
+${requirements ? `请根据以下补充要求改写【待改写片段】：\n${requirements}` : '请直接重新生成【待改写片段】，使其表达更生动、情节更精彩，并确保与前文和后文衔接自然。'}
+要求：
+1. 直接输出改写后的内容，不要有任何废话或解释。
+2. 保持与全文一致的剧本格式和风格。
+
+${FORCE_LONG_INSTRUCTION}`;
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        let result = '';
+        try {
+            const stream = generateTextStream(prompt, { model: settings.model, temperature: 0.8, topP: 0.95, maxOutputTokens: 8192, signal: controller.signal });
+            for await (const chunk of stream) {
+                result += chunk;
+            }
+            
+            // Apply replacement
+            if (stepVar) {
+                setStepResults(prev => ({
+                    ...prev,
+                    [stepVar]: prev[stepVar].replace(targetText, result)
+                }));
+            } else if (generationMode === 'prompt') {
+                setPromptResultText(prev => prev.replace(targetText, result));
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsGenerating(false);
+            abortControllerRef.current = null;
+        }
+    };
+
+    const handleContextMenuAction = (action: 'polish' | 'expand' | 'ask' | 'rewrite-auto' | 'rewrite-req') => {
+        if (!contextMenu.text) return;
+
+        if (action === 'ask' || action === 'rewrite-req') {
             setFollowUpModal({
                 open: true,
                 targetText: contextMenu.text,
-                context: '', 
-                stepVar: '' 
+                context: contextMenu.fullText,
+                stepVar: contextMenu.stepVar || '',
+                rewriteMode: action === 'rewrite-req'
             });
-        } else if (contextMenu.text) {
+        } else if (action === 'rewrite-auto') {
+            handleAiRewrite(contextMenu.text, contextMenu.fullText, undefined, contextMenu.stepVar);
+        } else {
             setAiTrigger({ type: action, text: contextMenu.text });
             setRightSidebarOpen(true);
         }
@@ -936,6 +1007,7 @@ ${FORCE_LONG_INSTRUCTION}
                 context={followUpModal.context || (selectedWorkflow?.steps?.find(s => s.outputVariable === followUpModal.stepVar)?.prompt || '')} 
                 initialMode={followUpModal.targetText ? 'selection' : 'full'}
                 onApply={handleFollowUpApply}
+                rewriteMode={followUpModal.rewriteMode}
             />
 
             <ContextMenu 
@@ -1260,50 +1332,36 @@ ${FORCE_LONG_INSTRUCTION}
                                                  <EditableStepContent 
                                                      initialContent={promptResultText}
                                                      onSave={(val) => setPromptResultText(val)}
-                                                     onContextMenu={(e, text) => {
-                                                         setContextMenu({ x: e.clientX, y: e.clientY, visible: true, text });
+                                                     onContextMenu={(e, text, fullText) => {
+                                                         setContextMenu({ x: e.clientX, y: e.clientY, visible: true, text, fullText });
                                                      }}
                                                  />
                                              )}
+                                             
+                                             <div className="mt-8 flex items-center gap-4">
+                                                 <button 
+                                                     type="button"
+                                                     onClick={() => {
+                                                         if(window.confirm('确定要清空结果吗？')) setPromptResultText('');
+                                                     }}
+                                                     className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full shadow-lg hover:text-red-500 transition-colors border border-gray-100 dark:border-gray-700"
+                                                     title="清空"
+                                                 >
+                                                     <Trash className="w-5 h-5" />
+                                                 </button>
+                                                 
+                                                 <button 
+                                                     onClick={() => handleInsertToScript(promptResultText)}
+                                                     className="px-6 py-3 bg-emerald-600 text-white font-bold rounded-full shadow-lg hover:bg-emerald-500 transition-all active:scale-95 flex items-center gap-2 text-sm"
+                                                 >
+                                                     <Plus className="w-5 h-5" /> 插入到正文
+                                                 </button>
+                                             </div>
                                          </div>
                                      ) : (
                                          <div className="flex flex-col items-center justify-center h-full text-gray-400 pt-20">
                                              <Sparkles className="w-16 h-16 mb-4 opacity-20" />
                                              <p>请在左侧填写提示词并开始生成</p>
-                                         </div>
-                                     )}
-                                     
-                                     {/* Overlay Actions for Prompt Mode */}
-                                     {!isGenerating && promptResultText && (
-                                         <div className="fixed bottom-8 right-8 flex gap-2 z-50 animate-fade-in-up">
-                                             <button 
-                                                 type="button"
-                                                 onClick={() => {
-                                                     navigator.clipboard.writeText(promptResultText);
-                                                     alert('已复制到剪贴板');
-                                                 }}
-                                                 className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full shadow-lg hover:text-sky-600 dark:hover:text-sky-400 transition-colors border border-gray-100 dark:border-gray-700"
-                                                 title="复制"
-                                             >
-                                                 <Copy className="w-5 h-5" />
-                                             </button>
-                                             <button 
-                                                 type="button"
-                                                 onClick={() => {
-                                                     if(window.confirm('确定要清空结果吗？')) setPromptResultText('');
-                                                 }}
-                                                 className="p-3 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full shadow-lg hover:text-red-500 transition-colors border border-gray-100 dark:border-gray-700"
-                                                 title="清空"
-                                             >
-                                                 <Trash className="w-5 h-5" />
-                                             </button>
-                                             
-                                             <button 
-                                                 onClick={() => handleInsertToScript(promptResultText)}
-                                                 className="px-6 py-3 bg-emerald-600 text-white font-bold rounded-full shadow-lg hover:bg-emerald-500 transition-all active:scale-95 flex items-center gap-2 text-sm"
-                                             >
-                                                 <Plus className="w-5 h-5" /> 插入到正文
-                                             </button>
                                          </div>
                                      )}
                                  </div>
@@ -1344,20 +1402,20 @@ ${FORCE_LONG_INSTRUCTION}
                                                                  <EditableStepContent 
                                                                     initialContent={result} 
                                                                     onSave={(newContent) => handleStepContentChange(step.outputVariable, newContent)}
-                                                                    onContextMenu={(e, text) => {
-                                                                        setContextMenu({ x: e.clientX, y: e.clientY, visible: true, text });
+                                                                    onContextMenu={(e, text, fullText) => {
+                                                                        setContextMenu({ x: e.clientX, y: e.clientY, visible: true, text, fullText, stepVar: step.outputVariable });
                                                                     }}
                                                                  />
                                                              )}
                                                          </div>
-                                                     ) : isGeneratingThis ? (
+                                                      ) : isGeneratingThis ? (
                                                          <div className="flex flex-col items-center justify-center py-8 text-sky-500 text-sm animate-pulse gap-2">
                                                              <Sparkles className="w-6 h-6" /> 
                                                              <span>正在生成内容...</span>
                                                          </div>
-                                                     ) : (
+                                                      ) : (
                                                          <div className="text-gray-400 text-xs italic p-4 text-center">等待生成...</div>
-                                                     )}
+                                                      )}
                                                  </div>
                                              )}
                                          </div>
