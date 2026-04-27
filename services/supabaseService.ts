@@ -295,7 +295,17 @@ export async function deleteChapterFromDB(chapterId: string) {
 
 // --- Workflow State Persistence ---
 
-export async function saveScriptWorkflowState(projectId: string, workflowId: string | undefined, formState: any, stepResults: any, visibleIndex: number) {
+export async function saveScriptWorkflowState(
+    projectId: string, 
+    workflowId: string | undefined, 
+    formState: any, 
+    stepResults: any, 
+    visibleIndex: number,
+    promptId?: string,
+    promptFormState?: any,
+    promptResultText?: string,
+    generationMode?: 'workflow' | 'prompt'
+) {
     try {
         const userId = await getCurrentUserId();
         if (!userId) return;
@@ -303,8 +313,16 @@ export async function saveScriptWorkflowState(projectId: string, workflowId: str
         await supabase.from('script_workflow_states').upsert({
             project_id: projectId,
             workflow_id: workflowId,
-            form_state: formState,
-            step_results: stepResults,
+            form_state: {
+                ...formState,
+                __prompt_form: promptFormState,
+                __selected_prompt_id: promptId,
+                __generation_mode: generationMode
+            },
+            step_results: {
+                ...stepResults,
+                __prompt_result: promptResultText
+            },
             visible_index: visibleIndex,
             updated_at: new Date().toISOString()
         });

@@ -3,7 +3,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory, PromptSubCategory } from '../../types';
 import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search, CloudArrowUp, Settings } from '../Icon';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
-import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, deleteScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
+import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, fetchPrompts, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, deleteScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
 import CustomSelect from '../CustomSelect';
@@ -279,13 +279,17 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         if (!script.id) return;
         setSaveStatus('saving');
         try {
-            if (selectedWorkflow || Object.keys(stepResults).length > 0) {
+            if (selectedWorkflow || Object.keys(stepResults).length > 0 || promptResultText || selectedPrompt) {
                 await saveScriptWorkflowState(
                     script.id,
                     selectedWorkflow?.id,
                     workflowFormState,
                     stepResults,
-                    visibleStepIndex
+                    visibleStepIndex,
+                    selectedPrompt?.id,
+                    promptFormState,
+                    promptResultText,
+                    generationMode
                 );
             }
             setSaveStatus('saved');
@@ -293,7 +297,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             console.error("Save failed", e);
             setSaveStatus('error');
         }
-    }, [script.id, selectedWorkflow?.id, workflowFormState, stepResults, visibleStepIndex]);
+    }, [script.id, selectedWorkflow?.id, workflowFormState, stepResults, visibleStepIndex, selectedPrompt?.id, promptFormState, promptResultText, generationMode]);
 
     const persistState = useCallback(() => {
         if (!script.id) return;
@@ -332,7 +336,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             setAssets(userAssets.map((item: any) => ({ id: item.id, name: item.name || item.title, type: item.type === 'idea' ? 'inspiration' : item.type, content: item.content, tags: item.tags || [] })));
 
             const workflowsData = await fetchWorkflows({ category: 'all' });
+            const promptsResponse = await fetchPrompts({ category: 'all' });
             let mappedWorkflows: Workflow[] = [];
+            let mappedPrompts: Prompt[] = [];
+            
             if (workflowsData) {
                 mappedWorkflows = workflowsData.map((wf: any) => {
                     let content: any = {};
@@ -355,16 +362,68 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 setAvailableWorkflows(mappedWorkflows);
             }
 
+            if (promptsResponse && promptsResponse.data) {
+                mappedPrompts = promptsResponse.data.map((p: any) => {
+                    let content: any = {};
+                    try { content = typeof p.content === 'string' ? JSON.parse(p.content) : p.content; } catch(e) {}
+                    return {
+                        id: p.id,
+                        title: p.title,
+                        description: p.description,
+                        content: p.content,
+                        template: content.template || '',
+                        fields: content.fields || [],
+                        category: p.main_category,
+                        subCategory: p.sub_category,
+                        usageCount: p.usage_count || 0,
+                        heat: p.usage_count || 0,
+                        author: p.profiles?.username || (p.user_id === uid ? '我' : '匿名'),
+                        userId: p.user_id
+                    };
+                });
+            }
+
             const savedState = await fetchScriptWorkflowState(script.id);
-            if (savedState && savedState.workflow_id) {
-                const wf = mappedWorkflows.find(w => w.id === savedState.workflow_id);
-                if (wf) {
-                    setSelectedWorkflow(wf);
-                    setExecutedWorkflow(wf);
-                    setWorkflowFormState(savedState.form_state || {});
-                    setStepResults(savedState.step_results || {});
-                    setVisibleStepIndex(savedState.visible_index ?? -1);
+            if (savedState) {
+                const fState = savedState.form_state || {};
+                const sResults = savedState.step_results || {};
+
+                // Restore Generation Mode
+                if (fState.__generation_mode) {
+                    setGenerationMode(fState.__generation_mode);
                 }
+
+                // Restore Workflow state
+                if (savedState.workflow_id) {
+                    const wf = mappedWorkflows.find(w => w.id === savedState.workflow_id);
+                    if (wf) {
+                        setSelectedWorkflow(wf);
+                        setExecutedWorkflow(wf);
+                    }
+                }
+                
+                // Restore Prompt state
+                if (fState.__selected_prompt_id) {
+                    const p = mappedPrompts.find(pr => pr.id === fState.__selected_prompt_id);
+                    if (p) {
+                        setSelectedPrompt(p);
+                        setExecutedPrompt(p);
+                    }
+                }
+                setPromptFormState(fState.__prompt_form || {});
+                setPromptResultText(sResults.__prompt_result || '');
+                // Filter out internal fields for Workflow state
+                const cleanWFForm = { ...fState };
+                delete cleanWFForm.__prompt_form;
+                delete cleanWFForm.__selected_prompt_id;
+                delete cleanWFForm.__generation_mode;
+                setWorkflowFormState(cleanWFForm);
+                
+                const cleanStepResults = { ...sResults };
+                delete cleanStepResults.__prompt_result;
+                setStepResults(cleanStepResults);
+                
+                setVisibleStepIndex(savedState.visible_index ?? -1);
             }
             setIsScriptLoading(false);
         };
@@ -735,6 +794,18 @@ ${FORCE_LONG_INSTRUCTION}`;
     const handleToolbarAction = (action: ToolbarAction) => {
         if (['bold', 'italic'].includes(action)) {
             document.execCommand(action);
+        } else if (action === 'copy') {
+            const activeWF = executedWorkflow || selectedWorkflow;
+            const allText = generationMode === 'workflow' 
+                ? activeWF?.steps?.map(s => stepResults[s.outputVariable]).filter(Boolean).join('\n\n')
+                : promptResultText;
+            
+            if (allText) {
+                navigator.clipboard.writeText(allText);
+                alert('全文已复制到剪贴板');
+            } else {
+                alert('各章节/提示词暂无生成内容可供复制');
+            }
         }
     };
 
