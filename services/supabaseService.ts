@@ -191,7 +191,7 @@ export async function createProject(title: string, desc: string, type: 'novel' |
     }
 }
 
-export async function updateProject(projectId: string, updates: any) {
+export async function updateProject(projectId: string, updates: { title?: string, description?: string, cover_image?: string }) {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("未登录");

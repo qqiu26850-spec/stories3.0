@@ -1,10 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize Gemini directly in the frontend
-// The API key is provided by the environment
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 interface GenerationOptions {
     model: string;
     temperature: number;
@@ -102,17 +98,29 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 
   if (options.model.startsWith('gemini')) {
     try {
-        const response = await genAI.models.generateContent({
-            model: options.model,
-            contents: prompt,
-            config: {
-                temperature: options.temperature,
-                topP: options.topP,
-                maxOutputTokens: maxOutputTokens,
+        const response = await fetchWithRetry("/api/gemini", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
             },
+            body: JSON.stringify({
+                model: options.model,
+                contents: prompt,
+                temperature: options.temperature,
+                top_p: options.topP,
+                max_tokens: maxOutputTokens,
+                stream: false
+            }),
+            signal: options.signal
         });
 
-        return response.text || "";
+        if (!response.ok) {
+            const errorData = await response.text();
+            throw new Error(errorData);
+        }
+
+        const data = await response.json();
+        return data.text || "";
     } catch (error: any) {
         if (error.name === 'AbortError' || error.message === 'Aborted') {
             throw new Error("Aborted");
@@ -184,19 +192,43 @@ export const generateTextStream = async function* (prompt: string, options: Gene
 
     if (options.model.startsWith('gemini')) {
         try {
-            const stream = await genAI.models.generateContentStream({
-                model: options.model,
-                contents: prompt,
-                config: {
+            const response = await fetchWithRetry("/api/gemini", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model: options.model,
+                    contents: prompt,
                     temperature: options.temperature,
-                    topP: options.topP,
-                    maxOutputTokens: maxOutputTokens,
-                }
+                    top_p: options.topP,
+                    max_tokens: maxOutputTokens,
+                    stream: true
+                }),
+                signal: options.signal
             });
 
-            for await (const chunk of stream) {
-                if (options.signal?.aborted) break;
-                yield chunk.text || "";
+            if (!response.ok) {
+                 const errorText = await response.text().catch(() => '');
+                 throw new Error(errorText || `Server Error: ${response.status}`);
+            }
+            
+            if (!response.body) throw new Error("No response body");
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+
+            while (true) {
+                if (options.signal?.aborted) {
+                    reader.cancel();
+                    break;
+                }
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                // The API sends raw text chunks in the stream
+                const textChunk = decoder.decode(value, { stream: true });
+                yield textChunk;
             }
 
         } catch (error: any) {

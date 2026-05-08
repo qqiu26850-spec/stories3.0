@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory, PromptSubCategory } from '../../types';
-import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search, CloudArrowUp, Settings, BookOpen } from '../Icon';
+import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search, CloudArrowUp, Settings } from '../Icon';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, fetchPrompts, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, deleteScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
 import { createPortal } from 'react-dom';
@@ -117,7 +117,6 @@ const StreamingText: React.FC<{ text: string; isGenerating: boolean }> = ({ text
 const MODEL_OPTIONS = [
     { value: "deepseek-chat", label: "奇思版 (DeepSeek V3)" },
     { value: "gemini-3-flash-preview", label: "妙写版 (Gemini 3 Flash)" },
-    { value: "gemini-3.1-pro-preview", label: "进阶版 (Gemini 3 Pro)" },
     { value: "doubao-flash", label: "速写版 (豆包)" }
 ];
 
@@ -172,11 +171,6 @@ const ContextMenu: React.FC<{
         </div>,
         document.body
     );
-};
-
-const FormattedText = ({ text }: { text: string }) => {
-    if (!text) return null;
-    return <div className="whitespace-pre-wrap break-words text-sm tracking-wide leading-7">{text}</div>;
 };
 
 const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialScript, onBack }) => {
@@ -239,42 +233,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [isLeftSidebarOpen, setLeftSidebarOpen] = useState(true);
     const [isRightSidebarOpen, setRightSidebarOpen] = useState(true); // Changed default to true
     const [isGenerating, setIsGenerating] = useState(false);
-    const [generationError, setGenerationError] = useState<string | null>(null);
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('正在处理...');
     const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
-    const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
-    const [isSourceAssetModalOpen, setIsSourceAssetModalOpen] = useState(false);
-
-    const handleSourceUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            const content = event.target?.result as string;
-            setScript(prev => ({ ...prev, sourceContent: content }));
-            if (script.id) {
-                await updateProject(script.id, { source_content: content });
-            }
-        };
-        reader.readAsText(file);
-    }, [script.id]);
-
-    const handleSelectSourceAsset = useCallback(async (assetId: string) => {
-        const asset = assets.find(a => a.id === assetId);
-        if (asset) {
-            const content = asset.content;
-            setScript(prev => ({ ...prev, sourceContent: content, sourceAssetId: assetId }));
-            if (script.id) {
-                await updateProject(script.id, { 
-                    source_content: content,
-                    source_asset_id: assetId 
-                });
-            }
-        }
-        setIsSourceAssetModalOpen(false);
-    }, [assets, script.id]);
     
     // Editor State
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
@@ -401,8 +362,8 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 setAvailableWorkflows(mappedWorkflows);
             }
 
-            if (promptsResponse && Array.isArray(promptsResponse)) {
-                mappedPrompts = promptsResponse.map((p: any) => {
+            if (promptsResponse && promptsResponse.data) {
+                mappedPrompts = promptsResponse.data.map((p: any) => {
                     let content: any = {};
                     try { content = typeof p.content === 'string' ? JSON.parse(p.content) : p.content; } catch(e) {}
                     return {
@@ -413,12 +374,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         template: content.template || '',
                         fields: content.fields || [],
                         category: p.main_category,
-                        subCategories: p.sub_category ? [p.sub_category as any] : [],
+                        subCategory: p.sub_category,
+                        usageCount: p.usage_count || 0,
                         heat: p.usage_count || 0,
-                        creator: p.user_id === uid ? ('user' as const) : ('system' as const),
-                        userId: p.user_id,
-                        authorName: p.profiles?.username || (p.user_id === uid ? '我' : '匿名'),
-                        createdAt: p.created_at
+                        author: p.profiles?.username || (p.user_id === uid ? '我' : '匿名'),
+                        userId: p.user_id
                     };
                 });
             }
@@ -535,7 +495,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         const controller = new AbortController(); 
         abortControllerRef.current = controller;
         setIsGenerating(true);
-        setGenerationError(null);
         setCurrentStepIndex(stepIndex);
         
         // STRICTLY sequential visibility: only reveal up to current step
@@ -543,21 +502,6 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
 
         try {
             let finalPrompt = '';
-            
-            // Generate context from PREVIOUS steps for continuity
-            let prevStepsContext = '';
-            if (activeWorkflow && activeWorkflow.steps) {
-                const prevSteps = activeWorkflow.steps.slice(0, stepIndex);
-                if (prevSteps.length > 0) {
-                    prevStepsContext = "【创作背景 - 前序章节回顾】\n" + prevSteps.map(s => {
-                        const res = stepResults[s.outputVariable];
-                        if (!res) return '';
-                        // Take the last 800 chars of each previous step to maintain context without exceeding token limits
-                        return `--- ${s.name} (已完成) ---\n${res.length > 800 ? '...' + res.slice(-800) : res}\n`;
-                    }).filter(Boolean).join('\n') + "\n";
-                }
-            }
-
             if (isContinue) {
                 const currentResult = stepResults[step.outputVariable] || '';
                 const tail = currentResult.slice(-3000);
@@ -570,30 +514,17 @@ ${originalPrompt}
 ...${tail}
 
 【续写指令】：
-请严格基于【原始创作任务】的要求，紧接着【已生成内容末尾】处开始无缝续写。
+请严格基于【原始创作任务】的要求，从【已生成内容末尾】处开始无缝续写。
 要求：
-1. 请确保生成的剧情、人设、台词风格与【已生成内容末尾】完美衔接。
-2. 严禁重复上文内容，严禁从头开始。
-3. 保持与上文完全一致的剧本格式、风格和逻辑。
-4. 直接输出续写内容，不要有任何开场白。
+1. 严禁重复上文内容，严禁从头开始。
+2. 保持与上文完全一致的剧本格式、风格和逻辑。
+3. 直接输出续写内容，不要有任何开场白。
 
 ${FORCE_LONG_INSTRUCTION}`;
             } else {
                 let prompt = step.prompt;
                 Object.keys(context).forEach(key => { prompt = prompt.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), context[key] || ''); });
-                
-                // Prepend continuity context to ensure format and content consistency
-                const continuityInstruction = prevStepsContext ? `
-【连贯性要求】：
-当前正在生成剧本的下一部分。请务必参考下方的【创作背景】，确保：
-1. 人物性格、语言风格、场景逻辑与前文保持高度一致。
-2. 严格延续前文使用的剧本排版格式（如：场景号、对白缩进等）。
-3. 剧情紧接上文，不要出现跳跃或逻辑断裂。
-
-${prevStepsContext}
-` : '';
-
-                const corePrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${continuityInstruction}${prompt}`;
+                const corePrompt = `${basicInfo}${assetContext ? `【关联素材】\n${assetContext}\n\n` : ''}${prompt}`;
                 finalPrompt = `${corePrompt}${FORCE_LONG_INSTRUCTION}`;
                 lastStepPromptsRef.current[step.outputVariable] = corePrompt;
             }
@@ -606,9 +537,8 @@ ${prevStepsContext}
                 setStepResults(prev => ({ ...prev, [step.outputVariable]: stepOutput })); 
             }
             return stepOutput;
-        } catch (e: any) {
+        } catch (e) {
             console.error(e);
-            setGenerationError(e.message || String(e));
             throw e;
         } finally {
             setIsGenerating(false);
@@ -637,8 +567,6 @@ ${prevStepsContext}
             let startStepIndex = 0;
             if (typeof startFromIndex === 'number') {
                 startStepIndex = startFromIndex;
-            } else if (isContinue) {
-                startStepIndex = Math.max(0, visibleStepIndex);
             } else {
                 // If regenerating (no index provided), force reset state
                 if (!isContinue) {
@@ -696,12 +624,11 @@ ${originalPrompt}
 ...${tail}
 
 【续写指令】：
-请严格基于【原始创作任务】的要求，紧接着【已生成内容末尾】处开始无缝续写。
+请严格基于【原始创作任务】的要求，从【已生成内容末尾】处开始无缝续写。
 要求：
-1. 请确保生成的剧情、人设、台词风格与【已生成内容末尾】完美衔接。
-2. 严禁重复上文内容，严禁从头开始。
-3. 保持与上文完全一致的剧本格式、风格和逻辑。
-4. 直接输出续写内容，不要有任何开场白。
+1. 严禁重复上文内容，严禁从头开始。
+2. 保持与上文完全一致的剧本格式、风格和逻辑。
+3. 直接输出续写内容，不要有任何开场白。
 
 ${FORCE_LONG_INSTRUCTION}`;
             } else {
@@ -712,7 +639,6 @@ ${FORCE_LONG_INSTRUCTION}`;
             }
 
             setIsGenerating(true);
-            setGenerationError(null);
             const controller = new AbortController();
             abortControllerRef.current = controller;
 
@@ -721,10 +647,7 @@ ${FORCE_LONG_INSTRUCTION}`;
                 for await (const chunk of stream) { 
                     setPromptResultText(prev => prev + chunk); 
                 }
-            } catch (e: any) { 
-                console.error(e); 
-                setGenerationError(e.message || String(e));
-            } finally { setIsGenerating(false); }
+            } catch (e) { console.error(e); } finally { setIsGenerating(false); }
         }
     };
 
@@ -768,7 +691,6 @@ ${FORCE_LONG_INSTRUCTION}`;
     const handleAiRewrite = async (targetText: string, fullText: string, requirements?: string, stepVar?: string) => {
         if (isGenerating) return;
         setIsGenerating(true);
-        setGenerationError(null);
         
         // Find context
         const index = fullText.indexOf(targetText);
@@ -813,9 +735,8 @@ ${FORCE_LONG_INSTRUCTION}`;
             } else if (generationMode === 'prompt') {
                 setPromptResultText(prev => prev.replace(targetText, result));
             }
-        } catch (e: any) {
+        } catch (e) {
             console.error(e);
-            setGenerationError(e.message || String(e));
         } finally {
             setIsGenerating(false);
             abortControllerRef.current = null;
@@ -1150,112 +1071,6 @@ ${FORCE_LONG_INSTRUCTION}`;
         <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden relative font-sans" onClick={() => setContextMenu(prev => ({...prev, visible: false}))}>
             <LoadingOverlay isVisible={showLoadingOverlay} message={loadingMessage} onClose={() => setShowLoadingOverlay(false)} />
             
-            {/* Comparison Modal */}
-            {isComparisonModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-10 pointer-events-none">
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto" onClick={() => setIsComparisonModalOpen(false)} />
-                    <div className="bg-white dark:bg-gray-900 w-full max-w-6xl h-full rounded-2xl shadow-2xl flex flex-col overflow-hidden relative z-10 pointer-events-auto animate-modal-up border border-gray-200 dark:border-gray-800">
-                        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg text-purple-600">
-                                    <BookOpen className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <h2 className="text-lg font-black text-gray-900 dark:text-white">剧本改编对比</h2>
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Script Adaptation Comparison</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setIsComparisonModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-                                <X className="w-6 h-6 text-gray-400" />
-                            </button>
-                        </div>
-                        
-                        <div className="flex-1 flex overflow-hidden">
-                            {/* Left: Original */}
-                            <div className="flex-1 flex flex-col border-r border-gray-100 dark:border-gray-800 overflow-hidden">
-                                <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800/50 flex items-center justify-between border-b border-gray-100 dark:border-gray-800">
-                                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                                        原文剧本 (小说/素材)
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                        <button 
-                                            onClick={() => document.getElementById('source-upload-modal')?.click()}
-                                            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-500 transition-colors"
-                                            title="上传本地文件"
-                                        >
-                                            <CloudArrowUp className="w-4 h-4" />
-                                        </button>
-                                        <button 
-                                            onClick={() => setIsSourceAssetModalOpen(true)}
-                                            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-500 transition-colors"
-                                            title="从素材库导入"
-                                        >
-                                            <Database className="w-4 h-4" />
-                                        </button>
-                                        <input 
-                                            type="file" 
-                                            id="source-upload-modal" 
-                                            className="hidden" 
-                                            accept=".txt,.md"
-                                            onChange={handleSourceUpload}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-6 text-sm leading-relaxed text-gray-600 dark:text-gray-400 bg-gray-50/30 dark:bg-black/20 custom-scrollbar font-serif">
-                                    <div className="whitespace-pre-wrap">
-                                        {script.sourceContent || (generationMode === 'workflow' 
-                                            ? (workflowFormState['novel_content'] || workflowFormState['novel_text'] || workflowFormState['小说内容'] || workflowFormState['小说原文'] || '暂无原文内容')
-                                            : (promptFormState['novel_text'] || promptFormState['novel_content'] || promptFormState['小说原文'] || promptFormState['小说内容'] || '暂无原文内容'))}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            {/* Right: Adapted */}
-                            <div className="flex-1 flex flex-col overflow-hidden">
-                                <div className="px-6 py-3 bg-purple-50/50 dark:bg-purple-900/10 flex items-center justify-between border-b border-purple-100/50 dark:border-purple-800/50">
-                                    <span className="text-xs font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                                        改编后剧本
-                                    </span>
-                                    <span className="text-[10px] bg-purple-100 dark:bg-purple-900/50 text-purple-600 px-2 py-0.5 rounded font-bold">AI 改编</span>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-6 bg-white dark:bg-gray-900 custom-scrollbar">
-                                    <div className="space-y-4">
-                                        {generationMode === 'workflow' ? (
-                                            (executedWorkflow || selectedWorkflow)?.steps?.map((step) => {
-                                                const content = stepResults[step.outputVariable];
-                                                if (!content) return null;
-                                                return (
-                                                    <div key={step.id} className="p-4 rounded-xl border border-purple-100 dark:border-purple-900/30 bg-purple-50/10 dark:bg-purple-900/5">
-                                                        <div className="text-[10px] font-black text-purple-400 uppercase mb-2 border-b border-purple-100/30 pb-1">{step.name}</div>
-                                                        <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                                                            {content}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })
-                                        ) : (
-                                            promptResultText ? (
-                                                <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                                                    {promptResultText}
-                                                </div>
-                                            ) : (
-                                                <div className="text-center py-20 text-gray-400 text-sm italic">暂无适配生成内容</div>
-                                            )
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 text-center">
-                            <p className="text-[10px] text-gray-400 font-medium">对比视图仅供参考，AI 改编内容已根据剧情深度优化。改编的情节点已自动进行视听语言转换。</p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             <FollowUpModal 
                 isOpen={followUpModal.open} 
                 onClose={() => setFollowUpModal(prev => ({ ...prev, open: false }))} 
@@ -1274,14 +1089,6 @@ ${FORCE_LONG_INSTRUCTION}`;
 
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
             <PromptSelectionModal isOpen={isPromptSelectionModalOpen} onClose={() => setIsPromptSelectionModalOpen(false)} onSelect={handlePromptChange} />
-            
-            <AssetSelectionModal 
-                isOpen={isSourceAssetModalOpen} 
-                onClose={() => setIsSourceAssetModalOpen(false)} 
-                assets={assets} 
-                selectedAssetIds={script.sourceAssetId ? new Set([script.sourceAssetId]) : new Set()} 
-                onToggleAsset={(id) => handleSelectSourceAsset(id)} 
-            />
             
             {/* ... Workflow Modal with Top Bar ... */}
             {isWorkflowModalOpen && createPortal(
@@ -1516,15 +1323,6 @@ ${FORCE_LONG_INSTRUCTION}`;
                          </div>
 
                          <div className="flex items-center gap-2 w-1/4 justify-end">
-                             {script.type === 'adaptation' && (
-                                 <button 
-                                    onClick={() => setIsComparisonModalOpen(true)}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors mr-1"
-                                 >
-                                     <ArrowPath className="w-3.5 h-3.5" />
-                                     改编对比
-                                 </button>
-                             )}
                              <div className="relative">
                                  {/* Replace Episode Selector with Download */}
                                  <button 
@@ -1597,34 +1395,7 @@ ${FORCE_LONG_INSTRUCTION}`;
                                  {/* Result Header Removed */}
                                  {/* Result Body - Full height */}
                                  <div className="flex-1 p-8 relative group overflow-y-auto custom-scrollbar min-h-[500px]">
-                                     {generationError && (
-                                         <div className="mb-6 p-6 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl flex flex-col items-center gap-4 animate-fade-in">
-                                             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/40 rounded-full flex items-center justify-center text-red-600 dark:text-red-400">
-                                                 <InformationCircle className="w-6 h-6" />
-                                             </div>
-                                             <div className="text-center">
-                                                 <h4 className="text-sm font-bold text-red-700 dark:text-red-300 mb-1">生成失败</h4>
-                                                 <p className="text-xs text-red-500 dark:text-red-400/80 max-w-md mx-auto">{generationError}</p>
-                                             </div>
-                                             <button 
-                                                 onClick={() => handleRunGeneration()}
-                                                 className="px-6 py-2 bg-red-600 text-white rounded-full text-sm font-bold hover:bg-red-500 transition-all active:scale-95 flex items-center gap-2 shadow-lg shadow-red-500/20"
-                                             >
-                                                 <ArrowPath className="w-4 h-4" /> 重新尝试生成
-                                             </button>
-                                         </div>
-                                     )}
-
-                                     {isGenerating && !promptResultText ? (
-                                         <div className="flex flex-col items-center justify-center h-full text-sky-500 pt-20 animate-pulse">
-                                             <div className="w-16 h-16 mb-6 relative">
-                                                 <Sparkles className="w-16 h-16 absolute inset-0 opacity-20" />
-                                                 <ArrowPath className="w-16 h-16 animate-spin" />
-                                             </div>
-                                             <h3 className="text-lg font-bold mb-2">正在为您精心创作...</h3>
-                                             <p className="text-sm text-sky-400 opacity-80">AI 正在根据您的提示词构建精彩内容</p>
-                                         </div>
-                                     ) : promptResultText ? (
+                                     {promptResultText ? (
                                          <div className="mb-8">
                                              {isGenerating ? (
                                                  <StreamingText text={promptResultText} isGenerating={true} />
@@ -1691,21 +1462,7 @@ ${FORCE_LONG_INSTRUCTION}`;
                                                          Step {index + 1}
                                                      </div>
 
-                                                     {generationError && currentStepIndex === index ? (
-                                                          <div className="p-6 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl flex flex-col items-center gap-3 animate-fade-in text-center mx-auto max-w-2xl">
-                                                              <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-bold text-sm">
-                                                                  <InformationCircle className="w-5 h-5" />
-                                                                  本级剧本生成失败
-                                                              </div>
-                                                              <p className="text-xs text-red-500 dark:text-red-400/80 max-w-md">{generationError}</p>
-                                                              <button 
-                                                                  onClick={() => handleRunGeneration(index)}
-                                                                  className="mt-2 px-5 py-2 bg-red-600 text-white rounded-full text-xs font-bold hover:bg-red-500 transition-all active:scale-95 flex items-center gap-2"
-                                                              >
-                                                                  <ArrowPath className="w-3.5 h-3.5" /> 立即重试
-                                                              </button>
-                                                          </div>
-                                                     ) : result ? (
+                                                     {result ? (
                                                          <div className="relative">
                                                              {/* Removed Hover Controls as requested */}
                                                              
@@ -1723,13 +1480,9 @@ ${FORCE_LONG_INSTRUCTION}`;
                                                              )}
                                                          </div>
                                                       ) : isGeneratingThis ? (
-                                                         <div className="flex flex-col items-center justify-center py-12 text-sky-500 text-sm animate-pulse gap-3">
-                                                             <div className="relative flex items-center justify-center">
-                                                                 <Sparkles className="w-8 h-8 opacity-20" />
-                                                                 <ArrowPath className="w-8 h-8 animate-spin absolute" />
-                                                             </div>
-                                                             <span className="font-bold">正在创作本章节内容...</span>
-                                                             <p className="text-[11px] opacity-60">AI 正在努力为您编织精彩情节</p>
+                                                         <div className="flex flex-col items-center justify-center py-8 text-sky-500 text-sm animate-pulse gap-2">
+                                                             <Sparkles className="w-6 h-6" /> 
+                                                             <span>正在生成内容...</span>
                                                          </div>
                                                       ) : (
                                                          <div className="text-gray-400 text-xs italic p-4 text-center">等待生成...</div>
