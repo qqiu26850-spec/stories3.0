@@ -192,6 +192,8 @@ export interface Script {
   wordCount: number;
   type: 'original' | 'adaptation';
   creationDate: string;
+  sourceContent?: string;
+  sourceAssetId?: string;
   scenes: Scene[];
   scriptData?: {
       settings: ScriptSettings;
