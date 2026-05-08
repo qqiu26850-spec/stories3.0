@@ -1,18 +1,9 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-let genAI: GoogleGenAI | null = null;
-
-function getGenAI() {
-    if (!genAI) {
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            throw new Error("GEMINI_API_KEY is not set in environment variables.");
-        }
-        genAI = new GoogleGenAI({ apiKey });
-    }
-    return genAI;
-}
+// Initialize Gemini directly in the frontend
+// The API key is provided by the environment
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 interface GenerationOptions {
     model: string;
@@ -111,8 +102,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
 
   if (options.model.startsWith('gemini')) {
     try {
-        const ai = getGenAI();
-        const response = await ai.models.generateContent({
+        const response = await genAI.models.generateContent({
             model: options.model,
             contents: prompt,
             config: {
@@ -194,8 +184,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
 
     if (options.model.startsWith('gemini')) {
         try {
-            const ai = getGenAI();
-            const stream = await ai.models.generateContentStream({
+            const stream = await genAI.models.generateContentStream({
                 model: options.model,
                 contents: prompt,
                 config: {
