@@ -221,6 +221,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [isAssetModalOpen, setAssetModalOpen] = useState(false);
     const [isWorkflowModalOpen, setWorkflowModalOpen] = useState(false);
     const [isPromptSelectionModalOpen, setIsPromptSelectionModalOpen] = useState(false);
+    const [isComparisonAssetModalOpen, setIsComparisonAssetModalOpen] = useState(false);
 
     // Workflow Modal specific states
     const [workflowCategory, setWorkflowCategory] = useState<string>('all');
@@ -236,6 +237,9 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('正在处理...');
     const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
+    const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
+    const [originalScriptText, setOriginalScriptText] = useState('');
+    const [adaptedScriptText, setAdaptedScriptText] = useState('');
     
     // Editor State
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
@@ -507,18 +511,18 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                 const tail = currentResult.slice(-3000);
                 const originalPrompt = lastStepPromptsRef.current[step.outputVariable] || '';
                 
-                finalPrompt = `【原始创作任务】：
-${originalPrompt}
+                finalPrompt = `${originalPrompt}
+
+---
+【系统提示】：
+上文输出因长度限制被中断。请严格基于上方【原始创作任务】的要求，紧接着下方的【已生成内容末尾】，直接无缝生成后续内容。
+要求：
+1. 严禁重复上文内容，严禁从头开始，严禁带开场白。
+2. 必须保持与上文完全一致的剧本格式（场景、动作、对白）、风格和逻辑。
+3. 确保衔接处逻辑通顺。
 
 【已生成内容末尾】：
 ...${tail}
-
-【续写指令】：
-请严格基于【原始创作任务】的要求，从【已生成内容末尾】处开始无缝续写。
-要求：
-1. 严禁重复上文内容，严禁从头开始。
-2. 保持与上文完全一致的剧本格式、风格和逻辑。
-3. 直接输出续写内容，不要有任何开场白。
 
 ${FORCE_LONG_INSTRUCTION}`;
             } else {
@@ -617,18 +621,18 @@ ${FORCE_LONG_INSTRUCTION}`;
             if (isContinue) {
                 const tail = promptResultText.slice(-3000);
                 const originalPrompt = lastPromptRef.current;
-                finalPrompt = `【原始创作任务】：
-${originalPrompt}
+                finalPrompt = `${originalPrompt}
+
+---
+【系统提示】：
+上文输出因长度限制被中断。请严格基于上方【原始创作任务】的要求，紧接着下方的【已生成内容末尾】，直接无缝生成后续内容。
+要求：
+1. 严禁重复上文内容，严禁从头开始，严禁带开场白。
+2. 必须保持与上文完全一致的剧本格式、风格和逻辑。
+3. 确保衔接处逻辑通顺。
 
 【已生成内容末尾】：
 ...${tail}
-
-【续写指令】：
-请严格基于【原始创作任务】的要求，从【已生成内容末尾】处开始无缝续写。
-要求：
-1. 严禁重复上文内容，严禁从头开始。
-2. 保持与上文完全一致的剧本格式、风格和逻辑。
-3. 直接输出续写内容，不要有任何开场白。
 
 ${FORCE_LONG_INSTRUCTION}`;
             } else {
@@ -813,6 +817,39 @@ ${FORCE_LONG_INSTRUCTION}`;
         setScript(p => ({...p, title: tempTitle}));
         await updateProject(script.id, { title: tempTitle });
         setIsEditingTitle(false);
+    };
+
+    const handleUploadOriginal = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                setOriginalScriptText(event.target?.result as string);
+            };
+            reader.readAsText(file);
+        }
+    };
+
+    const handleSelectAssetForComparison = (assetId: string) => {
+        const asset = assets.find(a => a.id === assetId);
+        if (asset) {
+            setOriginalScriptText(asset.content);
+            setIsComparisonAssetModalOpen(false);
+        }
+    };
+
+    const handleSaveAdaptedTextFromModal = () => {
+        if (generationMode === 'prompt') {
+            setPromptResultText(adaptedScriptText);
+        } else {
+            const activeWF = executedWorkflow || selectedWorkflow;
+            if (activeWF?.steps?.length === 1) {
+                setStepResults({ [activeWF.steps[0].outputVariable]: adaptedScriptText });
+            } else {
+                alert('提示：多步工作流模式下，对比框中的全局修改暂无法自动拆分回各步骤，请手动复制需要的部分。');
+            }
+        }
+        setIsComparisonModalOpen(false);
     };
 
     // --- Render ---
@@ -1088,7 +1125,92 @@ ${FORCE_LONG_INSTRUCTION}`;
             />
 
             <AssetSelectionModal isOpen={isAssetModalOpen} onClose={() => setAssetModalOpen(false)} assets={assets} selectedAssetIds={selectedAssetIds} onToggleAsset={(id) => setSelectedAssetIds(prev => { const next = new Set(prev); if(next.has(id)) next.delete(id); else next.add(id); return next; })} />
+            <AssetSelectionModal 
+                isOpen={isComparisonAssetModalOpen} 
+                onClose={() => setIsComparisonAssetModalOpen(false)} 
+                assets={assets} 
+                selectedAssetIds={new Set()} 
+                onToggleAsset={handleSelectAssetForComparison} 
+            />
             <PromptSelectionModal isOpen={isPromptSelectionModalOpen} onClose={() => setIsPromptSelectionModalOpen(false)} onSelect={handlePromptChange} />
+            
+            {/* Adaptation Comparison Modal */}
+            {isComparisonModalOpen && createPortal(
+                <div className="fixed inset-0 bg-black/60 z-[110] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsComparisonModalOpen(false)}>
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-[95vw] h-[90vh] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Copy className="w-5 h-5 text-purple-500" />
+                                改编对比
+                            </h3>
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={handleSaveAdaptedTextFromModal}
+                                    className="px-4 py-2 bg-sky-600 text-white text-sm font-bold rounded-lg hover:bg-sky-500 transition-colors shadow-lg"
+                                >
+                                    应用修改
+                                </button>
+                                <button onClick={() => setIsComparisonModalOpen(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-400">
+                                    <X className="w-6 h-6"/>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 flex overflow-hidden">
+                            {/* Original Script */}
+                            <div className="flex-1 border-r border-gray-100 dark:border-gray-800 flex flex-col">
+                                <div className="p-3 bg-gray-50/30 dark:bg-gray-900/30 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">原文剧本</span>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={async () => {
+                                                const text = await navigator.clipboard.readText();
+                                                setOriginalScriptText(text);
+                                            }}
+                                            className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-[10px] font-bold text-gray-600 dark:text-gray-400 hover:border-sky-500"
+                                            title="从剪贴板粘贴"
+                                        >
+                                            复制粘贴
+                                        </button>
+                                        <label className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-[10px] font-bold text-gray-600 dark:text-gray-400 hover:border-sky-500 cursor-pointer flex items-center gap-1">
+                                            <CloudArrowUp className="w-3 h-3" />
+                                            本地上传
+                                            <input type="file" className="hidden" accept=".txt,.md,.doc,.docx" onChange={handleUploadOriginal} />
+                                        </label>
+                                        <button 
+                                            onClick={() => setIsComparisonAssetModalOpen(true)}
+                                            className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-[10px] font-bold text-gray-600 dark:text-gray-400 hover:border-sky-500 flex items-center gap-1"
+                                        >
+                                            <Database className="w-3 h-3" />
+                                            素材库
+                                        </button>
+                                    </div>
+                                </div>
+                                <textarea 
+                                    value={originalScriptText}
+                                    onChange={(e) => setOriginalScriptText(e.target.value)}
+                                    placeholder="请输入或上传原剧本内容进行对比..."
+                                    className="flex-1 p-6 text-sm leading-relaxed outline-none resize-none bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 custom-scrollbar"
+                                />
+                            </div>
+
+                            {/* Adapted Script */}
+                            <div className="flex-1 flex flex-col bg-gray-50/10 dark:bg-gray-900/5">
+                                <div className="p-3 bg-gray-50/30 dark:bg-gray-900/30 border-b border-gray-100 dark:border-gray-800 flex items-center">
+                                    <span className="text-sm font-bold text-purple-600 dark:text-purple-400">改编后剧本 (可直接修改)</span>
+                                </div>
+                                <textarea 
+                                    value={adaptedScriptText}
+                                    onChange={(e) => setAdaptedScriptText(e.target.value)}
+                                    placeholder="生成后的改编剧本将显示在这里..."
+                                    className="flex-1 p-6 text-sm leading-relaxed outline-none resize-none bg-white dark:bg-gray-900 text-purple-950 dark:text-purple-200 custom-scrollbar"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
             
             {/* ... Workflow Modal with Top Bar ... */}
             {isWorkflowModalOpen && createPortal(
@@ -1323,6 +1445,25 @@ ${FORCE_LONG_INSTRUCTION}`;
                          </div>
 
                          <div className="flex items-center gap-2 w-1/4 justify-end">
+                             {script.type === 'adaptation' && (
+                                 <button 
+                                    onClick={() => {
+                                        setIsComparisonModalOpen(true);
+                                        // Initialize adapted text if empty
+                                        if (!adaptedScriptText) {
+                                            const activeWF = executedWorkflow || selectedWorkflow;
+                                            const allText = generationMode === 'workflow' 
+                                                ? activeWF?.steps?.map(s => stepResults[s.outputVariable]).filter(Boolean).join('\n\n')
+                                                : promptResultText;
+                                            setAdaptedScriptText(allText || '');
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                                 >
+                                     <Copy className="w-3.5 h-3.5" />
+                                     改编对比
+                                 </button>
+                             )}
                              <div className="relative">
                                  {/* Replace Episode Selector with Download */}
                                  <button 

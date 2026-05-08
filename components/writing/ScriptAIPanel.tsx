@@ -187,18 +187,18 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
         const tail = generatedText.slice(-3000); 
         const originalPrompt = lastPromptRef.current;
         
-        const continuePrompt = `【原始创作任务】：
-${originalPrompt}
+        const continuePrompt = `${originalPrompt}
+
+---
+【系统提示】：
+上文输出因长度限制被中断。请严格基于上方【原始创作任务】的要求，紧接着下方的【已生成内容末尾】，直接无缝生成后续内容。
+要求：
+1. 严禁重复上文内容，严禁从头开始，严禁带开场白。
+2. 必须保持与上文完全一致的剧本格式、风格和逻辑。
+3. 确保衔接处逻辑通顺。
 
 【已生成内容末尾】：
 ...${tail}
-
-【续写指令】：
-请严格基于【原始创作任务】的要求，从【已生成内容末尾】处开始无缝续写。
-要求：
-1. 严禁重复上文内容，严禁从头开始。
-2. 保持与上文完全一致的剧本格式、风格和逻辑。
-3. 直接输出续写内容，不要有任何开场白。
 
 ${FORCE_LONG_INSTRUCTION}`;
         const controller = new AbortController();
