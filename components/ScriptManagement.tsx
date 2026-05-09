@@ -9,7 +9,7 @@ import { Film, BookOpen, DocumentPlus, Check, ArrowPath } from './Icon';
 import ScriptWritingPage from './writing/ScriptWritingPage';
 import { createProject, fetchProjects, deleteProject, updateProject } from '../services/supabaseService';
 
-type ScriptType = 'original' | 'adaptation';
+type ScriptType = 'original' | 'adaptation' | 'original_adaptation';
 type ViewState = 'selection' | 'list';
 
 interface ScriptManagementProps {
@@ -43,7 +43,7 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
         if (data) {
             // Filter by specific script types or the generic 'script' for legacy support
             const filtered = data.filter((p: any) => 
-                p.type === 'script' || p.type === 'script_original' || p.type === 'script_adaptation'
+                p.type === 'script' || p.type === 'script_original' || p.type === 'script_adaptation' || p.type === 'script_original_adaptation'
             );
             const mappedScripts: Script[] = filtered.map((p: any) => ({
                 id: p.id,
@@ -51,7 +51,7 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
                 coverImage: null, 
                 wordCount: p.word_count || 0,
                 // Determine type based on DB type or fallback logic
-                type: p.type === 'script_adaptation' ? 'adaptation' : 'original', 
+                type: p.type === 'script_adaptation' ? 'adaptation' : (p.type === 'script_original_adaptation' ? 'original_adaptation' : 'original'), 
                 creationDate: p.created_at || new Date().toISOString(),
                 scenes: [],
                 scriptData: p.script_data || undefined 
@@ -109,8 +109,15 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
         
         try {
             // Explicitly set dbType to separate storage
-            const dbType = scriptType === 'adaptation' ? 'script_adaptation' : 'script_original';
-            const description = scriptType === 'adaptation' ? "Adaptation Project" : "Original Script";
+            let dbType = 'script_original';
+            let description = 'Original Script';
+            if (scriptType === 'adaptation') {
+                dbType = 'script_adaptation';
+                description = 'Novel Adaptation';
+            } else if (scriptType === 'original_adaptation') {
+                dbType = 'script_original_adaptation';
+                description = 'Original Script Adaptation';
+            }
             
             // @ts-ignore - passing specific string type
             const { id: dbId, error } = await createProject(title, description, dbType, null);
@@ -211,7 +218,7 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
                         <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">剧本创作中心</h1>
                         <p className="text-xl text-gray-500 dark:text-gray-400">请选择您的创作类型，开启一段光影之旅。</p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         <button onClick={() => handleSelectType('original')} className="group relative p-10 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-sky-500 dark:hover:border-sky-500 transition-all duration-300 hover:shadow-xl text-center flex flex-col items-center">
                             <div className="w-24 h-24 bg-sky-50 dark:bg-sky-900/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <Film className="w-12 h-12 text-sky-500 dark:text-sky-400" />
@@ -225,9 +232,18 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
                             <div className="w-24 h-24 bg-purple-50 dark:bg-purple-900/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <BookOpen className="w-12 h-12 text-purple-500 dark:text-purple-400" />
                             </div>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">剧本改编</h2>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">小说改编剧本</h2>
                             <p className="text-gray-500 dark:text-gray-400">基于小说或现有素材进行影视化改编。</p>
                              <span className="mt-6 text-purple-500 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">点击开始 &rarr;</span>
+                        </button>
+
+                        <button onClick={() => handleSelectType('original_adaptation')} className="group relative p-10 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all duration-300 hover:shadow-xl text-center flex flex-col items-center">
+                            <div className="w-24 h-24 bg-emerald-50 dark:bg-emerald-900/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                                <DocumentPlus className="w-12 h-12 text-emerald-500 dark:text-emerald-400" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">原创剧本改编</h2>
+                            <p className="text-gray-500 dark:text-gray-400">对原始剧本进行结构重组与精细化二次创作。</p>
+                             <span className="mt-6 text-emerald-500 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">点击开始 &rarr;</span>
                         </button>
                     </div>
                 </div>
@@ -262,7 +278,9 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
                     </button>
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{scriptType === 'original' ? '原创剧本' : '剧本改编'}</h1>
+                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                            {scriptType === 'original' ? '原创剧本' : scriptType === 'adaptation' ? '小说改编剧本' : '原创剧本改编'}
+                        </h1>
                         <p className="text-gray-500 dark:text-gray-400 mt-1">管理你的剧本创作项目。</p>
                     </div>
                 </div>
@@ -323,12 +341,12 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
                                 )}
                             </div>
                             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                                {scriptType === 'original' ? '创建你的第一个原创剧本' : '开始你的第一个剧本改编'}
+                                {scriptType === 'original' ? '创建你的第一个原创剧本' : scriptType === 'adaptation' ? '开始你的第一个小说改编剧本' : '开始你的第一个原创剧本改编'}
                             </h2>
                             <p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
                                 {scriptType === 'original'
                                     ? '每一个伟大的电影都始于一个脚本。创建新项目，开始编写场景、动作和对白。'
-                                    : '将优秀的文字转化为生动的影像。导入素材，开始你的改编创作。'
+                                    : scriptType === 'adaptation' ? '将优秀的文字转化为生动的影像。导入素材，开始你的改编创作。' : '对现有剧本进行精雕细琢。上传原稿，开启重塑之旅。'
                                 }
                             </p>
                             <button

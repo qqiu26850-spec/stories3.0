@@ -391,7 +391,7 @@ export const WORKFLOWS: Workflow[] = [
   },
   {
     id: 'wf-4',
-    title: '小说转剧本改编流',
+    title: '小说改编剧本',
     description: '专业的改编工作流，将小说章节自动转换为分镜头剧本，保留核心对白与动作。',
     usageCount: '3.1k',
     heat: 3200,

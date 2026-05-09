@@ -183,7 +183,7 @@ export interface Script {
   title: string;
   coverImage: string | null;
   wordCount: number;
-  type: 'original' | 'adaptation';
+  type: 'original' | 'adaptation' | 'original_adaptation';
   creationDate: string;
   scenes: Scene[];
   scriptData?: {
