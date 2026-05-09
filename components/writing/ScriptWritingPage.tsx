@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Script, Scene, ScriptSettings, Workflow, WorkflowStep, Asset, Prompt, PromptCategory, PromptSubCategory } from '../../types';
+import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory, PromptSubCategory } from '../../types';
 import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search, CloudArrowUp, Settings } from '../Icon';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, fetchPrompts, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, deleteScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
@@ -115,8 +115,8 @@ const StreamingText: React.FC<{ text: string; isGenerating: boolean }> = ({ text
 };
 
 const MODEL_OPTIONS = [
-    { value: "gemini-3-flash-preview", label: "妙写版 (Gemini 3 Flash)" },
     { value: "deepseek-chat", label: "奇思版 (DeepSeek V3)" },
+    { value: "gemini-3-flash-preview", label: "妙写版 (Gemini 3 Flash)" },
     { value: "doubao-flash", label: "速写版 (豆包)" }
 ];
 
@@ -185,7 +185,7 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         format: 'live_action',
         totalEpisodes: '40', // Updated Default
         outputLanguage: 'zh',
-        model: 'gemini-3-flash-preview'
+        model: 'deepseek-chat'
     });
 
     // Model Config State
@@ -246,13 +246,11 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
         id: 'original-script-adaptation-system',
         title: '原创剧本改编工作流',
         steps: [
-            { id: 's1', name: '1.原文上传与需求', prompt: '', outputVariable: 'source_script', manualConfirmation: true },
-            { id: 's2', name: '2.艺术重塑设定', prompt: '你是一个剧本专家。根据以下原始剧本内容和改编需求，结合最新的艺术设定（${selected_prompt_content}），重新生成并完善该剧本的人物设定、世界观和故事简介。要求：在保留核心冲突的基础上，增强角色的复杂度和世界观的逻辑深度。\n\n【原始剧本内容】：\n${source_script}\n\n【改编需求】：\n${adaptation_requirements}\n\n【所选提示词要求】：\n${selected_prompt_content}', outputVariable: 'art_settings' },
-            { id: 's3', name: '3.1 剧本重构 (01-03集)', prompt: '根据以下艺术重塑说明、原始剧本以及改编需求，重新生成完整剧本内容。要求：严格遵守新的艺术设定，确保情节逻辑严密且高度连贯。本次请生成前3集的内容。\n\n【艺术重塑设定】：\n${art_settings}\n\n【原始剧本原文】：\n${source_script}\n\n【改编需求】：\n${adaptation_requirements}', outputVariable: 'final_script_01_03' }
+            { id: 's1', name: '1.原文上传', prompt: '', outputVariable: 'source_script', manualConfirmation: true },
+            { id: 's2', name: '2.艺术重塑', prompt: '你是一个剧本专家。根据以下原始剧本内容，重新生成并完善该剧本的人物设定、世界观和故事简介。要求：在保留核心冲突的基础上，增强角色的复杂度和世界观的逻辑深度。\n\n【原始剧本内容】：\n${source_script}', outputVariable: 'art_settings' },
+            { id: 's3', name: '3.1 剧本重构 (01-03集)', prompt: '根据以下艺术重塑说明和原始剧本，重新生成完整剧本内容。要求：严格遵守新的艺术设定，确保情节逻辑严密且高度连贯。本次请生成前3集的内容。\n\n【艺术重塑设定】：\n${art_settings}\n\n【原始剧本原文】：\n${source_script}', outputVariable: 'final_script_01_03' }
         ]
     }), []);
-
-    const [adaptationPrompt, setAdaptationPrompt] = useState<Prompt | null>(null);
 
     useEffect(() => {
         if (script.type === 'original_adaptation' && !selectedWorkflow && !executedWorkflow) {
@@ -398,9 +396,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         template: content.template || '',
                         fields: content.fields || [],
                         category: p.main_category,
-                        subCategories: p.sub_category ? [p.sub_category] : [],
+                        subCategory: p.sub_category,
+                        usageCount: p.usage_count || 0,
                         heat: p.usage_count || 0,
-                        creator: p.user_id === uid ? 'user' : 'system',
+                        author: p.profiles?.username || (p.user_id === uid ? '我' : '匿名'),
                         userId: p.user_id
                     };
                 });
@@ -943,199 +942,186 @@ ${FORCE_LONG_INSTRUCTION}`;
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 flex justify-between"><span>随机度 (Temperature): {temperature}</span></label>
                                     <input type="range" min="0" max="1.5" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
-                                    <p className="text-[9px] text-gray-400 mt-0.5">控制创造性：值越高越发散，值越低越严谨。</p>
+                                    <p className="text-[9px] text-gray-400 mt-0.5">控制创造性：值越高越发散（适合创意），值越低越严谨（适合逻辑）。</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 flex justify-between"><span>核采样 (Top P): {topP}</span></label>
+                                    <input type="range" min="0" max="1" step="0.05" value={topP} onChange={e => setTopP(parseFloat(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                    <p className="text-[9px] text-gray-400 mt-0.5">控制词汇多样性：降低该值可减少偏门词汇的出现。</p>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 flex justify-between"><span>最大长度 (Tokens): {maxOutputTokens}</span></label>
                                     <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                    <p className="text-[9px] text-gray-400 mt-0.5">限制单次请求生成的最大文本量（包括标点和换行）。</p>
                                 </div>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* 2. Basic Info / Prompt Selection */}
+                {/* 2. Basic Info - Updated Labels and Defaults handled in State */}
                 <div className="space-y-3">
-                    <h3 className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">
-                        {generationMode === 'workflow' && (executedWorkflow || selectedWorkflow)?.id === 'original-script-adaptation-system' 
-                            ? '2. 提示词卡片 (艺术风格设定)' 
-                            : '2. 基础信息'}
-                    </h3>
-                    
-                    {generationMode === 'workflow' && (executedWorkflow || selectedWorkflow)?.id === 'original-script-adaptation-system' ? (
-                        <div className="space-y-2 pl-1">
-                            <button 
-                                onClick={() => {
-                                    (window as any)._onPromptSelectCallback = (p: Prompt) => {
-                                        setAdaptationPrompt(p);
-                                        setWorkflowFormState(prev => ({...prev, 'selected_prompt_content': p.content}));
-                                    };
-                                    setIsPromptSelectionModalOpen(true);
-                                }}
-                                className={`w-full p-3 rounded-xl border text-xs text-left flex justify-between items-center group shadow-sm transition-all ${adaptationPrompt ? 'bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-sky-300'}`}
-                            >
-                                <span className="truncate font-bold">{adaptationPrompt ? adaptationPrompt.title : '点击选择提示词...'}</span>
-                                {adaptationPrompt ? <Check className="w-4 h-4 text-green-500" /> : <Box className="w-4 h-4 text-gray-400" />}
-                            </button>
-                            {adaptationPrompt && (
-                                <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
-                                    <p className="text-[10px] text-gray-500 line-clamp-2 italic">“{stripMarkdown(adaptationPrompt.content).substring(0, 100)}...”</p>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 gap-3 pl-1">
-                            <div className="space-y-1"><label className="text-xs font-bold text-gray-400">总集数</label><input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
-                            <div className="space-y-1"><label className="text-xs font-bold text-gray-400">语言</label><div className="relative z-40"><CustomSelect value={settings.outputLanguage} onChange={(v) => setSettings(s => ({...s, outputLanguage: v as 'zh' | 'en'}))} options={LANGUAGE_OPTIONS} /></div></div>
-                        </div>
-                    )}
+                    <h3 className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">2. 基础信息</h3>
+                    <div className="grid grid-cols-2 gap-3 pl-1">
+                        <div className="space-y-1"><label className="text-xs font-bold text-gray-400">总集数</label><input type="number" value={settings.totalEpisodes} onChange={e => setSettings(s => ({...s, totalEpisodes: e.target.value}))} className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-sky-500 outline-none" /></div>
+                        <div className="space-y-1"><label className="text-xs font-bold text-gray-400">语言</label><div className="relative z-40"><CustomSelect value={settings.outputLanguage} onChange={(v) => setSettings(s => ({...s, outputLanguage: v as 'zh' | 'en'}))} options={LANGUAGE_OPTIONS} /></div></div>
+                    </div>
                 </div>
 
                 {/* 3. Generation Mode Config */}
                 <div className="space-y-4">
-                    <h3 className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">
-                        {generationMode === 'workflow' && (executedWorkflow || selectedWorkflow)?.id === 'original-script-adaptation-system' 
-                            ? '3. 生成配置与步骤' 
-                            : '3. 生成模式'}
-                    </h3>
+                    <h3 className="text-sm font-black text-sky-600 dark:text-sky-400 flex items-center gap-2">3. 创作配置</h3>
                     
-                    <div className="pl-1">
+                    <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                        <button 
+                            onClick={() => setGenerationMode('workflow')}
+                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${generationMode === 'workflow' ? 'bg-white dark:bg-gray-700 text-sky-600 shadow-sm' : 'text-gray-500'}`}
+                        >
+                            工作流模式
+                        </button>
+                        <button 
+                            onClick={() => setGenerationMode('prompt')}
+                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${generationMode === 'prompt' ? 'bg-white dark:bg-gray-700 text-sky-600 shadow-sm' : 'text-gray-500'}`}
+                        >
+                            提示词模式
+                        </button>
+                    </div>
+
+                    <div className="space-y-4 pl-1">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">关联素材</label>
+                            <button onClick={() => setAssetModalOpen(true)} className={`w-full p-3 rounded-xl border border-dashed text-xs transition-all text-left flex justify-between items-center group ${selectedAssetIds.size > 0 ? 'border-sky-300 bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400' : 'border-gray-300 dark:border-gray-700 text-gray-500 hover:border-sky-300'}`}>
+                                <span className="truncate font-bold">{selectedAssetIds.size > 0 ? `已关联 ${selectedAssetIds.size} 项素材` : '选择角色/剧情/世界观...'}</span>
+                                <Database className={`w-4 h-4 group-hover:scale-110 transition-transform ${selectedAssetIds.size > 0 ? 'text-sky-500' : 'text-gray-400'}`} />
+                            </button>
+                        </div>
+
                         {generationMode === 'workflow' ? (
-                            (executedWorkflow || selectedWorkflow)?.id === 'original-script-adaptation-system' ? (
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-700 dark:text-gray-200">1.1 上传原始剧本内容 <span className="text-red-500">*</span></label>
-                                        <textarea 
-                                            value={workflowFormState['source_script'] || ''}
-                                            onChange={(e) => setWorkflowFormState(p => ({...p, 'source_script': e.target.value}))}
-                                            className="w-full h-24 p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
-                                            placeholder="请粘贴或上传您的原始剧本内容..."
-                                        />
-                                        <label className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] font-bold text-gray-600 dark:text-gray-400 hover:border-sky-500 cursor-pointer flex items-center justify-center gap-1.5 transition-all">
-                                            <CloudArrowUp className="w-3.5 h-3.5" />
-                                            本地上传剧本文件
-                                            <input 
-                                                type="file" 
-                                                className="hidden" 
-                                                accept=".txt,.md,.doc,.docx"
-                                                onChange={(e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file) {
-                                                        const reader = new FileReader();
-                                                        reader.onload = (ev) => setWorkflowFormState(p => ({...p, 'source_script': ev.target?.result as string}));
-                                                        reader.readAsText(file);
-                                                    }
-                                                }}
-                                            />
-                                        </label>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-700 dark:text-gray-200">1.2 填写改编需求</label>
-                                        <textarea 
-                                            value={workflowFormState['adaptation_requirements'] || ''}
-                                            onChange={(e) => setWorkflowFormState(p => ({...p, 'adaptation_requirements': e.target.value}))}
-                                            className="w-full h-24 p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
-                                            placeholder="请输入具体的改编要求，例如：节奏加快、增加悬疑感、修改结局等..."
-                                        />
-                                        <label className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] font-bold text-gray-600 dark:text-gray-400 hover:border-sky-500 cursor-pointer flex items-center justify-center gap-1.5 transition-all">
-                                            <CloudArrowUp className="w-3.5 h-3.5" />
-                                            上传相关需求文档
-                                            <input 
-                                                type="file" 
-                                                className="hidden" 
-                                                accept=".txt,.md,.doc,.docx"
-                                                onChange={(e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file) {
-                                                        const reader = new FileReader();
-                                                        reader.onload = (ev) => setWorkflowFormState(p => ({...p, 'adaptation_requirements': ev.target?.result as string}));
-                                                        reader.readAsText(file);
-                                                    }
-                                                }}
-                                            />
-                                        </label>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-700 dark:text-gray-200">2. 重塑创意设定 (人物/世界观/简介)</label>
-                                        <div className="p-3 bg-sky-50 dark:bg-sky-900/20 rounded-xl border border-sky-100 dark:border-sky-800 flex items-center gap-2 group">
-                                            <InformationCircle className="w-3.5 h-3.5 text-sky-500" />
-                                            <span className="text-[10px] text-sky-700 dark:text-sky-300">系统将结合所选提示词及需求自动分析生成</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-700 dark:text-gray-200">3. 剧本重新生成</label>
-                                        <div className="p-3 bg-sky-50 dark:bg-sky-900/20 rounded-xl border border-sky-100 dark:border-sky-800 flex items-center gap-2">
-                                            <InformationCircle className="w-3.5 h-3.5 text-sky-500" />
-                                            <span className="text-[10px] text-sky-700 dark:text-sky-300">AI分集拆解生成，支持模块化修改</span>
-                                        </div>
-                                    </div>
-
-                                    {(executedWorkflow || selectedWorkflow)?.id === 'original-script-adaptation-system' && 
-                                     stepResults['final_script_01_03'] && (
-                                        <button 
-                                            onClick={handleAddNextEpisodesStep}
-                                            className="w-full py-2 bg-sky-100 hover:bg-sky-200 text-sky-600 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all mt-2 border border-sky-200"
-                                        >
-                                            <Plus className="w-3.5 h-3.5" />
-                                            生成后续 3 集
-                                        </button>
-                                    )}
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">选择工作流</label>
-                                        <button onClick={() => setWorkflowModalOpen(true)} className={`w-full p-3 rounded-xl border text-xs text-left flex justify-between items-center group shadow-sm transition-all ${selectedWorkflow ? 'bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-sky-300'}`}>
-                                            <span className="truncate font-bold">{selectedWorkflow ? selectedWorkflow.title : '选择生成流程...'}</span>
-                                            <ChevronDown className={`w-4 h-4 ${selectedWorkflow ? 'text-sky-500' : 'text-gray-400'}`} />
-                                        </button>
-                                    </div>
-                                    {selectedWorkflow && selectedWorkflow.fields && selectedWorkflow.fields.length > 0 && (
-                                        <div className="space-y-4 animate-fade-in">
-                                            <div className="flex justify-between items-center pb-2">
-                                                <span className="text-xs font-black text-gray-700 dark:text-gray-200 flex items-center gap-1"><AdjustmentsHorizontal className="w-3 h-3"/> 参数填写</span>
-                                                <button onClick={() => { setSelectedWorkflow(null); setWorkflowFormState({}); }} className="text-xs text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
+                            <>
+                                {script.type === 'original_adaptation' ? (
+                                    <div className="space-y-4 animate-fade-in py-2 bg-gray-50/50 dark:bg-sky-900/10 rounded-2xl p-4 border border-sky-100 dark:border-sky-800">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="p-1.5 bg-sky-100 dark:bg-sky-900/30 rounded-lg">
+                                                <WorkflowIcon className="w-4 h-4 text-sky-600" />
                                             </div>
-                                            {selectedWorkflow.fields.map((field) => (
-                                                <div key={field.id} className="space-y-1.5">
-                                                    <div className="flex justify-between items-center">
-                                                        <label className="text-xs font-bold text-gray-600 dark:text-gray-300 block">
-                                                            {field.label}
-                                                            {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
-                                                        </label>
-                                                        {field.maxLength && <span className={`text-[9px] ${(workflowFormState[field.variable]?.length || 0) > field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>{workflowFormState[field.variable]?.length || 0}/{field.maxLength}</span>}
-                                                    </div>
-                                                    {field.type === 'file' ? (
-                                                        <div className="w-full">
-                                                            <input 
-                                                                type="file"
-                                                                multiple
-                                                                accept=".txt,.md,.json,.csv"
-                                                                onChange={(e) => handleFileChange(e, field.variable, true)}
-                                                                className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 transition-colors"
-                                                            />
-                                                            {workflowFormState[field.variable] && (
-                                                                <div className="mt-1 text-[10px] text-green-600 dark:text-green-400 truncate pl-2">
-                                                                    已加载 {workflowFormState[field.variable].length} 字符
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ) : field.type === 'textarea' ? <textarea value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none h-24 resize-y" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} /> : <input type="text" value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} />}
-                                                    {field.description && (
-                                                        <p className="text-[9px] text-sky-500 dark:text-sky-400 flex items-start gap-1 leading-tight mt-0.5">
-                                                            <InformationCircle className="w-3 h-3 shrink-0" />
-                                                            {field.description}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            ))}
+                                            <span className="text-xs font-black text-sky-700 dark:text-sky-300">改编工作流步骤</span>
                                         </div>
-                                    )}
-                                </>
-                            )
+                                        <div className="space-y-5">
+                                            {/* Step 1: Upload */}
+                                            <div className="space-y-5">
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="text-xs font-bold text-gray-700 dark:text-gray-200">1. 上传原始剧本内容 <span className="text-red-500">*</span></label>
+                                                    </div>
+                                                    <textarea 
+                                                        value={workflowFormState['source_script'] || ''}
+                                                        onChange={(e) => setWorkflowFormState(p => ({...p, 'source_script': e.target.value}))}
+                                                        className="w-full h-32 p-3 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-sm"
+                                                        placeholder="请粘贴或上传您的原始剧本内容..."
+                                                    />
+                                                    <div className="flex items-center gap-2">
+                                                        <label className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[10px] font-bold text-gray-600 dark:text-gray-400 hover:border-sky-500 cursor-pointer flex items-center justify-center gap-1.5 transition-all">
+                                                            <CloudArrowUp className="w-3.5 h-3.5" />
+                                                            本地上传剧本
+                                                            <input 
+                                                                type="file" 
+                                                                className="hidden" 
+                                                                accept=".txt,.md,.doc,.docx"
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) {
+                                                                        const reader = new FileReader();
+                                                                        reader.onload = (ev) => setWorkflowFormState(p => ({...p, 'source_script': ev.target?.result as string}));
+                                                                        reader.readAsText(file);
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold text-gray-700 dark:text-gray-200">2. 重塑创意设定 (人物/世界观/简介)</label>
+                                                    <div className="p-3 bg-sky-50 dark:bg-sky-900/20 rounded-xl border border-sky-100 dark:border-sky-800 flex items-center gap-2 group">
+                                                        <InformationCircle className="w-3.5 h-3.5 text-sky-500" />
+                                                        <span className="text-[10px] text-sky-700 dark:text-sky-300">系统将基于上文自动分析生成</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold text-gray-700 dark:text-gray-200">3. 剧本重新生成 (3集单元存储)</label>
+                                                    <div className="p-3 bg-sky-50 dark:bg-sky-900/20 rounded-xl border border-sky-100 dark:border-sky-800 flex items-center gap-2">
+                                                        <InformationCircle className="w-3.5 h-3.5 text-sky-500" />
+                                                        <span className="text-[10px] text-sky-700 dark:text-sky-300">AI分集拆解生成，支持模块化修改</span>
+                                                    </div>
+                                                </div>
+
+                                                {(executedWorkflow || selectedWorkflow)?.id === 'original-script-adaptation-system' && 
+                                                 stepResults['final_script_01_03'] && (
+                                                    <button 
+                                                        onClick={handleAddNextEpisodesStep}
+                                                        className="w-full py-2 bg-sky-100 hover:bg-sky-200 text-sky-600 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all mt-2 border border-sky-200"
+                                                    >
+                                                        <Plus className="w-3.5 h-3.5" />
+                                                        生成后续 3 集
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">选择工作流</label>
+                                            <button onClick={() => setWorkflowModalOpen(true)} className={`w-full p-3 rounded-xl border text-xs text-left flex justify-between items-center group shadow-sm transition-all ${selectedWorkflow ? 'bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-sky-300'}`}>
+                                                <span className="truncate font-bold">{selectedWorkflow ? selectedWorkflow.title : '选择生成流程...'}</span>
+                                                <ChevronDown className={`w-4 h-4 ${selectedWorkflow ? 'text-sky-500' : 'text-gray-400'}`} />
+                                            </button>
+                                        </div>
+                                        {selectedWorkflow && selectedWorkflow.fields && selectedWorkflow.fields.length > 0 && (
+                                            <div className="space-y-4 animate-fade-in">
+                                                <div className="flex justify-between items-center pb-2">
+                                                    <span className="text-xs font-black text-gray-700 dark:text-gray-200 flex items-center gap-1"><AdjustmentsHorizontal className="w-3 h-3"/> 参数填写</span>
+                                                    <button onClick={() => { setSelectedWorkflow(null); setWorkflowFormState({}); }} className="text-xs text-gray-400 hover:text-red-500"><X className="w-3 h-3"/></button>
+                                                </div>
+                                                {selectedWorkflow.fields.map((field) => (
+                                                    <div key={field.id} className="space-y-1.5">
+                                                        <div className="flex justify-between items-center">
+                                                            <label className="text-xs font-bold text-gray-600 dark:text-gray-300 block">
+                                                                {field.label}
+                                                                {field.required !== false && <span className="text-red-500 ml-0.5">*</span>}
+                                                            </label>
+                                                            {field.maxLength && <span className={`text-[9px] ${(workflowFormState[field.variable]?.length || 0) > field.maxLength ? 'text-red-500' : 'text-gray-400'}`}>{workflowFormState[field.variable]?.length || 0}/{field.maxLength}</span>}
+                                                        </div>
+                                                        {field.type === 'file' ? (
+                                                            <div className="w-full">
+                                                                <input 
+                                                                    type="file"
+                                                                    multiple
+                                                                    accept=".txt,.md,.json,.csv"
+                                                                    onChange={(e) => handleFileChange(e, field.variable, true)}
+                                                                    className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 transition-colors"
+                                                                />
+                                                                {workflowFormState[field.variable] && (
+                                                                    <div className="mt-1 text-[10px] text-green-600 dark:text-green-400 truncate pl-2">
+                                                                        已加载 {workflowFormState[field.variable].length} 字符
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : field.type === 'textarea' ? <textarea value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none h-24 resize-y" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} /> : <input type="text" value={workflowFormState[field.variable] || ''} onChange={(e) => setWorkflowFormState(p => ({...p, [field.variable]: e.target.value}))} className="w-full p-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none" placeholder={field.description || `请输入${field.label}...`} maxLength={field.maxLength} />}
+                                                        {field.description && (
+                                                            <p className="text-[9px] text-sky-500 dark:text-sky-400 flex items-start gap-1 leading-tight mt-0.5">
+                                                                <InformationCircle className="w-3 h-3 shrink-0" />
+                                                                {field.description}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </>
                         ) : (
                             <>
                                 <div className="space-y-1">
@@ -1219,7 +1205,7 @@ ${FORCE_LONG_INSTRUCTION}`;
                                 // When workflow is active/done, show Resume/Regenerate options
                                 <div className="grid grid-cols-2 gap-2">
                                     <button onClick={() => handleRunGeneration()} className="py-2 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center gap-1 text-xs">
-                                        <ArrowPath className="w-3.5 h-3.5" /> {visibleStepIndex === -1 ? '点击生成' : '重新生成'}
+                                        <ArrowPath className="w-3.5 h-3.5" /> 重新生成
                                     </button>
                                     <button onClick={() => handleRunGeneration(undefined, true)} className="py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 transition-all flex items-center justify-center gap-1 text-xs">
                                         <Play className="w-3.5 h-3.5" /> 继续生成
@@ -1228,8 +1214,8 @@ ${FORCE_LONG_INSTRUCTION}`;
                             )
                         ) : (
                             <div className="flex gap-2">
-                                {!promptResultText && Object.keys(stepResults).length === 0 ? (
-                                    <button onClick={() => handleRunGeneration()} className="w-full py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-1 text-xs"><Sparkles className="w-3.5 h-3.5" /> 点击生成</button>
+                                {!promptResultText ? (
+                                    <button onClick={() => handleRunGeneration()} className="w-full py-2 bg-sky-600 text-white font-bold rounded-xl hover:bg-sky-500 shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-1 text-xs"><Sparkles className="w-3.5 h-3.5" /> 立即生成</button>
                                 ) : (
                                     <>
                                         <button onClick={() => handleRunGeneration()} className="flex-1 py-2 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center gap-1 text-xs">
@@ -1276,18 +1262,7 @@ ${FORCE_LONG_INSTRUCTION}`;
                 selectedAssetIds={new Set()} 
                 onToggleAsset={handleSelectAssetForComparison} 
             />
-            <PromptSelectionModal 
-                isOpen={isPromptSelectionModalOpen} 
-                onClose={() => setIsPromptSelectionModalOpen(false)} 
-                onSelect={(p) => {
-                    if ((window as any)._onPromptSelectCallback) {
-                        (window as any)._onPromptSelectCallback(p);
-                        (window as any)._onPromptSelectCallback = null;
-                    } else {
-                        handlePromptChange(p);
-                    }
-                }} 
-            />
+            <PromptSelectionModal isOpen={isPromptSelectionModalOpen} onClose={() => setIsPromptSelectionModalOpen(false)} onSelect={handlePromptChange} />
             
             {/* Adaptation Comparison Modal */}
             {isComparisonModalOpen && createPortal(
