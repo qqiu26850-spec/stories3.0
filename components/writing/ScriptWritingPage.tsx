@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory, PromptSubCategory } from '../../types';
+import { Script, Scene, ScriptSettings, Workflow, Asset, Prompt, PromptCategory, PromptSubCategory, WorkflowStep } from '../../types';
 import { Film, ArrowPath, Check, ChevronLeft, ChevronRight, AdjustmentsHorizontal, Sparkles, DocumentText, Database, Play, Pencil, X, Stop, ChevronDown, ChevronUp, Workflow as WorkflowIcon, ChatBubbleOvalLeftEllipsis, DocumentArrowDown, UserCircle, Fire, Plus, InformationCircle, Box, Copy, Trash, Heart, Search, CloudArrowUp, Settings } from '../Icon';
 import WritingToolbar, { ToolbarAction } from './WritingToolbar';
 import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fetchMaterials, incrementWorkflowUsage, fetchWorkflows, fetchPrompts, getCurrentUserId, saveScriptWorkflowState, fetchScriptWorkflowState, deleteScriptWorkflowState, incrementPromptHeat, fetchWorkflowFavorites } from '../../services/supabaseService';
@@ -396,10 +396,10 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
                         template: content.template || '',
                         fields: content.fields || [],
                         category: p.main_category,
-                        subCategory: p.sub_category,
-                        usageCount: p.usage_count || 0,
+                        subCategories: p.sub_category ? [p.sub_category] : [],
                         heat: p.usage_count || 0,
-                        author: p.profiles?.username || (p.user_id === uid ? '我' : '匿名'),
+                        creator: (p.user_id === 'system' ? 'system' : 'user') as 'system' | 'user',
+                        authorName: p.profiles?.username || (p.user_id === uid ? '我' : '匿名'),
                         userId: p.user_id
                     };
                 });

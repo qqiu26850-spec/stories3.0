@@ -184,23 +184,31 @@ const ScriptAIPanel: React.FC<ScriptAIPanelProps> = ({ onInsert, onReplace, onSt
         if (isGenerating) return;
         setIsGenerating(true);
         setError('');
-        const tail = generatedText.slice(-3000); 
+        
+        // 取末尾 4000 字作为上下文衔接（增加窗口大小以提高连贯性）
+        const tail = generatedText.slice(-4000); 
         const originalPrompt = lastPromptRef.current;
         
-        const continuePrompt = `${originalPrompt}
+        const continuePrompt = `【任务类型】：内容续写（接续上文）
+
+【原始创作任务指令】：
+${originalPrompt}
 
 ---
-【系统提示】：
-上文输出因长度限制被中断。请严格基于上方【原始创作任务】的要求，紧接着下方的【已生成内容末尾】，直接无缝生成后续内容。
-要求：
-1. 严禁重复上文内容，严禁从头开始，严禁带开场白。
-2. 必须保持与上文完全一致的剧本格式、风格和逻辑。
-3. 确保衔接处逻辑通顺。
 
-【已生成内容末尾】：
-...${tail}
+【当前进度记录（即上文末尾内容）】：
+${tail}
+
+---
+
+【续写指令】：
+1. **严格要求**：请直接从【当前进度记录】的最后一个字符开始，无缝地继续生成后续内容。
+2. **严禁重复**：绝对禁止重复上文已出现的内容或从头开始，严禁带开场白语。
+3. **保持一致**：必须严格遵循【原始创作任务指令】中的所有要求（如：提示词卡片的设定、字数要求、剧本格式、风格、人称、逻辑等）。
+4. **纯净输出**：直接输出续写正文，不要有任何关于“好的”、“继续生成”、“接上文”之类的开场白或解释语。
 
 ${FORCE_LONG_INSTRUCTION}`;
+
         const controller = new AbortController();
         abortControllerRef.current = controller;
         try {
