@@ -116,7 +116,8 @@ const StreamingText: React.FC<{ text: string; isGenerating: boolean }> = ({ text
 
 const MODEL_OPTIONS = [
     { value: "deepseek-chat", label: "奇思版 (DeepSeek V3)" },
-    { value: "gemini-3-flash-preview", label: "妙写版 (Gemini 3 Flash)" },
+    { value: "gemini-3.5-flash", label: "妙写版 (Gemini 3.5 Flash)" },
+    { value: "gemini-3.5-pro", label: "深度版 (Gemini 3.5 Pro)" },
     { value: "doubao-flash", label: "速写版 (豆包)" }
 ];
 

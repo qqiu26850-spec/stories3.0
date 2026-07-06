@@ -66,10 +66,10 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3,
 // Helper: Format error messages for users
 function formatGeminiError(errorMsg: string): string {
     if (errorMsg.includes('overloaded') || errorMsg.includes('503')) {
-        return "⚠️ 模型当前负载过高 (Google Server Overloaded)，请稍后再试或尝试切换其他模型。";
+        return "⚠️ 模型当前负载过高 (Google Server Overloaded)，请稍后再试或尝试切换至【奇思版 (DeepSeek)】。";
     }
-    if (errorMsg.includes('429') || errorMsg.includes('quota')) {
-        return "⚠️ API 调用次数超限 (Quota Exceeded)，请稍后再试。";
+    if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+        return "⚠️ 谷歌接口调用额度已超限 (Gemini Quota Exceeded)。建议您在左侧/上方模型下拉菜单中切换为【奇思版 (DeepSeek V3)】或【速写版 (豆包)】继续流畅创作！";
     }
     // Attempt to clean up nested JSON error messages
     try {
@@ -169,8 +169,11 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         if (error.name === 'AbortError' || error.message === 'Aborted') {
             throw new Error('已停止生成');
         }
-        console.error(`Error generating text with ${options.model}:`, error);
-        return `${options.model} 生成出错: ${error.message}`;
+        console.warn(`Error generating text with ${options.model}, falling back to Gemini:`, error);
+        return generateText(prompt, {
+            ...options,
+            model: 'gemini-3-flash-preview'
+        });
     }
   } else {
     // Simulation fallback
@@ -328,8 +331,11 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             }
         } catch (error: any) {
             if (error.name === 'AbortError' || error.message === 'Aborted' || options.signal?.aborted) return;
-            console.error(`Error generating text stream with ${options.model}:`, error);
-            yield `${options.model} 连接出错：${error.message}`;
+            console.warn(`Error generating text stream with ${options.model}, falling back to Gemini:`, error);
+            yield* generateTextStream(prompt, {
+                ...options,
+                model: 'gemini-3-flash-preview'
+            });
         }
     } else {
         const simulatedResponse = `[来自 ${options.model.toUpperCase()} 的模拟流式响应]\n\n${prompt.substring(0, 50)}...`;

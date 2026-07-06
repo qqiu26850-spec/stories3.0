@@ -5,12 +5,13 @@ import CreateProjectModal from './CreateProjectModal';
 import EditProjectModal from './EditProjectModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ProjectCard from './ProjectCard';
-import { Film, BookOpen, DocumentPlus, Check, ArrowPath } from './Icon';
+import { Film, BookOpen, DocumentPlus, Check, ArrowPath, Sparkles } from './Icon';
 import ScriptWritingPage from './writing/ScriptWritingPage';
+import { ScriptEpisodeGenerator } from './writing/ScriptEpisodeGenerator';
 import { createProject, fetchProjects, deleteProject, updateProject } from '../services/supabaseService';
 
 type ScriptType = 'original' | 'adaptation' | 'original_adaptation';
-type ViewState = 'selection' | 'list';
+type ViewState = 'selection' | 'list' | 'episode_generation';
 
 interface ScriptManagementProps {
     isActive?: boolean;
@@ -210,40 +211,53 @@ const ScriptManagement: React.FC<ScriptManagementProps> = ({ isActive = false })
         return <ScriptWritingPage script={editingScript} onBack={() => setEditingScript(null)} />;
     }
 
+    if (view === 'episode_generation') {
+        return <ScriptEpisodeGenerator onBack={() => setView('selection')} onSaveSuccess={() => { setPage(1); setHasMore(true); }} />;
+    }
+
     if (view === 'selection') {
         return (
             <div className="p-4 sm:p-6 lg:p-8 h-full flex flex-col justify-center items-center animate-fade-in">
-                <div className="max-w-4xl w-full">
+                <div className="max-w-6xl w-full">
                     <div className="text-center mb-12">
                         <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">剧本创作中心</h1>
                         <p className="text-xl text-gray-500 dark:text-gray-400">请选择您的创作类型，开启一段光影之旅。</p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <button onClick={() => handleSelectType('original')} className="group relative p-10 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-sky-500 dark:hover:border-sky-500 transition-all duration-300 hover:shadow-xl text-center flex flex-col items-center">
-                            <div className="w-24 h-24 bg-sky-50 dark:bg-sky-900/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <Film className="w-12 h-12 text-sky-500 dark:text-sky-400" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <button onClick={() => handleSelectType('original')} className="group relative p-8 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-sky-500 dark:hover:border-sky-500 transition-all duration-300 hover:shadow-xl text-center flex flex-col items-center">
+                            <div className="w-20 h-20 bg-sky-50 dark:bg-sky-900/20 rounded-full flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
+                                <Film className="w-10 h-10 text-sky-500 dark:text-sky-400" />
                             </div>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">原创剧本</h2>
-                            <p className="text-gray-500 dark:text-gray-400">从零开始构建全新的故事世界、人物与对白。</p>
-                            <span className="mt-6 text-sky-500 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">点击开始 &rarr;</span>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">原创剧本</h2>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">从零开始构建全新的故事世界、人物与对白。</p>
+                            <span className="mt-4 text-sky-500 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">点击开始 &rarr;</span>
                         </button>
                         
-                        <button onClick={() => handleSelectType('adaptation')} className="group relative p-10 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all duration-300 hover:shadow-xl text-center flex flex-col items-center">
-                            <div className="w-24 h-24 bg-purple-50 dark:bg-purple-900/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <BookOpen className="w-12 h-12 text-purple-500 dark:text-purple-400" />
+                        <button onClick={() => handleSelectType('adaptation')} className="group relative p-8 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all duration-300 hover:shadow-xl text-center flex flex-col items-center">
+                            <div className="w-20 h-20 bg-purple-50 dark:bg-purple-900/20 rounded-full flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
+                                <BookOpen className="w-10 h-10 text-purple-500 dark:text-purple-400" />
                             </div>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">小说改编剧本</h2>
-                            <p className="text-gray-500 dark:text-gray-400">基于小说或现有素材进行影视化改编。</p>
-                             <span className="mt-6 text-purple-500 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">点击开始 &rarr;</span>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">小说改编剧本</h2>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">基于小说或现有素材进行影视化改编。</p>
+                             <span className="mt-4 text-purple-500 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">点击开始 &rarr;</span>
                         </button>
 
-                        <button onClick={() => handleSelectType('original_adaptation')} className="group relative p-10 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all duration-300 hover:shadow-xl text-center flex flex-col items-center">
-                            <div className="w-24 h-24 bg-emerald-50 dark:bg-emerald-900/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <DocumentPlus className="w-12 h-12 text-emerald-500 dark:text-emerald-400" />
+                        <button onClick={() => handleSelectType('original_adaptation')} className="group relative p-8 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all duration-300 hover:shadow-xl text-center flex flex-col items-center">
+                            <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/20 rounded-full flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
+                                <DocumentPlus className="w-10 h-10 text-emerald-500 dark:text-emerald-400" />
                             </div>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">原创剧本改编</h2>
-                            <p className="text-gray-500 dark:text-gray-400">对原始剧本进行结构重组与精细化二次创作。</p>
-                             <span className="mt-6 text-emerald-500 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">点击开始 &rarr;</span>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">原创剧本改编</h2>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">对原始剧本进行结构重组与精细化二次创作。</p>
+                             <span className="mt-4 text-emerald-500 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">点击开始 &rarr;</span>
+                        </button>
+
+                        <button onClick={() => setView('episode_generation')} className="group relative p-8 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-indigo-500 dark:hover:border-indigo-500 transition-all duration-300 hover:shadow-xl text-center flex flex-col items-center">
+                            <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
+                                <Sparkles className="w-10 h-10 text-indigo-500 dark:text-indigo-400" />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">分集剧本生成</h2>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">输入或生成梗概，智能拆分集数大纲，一键生成整本/分集剧本。</p>
+                             <span className="mt-4 text-indigo-500 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">点击开始 &rarr;</span>
                         </button>
                     </div>
                 </div>

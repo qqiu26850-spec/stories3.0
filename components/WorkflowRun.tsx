@@ -434,8 +434,8 @@ ${FORCE_LONG_INSTRUCTION}
     const hasResults = Object.keys(stepResults).length > 0;
 
     const MODEL_OPTIONS = [
-        { value: 'gemini-3-flash-preview', label: '谷歌极速 (Gemini 3 Flash)' },
-        { value: 'gemini-3-pro-preview', label: '谷歌深度 (Gemini 3 Pro)' },
+        { value: 'gemini-3.5-flash', label: '谷歌极速 (Gemini 3.5 Flash)' },
+        { value: 'gemini-3.5-pro', label: '谷歌深度 (Gemini 3.5 Pro)' },
         { value: 'deepseek-chat', label: 'DeepSeek V3' },
         { value: 'deepseek-reasoner', label: 'DeepSeek R1 (推理)' }
     ];

@@ -176,14 +176,18 @@ export async function fetchUserLibrary() {
     }
 }
 
-export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short' | 'short_story', coverUrl: string | null = null) {
+export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short' | 'short_story', coverUrl: string | null = null, scriptData: any = null) {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("请先登录");
         const dbType = type === 'short' ? 'short_story' : type;
-        const { data, error } = await withRetry(async () => await supabase.from('projects').insert([{
+        const insertObj: any = {
             user_id: userId, title, description: desc, type: dbType, cover_image: coverUrl, status: 'draft'
-        }]).select());
+        };
+        if (scriptData) {
+            insertObj.script_data = scriptData;
+        }
+        const { data, error } = await withRetry(async () => await supabase.from('projects').insert([insertObj]).select());
         if (error) throw error;
         return { id: data?.[0]?.id, error: null };
     } catch (err: any) {

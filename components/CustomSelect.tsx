@@ -14,9 +14,10 @@ interface CustomSelectProps {
     options: Option[];
     className?: string;
     placeholder?: string;
+    style?: React.CSSProperties;
 }
 
-const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, className = "", placeholder = "请选择" }) => {
+const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, className = "", placeholder = "请选择", style }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
@@ -66,7 +67,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, c
     };
 
     return (
-        <div className={`relative ${className}`} ref={containerRef}>
+        <div className={`relative ${className}`} style={style} ref={containerRef}>
             <button
                 type="button"
                 onClick={() => { setIsOpen(!isOpen); }}
