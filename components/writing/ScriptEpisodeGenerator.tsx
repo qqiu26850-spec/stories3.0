@@ -4,13 +4,19 @@ import { createProject, saveChapterToDB, updateProject, deleteProject, fetchProj
 import { 
     Sparkles, Film, Database, Copy, Stop, AdjustmentsHorizontal, Check, ArrowPath, 
     Play, Pencil, ClipboardDocumentCheck, DocumentPlus, Trash, Plus, 
-    InformationCircle, X, ChevronDown, ChevronLeft, FloppyDisk 
+    InformationCircle, X, ChevronDown, ChevronLeft, FloppyDisk, DocumentArrowDown
 } from '../Icon';
 import CustomSelect from '../CustomSelect';
 
 interface ScriptEpisodeGeneratorProps {
     onBack: () => void;
     onSaveSuccess?: () => void;
+}
+
+interface EpisodeVersion {
+    timestamp: string;
+    script: string;
+    label: string;
 }
 
 interface EpisodeOutline {
@@ -20,6 +26,7 @@ interface EpisodeOutline {
     script?: string;
     isGenerating?: boolean;
     isDone?: boolean;
+    history?: EpisodeVersion[];
 }
 
 const ERA_OPTIONS = ['乡村', '职场', '民国', '校园', '历史古代', '古装'];
@@ -159,6 +166,12 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
     const [expandedOutlines, setExpandedOutlines] = useState<Record<number, boolean>>({});
     
+    // History versioning and emotional amplification states
+    const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [historyEpisodeIndex, setHistoryEpisodeIndex] = useState<number | null>(null);
+    const [selectedHistoryVersionIndex, setSelectedHistoryVersionIndex] = useState<number | null>(null);
+    const [activeEmotionPickerIndex, setActiveEmotionPickerIndex] = useState<number | null>(null);
+    
     const abortControllerRef = useRef<AbortController | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const aiChatScrollRef = useRef<HTMLDivElement>(null);
@@ -175,6 +188,193 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
             setError('加载剧本项目库失败，请重试');
         } finally {
             setLoadingProjects(false);
+        }
+    };
+
+    // Ensure all existing scripts have at least one history entry
+    useEffect(() => {
+        if (stage === 'script_generation' && parsedEpisodes.length > 0) {
+            const hasMissingHistory = parsedEpisodes.some(ep => ep.script && ep.script.trim() && (!ep.history || ep.history.length === 0));
+            if (hasMissingHistory) {
+                setParsedEpisodes(prev => prev.map(ep => {
+                    if (ep.script && ep.script.trim() && (!ep.history || ep.history.length === 0)) {
+                        const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        return {
+                            ...ep,
+                            history: [{
+                                timestamp: timeStr,
+                                script: ep.script,
+                                label: `基础/当前脚本版本 (${timeStr})`
+                            }]
+                        };
+                    }
+                    return ep;
+                }));
+            }
+        }
+    }, [stage, parsedEpisodes]);
+
+    const exportAllScriptsToWord = () => {
+        let htmlContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+            <title>全集剧本 - ${projectTitle || '分集剧本'}</title>
+            <style>
+                body { font-family: SimSun, Arial, sans-serif; line-height: 1.5; padding: 20px; }
+                h1 { text-align: center; font-size: 24pt; margin-bottom: 20px; }
+                h2 { font-size: 18pt; margin-top: 30px; margin-bottom: 15px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+                p { font-size: 11pt; margin-bottom: 8px; }
+                .scene-header { font-weight: bold; background-color: #f2f2f2; padding: 5px; margin-top: 15px; margin-bottom: 10px; border-left: 4px solid #800080; }
+                .action { color: #333333; font-style: italic; margin-bottom: 8px; }
+                .dialogue { margin-left: 20px; margin-bottom: 6px; }
+                .dialogue-char { font-weight: bold; }
+            </style>
+        </head>
+        <body>
+            <h1>${projectTitle || '全集剧本'}</h1>
+            <p style="text-align: center; font-size: 12pt; color: #666;">（共 ${parsedEpisodes.length} 集）</p>
+            <hr/>
+        `;
+
+        parsedEpisodes.forEach(ep => {
+            htmlContent += `<h2>第 ${ep.episodeNumber} 集：${ep.title || '未命名'}</h2>`;
+            if (ep.outline) {
+                htmlContent += `<p style="font-size: 10pt; color: #777; margin-bottom: 15px;"><strong>分集大纲：</strong>${ep.outline}</p>`;
+            }
+            
+            if (ep.script) {
+                const lines = ep.script.split('\n');
+                lines.forEach(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed) {
+                        htmlContent += `<br/>`;
+                        return;
+                    }
+                    
+                    if (/^\d+-\d+/.test(trimmed) || trimmed.includes('场景') || trimmed.includes('时间') || trimmed.includes('地点')) {
+                        htmlContent += `<div class="scene-header">${trimmed}</div>`;
+                    } else if (trimmed.startsWith('△') || trimmed.startsWith('▲')) {
+                        htmlContent += `<p class="action">${trimmed}</p>`;
+                    } else if (trimmed.includes('：') || trimmed.includes(':')) {
+                        const colonIdx = trimmed.indexOf('：') !== -1 ? trimmed.indexOf('：') : trimmed.indexOf(':');
+                        const char = trimmed.slice(0, colonIdx);
+                        const text = trimmed.slice(colonIdx + 1);
+                        htmlContent += `<p class="dialogue"><span class="dialogue-char">${char}：</span>${text}</p>`;
+                    } else {
+                        htmlContent += `<p>${trimmed}</p>`;
+                    }
+                });
+            } else {
+                htmlContent += `<p style="color: #999; font-style: italic;">（本集暂未生成剧本）</p>`;
+            }
+            
+            htmlContent += `<br clear="all" style="page-break-before:always" />`;
+        });
+
+        htmlContent += `</body></html>`;
+
+        const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${projectTitle || '短剧全集剧本'}_全集剧本.doc`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleEmotionAmplify = async (index: number, emotion: string) => {
+        const ep = parsedEpisodes[index];
+        if (!ep.script) {
+            alert('请先生成基础剧本，才能进行情绪放大！');
+            return;
+        }
+
+        setParsedEpisodes(prev => prev.map((item, id) => {
+            if (id === index) {
+                const updatedHistory = [...(item.history || [])];
+                const lastHist = updatedHistory[updatedHistory.length - 1];
+                if (!lastHist || lastHist.script !== item.script) {
+                    const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    updatedHistory.push({
+                        timestamp: timeStr,
+                        script: item.script!,
+                        label: `情绪放大前版本 (${timeStr})`
+                    });
+                }
+                return { ...item, isGenerating: true, history: updatedHistory };
+            }
+            return item;
+        }));
+
+        setActiveEmotionPickerIndex(null);
+
+        const prompt = `【剧本情绪极限制放大/重写任务】
+【目标集数】：第${ep.episodeNumber}集 / 共${parsedEpisodes.length}集
+【本集标题】：${ep.title}
+【核心放大情绪】：【${emotion}】
+
+【原剧本内容】：
+${ep.script}
+
+---
+
+【情绪放大与改写核心指令（极其重要）】：
+请在保持原剧本核心情节点、人物关系和基本场景走向不变的前提下，对上述剧本进行深度重写，将【${emotion}】的情绪张力与戏剧冲突放大到极致！
+
+根据你选择的【${emotion}】情绪，执行以下特化创作：
+- 如果是【极致虐心】：极度强化角色的痛苦、无奈与牺牲，对白要字字滴血，充满情感撕裂感。
+- 如果是【逆袭爽快】：将反派嘴脸写得更嚣张、主角的反击更干净利落、气势磅礴，把“打脸逆袭”的情绪爆发点和优越感拉到最满！
+- 如果是【搞笑幽默】：加入精妙的网络热梗、令人捧腹的动作细节和戏剧化误会，增加喜剧张力和荒诞喜感。
+- 如果是【甜宠撒糖】：细节刻画要充满心动与暧昧，强化男女主角眼神对视、温柔护短的肢体动作和苏感爆棚的对白。
+- 如果是【惊悚悬疑】：渲染紧张窒息的氛围，突出脚步声、呼吸声、阴影等视听细节，结尾卡点留下极度烧脑悬念。
+- 如果是【霸道高冷】：强化角色的至尊身份、霸气台词与不容置疑的气场，动作神态刻画要充满统治力。
+
+【剧本编写格式规范（严格保持）】：
+1. 必须严格遵循三角形符号“△ ”动作描写和“角色名字（神态动作语气）：台词内容”格式。
+2. 直接无缝输出修改后的完整剧本，不要带有任何多余的开场白、解释或总结。`;
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        try {
+            const stream = generateTextStream(prompt, {
+                model,
+                temperature: 0.85,
+                topP: 0.95,
+                maxOutputTokens: maxTokens,
+                signal: controller.signal
+            });
+
+            let fullText = '';
+            for await (const chunk of stream) {
+                fullText += chunk;
+                setParsedEpisodes(prev => prev.map((item, idx) => 
+                    idx === index ? { ...item, script: fullText } : item
+                ));
+            }
+
+            setParsedEpisodes(prev => prev.map((item, idx) => {
+                if (idx === index) {
+                    const updatedHistory = [...(item.history || [])];
+                    const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    updatedHistory.push({
+                        timestamp: timeStr,
+                        script: fullText,
+                        label: `情绪放大 [${emotion}] (${timeStr})`
+                    });
+                    return { ...item, isGenerating: false, isDone: true, history: updatedHistory };
+                }
+                return item;
+            }));
+        } catch (err: any) {
+            setParsedEpisodes(prev => prev.map((item, idx) => 
+                idx === index ? { ...item, isGenerating: false } : item
+            ));
+            alert(err.message || '情绪放大失败，请重试');
+        } finally {
+            abortControllerRef.current = null;
         }
     };
 
@@ -567,110 +767,79 @@ ${currentOutlinesStr}
         const list: EpisodeOutline[] = [];
         
         // Pattern supporting both Arabic numbers and Chinese characters for episode numbers
-        const pattern = /(?:【?第\s*([0-9一二三四五六七八九十百]+)\s*集】?[:：\-\s]*([^\n]*))/g;
-        const matches = Array.from(rawText.matchAll(pattern)) as any[];
+        const pattern = /(?:【?第\s*([0-9一二三四五六七八九十百]+)\s*集[:：\s]*([^】\n]*?)】?\s*\n+)(?:核心事件[:：]\s*([^\n]*)\n+)?(?:本集梗概[:：]\s*([\s\S]*?)(?=(?:【?第\s*[0-9一二三四五六七八九十百]+\s*集|\s*$)))/g;
         
-        if (matches.length > 0) {
-            for (let i = 0; i < matches.length; i++) {
-                const match = matches[i];
-                const rawNum = match[1];
-                let title = match[2].trim() || `第${rawNum}集`;
-                if (title.startsWith('：') || title.startsWith(':')) {
-                    title = title.substring(1).trim();
-                }
-                
-                const startIndex = match.index! + match[0].length;
-                const endIndex = i + 1 < matches.length ? matches[i + 1].index : rawText.length;
-                let content = rawText.substring(startIndex, endIndex).trim();
-                
-                // Clean up typical headers and labels that models love to prepend
-                content = content.replace(/^[:：\s\[\]梗概剧情本集内容内容等及核心事件对立冲突爆点分集标题次]+/, '').trim();
-                
-                // Try to parse the episode number, if it's a Chinese number, fall back to index + 1
-                let epNum = parseInt(rawNum);
-                if (isNaN(epNum)) {
-                    epNum = i + 1;
-                }
-                
-                list.push({
-                    episodeNumber: epNum,
-                    title: title || `第${epNum}集`,
-                    outline: content,
-                });
-            }
-        }
+        let match;
+        pattern.lastIndex = 0;
         
-        // Fallback: If no matches or parsing was empty, split by paragraphs
-        if (list.length === 0) {
-            const paragraphs = rawText.split(/\n+/).filter(p => p.trim().length > 10);
-            const count = Math.min(paragraphs.length, expectedCount);
-            for (let i = 0; i < count; i++) {
-                list.push({
-                    episodeNumber: i + 1,
-                    title: `第${i + 1}集`,
-                    outline: paragraphs[i],
-                });
+        while ((match = pattern.exec(rawText)) !== null) {
+            const epNumStr = match[1];
+            const title = match[2]?.trim() || '';
+            const coreEvent = match[3]?.trim() || '';
+            const outlineText = match[4]?.trim() || '';
+            
+            let epNum = parseInt(epNumStr, 10);
+            if (isNaN(epNum)) {
+                // simple conversion for Chinese numbers if needed
+                const cnNums: { [key: string]: number } = {
+                    '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10
+                };
+                epNum = cnNums[epNumStr] || (list.length + 1);
             }
-            // Fill up remainder
-            for (let i = list.length; i < expectedCount; i++) {
-                list.push({
-                    episodeNumber: i + 1,
-                    title: `第${i + 1}集`,
-                    outline: '待输入或生成剧情大纲...',
-                });
-            }
-        }
-        
-        return list;
-    };
-
-    // Parse Outlines on state changes
-    useEffect(() => {
-        if ((stage === 'outline_generating' || stage === 'outline_results') && outlineRawText) {
-            const newList = parseOutlines(outlineRawText, episodesCount);
-            setParsedEpisodes(prev => {
-                // If we already have episodes, merge them to keep existing scripts intact!
-                if (prev && prev.length > 0) {
-                    return newList.map(newEp => {
-                        const prevEp = prev.find(p => p.episodeNumber === newEp.episodeNumber);
-                        if (prevEp) {
-                            return {
-                                ...newEp,
-                                script: prevEp.script || newEp.script,
-                                isDone: prevEp.isDone || newEp.isDone,
-                                isGenerating: prevEp.isGenerating || newEp.isGenerating
-                            };
-                        }
-                        return newEp;
-                    });
-                }
-                return newList;
+            
+            list.push({
+                episodeNumber: epNum,
+                title: title || `第${epNum}集`,
+                outline: coreEvent ? `核心事件：${coreEvent}\n本集梗概：${outlineText}` : outlineText
             });
         }
-    }, [outlineRawText, episodesCount, stage]);
-
-    // Handle File upload
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                setExistingOutline(ev.target?.result as string || '');
-            };
-            reader.readAsText(file);
+        
+        // Fallback parser if we got nothing or too few matching the strict regex
+        if (list.length < expectedCount / 2) {
+            const fallbackList: EpisodeOutline[] = [];
+            const parts = rawText.split(/(?=【?第\s*[0-9一二三四五六七八九十百]+\s*集)/);
+            parts.forEach((part) => {
+                const lines = part.split('\n').map(l => l.trim()).filter(Boolean);
+                if (lines.length === 0) return;
+                
+                const firstLine = lines[0];
+                const epNumMatch = firstLine.match(/第\s*([0-9一二三四五六七八九十百]+)\s*集/);
+                let epNum = epNumMatch ? parseInt(epNumMatch[1], 10) : NaN;
+                if (isNaN(epNum)) {
+                    epNum = fallbackList.length + 1;
+                }
+                
+                let title = firstLine.replace(/【?第\s*[0-9一二三四五六七八九十百]+\s*集[:：\s]*/, '').replace(/】$/, '').trim();
+                if (!title) title = `第${epNum}集`;
+                
+                const outlineText = lines.slice(1).join('\n');
+                fallbackList.push({
+                    episodeNumber: epNum,
+                    title,
+                    outline: outlineText
+                });
+            });
+            if (fallbackList.length > list.length) {
+                return fallbackList.sort((a, b) => a.episodeNumber - b.episodeNumber);
+            }
         }
+        
+        return list.sort((a, b) => a.episodeNumber - b.episodeNumber);
     };
 
-    // Generate Outlines
+    // AI创意大纲一键批量生成
     const handleGenerateOutline = async () => {
+        if (globalIsGenerating) return;
+        
+        setGlobalIsGenerating(true);
         setError('');
         setOutlineRawText('');
+        setParsedEpisodes([]);
         setStage('outline_generating');
-        setGlobalIsGenerating(true);
-        
+
         let prompt = '';
         if (outlineMode === 'existing') {
-            prompt = `【任务类型】：分集故事梗概拆分
+            prompt = `【任务类型】：分集故事梗概拆分与续写
 【目标集数】：${episodesCount} 集
 
 【原始故事梗概】：
@@ -678,28 +847,44 @@ ${existingOutline}
 
 ---
 
-【拆分与续写指令】：
-请严格基于上述【原始故事梗概】，将整篇故事按照**其中蕴含的具体故事梗概的事件节点、冲突爆点与剧情转折点**，艺术化、戏剧化地拆分并扩写为共【${episodesCount}集】的AI短剧的分集梗概。
-请注意：用户提供的故事梗概可能是一整段连续的文字，完全没有具体的分集或数字编号。你必须：
-1. **深度挖掘与拆解事件点**：找出故事中所有的关键情节里程碑（如：开端受辱、获得奇遇、隐藏身份、恶势力挑衅、误会爆发、正面冲突、高潮打脸、真相大白等具体事件点）。
-2. **以事件点为边界进行拆分**：将这 ${episodesCount} 集中的每一集都紧密围绕一个具体的、有强戏剧冲突的【故事事件点】来构建，千万不要死板、生硬地按字数或段落进行平均机械切片。
-3. **合理延展与扩写**：如果原始梗概在某些阶段描述简略或字数太少，你需要根据前后文的情理，发挥爆款AI短剧“快节奏、强冲突、高反转”的特点，对这些事件节点进行合理的细节扩写和尾部钩子设计，确保最终凑足完整的 ${episodesCount} 集分集，且每一集都信息量饱满。
-4. 每一集格式必须严格统一：
+【拆分与续写核心指令（极其重要，不折不扣执行）】：
+请严格基于上述【原始故事梗概】，将整篇故事按照其蕴含的事件节点、冲突爆点与剧情转折点，艺术化、戏剧化地拆分并扩写为【整整 ${episodesCount} 集】的AI短剧分集梗概。
+
+【大纲创作金牌规范要求（极其重要，严格执行）】：
+1. **严格确保输出集数完全符合要求**：你必须精准、无一遗漏地生成刚好【${episodesCount}集】大纲（必须从【第1集】连续不间断地输出到【第${episodesCount}集】），绝对不能中途截断、合并集数、敷衍了事或在半路戛然而止！
+2. **大纲字数与 Token 预算控制（防止大模型生成截断）**：
+   - 如果目标集数较多（例如 ${episodesCount} >= 30 集），为了防止因大模型最大输出字数限制（maxOutputTokens）导致生成在半路中断，你**必须主动且精细地控制每集大纲的字数（每集梗概控制在 60-100 字左右，重点突出本集核心矛盾、打脸逆袭和结局悬念，字字珠玑）**，确保可以一口气完完整整地输出到最后一集【第${episodesCount}集】！
+   - 如果目标集数较少（例如 ${episodesCount} < 30 集），每集梗概应当更加充实饱满，不少于 150 字。
+3. **分集剧情的极致连贯性与层层递进**：整部短剧的分集大纲剧情必须**高度连贯、层层递进、环环相扣**。角色关系的演化、误会的堆叠、高潮打脸的清算、隐藏身份的层层解密，必须顺理成章、逻辑严密，绝不能出现剧情断代或莫名其妙的飞跃。
+4. **黄金前3集巨大信息量与炸裂事件开局**：
+   - **大纲前3集（第1集、第2集、第3集）必须包含极度饱满、高强度的剧情信息量**，用极快节奏瞬间铺开核心矛盾。
+   - **第1集必须以一个极其炸裂的事件（如惨烈背叛、当众羞辱、隐藏至尊身份揭晓、惊天机缘降临、重大家庭变故等）作为开头**，迅速激化不可调和的情绪和利益冲突，将戏剧张力拉满，奠定全剧高燃爽快的基调！
+5. **强节奏点与剧情卡点（Hook）**：在每一集的结尾，必须设置极具悬念的钩子、打脸的前奏或突如其来的反转，让观众产生强烈的“继续观看/自动解锁下一集”的冲动。
+6. **写清楚具体的情节点 and 行动**：绝不能使用笼统、空洞的词汇描述剧情（如：严禁只写“两人产生误会”，而要写清楚具体的人物理智/情感摩擦，以及视觉化、具有张力的情节行动画面）。
+
+---
+
+【输出格式规范】：
+请严格按照以下格式完整输出从【第1集】到【第${episodesCount}集】的详细大纲内容：
 【第X集：分集标题】
-核心事件：本集的核心故事事件点/矛盾爽点。
-本集梗概：本集具体的起承转合推演，不少于150字，且在集尾留下强烈的悬念或吸睛钩子。
-5. 请确保输出完整的【第1集】到【第${episodesCount}集】，保证各集之间递进自然、逻辑严密，无任何断代或情节飞跃。
-6. 直接输出内容，不要有任何多余的开场白或解释。`;
+核心事件：本集的核心打脸、冲突、事件或情绪卡点。
+本集梗概：具体情节详细推演。
+
+直接无缝输出，不要有任何多余的解释、开场白或引导语。`;
         } else {
             const selectedTemplate = PROMPT_LIBRARY.find(p => p.id === selectedPromptId) || PROMPT_LIBRARY[0];
-            prompt = `【任务类型】：爆款微短剧分集大纲智能生成
+            const genre = `${selectedEra}${theme ? ` - ${theme}` : ''}`;
+            const protagonistName = '主角';
+            const protagonistRole = selectedCharacters.join('、') || '神秘身份者';
+            const antagonistName = '对手';
+            const antagonistRole = '反派配角';
+            
+            prompt = `【任务类型】：AI创意大纲一键批量生成
+【剧本类型/风格】：${genre}
 【目标集数】：${episodesCount} 集
-【时代背景】：${selectedEra || '未指定'}
-【短剧主题】：${selectedThemePlots.join('， ') || theme}
-【角色设定】：${selectedCharacters.join('， ') || '未指定'}
-${coreTrope ? `【核心梗】：${coreTrope}\n` : ''}
-【核心剧情脑洞/简单故事雏形】：
-${coreIdea}
+【核心创意方向/故事内核】：${coreIdea}
+【主角设定】：主角名字：${protagonistName}，主角身份：${protagonistRole}
+【对手/反派设定】：对手名字：${antagonistName}，对手身份：${antagonistRole}
 
 ---
 
@@ -709,10 +894,16 @@ ${selectedTemplate.prompt}
 ---
 
 【大纲创作金牌规范要求（极其重要，严格执行）】：
-1. 必须保持【强情绪、强剧情开局】：第1集必须有极其强烈的戏剧冲突、情绪对立或尊严危机，一上来就有极大的矛盾爆发，瞬间抓住读者眼球。
-2. 必须有【明显的节奏点、剧情卡点（Hook）】：在每一集的结尾，必须设置极具悬念的钩子、打脸的前奏或突如其来的反转，让观众产生强烈的“继续观看/自动解锁下一集”的冲动。
-3. 必须融入【爆火的元素设定】：将扮演反差、真假少爷千金、扮猪吃虎、隐藏身份、高燃打脸逆袭等钩子完美融合到情节中。
-4. 【写清楚具体的情节点和行动】：绝不能使用笼统、空洞的词汇描述剧情（如：严禁只写“两人产生误会”，而要写清楚“反派王强故意在女主面前拉住男主的手，并掏出一张伪造的孕检单，指责男主始乱终弃，女主愤而掌掴男主，男主因声带受伤无法辩解”等具体、细腻的情节画面和爽点！）。
+1. **严格确保输出集数完全符合要求**：你必须精准、无一遗漏地生成刚好【${episodesCount}集】大纲（必须从【第1集】连续不间断地输出到【第${episodesCount}集】），绝对不能中途截断、合并集数、敷衍了事或在半路戛逐渐停止！
+2. **大纲字数与 Token 预算控制（防止大模型生成截断）**：
+   - 如果目标集数较多（例如 ${episodesCount} >= 30 集），为了防止因大模型最大输出字数限制（maxOutputTokens）导致生成在半路中断，你**必须主动且精细地控制每集大纲的字数（每集梗概控制在 60-100 字左右，重点突出本集核心矛盾、打脸逆袭和结局悬念，字字珠玑）**，确保可以一口气完完整整地输出到最后一集【第${episodesCount}集】！
+   - 如果目标集少（例如 ${episodesCount} < 30 集），每集梗概应当更加充实饱满，不少于 150 字。
+3. **分集剧情的极致连贯性与层层递进**：整部短剧的分集大纲剧情必须**高度连贯、层层递进、环环相扣**。角色关系的演化、误会的堆叠、高潮打脸的清算、隐藏身份的层层解密，必须顺理成章、逻辑严密，绝不能出现剧情断代或莫名其妙的飞跃。
+4. **黄金前3集巨大信息量与炸裂事件开局**：
+   - **大纲前3集（第1集、第2集、第3集）必须包含极度饱满、高强度的剧情信息量**，用极快节奏瞬间铺开核心矛盾。
+   - **第1集必须以一个极其炸裂的事件（如惨烈背叛、当众羞辱、隐藏至尊身份揭晓、惊天机缘降临、重大家庭变故等）作为开头**，迅速激化不可调和的情绪和利益冲突，将戏剧张力拉满，奠定全剧高燃爽快的基调！
+5. **强节奏点与剧情卡点（Hook）**：在每一集的结尾，必须设置极具悬念的钩子、打脸的前奏或突如其来的反转，让观众产生强烈的“继续观看/自动解锁下一集”的冲动。
+6. **写清楚具体的情节点和行动**：绝不能使用笼统、空洞的词汇描述剧情（如：严禁只写“两人产生误会”，而要写清楚具体的人物理智/情感摩擦，以及视觉化、具有张力的情节行动画面）。
 
 ---
 
@@ -720,7 +911,7 @@ ${selectedTemplate.prompt}
 请严格按照以下格式完整输出从【第1集】到【第${episodesCount}集】的详细大纲内容：
 【第X集：分集标题】
 核心事件：本集的核心打脸、冲突、事件或情绪卡点。
-本集梗概：具体情节详细推演，不少于150字，必须写清楚具体的情节点 and 人物白热化的具体互动，每集末尾制造巨大的危机或强悬念。
+本集梗概：具体情节详细推演。
 
 直接无缝输出，不要有任何多余的解释、开场白或引导语。`;
         }
@@ -762,6 +953,7 @@ ${selectedTemplate.prompt}
         }
     };
 
+    
     // Sequential Script Generation
     const generateScriptForEpisode = async (index: number, previousScript: string = '') => {
         if (index >= parsedEpisodes.length) return;
@@ -769,10 +961,25 @@ ${selectedTemplate.prompt}
         const ep = parsedEpisodes[index];
         setActiveGeneratingIndex(index);
         
-        // Setup initial blank script for this episode
-        setParsedEpisodes(prev => prev.map((item, idx) => 
-            idx === index ? { ...item, script: '', isGenerating: true } : item
-        ));
+        // Setup initial blank script for this episode and save current script to history if exists
+        setParsedEpisodes(prev => prev.map((item, idx) => {
+            if (idx === index) {
+                const updatedHistory = [...(item.history || [])];
+                if (item.script && item.script.trim()) {
+                    const lastHist = updatedHistory[updatedHistory.length - 1];
+                    if (!lastHist || lastHist.script !== item.script) {
+                        const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        updatedHistory.push({
+                            timestamp: timeStr,
+                            script: item.script,
+                            label: `手动修改/历史版本 (${timeStr})`
+                        });
+                    }
+                }
+                return { ...item, script: '', isGenerating: true, history: updatedHistory };
+            }
+            return item;
+        }));
 
         // Gather surrounding context
         const globalOutline = outlineMode === 'existing' ? existingOutline : coreIdea;
@@ -794,7 +1001,7 @@ ${previousTail}
 ---
 
 【剧本编写格式与排版规范（极其重要，请严格执行）】：
-请将上述【分集剧情大纲】的情节，扩展为高戏剧冲突、爽点鲜明、字数大约500-800字、播放时长约1.5分钟的单集正式剧本。剧本生成的过程中要强化开头和卡点的表现，用具体的、炸裂的、情绪化的画面动作和人物话语来强化剧情。
+请将上述【分集剧情大纲】的情节，扩展为高戏剧冲突、爽点鲜明、字数大约500-800字、播放时长约1.5分钟的单集正式剧本。剧本生成的过程中要强化开头和卡点的表现，用具体的、炸裂的、情绪化的画面动作 and 人物话语来强化剧情。
 剧本的结构和排版格式必须精确参照以下格式：
 
 1. **集数标题**：
@@ -849,9 +1056,19 @@ ${previousTail}
                 ));
             }
             
-            setParsedEpisodes(prev => prev.map((item, idx) => 
-                idx === index ? { ...item, isGenerating: false, isDone: true } : item
-            ));
+            setParsedEpisodes(prev => prev.map((item, idx) => {
+                if (idx === index) {
+                    const updatedHistory = [...(item.history || [])];
+                    const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    updatedHistory.push({
+                        timestamp: timeStr,
+                        script: fullText,
+                        label: `自动生成版本 (${timeStr})`
+                    });
+                    return { ...item, isGenerating: false, isDone: true, history: updatedHistory };
+                }
+                return item;
+            }));
             
             return fullText;
         } catch (err: any) {
@@ -873,9 +1090,24 @@ ${previousTail}
         if (!instruction || !instruction.trim()) return;
 
         const ep = parsedEpisodes[index];
-        setParsedEpisodes(prev => prev.map((item, id) => 
-            id === index ? { ...item, isGenerating: true } : item
-        ));
+        setParsedEpisodes(prev => prev.map((item, id) => {
+            if (id === index) {
+                const updatedHistory = [...(item.history || [])];
+                if (item.script && item.script.trim()) {
+                    const lastHist = updatedHistory[updatedHistory.length - 1];
+                    if (!lastHist || lastHist.script !== item.script) {
+                        const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        updatedHistory.push({
+                            timestamp: timeStr,
+                            script: item.script,
+                            label: `润色前版本 (${timeStr})`
+                        });
+                    }
+                }
+                return { ...item, isGenerating: true, history: updatedHistory };
+            }
+            return item;
+        }));
 
         // Clear the input
         setSingleEpisodeEdits(prev => ({ ...prev, [index]: '' }));
@@ -918,9 +1150,19 @@ ${ep.script}
                 ));
             }
 
-            setParsedEpisodes(prev => prev.map((item, idx) => 
-                idx === index ? { ...item, isGenerating: false, isDone: true } : item
-            ));
+            setParsedEpisodes(prev => prev.map((item, idx) => {
+                if (idx === index) {
+                    const updatedHistory = [...(item.history || [])];
+                    const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    updatedHistory.push({
+                        timestamp: timeStr,
+                        script: fullText,
+                        label: `优化生成版本 (${timeStr})`
+                    });
+                    return { ...item, isGenerating: false, isDone: true, history: updatedHistory };
+                }
+                return item;
+            }));
         } catch (err: any) {
             setParsedEpisodes(prev => prev.map((item, idx) => 
                 idx === index ? { ...item, isGenerating: false } : item
@@ -1096,6 +1338,19 @@ ${ep.script}
 
     const toggleStyle = (st: string) => {
         setStyleTags(prev => prev.includes(st) ? prev.filter(x => x !== st) : [...prev, st]);
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result;
+            if (typeof text === 'string') {
+                setExistingOutline(text);
+            }
+        };
+        reader.readAsText(file);
     };
 
     return (
@@ -2030,6 +2285,13 @@ ${ep.script}
                                     </div>
 
                                     <button 
+                                        onClick={exportAllScriptsToWord}
+                                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-550 text-white font-bold rounded-xl text-xs shadow-md flex items-center gap-1.5 transition-all active:scale-98"
+                                    >
+                                        <DocumentArrowDown className="w-4 h-4" /> 一键导出全集剧本 (Word)
+                                    </button>
+
+                                    <button 
                                         onClick={handleGenerateAllScripts}
                                         className={`px-4 py-2 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-1.5 transition-all active:scale-98 ${globalIsGenerating && scriptGenMode === 'all' ? 'bg-rose-500 hover:bg-rose-600' : 'bg-purple-600 hover:bg-purple-550'}`}
                                     >
@@ -2092,6 +2354,51 @@ ${ep.script}
                                                 >
                                                     {ep.isGenerating ? '停止' : ep.isDone ? '重新生成本集' : '生成单集剧本'}
                                                 </button>
+
+                                                {ep.isDone && (
+                                                    <button 
+                                                        onClick={() => {
+                                                            setHistoryEpisodeIndex(idx);
+                                                            setSelectedHistoryVersionIndex(ep.history && ep.history.length > 0 ? ep.history.length - 1 : null);
+                                                            setShowHistoryModal(true);
+                                                        }}
+                                                        className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg border border-indigo-100 dark:border-indigo-900 transition-colors"
+                                                    >
+                                                        查看版本
+                                                    </button>
+                                                )}
+
+                                                {ep.isDone && (
+                                                    <div className="relative">
+                                                        <button 
+                                                            onClick={() => setActiveEmotionPickerIndex(activeEmotionPickerIndex === idx ? null : idx)}
+                                                            disabled={!ep.script || ep.isGenerating}
+                                                            className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/45 hover:bg-amber-100 text-amber-600 dark:text-amber-400 text-xs font-bold rounded-lg border border-amber-100 dark:border-amber-900 transition-colors flex items-center gap-1 disabled:opacity-50"
+                                                        >
+                                                            <Sparkles className="w-3.5 h-3.5" /> 情绪放大
+                                                        </button>
+                                                        {activeEmotionPickerIndex === idx && (
+                                                            <div className="absolute right-0 mt-1.5 w-48 bg-white dark:bg-gray-800 border border-gray-150 dark:border-gray-700 rounded-xl shadow-xl z-30 p-2 grid grid-cols-2 gap-1 animate-scale-up">
+                                                                {[
+                                                                    { label: '💔 极致虐心', value: '极致虐心' },
+                                                                    { label: '🔥 逆袭爽快', value: '逆袭爽快' },
+                                                                    { label: '🤣 搞笑幽默', value: '搞笑幽默' },
+                                                                    { label: '❤️ 甜宠撒糖', value: '甜宠撒糖' },
+                                                                    { label: '😰 惊悚悬疑', value: '惊悚悬疑' },
+                                                                    { label: '👑 霸道高冷', value: '霸道高冷' }
+                                                                ].map((item, emIdx) => (
+                                                                    <button
+                                                                        key={emIdx}
+                                                                        onClick={() => handleEmotionAmplify(idx, item.value)}
+                                                                        className="py-1.5 px-2 text-[10px] font-bold text-gray-700 dark:text-gray-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg text-left transition-colors"
+                                                                    >
+                                                                       {item.label}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
@@ -2250,6 +2557,99 @@ ${ep.script}
                                 className="px-5 py-2.5 bg-sky-600 hover:bg-sky-550 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-70"
                             >
                                 {creatingProjectInDB ? '正在为您开辟云端空间...' : <><Check className="w-4 h-4" /> 确认新建并开始</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Version History Modal */}
+            {showHistoryModal && historyEpisodeIndex !== null && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl w-full max-w-4xl h-[80vh] shadow-2xl overflow-hidden flex flex-col animate-scale-up">
+                        <div className="flex items-center justify-between p-4 border-b border-gray-150 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/30">
+                            <div>
+                                <h4 className="font-extrabold text-gray-900 dark:text-white flex items-center gap-1.5 text-sm">
+                                    <Database className="w-5 h-5 text-indigo-500" />
+                                    第 {parsedEpisodes[historyEpisodeIndex].episodeNumber} 集 历史版本记录
+                                </h4>
+                                <p className="text-[10px] text-gray-400 mt-0.5">查看、对比以及一键恢复该分集在剧本创作和润色过程中的所有历史版本</p>
+                            </div>
+                            <button 
+                                onClick={() => { setShowHistoryModal(false); setHistoryEpisodeIndex(null); setSelectedHistoryVersionIndex(null); }}
+                                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 flex overflow-hidden">
+                            {/* Left Panel: Versions list */}
+                            <div className="w-1/3 border-r border-gray-150 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-950/25 overflow-y-auto p-3 space-y-2">
+                                <div className="text-[11px] font-bold text-gray-400 px-1 mb-2">版本历史列表 ({parsedEpisodes[historyEpisodeIndex].history?.length || 0})</div>
+                                {parsedEpisodes[historyEpisodeIndex].history?.map((version, vIdx) => (
+                                    <div
+                                        key={vIdx}
+                                        onClick={() => setSelectedHistoryVersionIndex(vIdx)}
+                                        className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${selectedHistoryVersionIndex === vIdx ? 'bg-indigo-50/70 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-900' : 'bg-white border-gray-150 hover:bg-gray-50 dark:bg-gray-850 dark:border-gray-800 dark:hover:bg-gray-800'}`}
+                                    >
+                                        <div className="font-bold text-xs text-gray-800 dark:text-gray-200 line-clamp-1">{version.label}</div>
+                                        <div className="text-[10px] text-gray-400 mt-1 flex items-center justify-between">
+                                            <span>版本 #{vIdx + 1}</span>
+                                            <span>{version.timestamp}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!parsedEpisodes[historyEpisodeIndex].history || parsedEpisodes[historyEpisodeIndex].history!.length === 0) && (
+                                    <div className="text-center py-8 text-xs text-gray-400">暂无版本记录</div>
+                                )}
+                            </div>
+
+                            {/* Right Panel: Version content preview */}
+                            <div className="flex-grow flex flex-col overflow-hidden bg-white dark:bg-gray-900">
+                                {selectedHistoryVersionIndex !== null && parsedEpisodes[historyEpisodeIndex].history?.[selectedHistoryVersionIndex] ? (
+                                    <>
+                                        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-950/20 px-4 py-2 border-b border-gray-150 dark:border-gray-800 flex items-center justify-between">
+                                            <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                                                正在预览：{parsedEpisodes[historyEpisodeIndex].history![selectedHistoryVersionIndex].label}
+                                            </span>
+                                            <button
+                                                onClick={() => {
+                                                    const chosenScript = parsedEpisodes[historyEpisodeIndex].history![selectedHistoryVersionIndex].script;
+                                                    setParsedEpisodes(prev => prev.map((item, idx) => {
+                                                        if (idx === historyEpisodeIndex) {
+                                                            return { ...item, script: chosenScript, isDone: true };
+                                                        }
+                                                        return item;
+                                                    }));
+                                                    setShowHistoryModal(false);
+                                                    setHistoryEpisodeIndex(null);
+                                                    setSelectedHistoryVersionIndex(null);
+                                                }}
+                                                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-550 text-white font-bold rounded-lg text-[10px] shadow-sm flex items-center gap-1 transition-all active:scale-95"
+                                            >
+                                                <ArrowPath className="w-3 h-3 animate-spin-slow" /> 恢复此版本为当前剧本
+                                            </button>
+                                        </div>
+                                        <div className="flex-grow p-4 overflow-y-auto font-mono text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed bg-gray-50/30 dark:bg-black/5 custom-scrollbar">
+                                            {parsedEpisodes[historyEpisodeIndex].history![selectedHistoryVersionIndex].script}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                                        <Database className="w-10 h-10 text-gray-300 mb-2" />
+                                        <span className="text-xs">请在左侧选择要预览的历史版本</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-gray-150 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/20 flex justify-end">
+                            <button 
+                                onClick={() => { setShowHistoryModal(false); setHistoryEpisodeIndex(null); setSelectedHistoryVersionIndex(null); }}
+                                className="px-4 py-2 bg-white hover:bg-gray-100 border border-gray-200 dark:bg-gray-850 dark:border-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition-all"
+                            >
+                                关闭
                             </button>
                         </div>
                     </div>
