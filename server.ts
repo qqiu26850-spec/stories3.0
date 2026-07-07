@@ -3,6 +3,98 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
+// Helper functions for fallback providers when Gemini is exhausted/429
+async function handleFallbackStream(provider: "deepseek" | "doubao", apiKey: string, prompt: string, res: any) {
+  const url = provider === "deepseek" 
+    ? "https://api.deepseek.com/chat/completions" 
+    : "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+  
+  const modelId = provider === "deepseek" ? "deepseek-chat" : "ep-20251229180745-tbpdh";
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: modelId,
+      messages: [
+        { role: "system", content: "You are a helpful creative writing assistant. Write detailed, expansive, and high-quality content. Do not summarize unless asked. Use Markdown headers (# ## ###) for structure." },
+        { role: "user", content: prompt }
+      ],
+      stream: true,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Fallback ${provider} API error: ${response.status}`);
+  }
+
+  if (response.body) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data: ")) continue;
+        const jsonStr = trimmed.slice(6);
+        if (jsonStr === "[DONE]") continue;
+
+        try {
+          const json = JSON.parse(jsonStr);
+          const content = json.choices?.[0]?.delta?.content || "";
+          if (content) {
+            res.write(content);
+          }
+        } catch (e) {
+          // ignore parsing error for chunk
+        }
+      }
+    }
+  }
+}
+
+async function handleFallbackContent(provider: "deepseek" | "doubao", apiKey: string, prompt: string): Promise<string> {
+  const url = provider === "deepseek" 
+    ? "https://api.deepseek.com/chat/completions" 
+    : "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+  
+  const modelId = provider === "deepseek" ? "deepseek-chat" : "ep-20251229180745-tbpdh";
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: modelId,
+      messages: [
+        { role: "system", content: "You are a helpful creative writing assistant. Write detailed, expansive, and high-quality content. Do not summarize unless asked. Use Markdown headers (# ## ###) for structure." },
+        { role: "user", content: prompt }
+      ],
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Fallback ${provider} API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -24,14 +116,21 @@ async function startServer() {
       let resolvedModel = model;
       if (typeof model === 'string') {
         const m = model.toLowerCase();
-        if (m === "gemini-3-flash-preview" || m === "gemini-3.5-flash-preview" || m === "gemini-3.5-flash") {
+        if (m.includes("flash") || m === "gemini-3-flash-preview" || m === "gemini-3.5-flash-preview" || m === "gemini-1.5-flash") {
           resolvedModel = "gemini-3.5-flash";
-        } else if (m === "gemini-3-pro-preview" || m === "gemini-3.5-pro") {
+        } else if (m.includes("pro") || m === "gemini-3-pro-preview" || m === "gemini-1.5-pro") {
           resolvedModel = "gemini-3.1-pro-preview";
         }
       }
 
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
       const generateConfig = {
         temperature: temperature,
         topP: top_p,
@@ -43,16 +142,12 @@ async function startServer() {
         const m = requestedModel.toLowerCase();
         const proChain = [
           "gemini-3.1-pro-preview",
-          "gemini-2.5-pro",
-          "gemini-1.5-pro",
           "gemini-3.5-flash",
-          "gemini-2.5-flash",
-          "gemini-1.5-flash"
+          "gemini-3.1-flash-lite"
         ];
         const flashChain = [
           "gemini-3.5-flash",
-          "gemini-2.5-flash",
-          "gemini-1.5-flash"
+          "gemini-3.1-flash-lite"
         ];
 
         if (m.includes("pro")) {
@@ -110,7 +205,27 @@ async function startServer() {
         }
 
         if (!success) {
-          throw lastError || new Error("All fallback Gemini models exhausted in stream");
+          if (process.env.DEEPSEEK_API_KEY) {
+            console.log("[Gemini API] Falling back to DeepSeek Chat due to Gemini exhaustion in stream");
+            try {
+              await handleFallbackStream("deepseek", process.env.DEEPSEEK_API_KEY, contents, res);
+              success = true;
+            } catch (err: any) {
+              console.error("[Gemini API] Fallback to DeepSeek failed:", err);
+              throw err;
+            }
+          } else if (process.env.ARK_API_KEY) {
+            console.log("[Gemini API] Falling back to Doubao Chat due to Gemini exhaustion in stream");
+            try {
+              await handleFallbackStream("doubao", process.env.ARK_API_KEY, contents, res);
+              success = true;
+            } catch (err: any) {
+              console.error("[Gemini API] Fallback to Doubao failed:", err);
+              throw err;
+            }
+          } else {
+            throw lastError || new Error("All fallback Gemini models exhausted in stream");
+          }
         }
         res.end();
       } else {
@@ -140,7 +255,29 @@ async function startServer() {
         }
 
         if (!success || !response) {
-          throw lastError || new Error("All fallback Gemini models exhausted in generation");
+          if (process.env.DEEPSEEK_API_KEY) {
+            console.log("[Gemini API] Falling back to DeepSeek Chat due to Gemini exhaustion in generation");
+            try {
+              const text = await handleFallbackContent("deepseek", process.env.DEEPSEEK_API_KEY, contents);
+              res.json({ text });
+              return;
+            } catch (err: any) {
+              console.error("[Gemini API] Fallback to DeepSeek failed:", err);
+              throw err;
+            }
+          } else if (process.env.ARK_API_KEY) {
+            console.log("[Gemini API] Falling back to Doubao Chat due to Gemini exhaustion in generation");
+            try {
+              const text = await handleFallbackContent("doubao", process.env.ARK_API_KEY, contents);
+              res.json({ text });
+              return;
+            } catch (err: any) {
+              console.error("[Gemini API] Fallback to Doubao failed:", err);
+              throw err;
+            }
+          } else {
+            throw lastError || new Error("All fallback Gemini models exhausted in generation");
+          }
         }
 
         res.json({ text: response.text });

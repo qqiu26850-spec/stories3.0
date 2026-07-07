@@ -176,7 +176,7 @@ export async function fetchUserLibrary() {
     }
 }
 
-export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short' | 'short_story', coverUrl: string | null = null, scriptData: any = null) {
+export async function createProject(title: string, desc: string, type: 'novel' | 'script' | 'short' | 'short_story' | 'script_episode', coverUrl: string | null = null, scriptData: any = null) {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("请先登录");
@@ -195,7 +195,7 @@ export async function createProject(title: string, desc: string, type: 'novel' |
     }
 }
 
-export async function updateProject(projectId: string, updates: { title?: string, description?: string, cover_image?: string }) {
+export async function updateProject(projectId: string, updates: { title?: string, description?: string, cover_image?: string, script_data?: any }) {
     try {
         const userId = await getCurrentUserId();
         if (!userId) throw new Error("未登录");

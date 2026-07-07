@@ -51,25 +51,39 @@ export default async function handler(request: Request) {
 
     if (stream) {
         let responseStream;
-        try {
-            responseStream = await ai.models.generateContentStream({
-                model: resolvedModel,
-                contents: contents,
-                config: generateConfig,
-            });
-        } catch (streamError: any) {
-            const errorMsg = String(streamError.message || streamError);
-            const isQuotaOrProError = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("limit: 0") || errorMsg.includes("pro") || errorMsg.includes("404");
-            if (resolvedModel !== "gemini-3.5-flash" && isQuotaOrProError) {
-                console.warn(`Falling back from ${resolvedModel} to gemini-3.5-flash due to stream initialization error:`, streamError);
-                resolvedModel = "gemini-3.5-flash";
+        let attemptModel = resolvedModel;
+        const modelsToTry = [attemptModel];
+        if (attemptModel === "gemini-3.1-pro-preview") {
+            modelsToTry.push("gemini-3.5-flash");
+            modelsToTry.push("gemini-3.1-flash-lite");
+        } else if (attemptModel === "gemini-3.5-flash") {
+            modelsToTry.push("gemini-3.1-flash-lite");
+        } else if (attemptModel !== "gemini-3.1-flash-lite") {
+            modelsToTry.push("gemini-3.5-flash");
+            modelsToTry.push("gemini-3.1-flash-lite");
+        }
+
+        let success = false;
+        for (let idx = 0; idx < modelsToTry.length; idx++) {
+            const currentModel = modelsToTry[idx];
+            try {
                 responseStream = await ai.models.generateContentStream({
-                    model: resolvedModel,
+                    model: currentModel,
                     contents: contents,
                     config: generateConfig,
                 });
-            } else {
-                throw streamError;
+                resolvedModel = currentModel;
+                success = true;
+                break;
+            } catch (streamError: any) {
+                const errorMsg = String(streamError.message || streamError);
+                const isQuotaOrProError = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("limit: 0") || errorMsg.includes("pro") || errorMsg.includes("404") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("exhausted");
+                if (isQuotaOrProError && idx < modelsToTry.length - 1) {
+                    console.warn(`Falling back from ${currentModel} to ${modelsToTry[idx + 1]} due to stream initialization error:`, streamError);
+                    continue;
+                } else {
+                    throw streamError;
+                }
             }
         }
 
@@ -99,12 +113,16 @@ export default async function handler(request: Request) {
                 } catch (e: any) {
                     console.error("Gemini Stream Error, checking fallback", e);
                     const errorMsg = String(e.message || e);
-                    const isQuotaOrProError = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("limit: 0") || errorMsg.includes("pro") || errorMsg.includes("404");
-                    if (resolvedModel !== "gemini-3.5-flash" && isQuotaOrProError) {
-                        console.warn(`Falling back from ${resolvedModel} to gemini-3.5-flash due to stream iteration error:`, e);
+                    const isQuotaOrProError = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("limit: 0") || errorMsg.includes("pro") || errorMsg.includes("404") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("exhausted");
+                    if (isQuotaOrProError) {
+                        let fallbackModel = "gemini-3.1-flash-lite";
+                        if (resolvedModel === "gemini-3.1-pro-preview") {
+                            fallbackModel = "gemini-3.5-flash";
+                        }
+                        console.warn(`Falling back from ${resolvedModel} to ${fallbackModel} due to stream iteration error:`, e);
                         try {
                             const fallbackStream = await ai.models.generateContentStream({
-                                model: "gemini-3.5-flash",
+                                model: fallbackModel,
                                 contents: contents,
                                 config: generateConfig,
                             });
@@ -120,8 +138,32 @@ export default async function handler(request: Request) {
                                     controller.enqueue(encoder.encode(text));
                                 }
                             }
-                        } catch (fallbackError) {
+                        } catch (fallbackError: any) {
                             console.error("Fallback stream error:", fallbackError);
+                            if (fallbackModel === "gemini-3.5-flash") {
+                                try {
+                                    console.warn(`Second fallback to gemini-3.1-flash-lite...`);
+                                    const secondFallbackStream = await ai.models.generateContentStream({
+                                        model: "gemini-3.1-flash-lite",
+                                        contents: contents,
+                                        config: generateConfig,
+                                    });
+                                    for await (const chunk of secondFallbackStream) {
+                                        let text = '';
+                                        try {
+                                            text = chunk.text || '';
+                                        } catch (e3) {}
+                                        if (!text && chunk.candidates?.[0]?.content?.parts?.[0]?.text) {
+                                            text = chunk.candidates[0].content.parts[0].text;
+                                        }
+                                        if (text) {
+                                            controller.enqueue(encoder.encode(text));
+                                        }
+                                    }
+                                } catch (e4) {
+                                    console.error("Second fallback stream error:", e4);
+                                }
+                            }
                         }
                     }
                     // Attempt to close gracefully even on error to prevent hanging
@@ -138,25 +180,39 @@ export default async function handler(request: Request) {
         });
     } else {
         let response;
-        try {
-            response = await ai.models.generateContent({
-                model: resolvedModel,
-                contents: contents,
-                config: generateConfig,
-            });
-        } catch (contentError: any) {
-            const errorMsg = String(contentError.message || contentError);
-            const isQuotaOrProError = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("limit: 0") || errorMsg.includes("pro") || errorMsg.includes("404");
-            if (resolvedModel !== "gemini-3.5-flash" && isQuotaOrProError) {
-                console.warn(`Falling back from ${resolvedModel} to gemini-3.5-flash due to content generation error:`, contentError);
-                resolvedModel = "gemini-3.5-flash";
+        let attemptModel = resolvedModel;
+        const modelsToTry = [attemptModel];
+        if (attemptModel === "gemini-3.1-pro-preview") {
+            modelsToTry.push("gemini-3.5-flash");
+            modelsToTry.push("gemini-3.1-flash-lite");
+        } else if (attemptModel === "gemini-3.5-flash") {
+            modelsToTry.push("gemini-3.1-flash-lite");
+        } else if (attemptModel !== "gemini-3.1-flash-lite") {
+            modelsToTry.push("gemini-3.5-flash");
+            modelsToTry.push("gemini-3.1-flash-lite");
+        }
+
+        let success = false;
+        for (let idx = 0; idx < modelsToTry.length; idx++) {
+            const currentModel = modelsToTry[idx];
+            try {
                 response = await ai.models.generateContent({
-                    model: resolvedModel,
+                    model: currentModel,
                     contents: contents,
                     config: generateConfig,
                 });
-            } else {
-                throw contentError;
+                resolvedModel = currentModel;
+                success = true;
+                break;
+            } catch (contentError: any) {
+                const errorMsg = String(contentError.message || contentError);
+                const isQuotaOrProError = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("limit: 0") || errorMsg.includes("pro") || errorMsg.includes("404") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("exhausted");
+                if (isQuotaOrProError && idx < modelsToTry.length - 1) {
+                    console.warn(`Falling back from ${currentModel} to ${modelsToTry[idx + 1]} due to content generation error:`, contentError);
+                    continue;
+                } else {
+                    throw contentError;
+                }
             }
         }
 

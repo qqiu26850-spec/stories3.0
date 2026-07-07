@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { generateTextStream } from '../../services/geminiService';
-import { createProject, saveChapterToDB } from '../../services/supabaseService';
+import { createProject, saveChapterToDB, updateProject, deleteProject, fetchProjects } from '../../services/supabaseService';
 import { 
     Sparkles, Film, Database, Copy, Stop, AdjustmentsHorizontal, Check, ArrowPath, 
     Play, Pencil, ClipboardDocumentCheck, DocumentPlus, Trash, Plus, 
@@ -22,35 +22,45 @@ interface EpisodeOutline {
     isDone?: boolean;
 }
 
-const THEME_OPTIONS = [
-    { value: '战神崛起', label: '战神崛起' },
-    { value: '赘婿逆袭', label: '赘婿逆袭' },
-    { value: '都市超能', label: '都市超能' },
-    { value: '豪门恩怨', label: '豪门恩怨' },
-    { value: '重生复仇', label: '重生复仇' },
-    { value: '甜宠娇妻', label: '甜宠娇妻' },
-    { value: '虐恋情深', label: '虐恋情深' },
-    { value: '穿越逆天', label: '穿越逆天' }
+const ERA_OPTIONS = ['乡村', '职场', '民国', '校园', '历史古代', '古装'];
+
+const THEME_PLOT_OPTIONS = [
+    '打脸虐渣', '逆袭', '马甲', '女性成长', '都市日常', '重生', '穿越', '系统', '亲情', '家庭伦理', 
+    '奇幻脑洞', '奇幻爱情', '闪婚', '暗恋成真', '古风言情', '穿书', '战神归来', '破镜重圆', '追妻', 
+    '现代言情', '豪门恩怨', '异能', '虐恋', '传承觉醒', '玄幻仙侠', '古风权谋', '年代爱情', 
+    '赘婿逆袭', '娱乐圈', '剧情', '无敌神医', '悬疑推理', '喜剧', '现言甜宠'
 ];
 
-const ELEMENT_OPTIONS = [
-    { value: '扮猪吃虎', label: '扮猪吃虎' },
-    { value: '强势打脸', label: '强势打脸' },
-    { value: '隐藏身份', label: '隐藏身份' },
-    { value: '契约结婚', label: '契约结婚' },
-    { value: '萌宝相助', label: '萌宝相助' },
-    { value: '真假千金', label: '真假千金' },
-    { value: '系统加身', label: '系统加身' },
-    { value: '极限反差', label: '极限反差' }
+const CHARACTER_TAG_OPTIONS = [
+    '大女主', '萌宝', '小人物', '神豪', '强者回归', '真假千金', '欢喜冤家', '强强联合', '天下无敌', 
+    '青梅竹马', '王妃', '女帝', '龙王', '皇后', '替身', '大叔', '团宠'
 ];
 
-const STYLE_OPTIONS = [
-    { value: '极速爽快', label: '极速爽快' },
-    { value: '爆爽高燃', label: '爆爽高燃' },
-    { value: '连续反转', label: '连续反转' },
-    { value: '催泪动人', label: '催泪动人' },
-    { value: '轻松爆笑', label: '轻松爆笑' },
-    { value: '悬疑烧脑', label: '悬疑烧脑' }
+const PROMPT_LIBRARY = [
+    {
+        id: 'system_default',
+        name: '系统默认爆款模板',
+        desc: '黄金快节奏，强冲突卡点，极速爽快',
+        prompt: '你是一位爆款微短剧金牌编剧。请为这套短剧创作极具网感、强情绪冲突、高开低走与强弱反转的分集大纲。要求：首集强剧情抓人开局，有明显的剧情卡点和节奏爽点，每集末尾设置钩子悬念。'
+    },
+    {
+        id: 'revenge_slap',
+        name: '逆袭复仇爽剧模板',
+        desc: '极致打脸、隐藏身份、扮猪吃虎清算反派',
+        prompt: '你是一位爆款微短剧金牌编剧。请以极致的反差感、尊严践踏后的逆袭为核心，编写分集大纲。第一集必须是受虐高潮与惊天身份揭秘的强情绪开局，情节点必须写得非常具体、写清楚每个人的自私嘴脸和主角的隐藏力量，节奏点掐死在主角清算前夜，设置剧情卡点。'
+    },
+    {
+        id: 'sweet_love',
+        name: '闪婚甜宠爆款模板',
+        desc: '豪门误会、先婚后爱、满分狗粮与甜虐交织',
+        prompt: '你是一位金牌甜宠剧编剧。请以“命中注定的缘分”和“隐藏豪门身份”为核心，编写甜中带虐的分集大纲。开局必须是闪婚名场面或误会冲突强力开场，设计甜蜜卡点与吃醋误会的情节，每集末尾留下关于真实身份或危机揭露的强悬念。'
+    },
+    {
+        id: 'high_tension_thriller',
+        name: '悬疑反转脑洞模板',
+        desc: '层层剥茧、高智商博弈、反常识反转',
+        prompt: '你是一位爆款悬疑脑洞短剧编剧。请编写高反转率、烧脑多重谜底的分集大纲。开局必须以荒诞或极度反常的突发危机切入，强行拉满情绪张力。每个情节点必须环环相扣，写清楚具体线索和卡点悬念，最后一秒实现神级大反转。'
+    }
 ];
 
 const toChineseNum = (num: number): string => {
@@ -78,9 +88,13 @@ const MODEL_OPTIONS = [
 ];
 
 export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ onBack, onSaveSuccess }) => {
-    // Stage navigation: 'mode_select' | 'outline_form_existing' | 'outline_form_new' | 'outline_generating' | 'outline_results' | 'script_generating' | 'completed'
-    const [stage, setStage] = useState<'mode_select' | 'outline_form_existing' | 'outline_form_new' | 'outline_generating' | 'outline_results' | 'script_generation' | 'completed'>('mode_select');
+    // Stage navigation: 'project_dashboard' | 'mode_select' | 'outline_form_existing' | 'outline_form_new' | 'outline_generating' | 'outline_results' | 'script_generation' | 'completed'
+    const [stage, setStage] = useState<'project_dashboard' | 'mode_select' | 'outline_form_existing' | 'outline_form_new' | 'outline_generating' | 'outline_results' | 'script_generation' | 'completed'>('project_dashboard');
     const [outlineMode, setOutlineMode] = useState<'existing' | 'new' | null>(null);
+    
+    // Project Dashboard states
+    const [episodeProjects, setEpisodeProjects] = useState<any[]>([]);
+    const [loadingProjects, setLoadingProjects] = useState(false);
     
     // Core parameters
     const [episodesCount, setEpisodesCount] = useState<number>(10);
@@ -92,7 +106,12 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
     const [existingOutline, setExistingOutline] = useState('');
     
     // New Outline parameters
-    const [theme, setTheme] = useState('战神崛起');
+    const [theme, setTheme] = useState('打脸虐渣');
+    const [selectedEra, setSelectedEra] = useState<string>('古装');
+    const [selectedThemePlots, setSelectedThemePlots] = useState<string[]>(['逆袭', '打脸虐渣']);
+    const [selectedCharacters, setSelectedCharacters] = useState<string[]>(['强者回归']);
+    const [coreTrope, setCoreTrope] = useState<string>(''); // 核心梗 (非必填)
+    const [selectedPromptId, setSelectedPromptId] = useState<string>('system_default');
     const [elements, setElements] = useState<string[]>(['扮猪吃虎', '强势打脸']);
     const [styleTags, setStyleTags] = useState<string[]>(['极速爽快', '连续反转']);
     const [customElement, setCustomElement] = useState('');
@@ -114,6 +133,14 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
     const [successMessage, setSuccessMessage] = useState('');
     const [error, setError] = useState('');
 
+    // Script creation states
+    const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+    const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
+    const [pendingMode, setPendingMode] = useState<'existing' | 'new' | null>(null);
+    const [newProjectTitle, setNewProjectTitle] = useState('');
+    const [newProjectDesc, setNewProjectDesc] = useState('');
+    const [creatingProjectInDB, setCreatingProjectInDB] = useState(false);
+
     // Single Episode Outline edit states
     const [editEpisodeIndex, setEditEpisodeIndex] = useState<number | null>(null);
     const [editEpisodeTitle, setEditEpisodeTitle] = useState('');
@@ -124,10 +151,166 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
     const [aiChatMessages, setAiChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
     const [aiChatInput, setAiChatInput] = useState('');
     const [aiIsGenerating, setAiIsGenerating] = useState(false);
+    const [chatScope, setChatScope] = useState<'global' | 'single'>('global');
+    const [chatTargetEpisode, setChatTargetEpisode] = useState<number>(1);
+    const [singleEpisodeEdits, setSingleEpisodeEdits] = useState<Record<number, string>>({});
+    
+    // Auto-sync and layout states
+    const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+    const [expandedOutlines, setExpandedOutlines] = useState<Record<number, boolean>>({});
     
     const abortControllerRef = useRef<AbortController | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const aiChatScrollRef = useRef<HTMLDivElement>(null);
+
+    const loadEpisodeProjects = async () => {
+        setLoadingProjects(true);
+        setError('');
+        try {
+            const allProjects = await fetchProjects(1, 100);
+            const filtered = allProjects.filter((p: any) => p.type === 'script_episode');
+            setEpisodeProjects(filtered);
+        } catch (err: any) {
+            console.error("Failed to load episode projects:", err);
+            setError('加载剧本项目库失败，请重试');
+        } finally {
+            setLoadingProjects(false);
+        }
+    };
+
+    useEffect(() => {
+        loadEpisodeProjects();
+    }, []);
+
+    // Automatic cloud synchronization debounced effect
+    useEffect(() => {
+        if (stage !== 'script_generation' && stage !== 'outline_results') return;
+        if (!currentProjectId || parsedEpisodes.length === 0) return;
+
+        setSyncStatus('syncing');
+        const timer = setTimeout(async () => {
+            try {
+                const description = outlineMode === 'existing' ? '已有故事分集生成' : `主题:${theme} | 元素:${elements.join(',')}`;
+                const scriptData = {
+                    settings: {
+                        format: 'live_action',
+                        totalEpisodes: String(parsedEpisodes.length),
+                        outputLanguage: 'zh',
+                        model: model
+                    },
+                    planning: {
+                        synopsis: outlineMode === 'existing' ? existingOutline : coreIdea,
+                        characterSettings: '',
+                        worldview: '',
+                        outline: outlineRawText || '暂无大纲内容...'
+                    },
+                    episodes: parsedEpisodes,
+                    outlineMode: outlineMode,
+                    aiChatMessages: aiChatMessages
+                };
+
+                await updateProject(currentProjectId, {
+                    title: projectTitle || '未命名剧本',
+                    description: description,
+                    script_data: scriptData
+                });
+
+                // Save chapters quietly as well
+                for (let i = 0; i < parsedEpisodes.length; i++) {
+                    const ep = parsedEpisodes[i];
+                    const content = `【分集故事梗概】：\n${ep.outline}\n\n=====================================\n\n【本集正式剧本】：\n${ep.script || '（未生成该集剧本）'}`;
+                    await saveChapterToDB(currentProjectId, `new-scene-${currentProjectId}-${i}`, ep.title, content, i + 1);
+                }
+
+                setSyncStatus('success');
+            } catch (err) {
+                console.error('Auto save to cloud failed:', err);
+                setSyncStatus('error');
+            }
+        }, 1500); // 1.5 seconds debounce for faster feedback
+
+        return () => clearTimeout(timer);
+    }, [parsedEpisodes, projectTitle, aiChatMessages, stage]);
+
+    const handleSelectProject = async (proj: any) => {
+        setCurrentProjectId(proj.id);
+        setProjectTitle(proj.title);
+        
+        const scriptData = proj.script_data || {};
+        const settings = scriptData.settings || {};
+        const planning = scriptData.planning || {};
+        
+        if (settings.model) setModel(settings.model);
+        if (planning.outline) setOutlineRawText(planning.outline);
+        
+        if (scriptData.outlineMode) {
+            setOutlineMode(scriptData.outlineMode);
+        }
+
+        // Restore chat messages if they exist, otherwise clear
+        if (scriptData.aiChatMessages && Array.isArray(scriptData.aiChatMessages)) {
+            setAiChatMessages(scriptData.aiChatMessages);
+        } else {
+            setAiChatMessages([]);
+        }
+        
+        if (scriptData.episodes && Array.isArray(scriptData.episodes) && scriptData.episodes.length > 0) {
+            setParsedEpisodes(scriptData.episodes);
+            setEpisodesCount(scriptData.episodes.length);
+            
+            const hasAnyScripts = scriptData.episodes.some((ep: any) => ep.script && ep.script.trim().length > 0);
+            if (hasAnyScripts) {
+                setStage('script_generation');
+            } else {
+                setStage('outline_results');
+            }
+        } else {
+            setParsedEpisodes([]);
+            setStage('mode_select');
+        }
+    };
+
+    const handleDeleteProject = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm('确定要删除这个剧本项目吗？此操作无法撤销。')) return;
+        try {
+            await deleteProject(id);
+            setEpisodeProjects(prev => prev.filter(p => p.id !== id));
+        } catch (err: any) {
+            console.error("Failed to delete project:", err);
+            alert("删除项目失败，请重试");
+        }
+    };
+
+    const handleHeaderBack = () => {
+        if (stage === 'project_dashboard') {
+            onBack();
+        } else if (stage === 'mode_select') {
+            setCurrentProjectId(null);
+            setProjectTitle('');
+            setStage('project_dashboard');
+            loadEpisodeProjects();
+        } else if (stage === 'outline_form_existing' || stage === 'outline_form_new') {
+            setStage('mode_select');
+        } else if (stage === 'outline_results') {
+            setCurrentProjectId(null);
+            setProjectTitle('');
+            setStage('project_dashboard');
+            loadEpisodeProjects();
+        } else if (stage === 'script_generation') {
+            setStage('outline_results');
+        } else if (stage === 'completed') {
+            setCurrentProjectId(null);
+            setProjectTitle('');
+            setStage('project_dashboard');
+            loadEpisodeProjects();
+        } else {
+            setCurrentProjectId(null);
+            setProjectTitle('');
+            setStage('project_dashboard');
+            loadEpisodeProjects();
+        }
+    };
 
     // Stop current stream
     const handleStop = () => {
@@ -158,6 +341,49 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
         setEditEpisodeIndex(null);
     };
 
+    // Parse partial JSON string during streaming to display clean preview outlines
+    const parsePartialOutlines = (jsonStr: string): { episodeNumber?: number; title?: string; outline?: string }[] => {
+        const results: { episodeNumber?: number; title?: string; outline?: string }[] = [];
+        const objectBlocks = jsonStr.split(/\{/);
+        
+        for (let i = 1; i < objectBlocks.length; i++) {
+            const block = objectBlocks[i];
+            
+            let episodeNumber: number | undefined;
+            const numMatch = block.match(/["']episodeNumber["']\s*:\s*(\d+)/i);
+            if (numMatch) {
+                episodeNumber = parseInt(numMatch[1]);
+            }
+            
+            let title: string | undefined;
+            const titleMatch = block.match(/["']title["']\s*:\s*["']([^"']*)["']/i);
+            if (titleMatch) {
+                title = titleMatch[1];
+            } else {
+                const partialTitleMatch = block.match(/["']title["']\s*:\s*["']([^"']*)$/i);
+                if (partialTitleMatch) {
+                    title = partialTitleMatch[1];
+                }
+            }
+            
+            let outline: string | undefined;
+            const outlineMatch = block.match(/["']outline["']\s*:\s*["']([^"']*)["']/i);
+            if (outlineMatch) {
+                outline = outlineMatch[1];
+            } else {
+                const partialOutlineMatch = block.match(/["']outline["']\s*:\s*["']([^"']*)$/i);
+                if (partialOutlineMatch) {
+                    outline = partialOutlineMatch[1];
+                }
+            }
+            
+            if (episodeNumber !== undefined || title !== undefined || outline !== undefined) {
+                results.push({ episodeNumber, title, outline });
+            }
+        }
+        return results;
+    };
+
     // AI collaborative chat message send
     const handleAIChatSend = async (customPrompt?: string) => {
         const textToSend = customPrompt || aiChatInput;
@@ -174,20 +400,55 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
             `【第${ep.episodeNumber}集：${ep.title}】\n${ep.outline}`
         ).join('\n\n');
 
-        const prompt = `你是一个顶级爆款短剧导演和编剧。用户想通过对话，协同优化这套【${parsedEpisodes.length}集】的分集剧情大纲。
-请根据用户的指令，对现有的大纲进行针对性的润色、修改或重构。
+        let prompt = '';
+        if (chatScope === 'single') {
+            prompt = `你是一个顶级爆款短剧导演和编剧。用户想通过对话，协同优化这套分集剧情大纲中的【第 ${chatTargetEpisode} 集】。
 
-【当前所有集数的大纲内容如下】：
-${currentOutlinesStr}
+【当前优化范围】：【单集针对性修改】 - 仅修改【第 ${chatTargetEpisode} 集】。
 
-【用户的修改指令】：
+【用户的具体修改指令】：
 “${userMsg}”
+
+【当前第 ${chatTargetEpisode} 集的大纲内容】：
+${parsedEpisodes.find(ep => ep.episodeNumber === chatTargetEpisode)?.outline || ''}
+
+【全剧上下文参考】：
+${currentOutlinesStr}
 
 ---
 
 【输出规范与要求】：
-1. 首先，请以专业编剧的视角，用亲切易懂的语言向用户分析和解释你的修改思路、调整了哪些冲突、强化了哪些钩子。
-2. 接着，你**必须**输出一份**完整且更新后**的【各集大纲JSON数组】，以便系统能够自动解析并让用户一键应用修改。
+1. 首先，请以专业编剧的视角，用亲切易懂的语言向用户分析和解释你对【第 ${chatTargetEpisode} 集】做出的具体内容优化思路，以及这一集在全剧大纲承上启下中的关键作用。
+2. 接着，你必须输出一个包含修改后大纲的 JSON 数组。
+3. 请只在 JSON 数组中输出【第 ${chatTargetEpisode} 集】（以及若有连锁关联的个别受影响集数）的更新大纲。绝对不要在 JSON 中输出未修改的其他集数大纲，避免冗余和打扰。
+4. 请将该JSON数组严格用代码块标记 \`\`\`json ... \`\`\` 包裹起来。
+5. JSON格式必须严格为以下格式，不要有任何多余的键名：
+\`\`\`json
+[
+  {
+    "episodeNumber": ${chatTargetEpisode},
+    "title": "第${chatTargetEpisode}集标题",
+    "outline": "本集优化后的具体大纲内容..."
+  }
+]
+\`\`\`
+注意：大纲内容应当保持在大约300字到450字左右的精炼梗概。`;
+        } else {
+            prompt = `你是一个顶级爆款短剧导演和编剧。用户想通过对话，协同优化这套【${parsedEpisodes.length}集】的全剧分集剧情大纲。
+
+【当前优化范围】：【全剧整体修改】
+
+【用户的具体修改指令】：
+“${userMsg}”
+
+【当前所有集数的大纲内容如下】：
+${currentOutlinesStr}
+
+---
+
+【输出规范与要求】：
+1. 首先，请以专业编剧的视角，用亲切易懂的语言向用户详细分析本次整体优化调整了哪些冲突，强化了哪些钩子，如何让剧情更加抓人。
+2. 接着，你必须输出一份完整更新后的【各集大纲JSON数组】，以便系统能够自动解析并让用户一键应用修改。
 3. 请将该JSON数组严格用代码块标记 \`\`\`json ... \`\`\` 包裹起来。
 4. JSON数组的格式必须严格为以下格式，不要有任何多余的键名：
 \`\`\`json
@@ -201,6 +462,7 @@ ${currentOutlinesStr}
 ]
 \`\`\`
 注意：大纲内容应当保持在每集分集梗概的情节长度设计，完美契合单集大概1分半（90秒）左右的微短剧视频剧情量（对应每集大约300字到450字的精炼梗概）。请完整输出所有集数，不要简写。`;
+        }
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -267,14 +529,31 @@ ${currentOutlinesStr}
 
             const arr = JSON.parse(jsonText);
             if (Array.isArray(arr)) {
-                const formatted: EpisodeOutline[] = arr.map((item: any) => ({
-                    episodeNumber: parseInt(item.episodeNumber) || 1,
-                    title: String(item.title || `第${item.episodeNumber}集`),
-                    outline: String(item.outline || ''),
-                    script: parsedEpisodes.find(x => x.episodeNumber === item.episodeNumber)?.script || ''
-                }));
-                setParsedEpisodes(formatted);
-                alert('✨ 成功应用 AI 优化后的全套分集大纲！');
+                setParsedEpisodes(prev => {
+                    const next = [...prev];
+                    arr.forEach((item: any) => {
+                        const epNum = parseInt(item.episodeNumber);
+                        if (!isNaN(epNum)) {
+                            const matchIdx = next.findIndex(x => x.episodeNumber === epNum);
+                            if (matchIdx !== -1) {
+                                next[matchIdx] = {
+                                    ...next[matchIdx],
+                                    title: String(item.title || next[matchIdx].title),
+                                    outline: String(item.outline || next[matchIdx].outline)
+                                };
+                            } else {
+                                next.push({
+                                    episodeNumber: epNum,
+                                    title: String(item.title || `第${epNum}集`),
+                                    outline: String(item.outline || ''),
+                                    script: ''
+                                });
+                            }
+                        }
+                    });
+                    return next.sort((a, b) => a.episodeNumber - b.episodeNumber);
+                });
+                alert('✨ 成功应用 AI 优化后的分集大纲！');
             } else {
                 alert('解析格式有误，返回的不是有效大纲列表。');
             }
@@ -348,8 +627,25 @@ ${currentOutlinesStr}
     // Parse Outlines on state changes
     useEffect(() => {
         if ((stage === 'outline_generating' || stage === 'outline_results') && outlineRawText) {
-            const list = parseOutlines(outlineRawText, episodesCount);
-            setParsedEpisodes(list);
+            const newList = parseOutlines(outlineRawText, episodesCount);
+            setParsedEpisodes(prev => {
+                // If we already have episodes, merge them to keep existing scripts intact!
+                if (prev && prev.length > 0) {
+                    return newList.map(newEp => {
+                        const prevEp = prev.find(p => p.episodeNumber === newEp.episodeNumber);
+                        if (prevEp) {
+                            return {
+                                ...newEp,
+                                script: prevEp.script || newEp.script,
+                                isDone: prevEp.isDone || newEp.isDone,
+                                isGenerating: prevEp.isGenerating || newEp.isGenerating
+                            };
+                        }
+                        return newEp;
+                    });
+                }
+                return newList;
+            });
         }
     }, [outlineRawText, episodesCount, stage]);
 
@@ -383,11 +679,11 @@ ${existingOutline}
 ---
 
 【拆分与续写指令】：
-请严格基于上述【原始故事梗概】，将整篇故事按照**其中蕴含的具体故事梗概的事件节点、冲突爆点与剧情转折点**，艺术化、戏剧化地拆分并扩写为共【${episodesCount}集】的短剧分集梗概。
+请严格基于上述【原始故事梗概】，将整篇故事按照**其中蕴含的具体故事梗概的事件节点、冲突爆点与剧情转折点**，艺术化、戏剧化地拆分并扩写为共【${episodesCount}集】的AI短剧的分集梗概。
 请注意：用户提供的故事梗概可能是一整段连续的文字，完全没有具体的分集或数字编号。你必须：
 1. **深度挖掘与拆解事件点**：找出故事中所有的关键情节里程碑（如：开端受辱、获得奇遇、隐藏身份、恶势力挑衅、误会爆发、正面冲突、高潮打脸、真相大白等具体事件点）。
 2. **以事件点为边界进行拆分**：将这 ${episodesCount} 集中的每一集都紧密围绕一个具体的、有强戏剧冲突的【故事事件点】来构建，千万不要死板、生硬地按字数或段落进行平均机械切片。
-3. **合理延展与扩写**：如果原始梗概在某些阶段描述简略或字数太少，你需要根据前后文的情理，发挥爆款微短剧“快节奏、强冲突、高反转”的特点，对这些事件节点进行合理的细节扩写和尾部钩子设计，确保最终凑足完整的 ${episodesCount} 集分集，且每一集都信息量饱满。
+3. **合理延展与扩写**：如果原始梗概在某些阶段描述简略或字数太少，你需要根据前后文的情理，发挥爆款AI短剧“快节奏、强冲突、高反转”的特点，对这些事件节点进行合理的细节扩写和尾部钩子设计，确保最终凑足完整的 ${episodesCount} 集分集，且每一集都信息量饱满。
 4. 每一集格式必须严格统一：
 【第X集：分集标题】
 核心事件：本集的核心故事事件点/矛盾爽点。
@@ -395,26 +691,38 @@ ${existingOutline}
 5. 请确保输出完整的【第1集】到【第${episodesCount}集】，保证各集之间递进自然、逻辑严密，无任何断代或情节飞跃。
 6. 直接输出内容，不要有任何多余的开场白或解释。`;
         } else {
-            prompt = `【任务类型】：爆款短剧分集大纲智能生成
+            const selectedTemplate = PROMPT_LIBRARY.find(p => p.id === selectedPromptId) || PROMPT_LIBRARY[0];
+            prompt = `【任务类型】：爆款微短剧分集大纲智能生成
 【目标集数】：${episodesCount} 集
-【短剧主题】：${theme}
-【特色元素】：${elements.join('， ')}
-【风格标签】：${styleTags.join('， ')}
-【核心剧情梗概 / 脑洞】：
+【时代背景】：${selectedEra || '未指定'}
+【短剧主题】：${selectedThemePlots.join('， ') || theme}
+【角色设定】：${selectedCharacters.join('， ') || '未指定'}
+${coreTrope ? `【核心梗】：${coreTrope}\n` : ''}
+【核心剧情脑洞/简单故事雏形】：
 ${coreIdea}
 
 ---
 
-【分集大纲创作指令】：
-根据微短剧“强冲突、快节奏、每集都有爽点与钩子”的爆款黄金法则，为上述设定创作【共${episodesCount}集】的详细分集大纲。
-要求：
-1. 完整输出从【第1集】到【第${episodesCount}集】的分集大纲，不要省略。
-2. 每一集格式必须严格统一：
+【编剧指令（由选择提示词库加载）】：
+${selectedTemplate.prompt}
+
+---
+
+【大纲创作金牌规范要求（极其重要，严格执行）】：
+1. 必须保持【强情绪、强剧情开局】：第1集必须有极其强烈的戏剧冲突、情绪对立或尊严危机，一上来就有极大的矛盾爆发，瞬间抓住读者眼球。
+2. 必须有【明显的节奏点、剧情卡点（Hook）】：在每一集的结尾，必须设置极具悬念的钩子、打脸的前奏或突如其来的反转，让观众产生强烈的“继续观看/自动解锁下一集”的冲动。
+3. 必须融入【爆火的元素设定】：将扮演反差、真假少爷千金、扮猪吃虎、隐藏身份、高燃打脸逆袭等钩子完美融合到情节中。
+4. 【写清楚具体的情节点和行动】：绝不能使用笼统、空洞的词汇描述剧情（如：严禁只写“两人产生误会”，而要写清楚“反派王强故意在女主面前拉住男主的手，并掏出一张伪造的孕检单，指责男主始乱终弃，女主愤而掌掴男主，男主因声带受伤无法辩解”等具体、细腻的情节画面和爽点！）。
+
+---
+
+【输出格式规范】：
+请严格按照以下格式完整输出从【第1集】到【第${episodesCount}集】的详细大纲内容：
 【第X集：分集标题】
-核心事件：本集的核心打脸、冲突或事件。
-本集梗概：具体情节详细推演，至少150字，每集末尾制造巨大的危机或悬念。
-3. 确保前后逻辑完全连贯。
-4. 不要进行任何开场白或结束语，直接无缝输出大纲。`;
+核心事件：本集的核心打脸、冲突、事件或情绪卡点。
+本集梗概：具体情节详细推演，不少于150字，必须写清楚具体的情节点 and 人物白热化的具体互动，每集末尾制造巨大的危机或强悬念。
+
+直接无缝输出，不要有任何多余的解释、开场白或引导语。`;
         }
 
         const controller = new AbortController();
@@ -486,7 +794,7 @@ ${previousTail}
 ---
 
 【剧本编写格式与排版规范（极其重要，请严格执行）】：
-请将上述【分集剧情大纲】的情节，扩展为高戏剧冲突、爽点鲜明、字数大约500-800字、播放时长约1.5分钟的单集正式剧本。
+请将上述【分集剧情大纲】的情节，扩展为高戏剧冲突、爽点鲜明、字数大约500-800字、播放时长约1.5分钟的单集正式剧本。剧本生成的过程中要强化开头和卡点的表现，用具体的、炸裂的、情绪化的画面动作和人物话语来强化剧情。
 剧本的结构和排版格式必须精确参照以下格式：
 
 1. **集数标题**：
@@ -502,6 +810,7 @@ ${previousTail}
 
 3. **动作、神态与环境描写**：
    - 必须在独立行输出。
+   - 动作描写一定要外化、夸张化，具有动漫感、分镜感。
    - 必须以三角形符号“△ ”（符号后跟一个空格）开头。
    - 例如：
    △ 她想悄悄退回去，但脚下高跟鞋踩在地板上发出了一声轻响。角落里的两个人迅速分开，女生慌张地推开厉维，两人齐齐转向看向她。
@@ -510,8 +819,9 @@ ${previousTail}
 
 4. **角色对白/台词**：
    - 格式为：角色名字（神态或动作语气描述）：台词内容
+   - 格式为：角色名字（神态或动作语气描述）：台词内容
    - 例如：
-   乔以安（率先打破沉默，声音有些僵硬）：我一定是喝多了！？
+   乔以安（声音有些僵硬）：我一定是喝多了！？
    厉维（嘴角扬起一抹冷笑，眼神充满不屑）：呵，你觉得呢？
 
 5. **特别禁用限制**：
@@ -554,6 +864,73 @@ ${previousTail}
         }
     };
 
+    const handleSingleEpisodeEditChange = (idx: number, value: string) => {
+        setSingleEpisodeEdits(prev => ({ ...prev, [idx]: value }));
+    };
+
+    const handleSingleEpisodeOptimize = async (index: number) => {
+        const instruction = singleEpisodeEdits[index];
+        if (!instruction || !instruction.trim()) return;
+
+        const ep = parsedEpisodes[index];
+        setParsedEpisodes(prev => prev.map((item, id) => 
+            id === index ? { ...item, isGenerating: true } : item
+        ));
+
+        // Clear the input
+        setSingleEpisodeEdits(prev => ({ ...prev, [index]: '' }));
+
+        const prompt = `【单集剧本精细优化任务】
+【当前集数】：第${ep.episodeNumber}集 / 共${parsedEpisodes.length}集
+【本集标题】：${ep.title}
+
+【原剧本内容】：
+${ep.script}
+
+【用户的精细修改意见】：
+“${instruction}”
+
+---
+
+【剧本编写格式与排版规范（极其重要，请严格执行）】：
+请根据用户的【修改意见】，在保持原剧本主体脉络 and 精彩情节的同时，对相应的场景、台词或描述进行精准优化和改写。
+确保：
+1. 严格遵循原来的三角形符号“△ ”动作描写和“角色名字（神态动作）：台词内容”格式。
+2. 不要输出任何开场白、问候语或总结，必须且仅输出修改后的标准剧本本体内容。`;
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        try {
+            const stream = generateTextStream(prompt, {
+                model,
+                temperature: 0.75,
+                topP: 0.95,
+                maxOutputTokens: maxTokens,
+                signal: controller.signal
+            });
+
+            let fullText = '';
+            for await (const chunk of stream) {
+                fullText += chunk;
+                setParsedEpisodes(prev => prev.map((item, idx) => 
+                    idx === index ? { ...item, script: fullText } : item
+                ));
+            }
+
+            setParsedEpisodes(prev => prev.map((item, idx) => 
+                idx === index ? { ...item, isGenerating: false, isDone: true } : item
+            ));
+        } catch (err: any) {
+            setParsedEpisodes(prev => prev.map((item, idx) => 
+                idx === index ? { ...item, isGenerating: false } : item
+            ));
+            alert(err.message || '优化剧本失败，请重试');
+        } finally {
+            abortControllerRef.current = null;
+        }
+    };
+
     // Sequential Trigger for ALL
     const handleGenerateAllScripts = async () => {
         if (globalIsGenerating) {
@@ -593,7 +970,7 @@ ${previousTail}
         setError('');
         
         try {
-            // 1. Create the project with scriptData archiving
+            // 1. Create or Update the project with scriptData archiving
             const description = outlineMode === 'existing' ? '已有故事分集生成' : `主题:${theme} | 元素:${elements.join(',')}`;
             const scriptData = {
                 settings: {
@@ -607,12 +984,27 @@ ${previousTail}
                     characterSettings: '',
                     worldview: '',
                     outline: outlineRawText || '暂无大纲内容...'
-                }
+                },
+                episodes: parsedEpisodes,
+                outlineMode: outlineMode
             };
-            const { id: projectId, error: createError } = await createProject(projectTitle, description, 'script', null, scriptData);
             
-            if (createError) throw createError;
-            if (!projectId) throw new Error('创建剧本项目失败');
+            let projectId = currentProjectId;
+            if (projectId) {
+                // Update the existing project with the compiled outlines/scripts
+                await updateProject(projectId, {
+                    title: projectTitle,
+                    description: description,
+                    script_data: scriptData
+                });
+            } else {
+                // Fallback: create a new one if not exists
+                const { id: newId, error: createError } = await createProject(projectTitle, description, 'script_episode', null, scriptData);
+                if (createError) throw createError;
+                projectId = newId;
+            }
+            
+            if (!projectId) throw new Error('创建或获取剧本项目失败');
             
             // 2. Save outlines and scripts into the chapter table
             for (let i = 0; i < parsedEpisodes.length; i++) {
@@ -634,6 +1026,69 @@ ${previousTail}
         }
     };
 
+    const handleInitiateMode = (mode: 'existing' | 'new') => {
+        if (currentProjectId) {
+            setOutlineMode(mode);
+            if (mode === 'existing') {
+                setStage('outline_form_existing');
+            } else {
+                setStage('outline_form_new');
+            }
+            return;
+        }
+
+        setPendingMode(mode);
+        const timeStr = new Date().toLocaleDateString('zh-CN', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        }).replace(/\//g, '-').replace(/ /g, '_').replace(/:/g, '');
+        
+        setNewProjectTitle(`新爆款分集剧本_${timeStr}`);
+        setNewProjectDesc('AI智能辅助规划的分集剧本创作项目');
+        setShowCreateProjectModal(true);
+    };
+
+    const handleConfirmCreateProject = async () => {
+        if (!newProjectTitle.trim()) {
+            alert('请输入剧本名称');
+            return;
+        }
+        setCreatingProjectInDB(true);
+        setError('');
+        try {
+            const { id: projectId, error: createError } = await createProject(
+                newProjectTitle,
+                newProjectDesc || '分集剧本创作',
+                'script_episode'
+            );
+            if (createError) throw createError;
+            if (!projectId) throw new Error('创建剧本项目失败');
+            
+            setCurrentProjectId(projectId);
+            setProjectTitle(newProjectTitle);
+            setAiChatMessages([]); // Reset chat context for new project
+            setSyncStatus('idle'); // Reset sync status
+            
+            if (pendingMode === 'existing') {
+                setOutlineMode('existing');
+                setStage('outline_form_existing');
+            } else if (pendingMode === 'new') {
+                setOutlineMode('new');
+                setStage('outline_form_new');
+            } else {
+                setOutlineMode(null);
+                setStage('mode_select');
+            }
+            setShowCreateProjectModal(false);
+        } catch (err: any) {
+            setError(err.message || '新建剧本项目失败，请重试');
+        } finally {
+            setCreatingProjectInDB(false);
+        }
+    };
+
     // Helper options toggling
     const toggleElement = (el: string) => {
         setElements(prev => prev.includes(el) ? prev.filter(x => x !== el) : [...prev, el]);
@@ -648,19 +1103,61 @@ ${previousTail}
             {/* Header */}
             <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 z-10" style={{ height: '60px' }}>
                 <div className="flex items-center gap-3">
-                    <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-850 text-gray-500">
+                    <button onClick={handleHeaderBack} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-850 text-gray-500">
                         <ChevronLeft className="w-5 h-5" />
                     </button>
                     <div>
-                        <h2 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+                        <h2 className="text-lg font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
                             <Sparkles className="w-5 h-5 text-sky-500" />
-                            分集剧本生成
+                            {projectTitle !== undefined && currentProjectId ? (
+                                <div className="flex items-center gap-1">
+                                    <span className="text-gray-400 text-xs font-normal">分集剧本:</span>
+                                    <input 
+                                        type="text" 
+                                        value={projectTitle} 
+                                        onChange={e => setProjectTitle(e.target.value)}
+                                        className="bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:outline-none text-sm font-extrabold text-gray-900 dark:text-white transition-all px-1 py-0.5 w-[240px] sm:w-[320px] truncate"
+                                        title="点击可直接修改项目名称"
+                                        placeholder="未命名项目"
+                                    />
+                                </div>
+                            ) : (
+                                <span className="text-base font-extrabold text-gray-900 dark:text-white">分集剧本生成</span>
+                            )}
                         </h2>
-                        <p className="text-xs text-gray-450 mt-0.5">智能规划分集故事，一键演进完整剧本创作</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">智能规划分集故事，一键演进完整剧本创作</p>
                     </div>
                 </div>
-                {stage === 'outline_results' && (
-                    <div className="flex items-center gap-2">
+                
+                <div className="flex items-center gap-3">
+                    {/* Cloud auto-sync status display inside top-right header */}
+                    {currentProjectId && (stage === 'script_generation' || stage === 'outline_results') && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-50 dark:bg-gray-800 text-[11px] font-bold border border-gray-150 dark:border-gray-700 shadow-sm">
+                            {syncStatus === 'syncing' ? (
+                                <>
+                                    <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                                    <span className="text-indigo-600 dark:text-indigo-400">云端同步中...</span>
+                                </>
+                            ) : syncStatus === 'success' ? (
+                                <>
+                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                    <span className="text-emerald-600 dark:text-emerald-400">已自动同步到云端</span>
+                                </>
+                            ) : syncStatus === 'error' ? (
+                                <>
+                                    <X className="w-3.5 h-3.5 text-rose-500" />
+                                    <span className="text-rose-600 dark:text-rose-400">同步失败</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Check className="w-3.5 h-3.5 text-gray-400" />
+                                    <span className="text-gray-500 dark:text-gray-400">云端已同步</span>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {stage === 'outline_results' && (
                         <button 
                             onClick={() => {
                                 setOutlineRawText('');
@@ -672,8 +1169,8 @@ ${previousTail}
                         >
                             重新配置
                         </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* Error alerts */}
@@ -686,6 +1183,124 @@ ${previousTail}
 
             {/* Stage content */}
             <div className="flex-grow flex overflow-hidden relative">
+                {/* 0. Project Dashboard Stage */}
+                {stage === 'project_dashboard' && (
+                    <div className="flex-1 overflow-y-auto p-6 sm:p-8 max-w-6xl mx-auto space-y-8 animate-fade-in w-full">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100 dark:border-gray-800 pb-5">
+                            <div className="space-y-1">
+                                <h3 className="text-2xl font-extrabold text-gray-950 dark:text-white flex items-center gap-2">
+                                    <Database className="w-6 h-6 text-sky-500" />
+                                    分集剧本项目库
+                                </h3>
+                                <p className="text-xs text-gray-405 dark:text-gray-500">
+                                    独立存储您的所有分集大纲及全套剧本，支持对每一集内容的永久保存和针对性润色
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => handleInitiateMode('new')}
+                                className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:opacity-95 text-white font-extrabold rounded-xl text-xs shadow-md transition-all active:scale-95 flex items-center gap-2 shrink-0"
+                            >
+                                <Plus className="w-4 h-4" /> 新建分集剧本项目
+                            </button>
+                        </div>
+
+                        {loadingProjects ? (
+                            <div className="flex flex-col items-center justify-center py-20 space-y-3">
+                                <div className="w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                                <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">正在读取分集剧本项目库...</span>
+                            </div>
+                        ) : episodeProjects.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm space-y-5">
+                                <div className="w-16 h-16 bg-sky-50 dark:bg-sky-950 rounded-full flex items-center justify-center text-sky-500">
+                                    <Film className="w-8 h-8" />
+                                </div>
+                                <div className="space-y-1.5 max-w-md">
+                                    <h4 className="font-bold text-gray-900 dark:text-white text-base">暂无分集剧本项目</h4>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                        在这里，所有的生成剧本都将保存在独立项目中。点击下方按钮立即创建您的第一个分集剧本项目吧！
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => handleInitiateMode('new')}
+                                    className="px-5 py-2.5 bg-sky-500 hover:bg-sky-550 text-white font-bold rounded-xl text-xs shadow-md transition-all"
+                                >
+                                    创建第一个剧本
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {/* Create New Card Button */}
+                                <div 
+                                    onClick={() => handleInitiateMode('new')}
+                                    className="group p-6 bg-white dark:bg-gray-900 border-2 border-dashed border-gray-200 dark:border-gray-800 hover:border-sky-500 dark:hover:border-sky-500 rounded-2xl flex flex-col justify-center items-center text-center cursor-pointer transition-all hover:shadow-md h-[180px]"
+                                >
+                                    <div className="w-12 h-12 bg-sky-50 dark:bg-sky-950/50 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                        <Plus className="w-6 h-6 text-sky-500" />
+                                    </div>
+                                    <span className="font-extrabold text-sm text-gray-900 dark:text-white">创建新剧本</span>
+                                    <span className="text-[11px] text-gray-400 mt-1 max-w-[200px]">
+                                        自定义大纲及集数，生成各集正文
+                                    </span>
+                                </div>
+
+                                {/* Project Cards */}
+                                {episodeProjects.map((proj) => {
+                                    const totalEpisodes = proj.script_data?.episodes?.length || proj.script_data?.settings?.totalEpisodes || 0;
+                                    const hasScripts = proj.script_data?.episodes?.some((ep: any) => ep.script && ep.script.trim().length > 0);
+                                    
+                                    return (
+                                        <div 
+                                            key={proj.id}
+                                            onClick={() => handleSelectProject(proj)}
+                                            className="group relative p-6 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl hover:shadow-md transition-all cursor-pointer flex flex-col justify-between h-[180px]"
+                                        >
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <h4 className="font-extrabold text-sm text-gray-900 dark:text-white group-hover:text-sky-500 dark:group-hover:text-sky-400 transition-colors line-clamp-1">
+                                                        {proj.title}
+                                                    </h4>
+                                                    <button 
+                                                        onClick={(e) => handleDeleteProject(proj.id, e)}
+                                                        className="p-1 text-gray-400 hover:text-rose-500 rounded transition-colors"
+                                                        title="删除项目"
+                                                    >
+                                                        <Trash className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                                <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
+                                                    {proj.description || '无项目描述'}
+                                                </p>
+                                            </div>
+
+                                            <div className="flex items-center justify-between border-t border-gray-50 dark:border-gray-800 pt-3 mt-3">
+                                                <div className="flex items-center gap-2">
+                                                    {totalEpisodes > 0 ? (
+                                                        <span className="px-2 py-0.5 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 rounded-md text-[10px] font-black">
+                                                            {totalEpisodes} 集大纲
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-md text-[10px] font-black">
+                                                            未配置大纲
+                                                        </span>
+                                                    )}
+                                                    {hasScripts && (
+                                                        <span className="px-2 py-0.5 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-md text-[10px] font-black">
+                                                            剧本已生成
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="text-[10px] text-gray-400">
+                                                    {new Date(proj.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* 1. Mode Select Stage */}
                 {stage === 'mode_select' && (
                     <div className="flex-1 flex flex-col justify-center items-center p-8 max-w-4xl mx-auto space-y-8 animate-fade-in">
@@ -696,10 +1311,7 @@ ${previousTail}
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
                             <button 
-                                onClick={() => {
-                                    setStage('outline_form_existing');
-                                    setOutlineMode('existing');
-                                }}
+                                onClick={() => handleInitiateMode('existing')}
                                 className="group p-8 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-sky-500 dark:hover:border-sky-500 transition-all hover:shadow-lg text-center flex flex-col items-center"
                             >
                                 <div className="w-16 h-16 bg-sky-50 dark:bg-sky-950 rounded-full flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
@@ -712,10 +1324,7 @@ ${previousTail}
                             </button>
 
                             <button 
-                                onClick={() => {
-                                    setStage('outline_form_new');
-                                    setOutlineMode('new');
-                                }}
+                                onClick={() => handleInitiateMode('new')}
                                 className="group p-8 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all hover:shadow-lg text-center flex flex-col items-center"
                             >
                                 <div className="w-16 h-16 bg-purple-50 dark:bg-purple-950 rounded-full flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
@@ -793,10 +1402,10 @@ ${previousTail}
 
                         {/* Interactive Outline Input Right side */}
                         <div className="flex-grow flex flex-col p-8 overflow-hidden bg-gray-50/50 dark:bg-gray-950/20">
-                            <div className="flex-1 bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded-2xl p-6 flex flex-col space-y-4 shadow-sm" style={{ height: '500px' }}>
+                            <div className="flex-1 bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded-2xl p-6 flex flex-col space-y-4 shadow-sm" style={{ height: '600px' }}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <DocumentPlus className="w-5 h-5 text-sky-500" />
+                                        <DocumentPlus className="text-sky-500" style={{ width: '35px', height: '35px' }} />
                                         <h4 className="text-sm font-bold text-gray-800 dark:text-white">请录入您已有的原始梗概或故事设定</h4>
                                     </div>
                                     <label className="cursor-pointer px-3 py-1.5 text-xs font-bold bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-lg border border-sky-100 transition-colors">
@@ -810,7 +1419,7 @@ ${previousTail}
                                     onChange={e => setExistingOutline(e.target.value)}
                                     placeholder="请在这里贴入您的完整故事梗概、小说内容简介或者是剧本的前期大纲描述..."
                                     className="flex-grow w-full p-4 bg-gray-50/50 dark:bg-gray-800 border border-gray-150 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-sm resize-none"
-                                    style={{ height: '420px' }}
+                                    style={{ height: '500px' }}
                                 />
                             </div>
                         </div>
@@ -823,77 +1432,106 @@ ${previousTail}
                         {/* Left Configuration */}
                         <div className="w-full lg:w-[420px] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-y-auto p-6 space-y-6">
                             <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-1.5 border-b pb-3">
-                                <AdjustmentsHorizontal className="w-5 h-5 text-sky-500" />
-                                短剧生成设定
+                                <AdjustmentsHorizontal className="w-5 h-5 text-purple-500" />
+                                短剧生成高级设定
                             </h3>
 
-                            {/* Theme option */}
+                            {/* Prompt Library */}
                             <div className="space-y-2">
-                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">短剧核心主题</label>
-                                <CustomSelect value={theme} onChange={setTheme} options={THEME_OPTIONS} />
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">选择剧本模版 / 提示词库</label>
+                                <div className="grid grid-cols-1 gap-2">
+                                    {PROMPT_LIBRARY.map((item) => (
+                                        <div 
+                                            key={item.id}
+                                            onClick={() => setSelectedPromptId(item.id)}
+                                            className={`p-3 border rounded-xl cursor-pointer transition-all ${selectedPromptId === item.id ? 'bg-purple-50/60 border-purple-400 dark:bg-purple-950/20' : 'bg-white dark:bg-gray-900 border-gray-150 dark:border-gray-800 hover:border-gray-300'}`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-gray-800 dark:text-white">{item.name}</span>
+                                                {selectedPromptId === item.id && <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />}
+                                            </div>
+                                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 line-clamp-1 leading-normal">{item.desc}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Era option */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">时代背景 (单选)</label>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {ERA_OPTIONS.map(opt => (
+                                        <button 
+                                            key={opt}
+                                            onClick={() => setSelectedEra(opt)}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${selectedEra === opt ? 'bg-purple-50 text-purple-600 border-purple-300 dark:bg-purple-950/40 dark:text-purple-400' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}
+                                        >
+                                            {opt}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Theme plot option */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">主题情节 (图二标签 - 可多选)</label>
+                                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto p-2 border border-gray-150 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-950/20 custom-scrollbar">
+                                    {THEME_PLOT_OPTIONS.map(opt => {
+                                        const isSelected = selectedThemePlots.includes(opt);
+                                        return (
+                                            <button 
+                                                key={opt}
+                                                onClick={() => {
+                                                    if (isSelected) {
+                                                        setSelectedThemePlots(selectedThemePlots.filter(x => x !== opt));
+                                                    } else {
+                                                        setSelectedThemePlots([...selectedThemePlots, opt]);
+                                                    }
+                                                }}
+                                                className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all ${isSelected ? 'bg-purple-600 text-white border-transparent' : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-750 hover:border-purple-300'}`}
+                                            >
+                                                {opt}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Character Settings option */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">角色设定 (图一标签 - 可多选)</label>
+                                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-2 border border-gray-150 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-950/20 custom-scrollbar">
+                                    {CHARACTER_TAG_OPTIONS.map(opt => {
+                                        const isSelected = selectedCharacters.includes(opt);
+                                        return (
+                                            <button 
+                                                key={opt}
+                                                onClick={() => {
+                                                    if (isSelected) {
+                                                        setSelectedCharacters(selectedCharacters.filter(x => x !== opt));
+                                                    } else {
+                                                        setSelectedCharacters([...selectedCharacters, opt]);
+                                                    }
+                                                }}
+                                                className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all ${isSelected ? 'bg-purple-600 text-white border-transparent' : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-750 hover:border-purple-300'}`}
+                                            >
+                                                {opt}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Core Trope (Optional) */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">核心梗 (非必填)</label>
                                 <input 
                                     type="text" 
-                                    value={theme}
-                                    onChange={e => setTheme(e.target.value)}
-                                    placeholder="或输入自定义主题..."
-                                    className="w-full p-2.5 text-xs border border-gray-150 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-lg outline-none"
+                                    value={coreTrope} 
+                                    onChange={e => setCoreTrope(e.target.value)}
+                                    placeholder="例如：逆袭打脸、真假千金身份揭秘..."
+                                    className="w-full p-2.5 text-xs border border-gray-150 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-lg outline-none text-gray-900 dark:text-white"
                                 />
-                            </div>
-
-                            {/* Elements */}
-                            <div className="space-y-2">
-                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">微短剧爆款元素（可多选）</label>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {ELEMENT_OPTIONS.map(opt => (
-                                        <button 
-                                            key={opt.value}
-                                            onClick={() => toggleElement(opt.value)}
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${elements.includes(opt.value) ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200'}`}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="flex gap-2">
-                                    <input 
-                                        type="text" value={customElement} onChange={e => setCustomElement(e.target.value)}
-                                        placeholder="加自定义元素..." className="flex-grow p-2 text-xs border border-gray-150 rounded-lg"
-                                    />
-                                    <button 
-                                        onClick={() => { if(customElement.trim()){ toggleElement(customElement.trim()); setCustomElement(''); } }}
-                                        className="px-3 bg-purple-50 hover:bg-purple-100 text-purple-600 text-xs font-bold rounded-lg border border-purple-100"
-                                    >
-                                        添加
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Style tags */}
-                            <div className="space-y-2">
-                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">影视文风风格（可多选）</label>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {STYLE_OPTIONS.map(opt => (
-                                        <button 
-                                            key={opt.value}
-                                            onClick={() => toggleStyle(opt.value)}
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${styleTags.includes(opt.value) ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200'}`}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="flex gap-2">
-                                    <input 
-                                        type="text" value={customStyle} onChange={e => setCustomStyle(e.target.value)}
-                                        placeholder="加自定风格..." className="flex-grow p-2 text-xs border border-gray-150 rounded-lg"
-                                    />
-                                    <button 
-                                        onClick={() => { if(customStyle.trim()){ toggleStyle(customStyle.trim()); setCustomStyle(''); } }}
-                                        className="px-3 bg-orange-50 hover:bg-orange-100 text-orange-600 text-xs font-bold rounded-lg border border-orange-100"
-                                    >
-                                        添加
-                                    </button>
-                                </div>
                             </div>
 
                             {/* Episodes Count */}
@@ -918,7 +1556,7 @@ ${previousTail}
 
                             <button 
                                 onClick={handleGenerateOutline}
-                                disabled={!theme.trim() || globalIsGenerating}
+                                disabled={globalIsGenerating}
                                 className="w-full py-3.5 bg-purple-600 hover:bg-purple-550 text-white font-bold rounded-xl shadow-lg hover:shadow-purple-500/20 transition-all active:scale-95 disabled:bg-gray-300 disabled:shadow-none"
                             >
                                 <Sparkles className="w-5 h-5 inline mr-1" /> 智能一键生成微短剧剧本大纲
@@ -927,10 +1565,10 @@ ${previousTail}
 
                         {/* Right Creative Hook Input */}
                         <div className="flex-grow flex flex-col p-8 overflow-hidden bg-gray-50/50 dark:bg-gray-950/20">
-                            <div className="flex-1 bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded-2xl p-6 flex flex-col space-y-4 shadow-sm animate-fade-in" style={{ height: '500px' }}>
+                            <div className="flex-1 bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded-2xl p-6 flex flex-col space-y-4 shadow-sm animate-fade-in" style={{ height: '600px' }}>
                                 <div className="flex items-center justify-between pb-2 border-b">
                                     <div className="flex items-center gap-2">
-                                        <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+                                        <Sparkles className="text-purple-500 animate-pulse" style={{ width: '35px', height: '35px' }} />
                                         <h4 className="text-sm font-bold text-gray-800 dark:text-white">请在此处输入核心梗或简单故事雏形：</h4>
                                     </div>
                                     <span className="text-[11px] text-gray-400">支持 1.5分钟/每集 情节智能生成</span>
@@ -941,7 +1579,7 @@ ${previousTail}
                                     onChange={e => setCoreIdea(e.target.value)}
                                     placeholder="例如：穷学生顾云在兼职外卖被富二代欺负时，突然接到一通神秘电话，原来自己竟然是华夏顶级财阀的第一顺位继承人，坐拥千亿资产！从此，顾云被迫踏上扮猪吃虎、隐藏身份清算仇敌的道路..."
                                     className="flex-grow w-full p-4 bg-gray-50/50 dark:bg-gray-800 border border-gray-150 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none text-xs resize-none text-gray-800 dark:text-gray-150 leading-relaxed font-medium"
-                                    style={{ height: '420px' }}
+                                    style={{ height: '500px' }}
                                 />
                             </div>
                         </div>
@@ -950,8 +1588,8 @@ ${previousTail}
 
                 {/* 4. AI Generating Episode Outlines Screen */}
                 {stage === 'outline_generating' && (
-                    <div className="flex-grow flex flex-col p-8 overflow-hidden bg-white dark:bg-gray-950/20">
-                        <div className="flex-1 border border-gray-150 dark:border-gray-800 rounded-2xl p-6 flex flex-col bg-white dark:bg-gray-900 shadow-lg relative">
+                    <div className="flex-1 w-full h-full flex flex-col p-8 overflow-hidden bg-white dark:bg-gray-950/20">
+                        <div className="flex-1 min-h-0 border border-gray-150 dark:border-gray-800 rounded-2xl p-6 flex flex-col bg-white dark:bg-gray-900 shadow-lg relative">
                             {/* Running Loader */}
                             <div className="flex-shrink-0 flex items-center justify-between pb-4 border-b">
                                 <div className="flex items-center gap-3">
@@ -964,7 +1602,7 @@ ${previousTail}
                             </div>
 
                             {/* Scrolling output window */}
-                            <div ref={scrollRef} className="flex-1 overflow-y-auto py-6 px-4 custom-scrollbar bg-gray-50 dark:bg-black rounded-xl border border-gray-100 dark:border-gray-900 mt-4 [scrollbar-gutter:stable]">
+                            <div ref={scrollRef} className="flex-1 h-0 min-h-0 overflow-y-auto py-6 px-4 custom-scrollbar bg-gray-50 dark:bg-black rounded-xl border border-gray-100 dark:border-gray-900 mt-4 [scrollbar-gutter:stable]">
                                 <div className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-gray-800 dark:text-gray-200">
                                     {outlineRawText || '正在唤醒创作大模型，智能计算故事最佳矛盾冲突和起伏节奏...'}
                                 </div>
@@ -976,9 +1614,9 @@ ${previousTail}
                     <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-gray-50/50 dark:bg-black/5">
                         {/* Left Side: Generated Episode Outlines */}
                         <div className="w-full md:w-1/2 flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
-                            <div className="flex-shrink-0 p-4 border-b bg-gray-50/50 dark:bg-gray-950/25 flex items-center justify-between">
+                            <div className="flex-shrink-0 p-4 border-b bg-gray-50/50 dark:bg-gray-950/25 flex items-center justify-between" style={{ height: '66px' }}>
                                 <div className="flex items-center gap-2">
-                                    <ClipboardDocumentCheck className="w-5 h-5 text-sky-500" />
+                                    <ClipboardDocumentCheck className="text-sky-500" style={{ width: '35px', height: '35px' }} />
                                     <h3 className="font-bold text-sm text-gray-800 dark:text-white">第一步：确认及修改分集梗概</h3>
                                 </div>
                                 <span className="text-xs bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-300 px-2.5 py-1 rounded-full font-bold">
@@ -1042,9 +1680,9 @@ ${previousTail}
 
                         {/* Right Side: AI Collaborative Chat Panel */}
                         <div className="w-full md:w-1/2 flex flex-col bg-gray-50/50 dark:bg-black/10 overflow-hidden">
-                            <div className="flex-shrink-0 p-4 border-b bg-white dark:bg-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2" style={{ height: '55px' }}>
+                            <div className="flex-shrink-0 p-4 border-b bg-white dark:bg-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2" style={{ height: '66px' }}>
                                 <div className="flex items-center gap-2" style={{ height: '50px' }}>
-                                    <Sparkles className="text-purple-500" style={{ width: '30px', height: '30px' }} />
+                                    <Sparkles className="text-purple-500" style={{ height: '50px', width: '50px' }} />
                                     <h3 className="font-bold text-sm text-gray-800 dark:text-white" style={{ width: '150px' }}>AI 导演协同优化室</h3>
                                 </div>
                                 <div className="flex items-center gap-2" style={{ width: '280px' }}>
@@ -1099,7 +1737,63 @@ ${previousTail}
                                                     ? 'bg-sky-600 text-white rounded-tr-none' 
                                                     : 'bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded-tl-none text-gray-800 dark:text-gray-200 shadow-sm'
                                             }`}>
-                                                <div className="whitespace-pre-wrap">{msg.content}</div>
+                                                <div className="whitespace-pre-wrap">
+                                                    {msg.role === 'user' ? (
+                                                        msg.content
+                                                    ) : (
+                                                        (() => {
+                                                            const jsonRegex = /```json[\s\S]*?```|```json[\s\S]*|\[\s*\{[\s\S]*/;
+                                                            const textPart = msg.content.replace(jsonRegex, '').trim();
+                                                            return textPart || (aiIsGenerating && i === aiChatMessages.length - 1 ? 'AI 导演正在思考规划...' : '');
+                                                        })()
+                                                    )}
+                                                </div>
+
+                                                {/* Reader-friendly rendering of structured outlines (even while streaming!) */}
+                                                {msg.role === 'assistant' && (() => {
+                                                    let jsonText = '';
+                                                    const jsonRegex = /```json\s*([\s\S]*?)\s*(```|$)/;
+                                                    const match = msg.content.match(jsonRegex);
+                                                    if (match && match[1]) {
+                                                        jsonText = match[1].trim();
+                                                    } else {
+                                                        const startIdx = msg.content.indexOf('[');
+                                                        if (startIdx !== -1) {
+                                                            jsonText = msg.content.substring(startIdx).trim();
+                                                        }
+                                                    }
+
+                                                    if (!jsonText) return null;
+
+                                                    const previewEpisodes = parsePartialOutlines(jsonText);
+                                                    if (previewEpisodes.length === 0) return null;
+
+                                                    return (
+                                                        <div className="mt-3.5 space-y-2.5 border-t border-purple-100 dark:border-purple-900/40 pt-3.5">
+                                                            <div className="text-[11px] font-extrabold text-purple-600 dark:text-purple-400 flex items-center gap-1.5 mb-1">
+                                                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                                                本次优化推荐大纲预览（流式生成中）：
+                                                            </div>
+                                                            <div className="grid grid-cols-1 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                                                                {previewEpisodes.map((ep, eIdx) => (
+                                                                    <div key={eIdx} className="p-3 bg-purple-50/40 dark:bg-purple-950/20 border border-purple-100/70 dark:border-purple-900/40 rounded-xl space-y-1.5 shadow-sm transition-all hover:bg-purple-50/60">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="w-5 h-5 rounded-full bg-purple-500 text-white text-[10px] font-black flex items-center justify-center">
+                                                                                {ep.episodeNumber || '?'}
+                                                                            </span>
+                                                                            <span className="font-extrabold text-[11px] text-purple-900 dark:text-purple-200">
+                                                                                {ep.title || '标题生成中...'}
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="text-[10px] text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap pl-7">
+                                                                            {ep.outline || '情节概要生成中...'}
+                                                                        </p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                                 
                                                 {/* If assistant message contains json blocks, show quick action button */}
                                                 {msg.role === 'assistant' && !aiIsGenerating && (msg.content.includes('```json') || msg.content.includes('[')) && (
@@ -1119,7 +1813,45 @@ ${previousTail}
                             </div>
 
                             {/* Chat Input */}
-                            <div className="p-4 border-t bg-white dark:bg-gray-900 flex flex-col gap-2 shadow-inner">
+                            <div className="p-4 border-t bg-white dark:bg-gray-900 flex flex-col gap-3 shadow-inner">
+                                {/* Scope Selector */}
+                                <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/40 p-2 rounded-xl border border-gray-150 dark:border-gray-800 text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-extrabold text-gray-500">优化范围:</span>
+                                        <div className="flex bg-gray-250/60 dark:bg-gray-700/60 p-0.5 rounded-lg">
+                                            <button 
+                                                onClick={() => setChatScope('global')}
+                                                className={`px-3 py-1 rounded-md text-[11px] font-black transition-all ${chatScope === 'global' ? 'bg-white dark:bg-gray-800 text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'}`}
+                                            >
+                                                整体修改
+                                            </button>
+                                            <button 
+                                                onClick={() => setChatScope('single')}
+                                                className={`px-3 py-1 rounded-md text-[11px] font-black transition-all ${chatScope === 'single' ? 'bg-white dark:bg-gray-800 text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'}`}
+                                            >
+                                                单集修改
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {chatScope === 'single' && (
+                                        <div className="flex items-center gap-1.5 animate-fade-in">
+                                            <span className="font-bold text-gray-400">选择目标集:</span>
+                                            <select 
+                                                value={chatTargetEpisode} 
+                                                onChange={e => setChatTargetEpisode(parseInt(e.target.value))}
+                                                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1 font-bold text-purple-600 dark:text-purple-400 outline-none text-[11px] cursor-pointer"
+                                            >
+                                                {parsedEpisodes.map(ep => (
+                                                    <option key={ep.episodeNumber} value={ep.episodeNumber}>
+                                                        第 {ep.episodeNumber} 集
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="flex gap-2">
                                     <input 
                                         type="text" 
@@ -1127,7 +1859,13 @@ ${previousTail}
                                         onChange={e => setAiChatInput(e.target.value)}
                                         onKeyDown={e => { if (e.key === 'Enter') handleAIChatSend(); }}
                                         disabled={aiIsGenerating}
-                                        placeholder={aiIsGenerating ? '导演深度优化思考中...' : '向 AI 导演提出全剧大纲修改指令...'}
+                                        placeholder={
+                                            aiIsGenerating 
+                                                ? '导演深度优化思考中...' 
+                                                : chatScope === 'single' 
+                                                    ? `输入对第 ${chatTargetEpisode} 集大纲的修改要求（如：让乔以安和周婉清在此处产生正面争执）` 
+                                                    : '向 AI 导演提出全剧大纲修改指令（如：整体节奏加快，增加反差打脸）...'
+                                        }
                                         className="flex-grow p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 outline-none text-xs text-gray-900 dark:text-white focus:bg-white font-medium"
                                     />
                                     <button 
@@ -1154,27 +1892,107 @@ ${previousTail}
                     <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-gray-50/50 dark:bg-black/5">
                         {/* Left Side: Confirmed Episode Outlines (Reference pane) */}
                         <div className="w-full md:w-[320px] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
-                            <div className="flex-shrink-0 p-4 border-b bg-gray-50/50 dark:bg-gray-950/25 flex items-center gap-2">
-                                <ClipboardDocumentCheck className="w-4.5 h-4.5 text-sky-500" />
-                                <h3 className="font-bold text-xs text-gray-800 dark:text-white">各集大纲参考设定</h3>
+                            <div className="flex-shrink-0 p-4 border-b bg-gray-50/50 dark:bg-gray-950/25 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                    <ClipboardDocumentCheck className="w-5 h-5 text-sky-500" />
+                                    <h3 className="font-bold text-xs text-gray-800 dark:text-white">各集大纲参考设定</h3>
+                                </div>
+                                
+                                <select 
+                                    onChange={e => {
+                                        const idx = e.target.value;
+                                        if (idx !== "") {
+                                            const el = document.getElementById(`episode-card-${idx}`);
+                                            el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                        }
+                                    }}
+                                    className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-sky-600 dark:text-sky-400 cursor-pointer outline-none max-w-[110px]"
+                                >
+                                    <option value="">快速定位</option>
+                                    {parsedEpisodes.map((ep, i) => (
+                                        <option key={i} value={i}>
+                                            第 {ep.episodeNumber} 集
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                             
                             <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 [scrollbar-gutter:stable] bg-gray-50/30">
-                                {parsedEpisodes.map((ep, idx) => (
-                                    <div key={idx} className="p-3 border border-gray-150 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-850 space-y-1.5 shadow-sm">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="w-4.5 h-4.5 rounded-full bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-300 text-[10px] font-black flex items-center justify-center">
-                                                {ep.episodeNumber}
-                                            </span>
-                                            <span className="font-extrabold text-xs text-gray-700 dark:text-white truncate">
-                                                {ep.title}
-                                            </span>
+                                {parsedEpisodes.map((ep, idx) => {
+                                    const isExpanded = !!expandedOutlines[idx];
+                                    return (
+                                        <div 
+                                            key={idx} 
+                                            id={`episode-sidebar-card-${idx}`}
+                                            onClick={() => {
+                                                const el = document.getElementById(`episode-card-${idx}`);
+                                                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                            }}
+                                            className="p-3 border border-gray-150 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-850 space-y-2 shadow-sm hover:border-purple-300 dark:hover:border-purple-800 cursor-pointer transition-all group"
+                                        >
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <div className="flex items-center gap-1.5 truncate">
+                                                    <span className="w-5 h-5 rounded-full bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-300 text-[10px] font-black flex items-center justify-center flex-shrink-0">
+                                                        {ep.episodeNumber}
+                                                    </span>
+                                                    <span className="font-extrabold text-xs text-gray-700 dark:text-white truncate">
+                                                        {ep.title}
+                                                    </span>
+                                                </div>
+                                                {ep.isDone && (
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="剧本已生成" />
+                                                )}
+                                            </div>
+                                            
+                                            <p className={`text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed pl-6 whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-3'}`}>
+                                                {ep.outline}
+                                            </p>
+
+                                            <div className="grid grid-cols-3 gap-1 pl-6 pt-1">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setExpandedOutlines(prev => ({ ...prev, [idx]: !prev[idx] }));
+                                                    }}
+                                                    className="py-1 px-1 bg-gray-50 hover:bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-750 text-[10px] font-black rounded border border-gray-150 dark:border-gray-700 transition-all text-center"
+                                                >
+                                                    {isExpanded ? '收起' : '预览大纲'}
+                                                </button>
+                                                
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openEditModal(idx);
+                                                    }}
+                                                    className="py-1 px-1 bg-sky-50 hover:bg-sky-100 text-sky-600 dark:bg-sky-950/45 dark:text-sky-300 dark:hover:bg-sky-900/30 text-[10px] font-black rounded border border-sky-100 dark:border-sky-900/30 transition-all text-center"
+                                                >
+                                                    修改大纲
+                                                </button>
+
+                                                <button
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        setScriptGenMode('single');
+                                                        try {
+                                                            const prevScript = idx > 0 ? parsedEpisodes[idx - 1].script : '';
+                                                            await generateScriptForEpisode(idx, prevScript);
+                                                        } catch (err: any) {
+                                                            alert(err.message || '生成该集剧本出错');
+                                                        }
+                                                    }}
+                                                    disabled={ep.isGenerating}
+                                                    className="py-1 px-1 bg-purple-50 hover:bg-purple-100 text-purple-600 dark:bg-purple-950/45 dark:text-purple-300 dark:hover:bg-purple-900 transition-all text-[10px] font-black rounded border border-purple-100 dark:border-purple-900 text-center flex items-center justify-center gap-0.5 disabled:opacity-50"
+                                                >
+                                                    {ep.isGenerating ? (
+                                                        <div className="w-2.5 h-2.5 border border-purple-500 border-t-transparent rounded-full animate-spin" />
+                                                    ) : (
+                                                        '生成剧本'
+                                                    )}
+                                                </button>
+                                            </div>
                                         </div>
-                                        <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-4 pl-6">
-                                            {ep.outline}
-                                        </p>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             <div className="p-3 border-t bg-gray-50 dark:bg-gray-900">
@@ -1191,7 +2009,7 @@ ${previousTail}
                         <div className="flex-grow flex flex-col bg-white dark:bg-gray-900 overflow-hidden">
                             <div className="flex-shrink-0 p-4 border-b bg-white dark:bg-gray-900 flex flex-col md:flex-row md:items-center justify-between gap-4">
                                 <div className="flex items-center gap-2">
-                                    <Sparkles className="w-4.5 h-4.5 text-purple-500" />
+                                    <Sparkles className="w-5 h-5 text-purple-500" />
                                     <h3 className="font-bold text-sm text-gray-800 dark:text-white">各分集精细剧本创作</h3>
                                 </div>
                                 
@@ -1225,10 +2043,14 @@ ${previousTail}
                             </div>
 
                             {/* Scripts list and generation progress */}
-                            <div className="flex-1 overflow-y-auto p-4 space-y-4 [scrollbar-gutter:stable] bg-gray-50/20 dark:bg-black/5">
+                            <div className="flex-1 overflow-y-auto p-4 space-y-6 [scrollbar-gutter:stable] bg-gray-50/20 dark:bg-black/5 snap-y snap-mandatory">
                                 {parsedEpisodes.map((ep, idx) => (
-                                    <div key={idx} className={`border rounded-xl bg-white dark:bg-gray-900 p-4 shadow-sm transition-all ${ep.isGenerating ? 'ring-2 ring-purple-400 border-transparent' : ''}`}>
-                                        <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800 mb-3">
+                                    <div 
+                                        key={idx} 
+                                        id={`episode-card-${idx}`} 
+                                        className={`border rounded-xl bg-white dark:bg-gray-900 p-5 shadow-sm transition-all scroll-mt-4 flex flex-col h-[calc(100vh-180px)] min-h-[500px] snap-start ${ep.isGenerating ? 'ring-2 ring-purple-400 border-transparent' : 'border-gray-200 dark:border-gray-800'}`}
+                                    >
+                                        <div className="flex-shrink-0 flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800 mb-3">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-300 font-black px-2 py-0.5 rounded">
                                                     第 {ep.episodeNumber} 集
@@ -1273,46 +2095,35 @@ ${previousTail}
                                             </div>
                                         </div>
 
-                                        {/* Editable Script block with triangles syntax as placeholder */}
+                                        {/* Editable Script block - with flex-grow to stretch full-height */}
                                         <textarea 
                                             value={ep.script || ''}
                                             onChange={e => setParsedEpisodes(prev => prev.map((item, id) => id === idx ? { ...item, script: e.target.value, isDone: e.target.value.trim().length > 0 } : item))}
                                             placeholder={`第${toChineseNum(ep.episodeNumber)}集\n\n${ep.episodeNumber}-1 场景地点 日/内 人物：乔以安 ...\n△ 乔以安推开门，看到了房间里的一幕。\n乔以安（难以置信）：这怎么可能...`}
-                                            rows={8}
-                                            className="w-full p-3 bg-gray-50/50 dark:bg-gray-850 border border-gray-150 dark:border-gray-800 rounded-lg text-xs outline-none focus:bg-white focus:ring-1 focus:ring-purple-400 leading-relaxed font-mono custom-scrollbar resize-y"
+                                            className="flex-grow w-full p-4 bg-gray-50/50 dark:bg-gray-850 border border-gray-150 dark:border-gray-800 rounded-xl text-xs outline-none focus:bg-white focus:ring-1 focus:ring-purple-400 leading-relaxed font-mono custom-scrollbar resize-none mb-3"
                                         />
+
+                                        {/* Q&A style single-episode optimization bar */}
+                                        <div className="flex-shrink-0 flex items-center gap-2 bg-purple-50/30 dark:bg-purple-950/20 p-2 rounded-xl border border-purple-100/40 dark:border-purple-900/30">
+                                            <input 
+                                                type="text"
+                                                value={singleEpisodeEdits[idx] || ''}
+                                                onChange={e => handleSingleEpisodeEditChange(idx, e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') handleSingleEpisodeOptimize(idx); }}
+                                                placeholder={ep.script ? `输入对第 ${ep.episodeNumber} 集剧本的针对性润色意见（如：“强化男主的愤怒质问”、“台词表现更具张力”）` : "请先生成或填写该集基础剧本，才能进行针对性润色意见修改..."}
+                                                className="flex-grow bg-white dark:bg-gray-800 border border-gray-150 dark:border-gray-750 rounded-lg px-3 py-1.5 text-xs text-gray-800 dark:text-white outline-none focus:ring-1 focus:ring-purple-400 placeholder:text-gray-400"
+                                                disabled={ep.isGenerating || !ep.script}
+                                            />
+                                            <button 
+                                                onClick={() => handleSingleEpisodeOptimize(idx)}
+                                                disabled={ep.isGenerating || !ep.script || !(singleEpisodeEdits[idx] || '').trim()}
+                                                className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-550 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-bold rounded-lg transition-all active:scale-95 flex items-center gap-1 shrink-0"
+                                            >
+                                                <Sparkles className="w-3.5 h-3.5" /> 智能润色
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
-                            </div>
-
-                            {/* Database Sync Panel */}
-                            <div className="flex-shrink-0 p-4 border-t bg-white dark:bg-gray-900 shadow-lg flex flex-col space-y-3.5">
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                        请输入项目名称，一键同步存储至云端
-                                    </label>
-                                    <div className="flex gap-2">
-                                        <input 
-                                            type="text" 
-                                            value={projectTitle}
-                                            onChange={e => setProjectTitle(e.target.value)}
-                                            placeholder="例如：无敌赘婿战神崛起剧本"
-                                            className="flex-grow p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 outline-none text-sm text-gray-900 dark:text-white focus:bg-white font-bold"
-                                        />
-                                        <button 
-                                            onClick={handleSaveProject}
-                                            disabled={saving || parsedEpisodes.filter(ep => ep.script).length === 0}
-                                            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-550 disabled:bg-gray-300 text-white font-bold rounded-xl shadow-md hover:shadow-emerald-500/20 flex items-center gap-1.5 transition-all text-sm"
-                                        >
-                                            {saving ? '正在同步存盘...' : <><FloppyDisk className="w-4 h-4" /> 同步云端项目</>}
-                                        </button>
-                                    </div>
-                                </div>
-                                {successMessage && (
-                                    <div className="px-4 py-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900/40 text-green-750 dark:text-green-450 rounded-lg text-xs font-bold animate-pulse">
-                                        {successMessage}
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </div>
@@ -1372,6 +2183,73 @@ ${previousTail}
                                 className="px-5 py-2 bg-sky-600 hover:bg-sky-550 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95"
                             >
                                 确认保存修改
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Create New Script Project Modal */}
+            {showCreateProjectModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-scale-up">
+                        <div className="flex items-center justify-between p-4 border-b border-gray-150 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/30">
+                            <h4 className="font-extrabold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
+                                <DocumentPlus className="w-5 h-5 text-sky-500 animate-pulse" />
+                                选项确认：新建分集剧本项目
+                            </h4>
+                            <button 
+                                onClick={() => setShowCreateProjectModal(false)}
+                                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-5 space-y-4">
+                            <div className="p-3 bg-sky-50 dark:bg-sky-950/30 border border-sky-150 dark:border-sky-900/40 rounded-xl space-y-1">
+                                <p className="text-[11px] text-sky-750 dark:text-sky-300 font-extrabold leading-normal">
+                                    提示：进入{pendingMode === 'existing' ? '“已有故事梗概”' : '“生成故事梗概”'}模式前，我们需要在云端为您先开辟并储存一个独立剧本项目。
+                                </p>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="block text-xs font-bold text-gray-600 dark:text-gray-400">剧本名称（项目标题）</label>
+                                <input 
+                                    type="text" 
+                                    value={newProjectTitle}
+                                    onChange={e => setNewProjectTitle(e.target.value)}
+                                    placeholder="输入要创建的剧本项目名称..."
+                                    className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white outline-none focus:bg-white"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="block text-xs font-bold text-gray-600 dark:text-gray-400">项目备注/描述（可选）</label>
+                                <textarea 
+                                    value={newProjectDesc}
+                                    onChange={e => setNewProjectDesc(e.target.value)}
+                                    rows={3}
+                                    placeholder="输入简要的项目描述或脑洞设想..."
+                                    className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 text-xs text-gray-800 dark:text-gray-300 outline-none leading-relaxed resize-none focus:bg-white"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-gray-150 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/20 flex justify-end gap-2.5">
+                            <button 
+                                onClick={() => setShowCreateProjectModal(false)}
+                                className="px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100"
+                                disabled={creatingProjectInDB}
+                            >
+                                取消
+                            </button>
+                            <button 
+                                onClick={handleConfirmCreateProject}
+                                disabled={creatingProjectInDB}
+                                className="px-5 py-2.5 bg-sky-600 hover:bg-sky-550 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-70"
+                            >
+                                {creatingProjectInDB ? '正在为您开辟云端空间...' : <><Check className="w-4 h-4" /> 确认新建并开始</>}
                             </button>
                         </div>
                     </div>
