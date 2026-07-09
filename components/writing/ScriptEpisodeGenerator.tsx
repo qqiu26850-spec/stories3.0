@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { generateTextStream } from '../../services/geminiService';
-import { createProject, saveChapterToDB, updateProject, deleteProject, fetchProjects } from '../../services/supabaseService';
+import { createProject, saveChapterToDB, updateProject, deleteProject, fetchProjects, matchDocumentsV3, InspirationNovelFragment, searchInspirationFragments, fetchAvailableTags } from '../../services/supabaseService';
 import { 
     Sparkles, Film, Database, Copy, Stop, AdjustmentsHorizontal, Check, ArrowPath, 
     Play, Pencil, ClipboardDocumentCheck, DocumentPlus, Trash, Plus, 
@@ -171,6 +171,34 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
     const [historyEpisodeIndex, setHistoryEpisodeIndex] = useState<number | null>(null);
     const [selectedHistoryVersionIndex, setSelectedHistoryVersionIndex] = useState<number | null>(null);
     const [activeEmotionPickerIndex, setActiveEmotionPickerIndex] = useState<number | null>(null);
+
+    // Tag-based Inspiration Retrieval Modal states
+    const [showInspirationModal, setShowInspirationModal] = useState(false);
+    const [inspirationEpisodeIndex, setInspirationEpisodeIndex] = useState<number | null>(null);
+    const [searchKeyword, setSearchKeyword] = useState('');
+    const [availableSceneTags, setAvailableSceneTags] = useState<string[]>([]);
+    const [availableEmotionTags, setAvailableEmotionTags] = useState<string[]>([]);
+    const [availableEventTags, setAvailableEventTags] = useState<string[]>([]);
+    const [availableAbilityTags, setAvailableAbilityTags] = useState<string[]>([]);
+    const [availableConflictTags, setAvailableConflictTags] = useState<string[]>([]);
+    const [availableThemeTags, setAvailableThemeTags] = useState<string[]>([]);
+    const [availableElementTags, setAvailableElementTags] = useState<string[]>([]);
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [expandedCategory, setExpandedCategory] = useState<string | null>('scene');
+    const [searchResults, setSearchResults] = useState<InspirationNovelFragment[]>([]);
+    const [selectedFragments, setSelectedFragments] = useState<InspirationNovelFragment[]>([]);
+    const [isSearchingInspirations, setIsSearchingInspirations] = useState(false);
+    const [amplifyType, setAmplifyType] = useState<'emotion' | 'scene' | 'event'>('emotion');
+    const [amplifyValue, setAmplifyValue] = useState('极致虐心');
+    const [customAmplifyReqs, setCustomAmplifyReqs] = useState('');
+
+    // Sidebar emotional amplification states
+    const [sidebarEpisodeIndex, setSidebarEpisodeIndex] = useState<number | null>(null);
+    const [sidebarSceneTag, setSidebarSceneTag] = useState<string>('日常生活');
+    const [sidebarEmotionTag, setSidebarEmotionTag] = useState<string>('极致虐心');
+    const [sidebarSearchQuery, setSidebarSearchQuery] = useState<string>('');
+    const [retrievedInspirations, setRetrievedInspirations] = useState<InspirationNovelFragment[]>([]);
+    const [isRetrievingInspirations, setIsRetrievingInspirations] = useState<boolean>(false);
     
     const abortControllerRef = useRef<AbortController | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -180,39 +208,16 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
         setLoadingProjects(true);
         setError('');
         try {
-            const allProjects = await fetchProjects(1, 100);
-            const filtered = allProjects.filter((p: any) => p.type === 'script_episode');
+            const data = await fetchProjects();
+            const filtered = (data || []).filter((p: any) => p.type === 'script_episode');
             setEpisodeProjects(filtered);
         } catch (err: any) {
-            console.error("Failed to load episode projects:", err);
-            setError('加载剧本项目库失败，请重试');
+            console.error("Failed to load projects:", err);
+            setError(err.message || "加载项目失败");
         } finally {
             setLoadingProjects(false);
         }
     };
-
-    // Ensure all existing scripts have at least one history entry
-    useEffect(() => {
-        if (stage === 'script_generation' && parsedEpisodes.length > 0) {
-            const hasMissingHistory = parsedEpisodes.some(ep => ep.script && ep.script.trim() && (!ep.history || ep.history.length === 0));
-            if (hasMissingHistory) {
-                setParsedEpisodes(prev => prev.map(ep => {
-                    if (ep.script && ep.script.trim() && (!ep.history || ep.history.length === 0)) {
-                        const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                        return {
-                            ...ep,
-                            history: [{
-                                timestamp: timeStr,
-                                script: ep.script,
-                                label: `基础/当前脚本版本 (${timeStr})`
-                            }]
-                        };
-                    }
-                    return ep;
-                }));
-            }
-        }
-    }, [stage, parsedEpisodes]);
 
     const exportAllScriptsToWord = () => {
         let htmlContent = `
@@ -246,48 +251,48 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
                 const lines = ep.script.split('\n');
                 lines.forEach(line => {
                     const trimmed = line.trim();
-                    if (!trimmed) {
-                        htmlContent += `<br/>`;
-                        return;
-                    }
-                    
-                    if (/^\d+-\d+/.test(trimmed) || trimmed.includes('场景') || trimmed.includes('时间') || trimmed.includes('地点')) {
-                        htmlContent += `<div class="scene-header">${trimmed}</div>`;
-                    } else if (trimmed.startsWith('△') || trimmed.startsWith('▲')) {
+                    if (trimmed.startsWith('△')) {
                         htmlContent += `<p class="action">${trimmed}</p>`;
                     } else if (trimmed.includes('：') || trimmed.includes(':')) {
-                        const colonIdx = trimmed.indexOf('：') !== -1 ? trimmed.indexOf('：') : trimmed.indexOf(':');
-                        const char = trimmed.slice(0, colonIdx);
-                        const text = trimmed.slice(colonIdx + 1);
-                        htmlContent += `<p class="dialogue"><span class="dialogue-char">${char}：</span>${text}</p>`;
-                    } else {
+                        const splitIdx = trimmed.indexOf('：') !== -1 ? trimmed.indexOf('：') : trimmed.indexOf(':');
+                        const char = trimmed.substring(0, splitIdx);
+                        const speech = trimmed.substring(splitIdx + 1);
+                        htmlContent += `<p class="dialogue"><span class="dialogue-char">${char}：</span>${speech}</p>`;
+                    } else if (trimmed) {
                         htmlContent += `<p>${trimmed}</p>`;
                     }
                 });
-            } else {
-                htmlContent += `<p style="color: #999; font-style: italic;">（本集暂未生成剧本）</p>`;
             }
-            
-            htmlContent += `<br clear="all" style="page-break-before:always" />`;
+            htmlContent += `<br/><hr/><br/>`;
         });
 
-        htmlContent += `</body></html>`;
+        htmlContent += `
+            </body>
+            </html>
+        `;
 
-        const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword;charset=utf-8' });
+        const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${projectTitle || '短剧全集剧本'}_全集剧本.doc`;
+        a.download = `${projectTitle || '分集剧本'}_全集剧本.doc`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
 
-    const handleEmotionAmplify = async (index: number, emotion: string) => {
+    const handleEmotionAmplify = async (
+        index: number, 
+        emotion: string, 
+        inspirations: InspirationNovelFragment[] = [], 
+        sceneTag: string = '', 
+        reqs: string = '',
+        ampType: 'emotion' | 'scene' | 'event' = 'emotion'
+    ) => {
         const ep = parsedEpisodes[index];
         if (!ep.script) {
-            alert('请先生成基础剧本，才能进行情绪放大！');
+            alert('请先生成基础剧本，才能进行重构/重写！');
             return;
         }
 
@@ -300,7 +305,7 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
                     updatedHistory.push({
                         timestamp: timeStr,
                         script: item.script!,
-                        label: `情绪放大前版本 (${timeStr})`
+                        label: `重改前版本 (${timeStr})`
                     });
                 }
                 return { ...item, isGenerating: true, history: updatedHistory };
@@ -310,20 +315,56 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
 
         setActiveEmotionPickerIndex(null);
 
-        const prompt = `【剧本情绪极限制放大/重写任务】
+        let inspirationSection = '';
+        if (inspirations && inspirations.length > 0) {
+            inspirationSection = `\n【参考灵感片段 (最相关的真实小说段落，用于提供叙事手法与情绪参考，用户选择的多段真实片段)】:\n` +
+                inspirations.map((item, i) => `
+片段 ${i + 1}:
+- 原文内容: ${item.content}
+- 事件标签: ${Array.isArray(item.event_types) ? item.event_types.join(', ') : item.event_types}
+- 情绪标签: ${Array.isArray(item.emotion_types) ? item.emotion_types.join(', ') : item.emotion_types}
+`).join('\n') + `
+\n【灵感与写作手法参考指令】: 
+请在本次剧本改写中，深度参考 and 模仿上述灵感片段中的行文节奏、画面渲染、情感爆破点以及细节事件描写手法，将其精华有机融入到当前的剧本中。`;
+        }
+
+        let taskTitle = '【剧本情绪极限制放大/重写任务】';
+        let mainGoalHeader = `【核心放大情绪】：【${emotion}】`;
+        let coreInstruction = `请在保持原剧本核心情节点、人物关系和基本场景走向不变的前提下，对上述剧本进行深度重写，将【${emotion}】的情绪张力与戏剧冲突放大到极致！`;
+        let specificCustomGuidelines = '';
+
+        if (ampType === 'scene') {
+            taskTitle = '【剧本场景环境重构/改写任务】';
+            mainGoalHeader = `【目标新场景】：【${sceneTag}】`;
+            coreInstruction = `请将原剧本中的场景环境全面更换或升级为：【${sceneTag}】。
+请重点渲染新环境下的视听细节、环境描写（如雨雪风霜、繁华宴会、深渊悬崖、废弃仓库等），让环境完美契合角色当前的冲突和心理变化，并相应地改写角色的动作反应。`;
+        } else if (ampType === 'event') {
+            taskTitle = '【剧本核心事件/情节重构任务】';
+            mainGoalHeader = `【目标新事件】：【${reqs}】`;
+            coreInstruction = `请将原剧本中的核心事件或核心冲突进行重大更换/升级，将其调整为：【${reqs}】。
+请在人物基本关系和前情铺垫合理的前提下，引入该核心新事件，重构矛盾爆发的过程，让整场戏的戏剧张力、悬念和冲突性实现颠覆性增强！`;
+        }
+
+        if (reqs && ampType !== 'event') {
+            specificCustomGuidelines = `\n【用户补充的个性化要求】：${reqs}\n`;
+        }
+
+        const prompt = `${taskTitle}
 【目标集数】：第${ep.episodeNumber}集 / 共${parsedEpisodes.length}集
 【本集标题】：${ep.title}
-【核心放大情绪】：【${emotion}】
+${mainGoalHeader}
+${sceneTag && ampType !== 'scene' ? `【关联场景设定】：${sceneTag}\n` : ''}${specificCustomGuidelines}
 
 【原剧本内容】：
 ${ep.script}
+${inspirationSection}
 
 ---
 
-【情绪放大与改写核心指令（极其重要）】：
-请在保持原剧本核心情节点、人物关系和基本场景走向不变的前提下，对上述剧本进行深度重写，将【${emotion}】的情绪张力与戏剧冲突放大到极致！
+【改写核心指令（极其重要）】：
+${coreInstruction}
 
-根据你选择的【${emotion}】情绪，执行以下特化创作：
+同时，如果适用了特定情绪，请参考以下特化创作：
 - 如果是【极致虐心】：极度强化角色的痛苦、无奈与牺牲，对白要字字滴血，充满情感撕裂感。
 - 如果是【逆袭爽快】：将反派嘴脸写得更嚣张、主角的反击更干净利落、气势磅礴，把“打脸逆袭”的情绪爆发点和优越感拉到最满！
 - 如果是【搞笑幽默】：加入精妙的网络热梗、令人捧腹的动作细节和戏剧化误会，增加喜剧张力和荒诞喜感。
@@ -359,10 +400,14 @@ ${ep.script}
                 if (idx === index) {
                     const updatedHistory = [...(item.history || [])];
                     const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    let actionLabel = `情绪放大 [${emotion}]`;
+                    if (ampType === 'scene') actionLabel = `更换场景 [${sceneTag}]`;
+                    else if (ampType === 'event') actionLabel = `重构事件 [${reqs.substring(0, 10)}...]`;
+
                     updatedHistory.push({
                         timestamp: timeStr,
                         script: fullText,
-                        label: `情绪放大 [${emotion}] (${timeStr})`
+                        label: `${actionLabel} (${timeStr})`
                     });
                     return { ...item, isGenerating: false, isDone: true, history: updatedHistory };
                 }
@@ -372,7 +417,7 @@ ${ep.script}
             setParsedEpisodes(prev => prev.map((item, idx) => 
                 idx === index ? { ...item, isGenerating: false } : item
             ));
-            alert(err.message || '情绪放大失败，请重试');
+            alert(err.message || '重改剧本失败，请重试');
         } finally {
             abortControllerRef.current = null;
         }
@@ -380,7 +425,37 @@ ${ep.script}
 
     useEffect(() => {
         loadEpisodeProjects();
+        const loadTags = async () => {
+            try {
+                const res = await fetchAvailableTags();
+                if (res) {
+                    setAvailableSceneTags(res.scene_types || []);
+                    setAvailableEmotionTags(res.emotion_types || []);
+                    setAvailableEventTags(res.event_types || []);
+                    setAvailableAbilityTags(res.special_abilities || []);
+                    setAvailableConflictTags(res.conflict_types || []);
+                    setAvailableThemeTags(res.core_themes || []);
+                    setAvailableElementTags(res.element_types || []);
+                }
+            } catch (e) {
+                console.error("fetchAvailableTags failed:", e);
+            }
+        };
+        loadTags();
     }, []);
+
+    const handleSearchInspirations = async () => {
+        setIsSearchingInspirations(true);
+        try {
+            const results = await searchInspirationFragments(searchKeyword, selectedTags);
+            setSearchResults(results);
+            setSelectedFragments([]); // Reset selections on new search
+        } catch (e) {
+            console.error("searchInspirationFragments failed:", e);
+        } finally {
+            setIsSearchingInspirations(false);
+        }
+    };
 
     // Automatic cloud synchronization debounced effect
     useEffect(() => {
@@ -1869,7 +1944,7 @@ ${ep.script}
                     <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-gray-50/50 dark:bg-black/5">
                         {/* Left Side: Generated Episode Outlines */}
                         <div className="w-full md:w-1/2 flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
-                            <div className="flex-shrink-0 p-4 border-b bg-gray-50/50 dark:bg-gray-950/25 flex items-center justify-between" style={{ height: '66px' }}>
+                            <div className="flex-shrink-0 p-4 border-b bg-gray-50/50 dark:bg-gray-950/25 flex items-center justify-between" style={{ height: '55px' }}>
                                 <div className="flex items-center gap-2">
                                     <ClipboardDocumentCheck className="text-sky-500" style={{ width: '35px', height: '35px' }} />
                                     <h3 className="font-bold text-sm text-gray-800 dark:text-white">第一步：确认及修改分集梗概</h3>
@@ -1921,6 +1996,7 @@ ${ep.script}
                                         setStage('mode_select');
                                     }}
                                     className="px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-150/50 dark:hover:bg-gray-800"
+                                    style={{ borderColor: '#b0c6f4', backgroundColor: '#4aa9ef', color: '#f8f9fb' }}
                                 >
                                     返回重设
                                 </button>
@@ -1935,7 +2011,7 @@ ${ep.script}
 
                         {/* Right Side: AI Collaborative Chat Panel */}
                         <div className="w-full md:w-1/2 flex flex-col bg-gray-50/50 dark:bg-black/10 overflow-hidden">
-                            <div className="flex-shrink-0 p-4 border-b bg-white dark:bg-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2" style={{ height: '66px' }}>
+                            <div className="flex-shrink-0 p-4 border-b bg-white dark:bg-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2" style={{ height: '55px' }}>
                                 <div className="flex items-center gap-2" style={{ height: '50px' }}>
                                     <Sparkles className="text-purple-500" style={{ height: '50px', width: '50px' }} />
                                     <h3 className="font-bold text-sm text-gray-800 dark:text-white" style={{ width: '150px' }}>AI 导演协同优化室</h3>
@@ -2304,133 +2380,513 @@ ${ep.script}
                                 </div>
                             </div>
 
-                            {/* Scripts list and generation progress */}
-                            <div className="flex-1 overflow-y-auto p-4 space-y-6 [scrollbar-gutter:stable] bg-gray-50/20 dark:bg-black/5 snap-y snap-mandatory">
-                                {parsedEpisodes.map((ep, idx) => (
-                                    <div 
-                                        key={idx} 
-                                        id={`episode-card-${idx}`} 
-                                        className={`border rounded-xl bg-white dark:bg-gray-900 p-5 shadow-sm transition-all scroll-mt-4 flex flex-col h-[calc(100vh-180px)] min-h-[500px] snap-start ${ep.isGenerating ? 'ring-2 ring-purple-400 border-transparent' : 'border-gray-200 dark:border-gray-800'}`}
-                                    >
-                                        <div className="flex-shrink-0 flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800 mb-3">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-300 font-black px-2 py-0.5 rounded">
-                                                    第 {ep.episodeNumber} 集
-                                                </span>
-                                                <span className="font-bold text-sm text-gray-800 dark:text-gray-100">
-                                                    {ep.title}
-                                                </span>
-                                            </div>
-                                            
-                                            <div className="flex items-center gap-2">
-                                                {ep.isGenerating ? (
-                                                    <span className="text-xs text-purple-600 font-bold animate-pulse flex items-center gap-1">
-                                                        <div className="w-2.5 h-2.5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                                                        正文生成中...
+                            {/* Main split area: Scripts list (left) + Sidebar (right) */}
+                            <div className="flex-1 flex overflow-hidden">
+                                {/* Scripts list and generation progress */}
+                                <div className="flex-1 overflow-y-auto p-4 space-y-6 [scrollbar-gutter:stable] bg-gray-50/20 dark:bg-black/5 snap-y snap-mandatory">
+                                    {parsedEpisodes.map((ep, idx) => (
+                                        <div 
+                                            key={idx} 
+                                            id={`episode-card-${idx}`} 
+                                            className={`border rounded-xl bg-white dark:bg-gray-900 p-5 shadow-sm transition-all scroll-mt-4 flex flex-col h-[calc(100vh-180px)] min-h-[500px] snap-start ${ep.isGenerating ? 'ring-2 ring-purple-400 border-transparent' : 'border-gray-200 dark:border-gray-800'}`}
+                                        >
+                                            <div className="flex-shrink-0 flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800 mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-300 font-black px-2 py-0.5 rounded">
+                                                        第 {ep.episodeNumber} 集
                                                     </span>
-                                                ) : ep.isDone ? (
-                                                    <span className="text-xs text-emerald-500 font-bold flex items-center gap-0.5">
-                                                        <Check className="w-3.5 h-3.5" /> 剧本完成
+                                                    <span className="font-bold text-sm text-gray-800 dark:text-gray-100">
+                                                        {ep.title}
                                                     </span>
-                                                ) : (
-                                                    <span className="text-xs text-gray-400">待创作</span>
-                                                )}
+                                                </div>
+                                                
+                                                <div className="flex items-center gap-2">
+                                                    {ep.isGenerating ? (
+                                                        <span className="text-xs text-purple-600 font-bold animate-pulse flex items-center gap-1">
+                                                            <div className="w-2.5 h-2.5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                                                            正文生成中...
+                                                        </span>
+                                                    ) : ep.isDone ? (
+                                                        <span className="text-xs text-emerald-500 font-bold flex items-center gap-0.5">
+                                                            <Check className="w-3.5 h-3.5" /> 剧本完成
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">待创作</span>
+                                                    )}
 
+                                                    <button 
+                                                        onClick={async () => {
+                                                            if (ep.isGenerating) {
+                                                                handleStop();
+                                                            } else {
+                                                                setScriptGenMode('single');
+                                                                try {
+                                                                    const prevScript = idx > 0 ? parsedEpisodes[idx - 1].script : '';
+                                                                    await generateScriptForEpisode(idx, prevScript);
+                                                                } catch (err: any) {
+                                                                    alert(err.message || '生成该集剧本出错');
+                                                                }
+                                                            }
+                                                        }}
+                                                        className="px-2.5 py-1 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-lg border border-gray-200 dark:border-gray-700 transition-colors"
+                                                    >
+                                                        {ep.isGenerating ? '停止' : ep.isDone ? '重新生成本集' : '生成单集剧本'}
+                                                    </button>
+
+                                                    {ep.isDone && (
+                                                        <button 
+                                                            onClick={() => {
+                                                                setHistoryEpisodeIndex(idx);
+                                                                setSelectedHistoryVersionIndex(ep.history && ep.history.length > 0 ? ep.history.length - 1 : null);
+                                                                setShowHistoryModal(true);
+                                                            }}
+                                                            className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg border border-indigo-100 dark:border-indigo-900 transition-colors"
+                                                        >
+                                                            查看版本
+                                                        </button>
+                                                    )}
+
+                                                    {ep.isDone && (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setInspirationEpisodeIndex(idx);
+                                                                    setShowInspirationModal(true);
+                                                                    setSearchKeyword('');
+                                                                    setSelectedTags([]);
+                                                                    setSearchResults([]);
+                                                                    setSelectedFragments([]);
+                                                                    setAmplifyType('emotion');
+                                                                    setAmplifyValue('极致虐心');
+                                                                    setCustomAmplifyReqs('');
+                                                                }}
+                                                                disabled={!ep.script || ep.isGenerating}
+                                                                className="px-2.5 py-1 bg-gradient-to-r from-purple-500 via-indigo-500 to-sky-500 hover:from-purple-600 hover:via-indigo-600 hover:to-sky-600 text-white text-xs font-black rounded-lg border border-transparent shadow-sm flex items-center gap-1 disabled:opacity-50 transition-all active:scale-95"
+                                                            >
+                                                                <Database className="w-3.5 h-3.5" /> 标签灵感强化
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Editable Script block - with flex-grow to stretch full-height */}
+                                            <textarea 
+                                                value={ep.script || ''}
+                                                onChange={e => setParsedEpisodes(prev => prev.map((item, id) => id === idx ? { ...item, script: e.target.value, isDone: e.target.value.trim().length > 0 } : item))}
+                                                placeholder={`第${toChineseNum(ep.episodeNumber)}集\n\n${ep.episodeNumber}-1 场景地点 日/内 人物：乔以安 ...\n△ 乔以安推开门，看到了房间里的一幕。\n乔以安（难以置信）：这怎么可能...`}
+                                                className="flex-grow w-full p-4 bg-gray-50/50 dark:bg-gray-850 border border-gray-150 dark:border-gray-800 rounded-xl text-xs outline-none focus:bg-white focus:ring-1 focus:ring-purple-400 leading-relaxed font-mono custom-scrollbar resize-none mb-3"
+                                            />
+
+                                            {/* Q&A style single-episode optimization bar */}
+                                            <div className="flex-shrink-0 flex items-center gap-2 bg-purple-50/30 dark:bg-purple-950/20 p-2 rounded-xl border border-purple-100/40 dark:border-purple-900/30">
+                                                <input 
+                                                    type="text"
+                                                    value={singleEpisodeEdits[idx] || ''}
+                                                    onChange={e => handleSingleEpisodeEditChange(idx, e.target.value)}
+                                                    onKeyDown={e => { if (e.key === 'Enter') handleSingleEpisodeOptimize(idx); }}
+                                                    placeholder={ep.script ? `输入对第 ${ep.episodeNumber} 集剧本的针对性润色意见（如：“强化男主的愤怒质问”、“台词表现更具张力”）` : "请先生成或填写该集基础剧本，才能进行针对性润色意见修改..."}
+                                                    className="flex-grow bg-white dark:bg-gray-800 border border-gray-150 dark:border-gray-750 rounded-lg px-3 py-1.5 text-xs text-gray-800 dark:text-white outline-none focus:ring-1 focus:ring-purple-400 placeholder:text-gray-400"
+                                                    disabled={ep.isGenerating || !ep.script}
+                                                />
                                                 <button 
-                                                    onClick={async () => {
-                                                        if (ep.isGenerating) {
-                                                            handleStop();
-                                                        } else {
-                                                            setScriptGenMode('single');
-                                                            try {
-                                                                const prevScript = idx > 0 ? parsedEpisodes[idx - 1].script : '';
-                                                                await generateScriptForEpisode(idx, prevScript);
-                                                            } catch (err: any) {
-                                                                alert(err.message || '生成该集剧本出错');
+                                                    onClick={() => handleSingleEpisodeOptimize(idx)}
+                                                    disabled={ep.isGenerating || !ep.script || !(singleEpisodeEdits[idx] || '').trim()}
+                                                    className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-550 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-bold rounded-lg transition-all active:scale-95 flex items-center gap-1 shrink-0"
+                                                >
+                                                    <Sparkles className="w-3.5 h-3.5" /> 智能润色
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Sidebar on the right */}
+                                {showInspirationModal && (
+                                    <div className="w-[360px] border-l border-gray-150 dark:border-gray-800 bg-white dark:bg-gray-900 flex flex-col h-full animate-slide-in">
+                                        {/* Sidebar Header */}
+                                        <div className="flex-shrink-0 p-4 border-b border-gray-150 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/20 flex items-center justify-between">
+                                            <div>
+                                                <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5 text-sm">
+                                                    <Database className="w-4 h-4 text-purple-600" />
+                                                    标签灵感强化 ({inspirationEpisodeIndex !== null ? `第 ${parsedEpisodes[inspirationEpisodeIndex].episodeNumber} 集` : ''})
+                                                </h4>
+                                                <p className="text-[10px] text-gray-400 mt-0.5">检索精品库剧本段落并将其精髓融入当前脚本</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => setShowInspirationModal(false)}
+                                                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors"
+                                            >
+                                                <X className="w-5 h-5" />
+                                            </button>
+                                        </div>
+
+                                        {/* Scrollable contents */}
+                                        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                                            {/* 1. Search Bar */}
+                                            <div className="space-y-1.5">
+                                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400">1. 输入检索词或直接筛选标签</label>
+                                                <div className="flex gap-2">
+                                                    <input 
+                                                        type="text" 
+                                                        value={searchKeyword}
+                                                        onChange={e => setSearchKeyword(e.target.value)}
+                                                        onKeyDown={e => { if (e.key === 'Enter') handleSearchInspirations(); }}
+                                                        placeholder="输入关键词搜索（如：反击、背叛、相遇）..."
+                                                        className="flex-grow bg-white dark:bg-gray-800 border border-gray-150 dark:border-gray-750 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 dark:text-white outline-none focus:ring-1 focus:ring-purple-400"
+                                                    />
+                                                    <button 
+                                                        onClick={handleSearchInspirations}
+                                                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-550 text-white text-xs font-bold rounded-lg transition-all active:scale-95 flex items-center gap-1 shrink-0"
+                                                    >
+                                                        检索
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                                                                        {/* 2. Tags filter */}
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">2. 筛选 7 大特色标签 (点击类型展开标签，支持多选)</label>
+                                                <div className="space-y-2 bg-gray-50/50 dark:bg-gray-950/20 p-2.5 rounded-xl border border-gray-150 dark:border-gray-800 max-h-[380px] overflow-y-auto custom-scrollbar">
+                                                    {[
+                                                        {
+                                                            id: 'scene',
+                                                            title: '场景类型',
+                                                            icon: '🎬',
+                                                            tags: availableSceneTags,
+                                                            colorClasses: {
+                                                                text: 'text-purple-600 dark:text-purple-400',
+                                                                bg: 'bg-purple-50 dark:bg-purple-950/30',
+                                                                border: 'border-purple-100 dark:border-purple-900/50',
+                                                                btnActive: 'bg-purple-600 text-white shadow-sm hover:bg-purple-700',
+                                                            }
+                                                        },
+                                                        {
+                                                            id: 'emotion',
+                                                            title: '情绪类型',
+                                                            icon: '🎭',
+                                                            tags: availableEmotionTags,
+                                                            colorClasses: {
+                                                                text: 'text-sky-600 dark:text-sky-400',
+                                                                bg: 'bg-sky-50 dark:bg-sky-950/30',
+                                                                border: 'border-sky-100 dark:border-sky-900/50',
+                                                                btnActive: 'bg-sky-600 text-white shadow-sm hover:bg-sky-700',
+                                                            }
+                                                        },
+                                                        {
+                                                            id: 'event',
+                                                            title: '事件/情节类型',
+                                                            icon: '🔥',
+                                                            tags: availableEventTags,
+                                                            colorClasses: {
+                                                                text: 'text-amber-600 dark:text-amber-400',
+                                                                bg: 'bg-amber-50 dark:bg-amber-950/30',
+                                                                border: 'border-amber-100 dark:border-amber-900/50',
+                                                                btnActive: 'bg-amber-600 text-white shadow-sm hover:bg-amber-700',
+                                                            }
+                                                        },
+                                                        {
+                                                            id: 'ability',
+                                                            title: '特殊能力/金手指',
+                                                            icon: '✨',
+                                                            tags: availableAbilityTags,
+                                                            colorClasses: {
+                                                                text: 'text-emerald-600 dark:text-emerald-400',
+                                                                bg: 'bg-emerald-50 dark:bg-emerald-950/30',
+                                                                border: 'border-emerald-100 dark:border-emerald-900/50',
+                                                                btnActive: 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700',
+                                                            }
+                                                        },
+                                                        {
+                                                            id: 'conflict',
+                                                            title: '核心冲突',
+                                                            icon: '⚡',
+                                                            tags: availableConflictTags,
+                                                            colorClasses: {
+                                                                text: 'text-rose-600 dark:text-rose-400',
+                                                                bg: 'bg-rose-50 dark:bg-rose-950/30',
+                                                                border: 'border-rose-100 dark:border-rose-900/50',
+                                                                btnActive: 'bg-rose-600 text-white shadow-sm hover:bg-rose-700',
+                                                            }
+                                                        },
+                                                        {
+                                                            id: 'theme',
+                                                            title: '核心主题',
+                                                            icon: '📖',
+                                                            tags: availableThemeTags,
+                                                            colorClasses: {
+                                                                text: 'text-indigo-600 dark:text-indigo-400',
+                                                                bg: 'bg-indigo-50 dark:bg-indigo-950/30',
+                                                                border: 'border-indigo-100 dark:border-indigo-900/50',
+                                                                btnActive: 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700',
+                                                            }
+                                                        },
+                                                        {
+                                                            id: 'element',
+                                                            title: '题材元素',
+                                                            icon: '🌟',
+                                                            tags: availableElementTags,
+                                                            colorClasses: {
+                                                                text: 'text-teal-600 dark:text-teal-400',
+                                                                bg: 'bg-teal-50 dark:bg-teal-950/30',
+                                                                border: 'border-teal-100 dark:border-teal-900/50',
+                                                                btnActive: 'bg-teal-600 text-white shadow-sm hover:bg-teal-700',
                                                             }
                                                         }
-                                                    }}
-                                                    className="px-2.5 py-1 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-lg border border-gray-200 dark:border-gray-700 transition-colors"
-                                                >
-                                                    {ep.isGenerating ? '停止' : ep.isDone ? '重新生成本集' : '生成单集剧本'}
-                                                </button>
+                                                    ].map((cat) => {
+                                                        if (!cat.tags || cat.tags.length === 0) return null;
 
-                                                {ep.isDone && (
-                                                    <button 
-                                                        onClick={() => {
-                                                            setHistoryEpisodeIndex(idx);
-                                                            setSelectedHistoryVersionIndex(ep.history && ep.history.length > 0 ? ep.history.length - 1 : null);
-                                                            setShowHistoryModal(true);
-                                                        }}
-                                                        className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg border border-indigo-100 dark:border-indigo-900 transition-colors"
-                                                    >
-                                                        查看版本
-                                                    </button>
-                                                )}
+                                                        const isExpanded = expandedCategory === cat.id;
+                                                        const selectedCountInCat = cat.tags.filter(t => selectedTags.includes(t)).length;
 
-                                                {ep.isDone && (
-                                                    <div className="relative">
-                                                        <button 
-                                                            onClick={() => setActiveEmotionPickerIndex(activeEmotionPickerIndex === idx ? null : idx)}
-                                                            disabled={!ep.script || ep.isGenerating}
-                                                            className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/45 hover:bg-amber-100 text-amber-600 dark:text-amber-400 text-xs font-bold rounded-lg border border-amber-100 dark:border-amber-900 transition-colors flex items-center gap-1 disabled:opacity-50"
-                                                        >
-                                                            <Sparkles className="w-3.5 h-3.5" /> 情绪放大
-                                                        </button>
-                                                        {activeEmotionPickerIndex === idx && (
-                                                            <div className="absolute right-0 mt-1.5 w-48 bg-white dark:bg-gray-800 border border-gray-150 dark:border-gray-700 rounded-xl shadow-xl z-30 p-2 grid grid-cols-2 gap-1 animate-scale-up">
-                                                                {[
-                                                                    { label: '💔 极致虐心', value: '极致虐心' },
-                                                                    { label: '🔥 逆袭爽快', value: '逆袭爽快' },
-                                                                    { label: '🤣 搞笑幽默', value: '搞笑幽默' },
-                                                                    { label: '❤️ 甜宠撒糖', value: '甜宠撒糖' },
-                                                                    { label: '😰 惊悚悬疑', value: '惊悚悬疑' },
-                                                                    { label: '👑 霸道高冷', value: '霸道高冷' }
-                                                                ].map((item, emIdx) => (
-                                                                    <button
-                                                                        key={emIdx}
-                                                                        onClick={() => handleEmotionAmplify(idx, item.value)}
-                                                                        className="py-1.5 px-2 text-[10px] font-bold text-gray-700 dark:text-gray-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg text-left transition-colors"
-                                                                    >
-                                                                       {item.label}
-                                                                    </button>
-                                                                ))}
+                                                        return (
+                                                            <div 
+                                                                key={cat.id} 
+                                                                className={`border rounded-xl transition-all duration-200 overflow-hidden ${
+                                                                    isExpanded 
+                                                                        ? 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 shadow-sm' 
+                                                                        : 'border-gray-150 dark:border-gray-800/60 bg-white/60 dark:bg-gray-900/20 hover:bg-gray-100/40 dark:hover:bg-gray-800/30'
+                                                                }`}
+                                                            >
+                                                                {/* Header button to expand/collapse */}
+                                                                <button
+                                                                    onClick={() => setExpandedCategory(isExpanded ? null : cat.id)}
+                                                                    className="w-full flex items-center justify-between p-2.5 text-left focus:outline-none transition-all hover:bg-gray-50/50 dark:hover:bg-gray-800/20"
+                                                                >
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xs">{cat.icon}</span>
+                                                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                                            {cat.title}
+                                                                        </span>
+                                                                        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-normal">
+                                                                            ({cat.tags.length}个标签)
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-2">
+                                                                        {selectedCountInCat > 0 && (
+                                                                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${cat.colorClasses.text} ${cat.colorClasses.bg} border ${cat.colorClasses.border}`}>
+                                                                                已选 {selectedCountInCat}
+                                                                            </span>
+                                                                        )}
+                                                                        <span className="text-gray-400 dark:text-gray-500 transition-transform duration-200">
+                                                                            {isExpanded ? (
+                                                                                <svg className="w-3.5 h-3.5 transform rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                                                                                </svg>
+                                                                            ) : (
+                                                                                <svg className="w-3.5 h-3.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+                                                                                </svg>
+                                                                            )}
+                                                                        </span>
+                                                                    </div>
+                                                                </button>
+
+                                                                {/* Tags content box */}
+                                                                {isExpanded && (
+                                                                    <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-850 bg-gray-50/30 dark:bg-black/10">
+                                                                        <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto p-0.5 custom-scrollbar">
+                                                                            {cat.tags.map((tag, tagIdx) => {
+                                                                                const isSelected = selectedTags.includes(tag);
+                                                                                return (
+                                                                                    <button
+                                                                                        key={`${cat.id}-${tagIdx}`}
+                                                                                        onClick={() => {
+                                                                                            if (isSelected) {
+                                                                                                setSelectedTags(selectedTags.filter(t => t !== tag));
+                                                                                            } else {
+                                                                                                setSelectedTags([...selectedTags, tag]);
+                                                                                            }
+                                                                                        }}
+                                                                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all ${
+                                                                                            isSelected 
+                                                                                                ? cat.colorClasses.btnActive 
+                                                                                                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-150 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750'
+                                                                                        }`}
+                                                                                    >
+                                                                                        {tag}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        )}
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            {/* 3. Search results & reference fragments */}
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400">3. 检索结果与参考片段选择 ({searchResults.length} 个结果)</label>
+                                                    {selectedFragments.length > 0 && (
+                                                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">已选 {selectedFragments.length} 个片段</span>
+                                                    )}
+                                                </div>
+                                                <div className="max-h-[220px] overflow-y-auto border border-gray-150 dark:border-gray-800 rounded-xl bg-gray-50/40 dark:bg-black/10 p-2.5 space-y-2 custom-scrollbar">
+                                                    {searchResults.map((item, idx) => {
+                                                        const isSelected = selectedFragments.some(f => f.content === item.content);
+                                                        return (
+                                                            <div 
+                                                                key={idx}
+                                                                onClick={() => {
+                                                                    if (isSelected) {
+                                                                        setSelectedFragments(selectedFragments.filter(f => f.content !== item.content));
+                                                                    } else {
+                                                                        setSelectedFragments([...selectedFragments, item]);
+                                                                    }
+                                                                }}
+                                                                className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all flex gap-2 ${isSelected ? 'bg-purple-50/60 dark:bg-purple-950/20 border-purple-300 dark:border-purple-900' : 'bg-white dark:bg-gray-850 border-gray-200 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800'}`}
+                                                            >
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    checked={isSelected}
+                                                                    onChange={() => {}} // Handled by parent div Click
+                                                                    className="mt-1 h-3.5 w-3.5 rounded text-purple-600 border-gray-350 focus:ring-purple-500 shrink-0"
+                                                                />
+                                                                <div className="space-y-1 flex-grow">
+                                                                    <p className="text-[11px] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{item.content}</p>
+                                                                    <div className="flex flex-wrap gap-1 pt-1">
+                                                                        {item.event_types.map((e, eIdx) => (
+                                                                            <span key={eIdx} className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">#{e}</span>
+                                                                        ))}
+                                                                        {item.emotion_types.map((em, emIdx) => (
+                                                                            <span key={emIdx} className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400">@{em}</span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {searchResults.length === 0 && (
+                                                        <div className="text-center py-6 text-xs text-gray-400">
+                                                            {searchKeyword || selectedTags.length > 0 ? "未找到匹配片段，请更换检索词" : "在上方输入关键词或选择标签后检索"}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* 4. Playbook Fusion & Settings */}
+                                            <div className="space-y-3 pt-2 border-t border-gray-150 dark:border-gray-800">
+                                                <div className="p-2.5 bg-purple-50/40 dark:bg-purple-950/10 border border-purple-100/40 dark:border-purple-900/30 rounded-xl">
+                                                    <h5 className="text-[11px] font-bold text-purple-800 dark:text-purple-300 flex items-center gap-1">
+                                                        <Sparkles className="w-3 h-3" /> 剧本融合模式设置
+                                                    </h5>
+                                                    <p className="text-[9px] text-gray-500 dark:text-gray-400">
+                                                        AI 导演在融合上述所选灵感段落的节奏与情节时，执行哪种主要的剧作改良任务？
+                                                    </p>
+                                                </div>
+
+                                                {/* Select Amplification Direction */}
+                                                <div className="space-y-1">
+                                                    <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400">选择强化方向</label>
+                                                    <div className="grid grid-cols-3 gap-1">
+                                                        {(['emotion', 'scene', 'event'] as const).map(type => (
+                                                            <button
+                                                                key={type}
+                                                                onClick={() => {
+                                                                    setAmplifyType(type);
+                                                                    setAmplifyValue(type === 'emotion' ? '极致虐心' : type === 'scene' ? '豪门晚宴' : '反派阴谋败露');
+                                                                }}
+                                                                className={`py-1 px-1 text-center rounded-lg border text-[10px] font-bold transition-all ${amplifyType === type ? 'bg-purple-600 border-transparent text-white shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                                            >
+                                                                {type === 'emotion' ? '🎭 极致情绪' : type === 'scene' ? '🗺️ 场景切换' : '⚡ 引入事件'}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Value select */}
+                                                {amplifyType === 'emotion' && (
+                                                    <div className="space-y-1">
+                                                        <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400">核心情绪目标</label>
+                                                        <select
+                                                            value={amplifyValue}
+                                                            onChange={e => setAmplifyValue(e.target.value)}
+                                                            className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-purple-400"
+                                                        >
+                                                            {['极致虐心', '逆袭爽快', '搞笑幽默', '甜宠撒糖', '惊悚悬疑', '霸道高冷', '悲痛欲绝', '扬眉吐气', '深情告白'].map(val => (
+                                                                <option key={val} value={val}>{val}</option>
+                                                            ))}
+                                                        </select>
                                                     </div>
                                                 )}
+
+                                                {amplifyType === 'scene' && (
+                                                    <div className="space-y-1">
+                                                        <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400">切换的目标场景设定</label>
+                                                        <input
+                                                            type="text"
+                                                            value={amplifyValue}
+                                                            onChange={e => setAmplifyValue(e.target.value)}
+                                                            placeholder="例如：豪门晚宴、废弃工厂..."
+                                                            className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-purple-400"
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {amplifyType === 'event' && (
+                                                    <div className="space-y-1">
+                                                        <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400">引入的核心事件设定</label>
+                                                        <input
+                                                            type="text"
+                                                            value={amplifyValue}
+                                                            onChange={e => setAmplifyValue(e.target.value)}
+                                                            placeholder="例如：女主角当众揭穿绿茶..."
+                                                            className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-purple-400"
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Custom rewrite guidelines */}
+                                                <div className="space-y-1">
+                                                    <label className="block text-[11px] font-bold text-gray-500 dark:text-gray-400">个性化增强及修改意见 (选填)</label>
+                                                    <textarea
+                                                        value={customAmplifyReqs}
+                                                        onChange={e => setCustomAmplifyReqs(e.target.value)}
+                                                        placeholder="个性化改写细节或指令（台词更犀利等）..."
+                                                        rows={2}
+                                                        className="w-full p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none focus:ring-1 focus:ring-purple-400 resize-none leading-normal placeholder:text-gray-400"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {/* Editable Script block - with flex-grow to stretch full-height */}
-                                        <textarea 
-                                            value={ep.script || ''}
-                                            onChange={e => setParsedEpisodes(prev => prev.map((item, id) => id === idx ? { ...item, script: e.target.value, isDone: e.target.value.trim().length > 0 } : item))}
-                                            placeholder={`第${toChineseNum(ep.episodeNumber)}集\n\n${ep.episodeNumber}-1 场景地点 日/内 人物：乔以安 ...\n△ 乔以安推开门，看到了房间里的一幕。\n乔以安（难以置信）：这怎么可能...`}
-                                            className="flex-grow w-full p-4 bg-gray-50/50 dark:bg-gray-850 border border-gray-150 dark:border-gray-800 rounded-xl text-xs outline-none focus:bg-white focus:ring-1 focus:ring-purple-400 leading-relaxed font-mono custom-scrollbar resize-none mb-3"
-                                        />
-
-                                        {/* Q&A style single-episode optimization bar */}
-                                        <div className="flex-shrink-0 flex items-center gap-2 bg-purple-50/30 dark:bg-purple-950/20 p-2 rounded-xl border border-purple-100/40 dark:border-purple-900/30">
-                                            <input 
-                                                type="text"
-                                                value={singleEpisodeEdits[idx] || ''}
-                                                onChange={e => handleSingleEpisodeEditChange(idx, e.target.value)}
-                                                onKeyDown={e => { if (e.key === 'Enter') handleSingleEpisodeOptimize(idx); }}
-                                                placeholder={ep.script ? `输入对第 ${ep.episodeNumber} 集剧本的针对性润色意见（如：“强化男主的愤怒质问”、“台词表现更具张力”）` : "请先生成或填写该集基础剧本，才能进行针对性润色意见修改..."}
-                                                className="flex-grow bg-white dark:bg-gray-800 border border-gray-150 dark:border-gray-750 rounded-lg px-3 py-1.5 text-xs text-gray-800 dark:text-white outline-none focus:ring-1 focus:ring-purple-400 placeholder:text-gray-400"
-                                                disabled={ep.isGenerating || !ep.script}
-                                            />
-                                            <button 
-                                                onClick={() => handleSingleEpisodeOptimize(idx)}
-                                                disabled={ep.isGenerating || !ep.script || !(singleEpisodeEdits[idx] || '').trim()}
-                                                className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-550 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-bold rounded-lg transition-all active:scale-95 flex items-center gap-1 shrink-0"
+                                        {/* Action Footer inside Sidebar */}
+                                        <div className="flex-shrink-0 p-4 border-t border-gray-150 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/20 space-y-2">
+                                            <div className="text-[10px] text-gray-400 flex items-center justify-between px-1">
+                                                <span>已关联灵感片段数：</span>
+                                                <span className="font-bold text-purple-600 dark:text-purple-400">{selectedFragments.length} 个</span>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    if (inspirationEpisodeIndex === null) return;
+                                                    setShowInspirationModal(false);
+                                                    const targetEmotion = amplifyType === 'emotion' ? amplifyValue : '';
+                                                    const targetScene = amplifyType === 'scene' ? amplifyValue : '';
+                                                    const finalReqs = amplifyType === 'event' ? amplifyValue : customAmplifyReqs;
+                                                    
+                                                    await handleEmotionAmplify(
+                                                        inspirationEpisodeIndex,
+                                                        targetEmotion,
+                                                        selectedFragments,
+                                                        targetScene,
+                                                        finalReqs,
+                                                        amplifyType
+                                                    );
+                                                }}
+                                                disabled={selectedFragments.length === 0}
+                                                className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-550 hover:to-indigo-550 disabled:from-gray-200 disabled:to-gray-200 disabled:text-gray-400 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
                                             >
-                                                <Sparkles className="w-3.5 h-3.5" /> 智能润色
+                                                <Sparkles className="w-4 h-4" /> 
+                                                {selectedFragments.length > 0 ? "确认 AI 协同剧本增强" : "请先选择至少 1 个灵感片段"}
                                             </button>
                                         </div>
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
                     </div>
@@ -2573,7 +3029,7 @@ ${ep.script}
                                     <Database className="w-5 h-5 text-indigo-500" />
                                     第 {parsedEpisodes[historyEpisodeIndex].episodeNumber} 集 历史版本记录
                                 </h4>
-                                <p className="text-[10px] text-gray-400 mt-0.5">查看、对比以及一键恢复该分集在剧本创作和润色过程中的所有历史版本</p>
+                                <p className="text-[10px] text-gray-400 mt-0.5">查看、对比以及一键恢复该分集在剧本创作 and 润色过程中的所有历史版本</p>
                             </div>
                             <button 
                                 onClick={() => { setShowHistoryModal(false); setHistoryEpisodeIndex(null); setSelectedHistoryVersionIndex(null); }}
@@ -2628,7 +3084,7 @@ ${ep.script}
                                                 }}
                                                 className="px-3 py-1 bg-indigo-600 hover:bg-indigo-550 text-white font-bold rounded-lg text-[10px] shadow-sm flex items-center gap-1 transition-all active:scale-95"
                                             >
-                                                <ArrowPath className="w-3 h-3 animate-spin-slow" /> 恢复此版本为当前剧本
+                                                <ArrowPath className="w-3 h-3" /> 恢复此版本为当前剧本
                                             </button>
                                         </div>
                                         <div className="flex-grow p-4 overflow-y-auto font-mono text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed bg-gray-50/30 dark:bg-black/5 custom-scrollbar">

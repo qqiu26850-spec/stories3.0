@@ -288,6 +288,50 @@ async function startServer() {
     }
   });
 
+  // API Route: Gemini Embed
+  app.post("/api/gemini/embed", async (req, res) => {
+    try {
+      const { text } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+
+      if (!apiKey) {
+        return res.status(500).json({ error: "Google API Key not configured on server" });
+      }
+
+      if (!text || typeof text !== 'string') {
+        return res.status(400).json({ error: "Text string is required for embedding" });
+      }
+
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      const response = await ai.models.embedContent({
+        model: 'gemini-embedding-001',
+        contents: text,
+        config: {
+          outputDimensionality: 768
+        }
+      });
+
+      const resData = response as any;
+      const embedding = resData.embedding?.values || resData.embeddings?.values;
+      if (!embedding) {
+        throw new Error("Failed to generate embedding: empty values returned from Gemini");
+      }
+
+      res.json({ embedding });
+    } catch (error: any) {
+      console.error("Gemini Embedding API Error inside Express:", error);
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+
   // API Route: DeepSeek
   app.post("/api/deepseek", async (req, res) => {
     try {

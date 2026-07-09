@@ -752,3 +752,262 @@ export async function uploadCoverImage(file: File) {
         return data.publicUrl;
     } catch (e) { return null; }
 }
+
+export interface InspirationNovelFragment {
+    content: string;
+    event_types: string | string[];
+    emotion_types: string | string[];
+}
+
+export async function matchDocumentsV3(embedding: number[], scene: string, emotion: string): Promise<InspirationNovelFragment[]> {
+    try {
+        const { data, error } = await supabase.rpc('match_documents_v3', {
+            query_embedding: embedding,
+            scene: scene,
+            emotion: emotion,
+            match_limit: 3,
+            match_count: 3
+        });
+
+        if (error) {
+            console.error("Supabase match_documents_v3 RPC error:", error);
+            throw error;
+        }
+
+        if (!data || !Array.isArray(data)) {
+            return [];
+        }
+
+        return data.slice(0, 3).map((item: any) => {
+            const metadata = item.metadata || {};
+            const content = item.content || '';
+            const event_types = item.event_types || metadata.event_types || '未知';
+            const emotion_types = item.emotion_types || metadata.emotion_types || '未知';
+
+            return {
+                content,
+                event_types,
+                emotion_types
+            };
+        });
+    } catch (e) {
+        console.error("matchDocumentsV3 failed:", e);
+        throw e;
+    }
+}
+
+const LOCAL_INSPIRATIONS: InspirationNovelFragment[] = [
+    {
+        content: "顾家大宴上，真千金顾晚身穿一件洗得发白的旧衣服站在角落。而假千金顾雪儿却穿着高定礼服，挽着顾夫人的手，笑得甜美。\n顾夫人当众宣布：“雪儿才是我唯一的女儿，至于顾晚，不过是个收养的孤儿，不识大体，难登大雅之堂！”\n顾晚眼眶泛红，双手死死攥紧，手心被指甲掐出了血。她默默忍受着众人的指点，心如刀割：“原来十八年的期盼，在你们眼里只是个笑话。”",
+        event_types: ["真假千金", "豪门争斗"],
+        emotion_types: ["极致虐心", "悲痛欲绝"]
+    },
+    {
+        content: "林氏集团董事会。李总将一叠文件狠狠摔在林默面前，冷嘲热讽：“一个刚毕业的实习生，也敢插手百亿级别的项目？识相的立刻签了这份辞职信，滚出林家！”\n林默不紧不慢地掏出手机，放了一段录音，里面清晰地传出李总收受竞品公司巨额贿赂、企图掏空林氏的阴谋。\n接着，林默站起身，眼神如刀：“李总，恐怕该走的人是你。还有，顺便提醒你一句，我不仅是实习生，更是林氏集团持股51%的最大股东！”李总瞬间脸色惨白，瘫倒在椅子上。",
+        event_types: ["主角反击", "打脸爽片", "身份反转"],
+        emotion_types: ["逆袭爽快", "扬眉吐气"]
+    },
+    {
+        content: "漫天大雨中，江寒不顾一切地冲上前，死死抱住即将登机的陆暖暖。\n陆暖暖挣扎着眼泪夺眶而出：“你放开我！你不是已经和白月光订婚了吗？还来找我做什么！”\n江寒搂得更紧，声音嘶哑而颤抖：“那张照片是合成的！我跟她没有任何关系，我自始至终爱的人只有你！暖暖，别走，求你……”\n陆暖暖听着他剧烈的心跳声，泪水终于和雨水混在一起。误会在此刻冰消瓦解，江寒深情地吻上了她的唇。",
+        event_types: ["误会解除", "旧情复燃", "英雄救美"],
+        emotion_types: ["深情告白", "甜宠撒糖"]
+    },
+    {
+        content: "苏晴端着咖啡，还没走到桌前，林薇薇便突然自己往后一倒，热咖啡洒了一身。\n林薇薇立刻哭得梨花带雨，楚楚可怜地望向走过来的顾景深：“景深，都是我不好，我不该和苏晴姐姐争那个代言的，苏晴姐姐肯定不是故意拿咖啡泼我的……”\n苏晴冷笑一声，直接掏出ipad按下播放键。画面中，正清晰地展示着林薇薇自己拽着苏晴的衣袖，主动将咖啡往自己身上倒的监控画面。\n苏晴挑眉看着目瞪口呆的林薇薇：“林妹妹，演技不错，可惜咖啡厅的360度无死角监控比你的眼泪更诚实。”",
+        event_types: ["手撕绿茶", "豪门争斗", "主角反击"],
+        emotion_types: ["逆袭爽快", "扬眉吐气"]
+    },
+    {
+        content: "幽暗废弃的仓库里，绑匪将沈蔓绑在椅子上，手里拿着明晃晃的匕首。\n“顾少，你太太在我们手里。想要她活命，拿十亿现金来换！”\n电话那头传来顾霆骁冰冷且毫无波动的声音：“随意。”绑匪气急败坏。沈蔓闭上眼，心沉入了谷底。\n突然，仓库大门被猛烈撞开，数十名特种保镖瞬间包围了现场。顾霆骁黑衣皮鞋，踏光而来。\n他夺下绑匪手中的刀，一脚将其踢飞，动作干净利落。随后他温柔地解开沈蔓的绳子，将她紧紧搂进怀里，声音沙哑：“对不起，我来晚了。说‘随意’是为了拖延定位时间，别怕，我一直在。”",
+        event_types: ["英雄救美", "暗中布局"],
+        emotion_types: ["惊悚悬疑", "霸道高冷"]
+    },
+    {
+        content: "结婚三周年纪念日，温凉等了一整夜，却等来沈赫在医院陪着前女友度过生日的热搜。\n温凉自嘲一笑，摘下了无名指上的婚戒，放在空无一人的餐桌上。\n她拿上早已签好的离婚协议书，只提着一个小行李箱，决然地走出了沈家别墅。\n“沈赫，这三年是我犯贱，以后你的世界，我彻底退出。”\n当沈赫第二天清晨兴冲冲地赶回家，看到空荡荡的屋子和冰冷的离婚协议书时，一种前所未有的心慌与悔恨瞬间将他淹没。",
+        event_types: ["离家出走", "极致虐心"],
+        emotion_types: ["悲痛欲绝", "因爱生恨"]
+    },
+    {
+        content: "萧晨本想租个豪车去前女友的婚礼上装个逼，结果不小心撞了路边的一辆宾利。\n宾利车主是个高冷的女总裁，萧晨吓得直哆嗦：“姐，我不是故意的，我真赔不起……”\n女总裁打量了他一眼，淡淡道：“今天我缺个男伴去砸场子，只要你假扮我未婚夫，这车就不用你赔了。”\n婚礼现场，前女友和新郎正得意洋洋，萧晨挽着女总裁盛装出席。\n女总裁当众宣布：“感谢两位邀请。顺便介绍一下，这位是我的未婚夫，也是萧氏集团的唯一继承人。”\n前女友和新郎惊得下巴都掉了，萧晨心里直犯嘀咕：“卧槽，我自己怎么不知道我是继承人？！”",
+        event_types: ["身份反转", "主角反击"],
+        emotion_types: ["搞笑幽默", "逆袭爽快"]
+    }
+];
+
+export async function searchInspirationFragments(keyword: string, tags: string[]): Promise<InspirationNovelFragment[]> {
+    try {
+        let query = supabase.from('novel_chunks').select('*');
+
+        // If keyword is specified, narrow down by content search
+        if (keyword && keyword.trim()) {
+            query = query.ilike('content', `%${keyword.trim()}%`);
+        }
+
+        const { data, error } = await query.limit(500);
+
+        if (error) {
+            console.error("Supabase query error on novel_chunks:", error);
+            return [];
+        }
+
+        if (!data || !Array.isArray(data)) {
+            return [];
+        }
+
+        let results = data;
+
+        // If specific tags are clicked/selected, we filter them.
+        // We check if ANY of the tag arrays within metadata.tags contains the selected tag.
+        if (tags && tags.length > 0) {
+            results = results.filter((item: any) => {
+                const metadata = item.metadata || {};
+                const tagsObj = metadata.tags || {};
+                if (tagsObj && typeof tagsObj === 'object') {
+                    return tags.some(tag => {
+                        const inScenes = Array.isArray(tagsObj.scene_types) && tagsObj.scene_types.includes(tag);
+                        const inEmotions = Array.isArray(tagsObj.emotion_types) && tagsObj.emotion_types.includes(tag);
+                        const inEvents = Array.isArray(tagsObj.event_types) && tagsObj.event_types.includes(tag);
+                        const inAbilities = Array.isArray(tagsObj.special_abilities) && tagsObj.special_abilities.includes(tag);
+                        const inConflicts = Array.isArray(tagsObj.conflict_types) && tagsObj.conflict_types.includes(tag);
+                        const inThemes = Array.isArray(tagsObj.core_themes) && tagsObj.core_themes.includes(tag);
+                        const inElements = Array.isArray(tagsObj.element_types) && tagsObj.element_types.includes(tag);
+                        return inScenes || inEmotions || inEvents || inAbilities || inConflicts || inThemes || inElements;
+                    });
+                }
+                return false;
+            });
+        }
+
+        // If no results are found after filtering or if the query returned nothing,
+        // we can also search without keyword restriction just by tags to give the user something.
+        if (results.length === 0 && tags && tags.length > 0) {
+            const secondTry = await supabase.from('novel_chunks').select('*').limit(500);
+            if (secondTry.data && Array.isArray(secondTry.data)) {
+                results = secondTry.data.filter((item: any) => {
+                    const metadata = item.metadata || {};
+                    const tagsObj = metadata.tags || {};
+                    if (tagsObj && typeof tagsObj === 'object') {
+                        return tags.some(tag => {
+                            const inScenes = Array.isArray(tagsObj.scene_types) && tagsObj.scene_types.includes(tag);
+                            const inEmotions = Array.isArray(tagsObj.emotion_types) && tagsObj.emotion_types.includes(tag);
+                            const inEvents = Array.isArray(tagsObj.event_types) && tagsObj.event_types.includes(tag);
+                            const inAbilities = Array.isArray(tagsObj.special_abilities) && tagsObj.special_abilities.includes(tag);
+                            const inConflicts = Array.isArray(tagsObj.conflict_types) && tagsObj.conflict_types.includes(tag);
+                            const inThemes = Array.isArray(tagsObj.core_themes) && tagsObj.core_themes.includes(tag);
+                            const inElements = Array.isArray(tagsObj.element_types) && tagsObj.element_types.includes(tag);
+                            return inScenes || inEmotions || inEvents || inAbilities || inConflicts || inThemes || inElements;
+                        });
+                    }
+                    return false;
+                });
+            }
+        }
+
+        return results.map((item: any) => {
+            const metadata = item.metadata || {};
+            const content = item.content || '';
+            const tagsObj = metadata.tags || {};
+            
+            // To support existing frontend expectations, we combine tag values into event_types and emotion_types
+            const event_types: string[] = [];
+            const emotion_types: string[] = [];
+
+            if (tagsObj && typeof tagsObj === 'object') {
+                if (Array.isArray(tagsObj.scene_types)) event_types.push(...tagsObj.scene_types);
+                if (Array.isArray(tagsObj.emotion_types)) emotion_types.push(...tagsObj.emotion_types);
+                if (Array.isArray(tagsObj.event_types)) event_types.push(...tagsObj.event_types);
+                if (Array.isArray(tagsObj.special_abilities)) event_types.push(...tagsObj.special_abilities);
+                if (Array.isArray(tagsObj.conflict_types)) event_types.push(...tagsObj.conflict_types);
+                if (Array.isArray(tagsObj.core_themes)) event_types.push(...tagsObj.core_themes);
+                if (Array.isArray(tagsObj.element_types)) event_types.push(...tagsObj.element_types);
+            }
+
+            if (event_types.length === 0) event_types.push('通用');
+            if (emotion_types.length === 0) emotion_types.push('通用');
+
+            return {
+                content,
+                event_types: Array.from(new Set(event_types)),
+                emotion_types: Array.from(new Set(emotion_types))
+            };
+        }).slice(0, 15);
+    } catch (e) {
+        console.error("searchInspirationFragments failed:", e);
+        return [];
+    }
+}
+
+export async function fetchAvailableTags(): Promise<{
+    scene_types: string[];
+    emotion_types: string[];
+    event_types: string[];
+    special_abilities: string[];
+    conflict_types: string[];
+    core_themes: string[];
+    element_types: string[];
+}> {
+    try {
+        const { data, error } = await supabase.from('novel_chunks').select('metadata').limit(1000);
+        
+        const sceneSet = new Set<string>();
+        const emotionSet = new Set<string>();
+        const eventSet = new Set<string>();
+        const abilitySet = new Set<string>();
+        const conflictSet = new Set<string>();
+        const themeSet = new Set<string>();
+        const elementSet = new Set<string>();
+
+        if (!error && data && data.length > 0) {
+            data.forEach((item: any) => {
+                const metadata = item.metadata || {};
+                const tagsObj = metadata.tags || {};
+                if (tagsObj && typeof tagsObj === 'object') {
+                    if (Array.isArray(tagsObj.scene_types)) tagsObj.scene_types.forEach((t: string) => sceneSet.add(t));
+                    if (Array.isArray(tagsObj.emotion_types)) tagsObj.emotion_types.forEach((t: string) => emotionSet.add(t));
+                    if (Array.isArray(tagsObj.event_types)) tagsObj.event_types.forEach((t: string) => eventSet.add(t));
+                    if (Array.isArray(tagsObj.special_abilities)) tagsObj.special_abilities.forEach((t: string) => abilitySet.add(t));
+                    if (Array.isArray(tagsObj.conflict_types)) tagsObj.conflict_types.forEach((t: string) => conflictSet.add(t));
+                    if (Array.isArray(tagsObj.core_themes)) tagsObj.core_themes.forEach((t: string) => themeSet.add(t));
+                    if (Array.isArray(tagsObj.element_types)) tagsObj.element_types.forEach((t: string) => elementSet.add(t));
+                }
+            });
+        }
+        
+        // High-quality defaults from user provided JSON
+        const defaultScenes = ['争吵', '背叛', '日常生活', '初遇', '密谋', '告白', '重逢', '营救', '照顾', '和解', '追逐', '订婚现场被抛弃', '边界试探', '大打出手', '当众对峙'];
+        const defaultEmotions = ['被豢养的窒息感', '察觉真相后的寒心绝望', '隐忍中的决绝反抗', '爱而不得的酸涩', '宿命般的无力感', '酸涩隐忍', '极致拉扯', '温情治愈', '大快人心的复仇爽感', '劫后余生的松弛感', '迟来的悔恨', '甜蜜心动', '撩拨暧昧', '绝望无助'];
+        const defaultEvents = ['大少奶奶罚宋莹回厨房烧火', '宋莹偷听老夫人与道士密谋', '洛宁被山贼掳走并被救下', '温旭在订婚现场为小青梅扔下女主', '姐姐安安被误解打碎花瓶', '课堂投屏社死现场', '真假千金看到弹幕得知真相', '主角死后托梦向男友索要男仆', '庆功宴上副将出示信件当众诬陷'];
+        const defaultAbilities = ['福星命格（旺侯府运势）', '永生（不老不死）', '弹幕金手指（预知剧情）', '穿越系统（可回现代）', '元宇宙系统（赎罪任务）', '手铐召唤（执法者）', '读心术', '吸血鬼特性', '死后托梦'];
+        const defaultConflicts = ['侯府对福星的利用与自我意识觉醒', '长生者与凡人爱人之间的生死相隔', '家庭信任危机', '原生家庭带来的身份认同危机', '师生身份差异带来的隐瞒焦虑', '出轨误会引发的信任危机', '真假千金从敌对到姐妹情深的转变'];
+        const defaultThemes = ['摆脱被豢养的命运,追求真实自我', '永生是诅咒，爱是唯一的救赎与羁绊', '爱能改写悲剧，家庭温暖改变命运', '在伤痛中重建自我', '爱是尊重与信任，而非占有与背叛', '真正的家人是给予温暖与守护而不是血缘', '用理性与法律武器打破狗血剧情'];
+        const defaultElements = ['锦鲤文', '养女逆袭', '轮回转世', '养崽文', '追妻火葬场', '白月光与朱砂痣', '甜宠', '先婚后爱', '穿越系统', '真假千金', '双向暗恋', '娱乐圈', '爽文'];
+
+        defaultScenes.forEach(t => sceneSet.add(t));
+        defaultEmotions.forEach(t => emotionSet.add(t));
+        defaultEvents.forEach(t => eventSet.add(t));
+        defaultAbilities.forEach(t => abilitySet.add(t));
+        defaultConflicts.forEach(t => conflictSet.add(t));
+        defaultThemes.forEach(t => themeSet.add(t));
+        defaultElements.forEach(t => elementSet.add(t));
+        
+        return {
+            scene_types: Array.from(sceneSet).slice(0, 30),
+            emotion_types: Array.from(emotionSet).slice(0, 30),
+            event_types: Array.from(eventSet).slice(0, 30),
+            special_abilities: Array.from(abilitySet).slice(0, 30),
+            conflict_types: Array.from(conflictSet).slice(0, 30),
+            core_themes: Array.from(themeSet).slice(0, 30),
+            element_types: Array.from(elementSet).slice(0, 30)
+        };
+    } catch (e) {
+        return {
+            scene_types: ['争吵', '背叛', '日常生活', '初遇', '密谋', '告白', '重逢', '营救', '照顾', '和解', '追逐', '订婚现场被抛弃', '边界试探', '大打出手', '当众对峙'],
+            emotion_types: ['被豢养的窒息感', '察觉真相后的寒心绝望', '隐忍中的决绝反抗', '爱而不得的酸涩', '宿命般的无力感', '酸涩隐忍', '极致拉扯', '温情治愈', '大快人心的复仇爽感', '劫后余生的松弛感', '迟来的悔恨', '甜蜜心动', '撩拨暧昧', '绝望无助'],
+            event_types: ['大少奶奶罚宋莹回厨房烧火', '宋莹偷听老夫人与道士密谋', '洛宁被山贼掳走并被救下', '温旭在订婚现场为小青梅扔下女主', '姐姐安安被误解打碎花瓶', '课堂投屏社死现场', '真假千金看到弹幕得知真相', '主角死后托梦向男友索要男仆', '庆功宴上副将出示信件当众诬陷'],
+            special_abilities: ['福星命格（旺侯府运势）', '永生（不老不死）', '弹幕金手指（预知剧情）', '穿越系统（可回现代）', '元宇宙系统（赎罪任务）', '手铐召唤（执法者）', '读心术', '吸血鬼特性', '死后托梦'],
+            conflict_types: ['侯府对福星的利用与自我意识觉醒', '长生者与凡人爱人之间的生死相隔', '家庭信任危机', '原生家庭带来的身份认同危机', '师生身份差异带来的隐瞒焦虑', '出轨误会引发的信任危机', '真假千金从敌对到姐妹情深的转变'],
+            core_themes: ['摆脱被豢养的命运,追求真实自我', '永生是诅咒，爱是唯一的救赎与羁绊', '爱能改写悲剧，家庭温暖改变命运', '在伤痛中重建自我', '爱是尊重与信任，而非占有与背叛', '真正的家人是给予温暖与守护而不是血缘', '用理性与法律武器打破狗血剧情'],
+            element_types: ['锦鲤文', '养女逆袭', '轮回转世', '养崽文', '追妻火葬场', '白月光与朱砂痣', '甜宠', '先婚后爱', '穿越系统', '真假千金', '双向暗恋', '娱乐圈', '爽文']
+        };
+    }
+}
