@@ -95,9 +95,35 @@ const MODEL_OPTIONS = [
 ];
 
 export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ onBack, onSaveSuccess }) => {
-    // Stage navigation: 'project_dashboard' | 'mode_select' | 'outline_form_existing' | 'outline_form_new' | 'outline_generating' | 'outline_results' | 'script_generation' | 'completed'
-    const [stage, setStage] = useState<'project_dashboard' | 'mode_select' | 'outline_form_existing' | 'outline_form_new' | 'outline_generating' | 'outline_results' | 'script_generation' | 'completed'>('project_dashboard');
-    const [outlineMode, setOutlineMode] = useState<'existing' | 'new' | null>(null);
+    // Stage navigation: 'project_dashboard' | 'mode_select' | 'outline_form_existing' | 'outline_form_new' | 'outline_generating' | 'outline_results' | 'script_generation' | 'completed' | 'skill_master_workspace'
+    const [stage, setStage] = useState<'project_dashboard' | 'mode_select' | 'outline_form_existing' | 'outline_form_new' | 'outline_generating' | 'outline_results' | 'script_generation' | 'completed' | 'skill_master_workspace'>('project_dashboard');
+    const [outlineMode, setOutlineMode] = useState<'existing' | 'new' | 'skill_master' | null>(null);
+
+    // --- 0xsline/short-drama Professional Screenplay Skill States ---
+    const [skillActiveStep, setSkillActiveStep] = useState<number>(1);
+    const [skillTopic, setSkillTopic] = useState<string>('真假千金重回豪门');
+    const [skillAudience, setSkillAudience] = useState<string>('年轻都市女性');
+    const [skillTone, setSkillTone] = useState<string>('极致反差、打脸爽剧');
+    const [skillSellingPoints, setSkillSellingPoints] = useState<string>('真千金隐藏顶奢黑卡、神医马甲层层揭开');
+    const [skillPlanEpisodes, setSkillPlanEpisodes] = useState<number>(80);
+    const [skillMainChar, setSkillMainChar] = useState<string>('乔以安：真千金，神医圣手，隐世至尊');
+    const [skillAntagonist, setSkillAntagonist] = useState<string>('周婉清：假千金，白莲花，手段阴险');
+    const [skillEpisodeNum, setSkillEpisodeNum] = useState<number>(1);
+    const [skillOverseasMode, setSkillOverseasMode] = useState<boolean>(false);
+    const [skillReviewNum, setSkillReviewNum] = useState<number>(1);
+    const [skillOverseasRegion, setSkillOverseasRegion] = useState<string>('北美市场 (Billionaire/Werewolf)');
+    
+    // Outputs for each step
+    const [skillStartOutput, setSkillStartOutput] = useState<string>('');
+    const [skillPlanOutput, setSkillPlanOutput] = useState<string>('');
+    const [skillCharOutput, setSkillCharOutput] = useState<string>('');
+    const [skillOutlineOutput, setSkillOutlineOutput] = useState<string>('');
+    const [skillEpisodesStore, setSkillEpisodesStore] = useState<Record<number, string>>({});
+    const [skillReviewsStore, setSkillReviewsStore] = useState<Record<number, string>>({});
+    const [skillComplianceStore, setSkillComplianceStore] = useState<Record<number, string>>({});
+    const [skillOverseasStore, setSkillOverseasStore] = useState<Record<number, string>>({});
+    const [skillExportOutput, setSkillExportOutput] = useState<string>('');
+    const [skillIsGenerating, setSkillIsGenerating] = useState<boolean>(false);
     
     // Project Dashboard states
     const [episodeProjects, setEpisodeProjects] = useState<any[]>([]);
@@ -143,7 +169,7 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
     // Script creation states
     const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
     const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
-    const [pendingMode, setPendingMode] = useState<'existing' | 'new' | null>(null);
+    const [pendingMode, setPendingMode] = useState<'existing' | 'new' | 'skill_master' | null>(null);
     const [newProjectTitle, setNewProjectTitle] = useState('');
     const [newProjectDesc, setNewProjectDesc] = useState('');
     const [creatingProjectInDB, setCreatingProjectInDB] = useState(false);
@@ -507,6 +533,67 @@ ${coreInstruction}
         return () => clearTimeout(timer);
     }, [parsedEpisodes, projectTitle, aiChatMessages, stage]);
 
+    // Professional Screenplay Skill Workspace cloud auto-save
+    useEffect(() => {
+        if (stage !== 'skill_master_workspace') return;
+        if (!currentProjectId) return;
+
+        setSyncStatus('syncing');
+        const timer = setTimeout(async () => {
+            try {
+                const scriptData = {
+                    isSkillMaster: true,
+                    skillActiveStep,
+                    skillTopic,
+                    skillAudience,
+                    skillTone,
+                    skillSellingPoints,
+                    skillPlanEpisodes,
+                    skillMainChar,
+                    skillAntagonist,
+                    skillEpisodeNum,
+                    skillOverseasMode,
+                    skillReviewNum,
+                    skillOverseasRegion,
+                    
+                    skillStartOutput,
+                    skillPlanOutput,
+                    skillCharOutput,
+                    skillOutlineOutput,
+                    skillEpisodesStore,
+                    skillReviewsStore,
+                    skillComplianceStore,
+                    skillOverseasStore,
+                    skillExportOutput,
+                    
+                    settings: {
+                        model: model
+                    }
+                };
+
+                await updateProject(currentProjectId, {
+                    title: projectTitle || '未命名剧本 (大师版)',
+                    description: `编剧大师项目 | 选题: ${skillTopic}`,
+                    script_data: scriptData
+                });
+
+                setSyncStatus('success');
+            } catch (err) {
+                console.error('Skill Master Auto save failed:', err);
+                setSyncStatus('error');
+            }
+        }, 1500);
+
+        return () => clearTimeout(timer);
+    }, [
+        stage, currentProjectId, projectTitle, skillActiveStep, skillTopic, skillAudience,
+        skillTone, skillSellingPoints, skillPlanEpisodes, skillMainChar, skillAntagonist,
+        skillEpisodeNum, skillOverseasMode, skillReviewNum, skillOverseasRegion,
+        skillStartOutput, skillPlanOutput, skillCharOutput, skillOutlineOutput,
+        skillEpisodesStore, skillReviewsStore, skillComplianceStore, skillOverseasStore,
+        skillExportOutput, model
+    ]);
+
     const handleSelectProject = async (proj: any) => {
         setCurrentProjectId(proj.id);
         setProjectTitle(proj.title);
@@ -520,6 +607,34 @@ ${coreInstruction}
         
         if (scriptData.outlineMode) {
             setOutlineMode(scriptData.outlineMode);
+        }
+
+        // If it's a skill_master project, load its properties!
+        if (scriptData.isSkillMaster) {
+            setStage('skill_master_workspace');
+            if (scriptData.skillActiveStep) setSkillActiveStep(scriptData.skillActiveStep);
+            if (scriptData.skillTopic) setSkillTopic(scriptData.skillTopic);
+            if (scriptData.skillAudience) setSkillAudience(scriptData.skillAudience);
+            if (scriptData.skillTone) setSkillTone(scriptData.skillTone);
+            if (scriptData.skillSellingPoints) setSkillSellingPoints(scriptData.skillSellingPoints);
+            if (scriptData.skillPlanEpisodes) setSkillPlanEpisodes(scriptData.skillPlanEpisodes);
+            if (scriptData.skillMainChar) setSkillMainChar(scriptData.skillMainChar);
+            if (scriptData.skillAntagonist) setSkillAntagonist(scriptData.skillAntagonist);
+            if (scriptData.skillEpisodeNum) setSkillEpisodeNum(scriptData.skillEpisodeNum);
+            if (scriptData.skillOverseasMode) setSkillOverseasMode(scriptData.skillOverseasMode);
+            if (scriptData.skillReviewNum) setSkillReviewNum(scriptData.skillReviewNum);
+            if (scriptData.skillOverseasRegion) setSkillOverseasRegion(scriptData.skillOverseasRegion);
+            
+            if (scriptData.skillStartOutput) setSkillStartOutput(scriptData.skillStartOutput);
+            if (scriptData.skillPlanOutput) setSkillPlanOutput(scriptData.skillPlanOutput);
+            if (scriptData.skillCharOutput) setSkillCharOutput(scriptData.skillCharOutput);
+            if (scriptData.skillOutlineOutput) setSkillOutlineOutput(scriptData.skillOutlineOutput);
+            if (scriptData.skillEpisodesStore) setSkillEpisodesStore(scriptData.skillEpisodesStore);
+            if (scriptData.skillReviewsStore) setSkillReviewsStore(scriptData.skillReviewsStore);
+            if (scriptData.skillComplianceStore) setSkillComplianceStore(scriptData.skillComplianceStore);
+            if (scriptData.skillOverseasStore) setSkillOverseasStore(scriptData.skillOverseasStore);
+            if (scriptData.skillExportOutput) setSkillExportOutput(scriptData.skillExportOutput);
+            return;
         }
 
         // Restore chat messages if they exist, otherwise clear
@@ -560,6 +675,11 @@ ${coreInstruction}
     const handleHeaderBack = () => {
         if (stage === 'project_dashboard') {
             onBack();
+        } else if (stage === 'skill_master_workspace') {
+            setCurrentProjectId(null);
+            setProjectTitle('');
+            setStage('project_dashboard');
+            loadEpisodeProjects();
         } else if (stage === 'mode_select') {
             setCurrentProjectId(null);
             setProjectTitle('');
@@ -1095,21 +1215,18 @@ ${previousTail}
    - 动作描写一定要外化、夸张化，具有动漫感、分镜感。
    - 必须以三角形符号“△ ”（符号后跟一个空格）开头。
    - 例如：
-   △ 她想悄悄退回去，但脚下高跟鞋踩在地板上发出了一声轻响。角落里的两个人迅速分开，女生慌张地推开厉维，两人齐齐转向看向她。
-   △ 乔以安这才看清那个女生的脸——是周婉清。
-   △ 三人在走廊拐角处面面相觑。空气凝固了整整三秒。
+   △ 她想悄悄退回去，但被周婉清一眼瞥见。
 
-4. **角色对白/台词**：
-   - 格式为：角色名字（神态或动作语气描述）：台词内容
-   - 格式为：角色名字（神态或动作语气描述）：台词内容
+4. **台词与对白**：
+   - 必须在独立行输出。
+   - 必须使用“人物名字（神态动作）：台词内容”格式。
    - 例如：
-   乔以安（声音有些僵硬）：我一定是喝多了！？
-   厉维（嘴角扬起一抹冷笑，眼神充满不屑）：呵，你觉得呢？
+   周婉清（冷笑，上前一步）：哟，这不是我们的天才女编剧吗？
 
-5. **特别禁用限制**：
-   - 严禁输出任何“好的”、“没问题”、“下面是为您创作的第X集剧本”等与剧情无关的解释、开场白、问候语或总结。
-   - 必须只输出标准的剧本对白本体。
-   - 每行内容（场景标题、动作描写、角色台词）都必须按照上述格式独立成行，排版清晰美观。`;
+5. **黄金剧终卡点（Hook）**：
+   - 在本集剧本的最末尾，必须设置一个极具悬念、反转或强烈情感撕裂的时刻作为卡点，诱导观众进入下一集。
+
+请严禁输出任何多余的开头语、解释、尾注或标记，直接输出符合上述格式规范的剧本内容。`;
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -1117,7 +1234,7 @@ ${previousTail}
         try {
             const stream = generateTextStream(prompt, {
                 model,
-                temperature,
+                temperature: 0.75,
                 topP: 0.95,
                 maxOutputTokens: maxTokens,
                 signal: controller.signal
@@ -1130,17 +1247,10 @@ ${previousTail}
                     idx === index ? { ...item, script: fullText } : item
                 ));
             }
-            
+
             setParsedEpisodes(prev => prev.map((item, idx) => {
                 if (idx === index) {
-                    const updatedHistory = [...(item.history || [])];
-                    const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    updatedHistory.push({
-                        timestamp: timeStr,
-                        script: fullText,
-                        label: `自动生成版本 (${timeStr})`
-                    });
-                    return { ...item, isGenerating: false, isDone: true, history: updatedHistory };
+                    return { ...item, isGenerating: false, isDone: true };
                 }
                 return item;
             }));
@@ -1150,34 +1260,32 @@ ${previousTail}
             setParsedEpisodes(prev => prev.map((item, idx) => 
                 idx === index ? { ...item, isGenerating: false } : item
             ));
+            alert(err.message || '生成剧本失败，请重试');
             throw err;
         } finally {
-            setActiveGeneratingIndex(null);
+            abortControllerRef.current = null;
         }
     };
 
-    const handleSingleEpisodeEditChange = (idx: number, value: string) => {
-        setSingleEpisodeEdits(prev => ({ ...prev, [idx]: value }));
+    const handleSingleEpisodeEditChange = (index: number, value: string) => {
+        setSingleEpisodeEdits(prev => ({ ...prev, [index]: value }));
     };
 
     const handleSingleEpisodeOptimize = async (index: number) => {
+        const ep = parsedEpisodes[index];
         const instruction = singleEpisodeEdits[index];
         if (!instruction || !instruction.trim()) return;
 
-        const ep = parsedEpisodes[index];
-        setParsedEpisodes(prev => prev.map((item, id) => {
-            if (id === index) {
+        setParsedEpisodes(prev => prev.map((item, idx) => {
+            if (idx === index) {
                 const updatedHistory = [...(item.history || [])];
                 if (item.script && item.script.trim()) {
-                    const lastHist = updatedHistory[updatedHistory.length - 1];
-                    if (!lastHist || lastHist.script !== item.script) {
-                        const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                        updatedHistory.push({
-                            timestamp: timeStr,
-                            script: item.script,
-                            label: `润色前版本 (${timeStr})`
-                        });
-                    }
+                    const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    updatedHistory.push({
+                        timestamp: timeStr,
+                        script: item.script,
+                        label: `润色前版本 (${timeStr})`
+                    });
                 }
                 return { ...item, isGenerating: true, history: updatedHistory };
             }
@@ -1343,13 +1451,15 @@ ${ep.script}
         }
     };
 
-    const handleInitiateMode = (mode: 'existing' | 'new') => {
+    const handleInitiateMode = (mode: 'existing' | 'new' | 'skill_master') => {
         if (currentProjectId) {
             setOutlineMode(mode);
             if (mode === 'existing') {
                 setStage('outline_form_existing');
-            } else {
+            } else if (mode === 'new') {
                 setStage('outline_form_new');
+            } else if (mode === 'skill_master') {
+                setStage('skill_master_workspace');
             }
             return;
         }
@@ -1362,9 +1472,175 @@ ${ep.script}
             minute: '2-digit'
         }).replace(/\//g, '-').replace(/ /g, '_').replace(/:/g, '');
         
-        setNewProjectTitle(`新爆款分集剧本_${timeStr}`);
-        setNewProjectDesc('AI智能辅助规划的分集剧本创作项目');
+        if (mode === 'skill_master') {
+            setNewProjectTitle(`新爆款出海短剧_${timeStr}`);
+            setNewProjectDesc('基于编剧大师工作流的出海与合规微短剧项目');
+        } else {
+            setNewProjectTitle(`新爆款分集剧本_${timeStr}`);
+            setNewProjectDesc('AI智能辅助规划的分集剧本创作项目');
+        }
         setShowCreateProjectModal(true);
+    };
+
+    const handleStopSkillStep = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setSkillIsGenerating(false);
+    };
+
+    const handleRunSkillStep = async (stepNum: number) => {
+        if (skillIsGenerating) return;
+        setSkillIsGenerating(true);
+        setError('');
+
+        let prompt = '';
+        if (stepNum === 1) {
+            prompt = `【编剧大师 - 立项策划 /start】
+你是一个专业的爆款短剧策划人，根据以下基本信息，为这部短剧进行全方位的立项策划。
+
+主题（Topic）：${skillTopic}
+目标受众（Audience）：${skillAudience}
+剧本调性（Tone）：${skillTone}
+核心卖点（Selling Points）：${skillSellingPoints}
+
+请根据微短剧市场最火爆的爽点逻辑、节奏和卡点设计，输出一份包含以下板块的专业立项方案：
+1. 【故事核心梗概（约300字，极具张力，写明隐藏身份与打脸反转）】
+2. 【核心看点与黄金前三集爆点设计】
+3. 【受众情感投射与共鸣点深度剖析】
+4. 【商业化变现设计与黄金卡点（付费解锁点）预测】`;
+        } else if (stepNum === 2) {
+            prompt = `【编剧大师 - 创作方案 /plan】
+你是一个金牌微短剧制作人。基于前一步的【立项策划方案】（参考以下）：
+${skillStartOutput || `主题: ${skillTopic}，卖点: ${skillSellingPoints}`}
+
+以及以下参数：
+目标集数（Plan Episodes）：${skillPlanEpisodes} 集
+
+请为这部短剧定制一份专业的【创作方案】，包括：
+1. 【整体结构设计】：将 ${skillPlanEpisodes} 集划分为三大幕（如：1-15集起势与压迫，16-45集蓄势与对立，46-80集爆发与爽点清算），明确每一阶段的节奏变化。
+2. 【爽点与期待感管理】：如何层层递进、钩子如何堆叠。
+3. 【高潮段落预设】：在第15、30、50、70集左右的核心反转和付费高潮点剧情预设。`;
+        } else if (stepNum === 3) {
+            prompt = `【编剧大师 - 角色卡设定 /char】
+你是一个顶尖的短剧人物塑造大师。基于以下基础角色设定：
+主要角色（Main Character）：${skillMainChar}
+对手/反派（Antagonist）：${skillAntagonist}
+
+请深度扩写并设计一套专业的短剧角色卡：
+1. 【主要角色】：
+   - 表面身份 vs 隐藏真实马甲/尊贵背景
+   - 性格弱点 vs 行动爽感
+   - 核心欲望与成长轨迹
+2. 【对手/反派】：
+   - 伪装白莲花/嚣张程度、如何拉满观众仇恨
+   - 核心阴谋、弱点以及最终自取灭亡的爽感看点
+3. 【男女主角的羁绊/宿命感纠葛】`;
+        } else if (stepNum === 4) {
+            prompt = `【编剧大师 - 分集大纲生成 /outline】
+基于前期的立项策划、创作方案和角色设定：
+【立项策划】：${skillStartOutput}
+【创作方案】：${skillPlanOutput}
+【角色卡设定】：${skillCharOutput}
+
+请全自动编织出这部短剧的前 10 集分集大纲（每集大约 100-150 字，紧扣核心矛盾、打脸爽感、快节奏并配有强烈的结尾钩子 Hook）：
+格式要求：
+【第X集：分集标题】
+本集梗概：具体情节详细推演。`;
+        } else if (stepNum === 5) {
+            prompt = `【编剧大师 - 单集剧本生成 /episode】
+你是一个殿堂级的爆款短剧编剧。请针对【第 ${skillEpisodeNum} 集】进行极其专业、高潮迭起的单集正式剧本创作。
+
+参考全局策划与大纲：
+${skillOutlineOutput || `主题: ${skillTopic}，马甲设定: ${skillSellingPoints}`}
+
+剧本编写格式与排版规范（极其重要，请严格执行）：
+1. 必须使用“△ ”（三角形加一个空格）来代表画面、场景、角色的无声眼神、心理动作或动作描写。
+2. 必须使用“角色名字（神态动作）：台词内容”作为台词对白格式。
+3. 单集时长约1.5分钟，台词必须犀利、情节极其紧凑、绝不拖泥带水，在这一集结尾设置一个极度震撼或引人入胜的戏剧卡点（Hook），逼着观众非看下一集不可。
+4. 严禁任何开场白、解释性或总结性语言，只输出剧本正文内容。`;
+        } else if (stepNum === 6) {
+            prompt = `【编剧大师 - 剧本合规性审查 /compliance】
+你是一个资深的微短剧内容总监和审查专家。请对当前【第 ${skillReviewNum} 集】的剧本内容进行全方位的合规性审查、低俗排查以及精彩度把关。
+
+当前第 ${skillReviewNum} 集剧本内容：
+${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本内容"}
+
+审查准则：
+1. 政治、法律、红线合规：是否有不良诱导、极端违规内容。
+2. 内容价值观合规：排查极度扭曲价值观（如无底线宣扬金钱至上、家庭伦理彻底崩坏等）。
+3. 爆点精彩度把关：打脸爽点是否到位？情感冲突是否充分激化？
+4. 改写建议（提供合规重写示范）：提供不降低戏剧张力、同时完美规避审核红线的犀利改写方案。`;
+        } else if (stepNum === 7) {
+            prompt = `【编剧大师 - 剧本海外化改写与翻译 /overseas】
+你是一个拥有全球视野的跨境短剧出海专家。请将当前【第 ${skillReviewNum} 集】的剧本进行精准的海外化翻译、本土化改写与剧设重构，使其完美契合海外受众（特别是欧美市场的 Billionaire, Alpha Wolf, Secret Heiress 题材喜好）。
+
+当前第 ${skillReviewNum} 集剧本内容：
+${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本内容"}
+
+目标海外市场（Region）：${skillOverseasRegion}
+
+请输出：
+1. 【本土化人设与场景重构方案】（如：将豪门总裁改写为 Lycan King/Alpha Wolf 或 Tech Billionaire，将神医马甲重构等）
+2. 【黄金对白英文本土化高质改写】（提供地道、富有戏剧张力和情绪饱满的英文台词，附带动作描写，保持剧本格式）`;
+        } else if (stepNum === 8) {
+            prompt = `【编剧大师 - 剧本导出与整合发布 /export】
+请对当前项目（${projectTitle}）在编剧大师工作流中的全部策划及创作产出进行完美的排版与总结：
+
+主题：${skillTopic}
+集数：${skillPlanEpisodes} 集
+立项策划：${skillStartOutput ? "已就绪" : "未生成"}
+创作方案：${skillPlanOutput ? "已就绪" : "未生成"}
+角色卡：${skillCharOutput ? "已就绪" : "未生成"}
+分集大纲：${skillOutlineOutput ? "已就绪" : "未生成"}
+已创作剧本数：${Object.keys(skillEpisodesStore).length} 集
+
+请为用户输出一份极具仪式感、排版精美利落的【完整短剧立项发布白皮书】：
+1. 独家剧本认证戳记、项目状态一览
+2. 完整立项基本信息及核心人物、冲突卡牌图谱
+3. 剧本全流程合规与出海评级报告
+4. 面向投资人与制作团队的商业推介陈述（Pitch Deck Proposal）`;
+        }
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        try {
+            const stream = generateTextStream(prompt, {
+                model,
+                temperature: 0.75,
+                topP: 0.95,
+                maxOutputTokens: maxTokens,
+                signal: controller.signal
+            });
+
+            let fullText = '';
+            for await (const chunk of stream) {
+                fullText += chunk;
+                if (stepNum === 1) setSkillStartOutput(fullText);
+                else if (stepNum === 2) setSkillPlanOutput(fullText);
+                else if (stepNum === 3) setSkillCharOutput(fullText);
+                else if (stepNum === 4) setSkillOutlineOutput(fullText);
+                else if (stepNum === 5) {
+                    setSkillEpisodesStore(prev => ({ ...prev, [skillEpisodeNum]: fullText }));
+                }
+                else if (stepNum === 6) {
+                    setSkillComplianceStore(prev => ({ ...prev, [skillReviewNum]: fullText }));
+                }
+                else if (stepNum === 7) {
+                    setSkillOverseasStore(prev => ({ ...prev, [skillReviewNum]: fullText }));
+                }
+                else if (stepNum === 8) setSkillExportOutput(fullText);
+            }
+        } catch (err: any) {
+            if (err.name !== 'AbortError' && err.message !== 'Aborted') {
+                setError(err.message || '生成失败，请重试');
+            }
+        } finally {
+            setSkillIsGenerating(false);
+            abortControllerRef.current = null;
+        }
     };
 
     const handleConfirmCreateProject = async () => {
@@ -1375,10 +1651,13 @@ ${ep.script}
         setCreatingProjectInDB(true);
         setError('');
         try {
+            const initialScriptData = pendingMode === 'skill_master' ? { isSkillMaster: true } : {};
             const { id: projectId, error: createError } = await createProject(
                 newProjectTitle,
                 newProjectDesc || '分集剧本创作',
-                'script_episode'
+                'script_episode',
+                null,
+                initialScriptData
             );
             if (createError) throw createError;
             if (!projectId) throw new Error('创建剧本项目失败');
@@ -1394,6 +1673,31 @@ ${ep.script}
             } else if (pendingMode === 'new') {
                 setOutlineMode('new');
                 setStage('outline_form_new');
+            } else if (pendingMode === 'skill_master') {
+                setOutlineMode('skill_master');
+                setStage('skill_master_workspace');
+                // Initial defaults for skill_master
+                setSkillActiveStep(1);
+                setSkillTopic('真假千金重回豪门');
+                setSkillAudience('年轻都市女性');
+                setSkillTone('极致反差、打脸爽剧');
+                setSkillSellingPoints('真千金隐藏顶奢黑卡、神医马甲层层揭开');
+                setSkillPlanEpisodes(80);
+                setSkillMainChar('乔以安：真千金，神医圣手，隐世至尊');
+                setSkillAntagonist('周婉清：假千金，白莲花，手段阴险');
+                setSkillEpisodeNum(1);
+                setSkillOverseasMode(false);
+                setSkillReviewNum(1);
+                setSkillOverseasRegion('北美市场 (Billionaire/Werewolf)');
+                setSkillStartOutput('');
+                setSkillPlanOutput('');
+                setSkillCharOutput('');
+                setSkillOutlineOutput('');
+                setSkillEpisodesStore({});
+                setSkillReviewsStore({});
+                setSkillComplianceStore({});
+                setSkillOverseasStore({});
+                setSkillExportOutput('');
             } else {
                 setOutlineMode(null);
                 setStage('mode_select');
@@ -1633,21 +1937,21 @@ ${ep.script}
 
                 {/* 1. Mode Select Stage */}
                 {stage === 'mode_select' && (
-                    <div className="flex-1 flex flex-col justify-center items-center p-8 max-w-4xl mx-auto space-y-8 animate-fade-in">
+                    <div className="flex-1 flex flex-col justify-center items-center p-8 max-w-5xl mx-auto space-y-8 animate-fade-in">
                         <div className="text-center space-y-2">
                             <h3 className="text-2xl font-bold text-gray-800 dark:text-white">您如何开始分集剧本创作？</h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400">选择符合您当前素材状态的模式，AI将精准承接上下文为您拆分各集大纲</p>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">
                             <button 
                                 onClick={() => handleInitiateMode('existing')}
-                                className="group p-8 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-sky-500 dark:hover:border-sky-500 transition-all hover:shadow-lg text-center flex flex-col items-center"
+                                className="group p-6 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-sky-500 dark:hover:border-sky-500 transition-all hover:shadow-lg text-center flex flex-col items-center"
                             >
-                                <div className="w-16 h-16 bg-sky-50 dark:bg-sky-950 rounded-full flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-                                    <ClipboardDocumentCheck className="w-8 h-8 text-sky-500" />
+                                <div className="w-14 h-14 bg-sky-50 dark:bg-sky-950 rounded-full flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                                    <ClipboardDocumentCheck className="w-7 h-7 text-sky-500" />
                                 </div>
-                                <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">已有故事梗概</h4>
+                                <h4 className="text-base font-bold text-gray-900 dark:text-white mb-2">已有故事梗概</h4>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
                                     上传或粘贴您自创的小说/梗概，指定您想要的集数，AI将精确将其拆分为高节奏的分集剧情大纲。
                                 </p>
@@ -1655,14 +1959,27 @@ ${ep.script}
 
                             <button 
                                 onClick={() => handleInitiateMode('new')}
-                                className="group p-8 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all hover:shadow-lg text-center flex flex-col items-center"
+                                className="group p-6 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all hover:shadow-lg text-center flex flex-col items-center"
                             >
-                                <div className="w-16 h-16 bg-purple-50 dark:bg-purple-950 rounded-full flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-                                    <Sparkles className="w-8 h-8 text-purple-500" />
+                                <div className="w-14 h-14 bg-purple-50 dark:bg-purple-950 rounded-full flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                                    <Sparkles className="w-7 h-7 text-purple-500" />
                                 </div>
-                                <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">生成故事梗概</h4>
+                                <h4 className="text-base font-bold text-gray-900 dark:text-white mb-2">生成故事梗概</h4>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
                                     没有现成故事？勾选您喜爱的短剧风格、爆点元素、核心创意脑洞，让AI大模型全自动编织出整套微短剧分集大纲。
+                                </p>
+                            </button>
+
+                            <button 
+                                onClick={() => handleInitiateMode('skill_master')}
+                                className="group p-6 bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-800 hover:border-sky-500 dark:hover:border-sky-500 transition-all hover:shadow-lg text-center flex flex-col items-center"
+                            >
+                                <div className="w-14 h-14 bg-sky-50 dark:bg-sky-950 rounded-full flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                                    <Film className="w-7 h-7 text-sky-500" />
+                                </div>
+                                <h4 className="text-base font-bold text-gray-900 dark:text-white mb-2">编剧大师</h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    爆款微短剧黄金开发规范。包含立项、创作方案、角色卡、分集大纲、单集剧本、合规审查与海外化。
                                 </p>
                             </button>
                         </div>
@@ -2544,177 +2861,105 @@ ${ep.script}
                                                 </div>
                                             </div>
 
-                                                                                        {/* 2. Tags filter */}
+                                            {/* 2. Tags filter */}
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">2. 筛选 7 大特色标签 (点击类型展开标签，支持多选)</label>
-                                                <div className="space-y-2 bg-gray-50/50 dark:bg-gray-950/20 p-2.5 rounded-xl border border-gray-150 dark:border-gray-800 max-h-[380px] overflow-y-auto custom-scrollbar">
-                                                    {[
-                                                        {
-                                                            id: 'scene',
-                                                            title: '场景类型',
-                                                            icon: '🎬',
-                                                            tags: availableSceneTags,
-                                                            colorClasses: {
-                                                                text: 'text-purple-600 dark:text-purple-400',
-                                                                bg: 'bg-purple-50 dark:bg-purple-950/30',
-                                                                border: 'border-purple-100 dark:border-purple-900/50',
-                                                                btnActive: 'bg-purple-600 text-white shadow-sm hover:bg-purple-700',
-                                                            }
-                                                        },
-                                                        {
-                                                            id: 'emotion',
-                                                            title: '情绪类型',
-                                                            icon: '🎭',
-                                                            tags: availableEmotionTags,
-                                                            colorClasses: {
-                                                                text: 'text-sky-600 dark:text-sky-400',
-                                                                bg: 'bg-sky-50 dark:bg-sky-950/30',
-                                                                border: 'border-sky-100 dark:border-sky-900/50',
-                                                                btnActive: 'bg-sky-600 text-white shadow-sm hover:bg-sky-700',
-                                                            }
-                                                        },
-                                                        {
-                                                            id: 'event',
-                                                            title: '事件/情节类型',
-                                                            icon: '🔥',
-                                                            tags: availableEventTags,
-                                                            colorClasses: {
-                                                                text: 'text-amber-600 dark:text-amber-400',
-                                                                bg: 'bg-amber-50 dark:bg-amber-950/30',
-                                                                border: 'border-amber-100 dark:border-amber-900/50',
-                                                                btnActive: 'bg-amber-600 text-white shadow-sm hover:bg-amber-700',
-                                                            }
-                                                        },
-                                                        {
-                                                            id: 'ability',
-                                                            title: '特殊能力/金手指',
-                                                            icon: '✨',
-                                                            tags: availableAbilityTags,
-                                                            colorClasses: {
-                                                                text: 'text-emerald-600 dark:text-emerald-400',
-                                                                bg: 'bg-emerald-50 dark:bg-emerald-950/30',
-                                                                border: 'border-emerald-100 dark:border-emerald-900/50',
-                                                                btnActive: 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700',
-                                                            }
-                                                        },
-                                                        {
-                                                            id: 'conflict',
-                                                            title: '核心冲突',
-                                                            icon: '⚡',
-                                                            tags: availableConflictTags,
-                                                            colorClasses: {
-                                                                text: 'text-rose-600 dark:text-rose-400',
-                                                                bg: 'bg-rose-50 dark:bg-rose-950/30',
-                                                                border: 'border-rose-100 dark:border-rose-900/50',
-                                                                btnActive: 'bg-rose-600 text-white shadow-sm hover:bg-rose-700',
-                                                            }
-                                                        },
-                                                        {
-                                                            id: 'theme',
-                                                            title: '核心主题',
-                                                            icon: '📖',
-                                                            tags: availableThemeTags,
-                                                            colorClasses: {
-                                                                text: 'text-indigo-600 dark:text-indigo-400',
-                                                                bg: 'bg-indigo-50 dark:bg-indigo-950/30',
-                                                                border: 'border-indigo-100 dark:border-indigo-900/50',
-                                                                btnActive: 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700',
-                                                            }
-                                                        },
-                                                        {
-                                                            id: 'element',
-                                                            title: '题材元素',
-                                                            icon: '🌟',
-                                                            tags: availableElementTags,
-                                                            colorClasses: {
-                                                                text: 'text-teal-600 dark:text-teal-400',
-                                                                bg: 'bg-teal-50 dark:bg-teal-950/30',
-                                                                border: 'border-teal-100 dark:border-teal-900/50',
-                                                                btnActive: 'bg-teal-600 text-white shadow-sm hover:bg-teal-700',
-                                                            }
-                                                        }
-                                                    ].map((cat) => {
-                                                        if (!cat.tags || cat.tags.length === 0) return null;
+                                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">2. 筛选 7 大特色标签 (点击类型后再展开对应的标签)</label>
+                                                <div className="space-y-3 bg-gray-50/50 dark:bg-gray-950/20 p-3 rounded-xl border border-gray-150 dark:border-gray-800">
+                                                    {/* Categories quick selectors */}
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {[
+                                                            { id: 'scene', title: '场景', icon: '🎬', tags: availableSceneTags },
+                                                            { id: 'emotion', title: '情绪', icon: '🎭', tags: availableEmotionTags },
+                                                            { id: 'event', title: '情节', icon: '🔥', tags: availableEventTags },
+                                                            { id: 'ability', title: '金手指', icon: '✨', tags: availableAbilityTags },
+                                                            { id: 'conflict', title: '冲突', icon: '⚡', tags: availableConflictTags },
+                                                            { id: 'theme', title: '主题', icon: '📖', tags: availableThemeTags },
+                                                            { id: 'element', title: '元素', icon: '🌟', tags: availableElementTags }
+                                                        ].map(cat => {
+                                                            const isSelected = expandedCategory === cat.id;
+                                                            const selectedCount = cat.tags.filter(t => selectedTags.includes(t)).length;
+                                                            return (
+                                                                <button
+                                                                    key={cat.id}
+                                                                    type="button"
+                                                                    onClick={() => setExpandedCategory(expandedCategory === cat.id ? null : cat.id)}
+                                                                    className={`px-2 py-1 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1 ${
+                                                                        isSelected 
+                                                                            ? 'bg-purple-600 text-white border-purple-600 shadow-sm active:scale-95' 
+                                                                            : 'bg-white dark:bg-gray-850 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-750 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                                                    }`}
+                                                                >
+                                                                    <span>{cat.icon}</span>
+                                                                    <span>{cat.title}</span>
+                                                                    {selectedCount > 0 && (
+                                                                        <span className="ml-0.5 px-1 py-0.2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full text-[9px] font-black">
+                                                                            {selectedCount}
+                                                                        </span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
 
-                                                        const isExpanded = expandedCategory === cat.id;
-                                                        const selectedCountInCat = cat.tags.filter(t => selectedTags.includes(t)).length;
+                                                    {/* Active tag sublist container */}
+                                                    {expandedCategory && (() => {
+                                                        const categoriesMap: Record<string, { title: string; icon: string; tags: string[]; btnActive: string }> = {
+                                                            scene: { title: '场景类型', icon: '🎬', tags: availableSceneTags, btnActive: 'bg-purple-600 text-white shadow-sm hover:bg-purple-700' },
+                                                            emotion: { title: '情绪类型', icon: '🎭', tags: availableEmotionTags, btnActive: 'bg-sky-600 text-white shadow-sm hover:bg-sky-700' },
+                                                            event: { title: '事件情节', icon: '🔥', tags: availableEventTags, btnActive: 'bg-amber-600 text-white shadow-sm hover:bg-amber-700' },
+                                                            ability: { title: '特殊能力/金手指', icon: '✨', tags: availableAbilityTags, btnActive: 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700' },
+                                                            conflict: { title: '核心冲突', icon: '⚡', tags: availableConflictTags, btnActive: 'bg-rose-600 text-white shadow-sm hover:bg-rose-700' },
+                                                            theme: { title: '核心主题', icon: '📖', tags: availableThemeTags, btnActive: 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700' },
+                                                            element: { title: '题材元素', icon: '🌟', tags: availableElementTags, btnActive: 'bg-teal-600 text-white shadow-sm hover:bg-teal-700' }
+                                                        };
+
+                                                        const activeCat = categoriesMap[expandedCategory];
+                                                        if (!activeCat || !activeCat.tags || activeCat.tags.length === 0) return null;
 
                                                         return (
-                                                            <div 
-                                                                key={cat.id} 
-                                                                className={`border rounded-xl transition-all duration-200 overflow-hidden ${
-                                                                    isExpanded 
-                                                                        ? 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 shadow-sm' 
-                                                                        : 'border-gray-150 dark:border-gray-800/60 bg-white/60 dark:bg-gray-900/20 hover:bg-gray-100/40 dark:hover:bg-gray-800/30'
-                                                                }`}
-                                                            >
-                                                                {/* Header button to expand/collapse */}
-                                                                <button
-                                                                    onClick={() => setExpandedCategory(isExpanded ? null : cat.id)}
-                                                                    className="w-full flex items-center justify-between p-2.5 text-left focus:outline-none transition-all hover:bg-gray-50/50 dark:hover:bg-gray-800/20"
-                                                                >
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="text-xs">{cat.icon}</span>
-                                                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                                                                            {cat.title}
-                                                                        </span>
-                                                                        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-normal">
-                                                                            ({cat.tags.length}个标签)
-                                                                        </span>
-                                                                    </div>
-
-                                                                    <div className="flex items-center gap-2">
-                                                                        {selectedCountInCat > 0 && (
-                                                                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${cat.colorClasses.text} ${cat.colorClasses.bg} border ${cat.colorClasses.border}`}>
-                                                                                已选 {selectedCountInCat}
-                                                                            </span>
-                                                                        )}
-                                                                        <span className="text-gray-400 dark:text-gray-500 transition-transform duration-200">
-                                                                            {isExpanded ? (
-                                                                                <svg className="w-3.5 h-3.5 transform rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
-                                                                                </svg>
-                                                                            ) : (
-                                                                                <svg className="w-3.5 h-3.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-                                                                                </svg>
-                                                                            )}
-                                                                        </span>
-                                                                    </div>
-                                                                </button>
-
-                                                                {/* Tags content box */}
-                                                                {isExpanded && (
-                                                                    <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-850 bg-gray-50/30 dark:bg-black/10">
-                                                                        <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto p-0.5 custom-scrollbar">
-                                                                            {cat.tags.map((tag, tagIdx) => {
-                                                                                const isSelected = selectedTags.includes(tag);
-                                                                                return (
-                                                                                    <button
-                                                                                        key={`${cat.id}-${tagIdx}`}
-                                                                                        onClick={() => {
-                                                                                            if (isSelected) {
-                                                                                                setSelectedTags(selectedTags.filter(t => t !== tag));
-                                                                                            } else {
-                                                                                                setSelectedTags([...selectedTags, tag]);
-                                                                                            }
-                                                                                        }}
-                                                                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all ${
-                                                                                            isSelected 
-                                                                                                ? cat.colorClasses.btnActive 
-                                                                                                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-150 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750'
-                                                                                        }`}
-                                                                                    >
-                                                                                        {tag}
-                                                                                    </button>
-                                                                                );
-                                                                            })}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
+                                                            <div className="border border-purple-100 dark:border-purple-900/40 rounded-xl bg-purple-50/10 dark:bg-purple-950/5 p-2.5 animate-fade-in space-y-2">
+                                                                <div className="flex items-center justify-between pb-1.5 border-b border-gray-150 dark:border-gray-800">
+                                                                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                                                        {activeCat.icon} {activeCat.title}标签集 ({activeCat.tags.length}个)
+                                                                    </span>
+                                                                    {selectedTags.some(t => activeCat.tags.includes(t)) && (
+                                                                        <button 
+                                                                            type="button"
+                                                                            onClick={() => setSelectedTags(selectedTags.filter(t => !activeCat.tags.includes(t)))}
+                                                                            className="text-[9px] text-rose-500 hover:text-rose-600 font-bold"
+                                                                        >
+                                                                            清空当前分类
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto p-0.5 custom-scrollbar">
+                                                                    {activeCat.tags.map((tag, tagIdx) => {
+                                                                        const isSelected = selectedTags.includes(tag);
+                                                                        return (
+                                                                            <button
+                                                                                key={`${expandedCategory}-${tagIdx}`}
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    if (isSelected) {
+                                                                                        setSelectedTags(selectedTags.filter(t => t !== tag));
+                                                                                    } else {
+                                                                                        setSelectedTags([...selectedTags, tag]);
+                                                                                    }
+                                                                                }}
+                                                                                className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-all ${
+                                                                                    isSelected 
+                                                                                        ? activeCat.btnActive 
+                                                                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-150 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750'
+                                                                                }`}
+                                                                            >
+                                                                                {tag}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
                                                             </div>
                                                         );
-                                                    })}
+                                                    })()}
                                                 </div>
                                             </div>
 
@@ -2887,6 +3132,402 @@ ${ep.script}
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 0xsline/short-drama Skill Master Stage */}
+                {stage === 'skill_master_workspace' && (
+                    <div className="flex-grow flex overflow-hidden bg-white dark:bg-gray-900 animate-fade-in h-full w-full">
+                        {/* Sidebar: 8-Step Navigation with CLI Command metadata */}
+                        <div className="w-[280px] border-r border-gray-150 dark:border-gray-800 bg-gray-50 dark:bg-gray-950/25 flex flex-col h-full select-none flex-shrink-0">
+                            <div className="p-4 border-b border-gray-150 dark:border-gray-800 bg-white dark:bg-gray-900/60 flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-extrabold text-xs text-gray-800 dark:text-white flex items-center gap-1.5">
+                                        <Film className="w-4 h-4 text-sky-500 animate-pulse" />
+                                        <span>编剧大师</span>
+                                    </h4>
+                                    <p className="text-[10px] text-gray-400 mt-0.5">爆款微短剧专业创作流</p>
+                                </div>
+                                <span className="text-[9px] bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-900 font-extrabold px-1.5 py-0.5 rounded-md">
+                                    编剧工作流
+                                </span>
+                            </div>
+
+                            {/* Scrollable steps */}
+                            <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5 custom-scrollbar">
+                                {[
+                                    { step: 1, name: '立项策划', cmd: '/start', desc: '设定选题、受众及看点' },
+                                    { step: 2, name: '创作方案', cmd: '/plan', desc: '确定总集数及幕节奏' },
+                                    { step: 3, name: '角色设定', cmd: '/char', desc: '构建正反派马甲设定' },
+                                    { step: 4, name: '分集大纲', cmd: '/outline', desc: '编排高吸引力大纲' },
+                                    { step: 5, name: '单集剧本', cmd: '/episode', desc: '创作高潮卡点剧本' },
+                                    { step: 6, name: '合规审查', cmd: '/compliance', desc: '防下架合规精彩排查' },
+                                    { step: 7, name: '海外改写', cmd: '/overseas', desc: '出海与本土化剧设改写' },
+                                    { step: 8, name: '剧本导出', cmd: '/export', desc: '生成短剧立项发布书' }
+                                ].map(item => {
+                                    const isActive = skillActiveStep === item.step;
+                                    return (
+                                        <button
+                                            key={item.step}
+                                            onClick={() => {
+                                                if (!skillIsGenerating) {
+                                                    setSkillActiveStep(item.step);
+                                                }
+                                            }}
+                                            disabled={skillIsGenerating}
+                                            className={`w-full p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all ${isActive ? 'bg-sky-50/70 border-sky-200 dark:bg-sky-950/30 dark:border-sky-900 shadow-sm' : 'bg-transparent border-transparent hover:bg-gray-100 dark:hover:bg-gray-800/40'}`}
+                                        >
+                                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0 mt-0.5 ${isActive ? 'bg-sky-500 text-white shadow-sm' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'}`}>
+                                                {item.step}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`text-[12px] font-black ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}>
+                                                        {item.name}
+                                                    </span>
+                                                    <span className="text-[9px] font-mono font-extrabold text-gray-400">
+                                                        {item.cmd}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10px] text-gray-400 truncate mt-0.5">{item.desc}</p>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Sidebar Footer */}
+                            <div className="p-3 border-t border-gray-150 dark:border-gray-800 bg-white dark:bg-gray-900/60 flex items-center justify-between text-[10px] text-gray-400 font-bold">
+                                <span>项目: {projectTitle || '出海短剧项目'}</span>
+                            </div>
+                        </div>
+
+                        {/* Content Area */}
+                        <div className="flex-1 flex flex-col overflow-hidden h-full">
+                            {/* Step Header */}
+                            <div className="flex-shrink-0 p-4 border-b border-gray-150 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-950/10 flex items-center justify-between">
+                                <div>
+                                    <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400 flex items-center gap-1 uppercase">
+                                        <span>步骤 0{skillActiveStep}</span>
+                                        <span>•</span>
+                                        <span>指令: {[
+                                            '/start', '/plan', '/char', '/outline', '/episode', '/compliance', '/overseas', '/export'
+                                        ][skillActiveStep - 1]}</span>
+                                    </span>
+                                    <h3 className="text-base font-black text-gray-900 dark:text-white mt-1">
+                                        {[
+                                            '立项策划 (Topic & Audience Research)',
+                                            '短剧创作方案 (Screenplay Concept & Plan)',
+                                            '核心角色卡设定 (Character Card Blueprint)',
+                                            '全剧分集大纲 (Overall Episode Outlines)',
+                                            '单集正式剧本 (Single Screenplay Writing)',
+                                            '合规性与精彩度把关 (Compliance & Quality Review)',
+                                            '剧本海外改写与翻译 (Overseas Localization & Copywriting)',
+                                            '整合发布导出 (Pitch Deck & Compilation Export)'
+                                        ][skillActiveStep - 1]}
+                                    </h3>
+                                </div>
+
+                                <div className="flex items-center gap-2.5">
+                                    {skillIsGenerating ? (
+                                        <button
+                                            onClick={handleStopSkillStep}
+                                            className="px-4 py-2 bg-rose-50 border border-rose-200 dark:bg-rose-950/20 dark:border-rose-900 text-rose-600 dark:text-rose-400 hover:bg-rose-100 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                                        >
+                                            <Stop className="w-4 h-4" />
+                                            <span>停止生成</span>
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleRunSkillStep(skillActiveStep)}
+                                            className="px-5 py-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+                                        >
+                                            <Play className="w-4 h-4 fill-current" />
+                                            <span>执行本步编剧指令</span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Split Configuration & Output Panels */}
+                            <div className="flex-1 flex overflow-hidden">
+                                {/* Left Side: Parameters Form */}
+                                <div className="w-[320px] border-r border-gray-150 dark:border-gray-800 p-4 overflow-y-auto space-y-4 bg-gray-50/20 dark:bg-black/5 custom-scrollbar flex-shrink-0">
+                                    <h4 className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                        <AdjustmentsHorizontal className="w-3.5 h-3.5" />
+                                        <span>参数配置</span>
+                                    </h4>
+
+                                    {/* STEP 1: start */}
+                                    {skillActiveStep === 1 && (
+                                        <div className="space-y-4 animate-fade-in">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">选题脑洞 (Topic)</label>
+                                                <input
+                                                    type="text"
+                                                    value={skillTopic}
+                                                    onChange={e => setSkillTopic(e.target.value)}
+                                                    placeholder="例如：真假千金重回豪门..."
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">目标受众 (Audience)</label>
+                                                <input
+                                                    type="text"
+                                                    value={skillAudience}
+                                                    onChange={e => setSkillAudience(e.target.value)}
+                                                    placeholder="例如：年轻都市女性、下沉市场用户..."
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">剧本调性 (Tone)</label>
+                                                <input
+                                                    type="text"
+                                                    value={skillTone}
+                                                    onChange={e => setSkillTone(e.target.value)}
+                                                    placeholder="例如：极致反差、打脸爽剧..."
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">核心卖点与钩子 (Selling Points)</label>
+                                                <textarea
+                                                    value={skillSellingPoints}
+                                                    onChange={e => setSkillSellingPoints(e.target.value)}
+                                                    placeholder="输入核心爆款要素..."
+                                                    rows={4}
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none resize-none leading-relaxed"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* STEP 2: plan */}
+                                    {skillActiveStep === 2 && (
+                                        <div className="space-y-4 animate-fade-in">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">规划目标总集数 (Episodes)</label>
+                                                <input
+                                                    type="number"
+                                                    value={skillPlanEpisodes}
+                                                    onChange={e => setSkillPlanEpisodes(parseInt(e.target.value) || 80)}
+                                                    min={1}
+                                                    max={120}
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none"
+                                                />
+                                                <p className="text-[10px] text-gray-400 leading-normal">
+                                                    微短剧常见总集数为 80 集、100 集。
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* STEP 3: char */}
+                                    {skillActiveStep === 3 && (
+                                        <div className="space-y-4 animate-fade-in">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">主要角色及设定 (Main Character)</label>
+                                                <textarea
+                                                    value={skillMainChar}
+                                                    onChange={e => setSkillMainChar(e.target.value)}
+                                                    placeholder="输入主角名字、真实马甲、表面职业..."
+                                                    rows={4}
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none resize-none leading-relaxed"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">反派/对手及设定 (Antagonist)</label>
+                                                <textarea
+                                                    value={skillAntagonist}
+                                                    onChange={e => setSkillAntagonist(e.target.value)}
+                                                    placeholder="输入对手姓名、反向冲突点、虚伪外表..."
+                                                    rows={4}
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none resize-none leading-relaxed"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* STEP 4: outline */}
+                                    {skillActiveStep === 4 && (
+                                        <div className="p-3 bg-sky-50/50 dark:bg-sky-950/20 border border-sky-150 dark:border-sky-900 rounded-xl space-y-2 text-xs">
+                                            <p className="font-bold text-sky-800 dark:text-sky-400">大纲自动化生成</p>
+                                            <p className="text-gray-600 dark:text-gray-300 leading-normal text-[11px]">
+                                                本步将全自动融合前三步（立项、方案、角色设定）的所有设定数据，批量生成微短剧分集大纲。
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* STEP 5: write script */}
+                                    {skillActiveStep === 5 && (
+                                        <div className="space-y-4 animate-fade-in">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">选择要创作的剧本集数</label>
+                                                <select
+                                                    value={skillEpisodeNum}
+                                                    onChange={e => setSkillEpisodeNum(parseInt(e.target.value))}
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none cursor-pointer"
+                                                >
+                                                    {Array.from({ length: 10 }).map((_, idx) => (
+                                                        <option key={idx + 1} value={idx + 1}>
+                                                            第 {idx + 1} 集剧本
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <p className="text-[10px] text-gray-400 leading-normal">
+                                                    输入集数将拉取对应第 {skillEpisodeNum} 集大纲展开专业剧本编写。
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* STEP 6: compliance */}
+                                    {skillActiveStep === 6 && (
+                                        <div className="space-y-4 animate-fade-in">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">选择要审查的内容集数</label>
+                                                <select
+                                                    value={skillReviewNum}
+                                                    onChange={e => setSkillReviewNum(parseInt(e.target.value))}
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none cursor-pointer"
+                                                >
+                                                    {Array.from({ length: 10 }).map((_, idx) => (
+                                                        <option key={idx + 1} value={idx + 1}>
+                                                            第 {idx + 1} 集剧本
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <p className="text-[10px] text-gray-400 leading-normal">
+                                                    对第 {skillReviewNum} 集的剧本进行色情、低俗、擦边、违规红线及合规精彩度审查。
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* STEP 7: overseas */}
+                                    {skillActiveStep === 7 && (
+                                        <div className="space-y-4 animate-fade-in">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">选择目标集数</label>
+                                                <select
+                                                    value={skillReviewNum}
+                                                    onChange={e => setSkillReviewNum(parseInt(e.target.value))}
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none cursor-pointer"
+                                                >
+                                                    {Array.from({ length: 10 }).map((_, idx) => (
+                                                        <option key={idx + 1} value={idx + 1}>
+                                                            第 {idx + 1} 集剧本
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-black text-gray-600 dark:text-gray-400">目标出海市场与风格题材</label>
+                                                <select
+                                                    value={skillOverseasRegion}
+                                                    onChange={e => setSkillOverseasRegion(e.target.value)}
+                                                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 rounded-xl text-xs font-bold text-gray-800 dark:text-gray-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-400/20 outline-none cursor-pointer"
+                                                >
+                                                    <option value="北美市场 (Billionaire/Werewolf)">北美市场 (Billionaire/Werewolf)</option>
+                                                    <option value="东南亚市场 (霸总虐恋/复仇)">东南亚市场 (霸总虐恋/复仇)</option>
+                                                    <option value="日韩市场 (校园恋爱/幻想穿越)">日韩市场 (校园恋爱/幻想穿越)</option>
+                                                    <option value="拉丁美洲 (Telenovela 家族恩怨)">拉丁美洲 (Telenovela 家族恩怨)</option>
+                                                </select>
+                                                <p className="text-[10px] text-gray-400 leading-normal">
+                                                    根据各地区审美与流行人设重组题材、地道台词化改写。
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* STEP 8: export */}
+                                    {skillActiveStep === 8 && (
+                                        <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-150 dark:border-indigo-900 rounded-xl space-y-2 text-xs">
+                                            <p className="font-bold text-indigo-800 dark:text-indigo-400">导出商业白皮书</p>
+                                            <p className="text-gray-600 dark:text-gray-300 leading-normal text-[11px]">
+                                                一键合并前面的策划文档、人物志、合规风险评估，产出格式优雅、可提交至各大平台审核及投行融资的完整白皮书。
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Right Side: Dynamic Workspace Output Preview Panel */}
+                                <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-900 border-l border-gray-150 dark:border-gray-800">
+                                    <div className="flex items-center justify-between bg-gray-50/75 border-b border-gray-150 dark:bg-gray-850 dark:border-gray-800 px-4 py-2.5 flex-shrink-0">
+                                        <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 text-[10px] font-bold">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-rose-400/80" />
+                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-400/80" />
+                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
+                                            <span className="ml-1.5 select-none text-gray-300 dark:text-gray-600">•</span>
+                                            <span className="font-mono text-gray-500 dark:text-gray-400">
+                                                {[
+                                                    'start_proposal.md', 'creative_plan.md', 'character_cards.md', 'episode_outlines.md',
+                                                    `episode_${skillEpisodeNum}_script.md`, `episode_${skillReviewNum}_compliance.md`,
+                                                    `episode_${skillReviewNum}_overseas_en.md`, 'pitch_deck_proposal.md'
+                                                ][skillActiveStep - 1]}
+                                            </span>
+                                        </div>
+
+                                        {/* Action buttons inside output window */}
+                                        <button
+                                            onClick={() => {
+                                                let textToCopy = '';
+                                                if (skillActiveStep === 1) textToCopy = skillStartOutput;
+                                                else if (skillActiveStep === 2) textToCopy = skillPlanOutput;
+                                                else if (skillActiveStep === 3) textToCopy = skillCharOutput;
+                                                else if (skillActiveStep === 4) textToCopy = skillOutlineOutput;
+                                                else if (skillActiveStep === 5) textToCopy = skillEpisodesStore[skillEpisodeNum] || '';
+                                                else if (skillActiveStep === 6) textToCopy = skillComplianceStore[skillReviewNum] || '';
+                                                else if (skillActiveStep === 7) textToCopy = skillOverseasStore[skillReviewNum] || '';
+                                                else if (skillActiveStep === 8) textToCopy = skillExportOutput;
+
+                                                if (textToCopy) {
+                                                    navigator.clipboard.writeText(textToCopy);
+                                                    alert('✨ 已复制生成成果到剪切板！');
+                                                } else {
+                                                    alert('当前板块暂无输出内容');
+                                                }
+                                            }}
+                                            className="px-2.5 py-1 rounded bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-750 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 transition-all flex items-center gap-1 text-[10px] active:scale-95 shadow-sm cursor-pointer font-bold"
+                                            title="复制当前生成文本"
+                                        >
+                                            <Copy className="w-3.5 h-3.5" />
+                                            <span>复制</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Output viewer screen */}
+                                    <div className="flex-grow overflow-y-auto p-6 custom-scrollbar leading-relaxed whitespace-pre-wrap select-text font-sans bg-white dark:bg-gray-900">
+                                        {/* Show actual streaming content or empty state */}
+                                        {(() => {
+                                            let currentOutput = '';
+                                            if (skillActiveStep === 1) currentOutput = skillStartOutput;
+                                            else if (skillActiveStep === 2) currentOutput = skillPlanOutput;
+                                            else if (skillActiveStep === 3) currentOutput = skillCharOutput;
+                                            else if (skillActiveStep === 4) currentOutput = skillOutlineOutput;
+                                            else if (skillActiveStep === 5) currentOutput = skillEpisodesStore[skillEpisodeNum] || '';
+                                            else if (skillActiveStep === 6) currentOutput = skillComplianceStore[skillReviewNum] || '';
+                                            else if (skillActiveStep === 7) currentOutput = skillOverseasStore[skillReviewNum] || '';
+                                            else if (skillActiveStep === 8) currentOutput = skillExportOutput;
+
+                                            if (!currentOutput) {
+                                                return (
+                                                    <div className="h-full flex flex-col items-center justify-center text-gray-400 py-20 select-none">
+                                                        <Sparkles className="w-8 h-8 text-sky-500 mb-3 animate-pulse" />
+                                                        <p className="text-[11px] font-extrabold text-gray-500 dark:text-gray-400">等待执行指令以生成创作成果</p>
+                                                        <p className="text-[10px] text-gray-400 mt-1">请点击右上方“执行本步编剧指令”启动短剧智能协同创作</p>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return <div className="text-gray-850 dark:text-gray-150 font-sans text-xs leading-relaxed select-text bg-transparent">{currentOutput}</div>;
+                                        })()}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
