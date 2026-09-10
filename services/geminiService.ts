@@ -172,7 +172,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         console.warn(`Error generating text with ${options.model}, falling back to Gemini:`, error);
         return generateText(prompt, {
             ...options,
-            model: 'gemini-3-flash-preview'
+            model: 'gemini-3.8-flash'
         });
     }
   } else {
@@ -334,7 +334,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             console.warn(`Error generating text stream with ${options.model}, falling back to Gemini:`, error);
             yield* generateTextStream(prompt, {
                 ...options,
-                model: 'gemini-3-flash-preview'
+                model: 'gemini-3.8-flash'
             });
         }
     } else {

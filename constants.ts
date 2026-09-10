@@ -428,3 +428,28 @@ export const WORKFLOWS: Workflow[] = [
     template: '任务：将以下小说内容改编为剧本。\n侧重方向：${focus}。\n要求：保留核心冲突，将心理描写转化为动作或视听语言。\n\n【小说内容】：\n${novel_content}'
   }
 ];
+
+export interface ModelOptionItem {
+  value: string;
+  label: string;
+}
+
+export const GEMINI_MODEL_OPTIONS: ModelOptionItem[] = [
+  { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" },
+  { value: "gemini-3.7-flash", label: "Gemini 3.7 Flash" },
+  { value: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash Lite" },
+  { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview" },
+  { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash" },
+  { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+];
+
+export const ALL_MODEL_OPTIONS: ModelOptionItem[] = [
+  { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" },
+  { value: "gemini-3.7-flash", label: "Gemini 3.7 Flash" },
+  { value: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash Lite" },
+  { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview" },
+  { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash" },
+  { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+  { value: "deepseek-chat", label: "奇思版 (DeepSeek V3)" },
+  { value: "doubao-flash", label: "速写版 (豆包)" },
+];

@@ -112,14 +112,16 @@ async function startServer() {
         return res.status(500).json({ error: "Google API Key not configured on server" });
       }
 
-      // Map models gracefully to prevent 404/Quota issues
-      let resolvedModel = model;
+      // Support user-selected models directly with fallback
+      let resolvedModel = model || "gemini-3.8-flash";
       if (typeof model === 'string') {
-        const m = model.toLowerCase();
-        if (m.includes("flash") || m === "gemini-3-flash-preview" || m === "gemini-3.5-flash-preview" || m === "gemini-1.5-flash") {
+        const m = model.toLowerCase().trim();
+        if (m === "gemini-3-flash-preview" || m === "gemini-1.5-flash") {
           resolvedModel = "gemini-3.5-flash";
-        } else if (m.includes("pro") || m === "gemini-3-pro-preview" || m === "gemini-1.5-pro") {
+        } else if (m === "gemini-3-pro-preview" || m === "gemini-1.5-pro" || m === "gemini-3.5-pro") {
           resolvedModel = "gemini-3.1-pro-preview";
+        } else {
+          resolvedModel = model;
         }
       }
 
@@ -139,24 +141,52 @@ async function startServer() {
 
       // Helper for fallback chains on free tier quota exhaustion (429)
       const getFallbackModels = (requestedModel: string): string[] => {
-        const m = requestedModel.toLowerCase();
-        const proChain = [
-          "gemini-3.1-pro-preview",
+        const candidateChain = [
+          requestedModel,
+          "gemini-3.8-flash",
+          "gemini-3.7-flash",
           "gemini-3.5-flash",
-          "gemini-3.1-flash-lite"
+          "gemini-3.6-flash",
+          "gemini-3.5-flash-lite",
+          "gemini-3.1-pro-preview"
         ];
-        const flashChain = [
-          "gemini-3.5-flash",
-          "gemini-3.1-flash-lite"
-        ];
+        return Array.from(new Set(candidateChain));
+      };
 
-        if (m.includes("pro")) {
-          const filtered = proChain.filter(x => x !== requestedModel);
-          return [requestedModel, ...filtered];
-        } else {
-          const filtered = flashChain.filter(x => x !== requestedModel);
-          return [requestedModel, ...filtered];
+      const executeWithRetry = async <T>(
+        operation: () => Promise<T>,
+        modelName: string,
+        maxRetries = 2,
+        baseDelay = 1000
+      ): Promise<T> => {
+        let lastError: any = null;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            return await operation();
+          } catch (error: any) {
+            lastError = error;
+            const errMsg = String(error.message || error);
+            const isRetryable = 
+              errMsg.toLowerCase().includes("503") || 
+              errMsg.toLowerCase().includes("429") || 
+              errMsg.toLowerCase().includes("500") || 
+              errMsg.toLowerCase().includes("overloaded") || 
+              errMsg.toLowerCase().includes("quota") || 
+              errMsg.toLowerCase().includes("rate limit") || 
+              errMsg.toLowerCase().includes("unavailable") || 
+              errMsg.toLowerCase().includes("busy") ||
+              errMsg.toLowerCase().includes("temporary");
+
+            if (isRetryable && attempt < maxRetries) {
+              const delay = baseDelay * Math.pow(2, attempt);
+              console.warn(`[Gemini API Retry] Model ${modelName} encountered retryable error: ${errMsg.substring(0, 150)}. Retrying in ${delay}ms (Attempt ${attempt + 1}/${maxRetries})...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+              throw error;
+            }
+          }
         }
+        throw lastError || new Error("Failed after retries");
       };
 
       if (stream) {
@@ -170,11 +200,14 @@ async function startServer() {
         for (const currentModel of modelsToTry) {
           try {
             console.log(`[Gemini API] Attempting stream generation with model: ${currentModel}`);
-            const responseStream = await ai.models.generateContentStream({
-              model: currentModel,
-              contents: contents,
-              config: generateConfig,
-            });
+            const responseStream = await executeWithRetry(
+              () => ai.models.generateContentStream({
+                model: currentModel,
+                contents: contents,
+                config: generateConfig,
+              }),
+              currentModel
+            );
             
             for await (const chunk of responseStream) {
               let text = "";
@@ -237,11 +270,14 @@ async function startServer() {
         for (const currentModel of modelsToTry) {
           try {
             console.log(`[Gemini API] Attempting content generation with model: ${currentModel}`);
-            response = await ai.models.generateContent({
-              model: currentModel,
-              contents: contents,
-              config: generateConfig,
-            });
+            response = await executeWithRetry(
+              () => ai.models.generateContent({
+                model: currentModel,
+                contents: contents,
+                config: generateConfig,
+              }),
+              currentModel
+            );
             success = true;
             break;
           } catch (contentError: any) {

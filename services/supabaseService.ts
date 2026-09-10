@@ -230,9 +230,17 @@ export async function fetchProjects(page = 1, limit = 20) {
 }
 
 export async function deleteProject(id: string) {
-    const userId = await getCurrentUserId();
-    if (!userId) return;
-    await supabase.from('projects').delete().eq('id', id).eq('user_id', userId);
+    try {
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+        await supabase.from('chapters').delete().eq('project_id', id);
+        await supabase.from('script_workflow_states').delete().eq('project_id', id);
+        const { error } = await supabase.from('projects').delete().eq('id', id).eq('user_id', userId);
+        if (error) throw error;
+    } catch (err) {
+        console.error("deleteProject error:", err);
+        throw err;
+    }
 }
 
 // Optimized fetchChapters: Exclude content column for fast list loading

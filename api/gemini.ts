@@ -24,20 +24,22 @@ export default async function handler(request: Request) {
     const body = await request.json();
     const { model, contents, temperature, top_p, max_tokens, stream } = body;
     
-    const apiKey = process.env.API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'Google API Key not configured on server' }), { status: 500 });
+      return new Response(JSON.stringify({ error: 'Google API Key not configured on server (please set GEMINI_API_KEY or API_KEY in environment variables)' }), { status: 500 });
     }
 
-    // Map models gracefully to prevent 404/Quota issues
-    let resolvedModel = model;
+    // Support all Gemini models directly
+    let resolvedModel = model || "gemini-3.8-flash";
     if (typeof model === 'string') {
-      const m = model.toLowerCase();
-      if (m === "gemini-3-flash-preview" || m === "gemini-3.5-flash-preview") {
+      const m = model.toLowerCase().trim();
+      if (m === "gemini-3-flash-preview" || m === "gemini-1.5-flash") {
         resolvedModel = "gemini-3.5-flash";
-      } else if (m === "gemini-3-pro-preview") {
+      } else if (m === "gemini-3-pro-preview" || m === "gemini-1.5-pro" || m === "gemini-3.5-pro") {
         resolvedModel = "gemini-3.1-pro-preview";
+      } else {
+        resolvedModel = model;
       }
     }
 
@@ -49,19 +51,22 @@ export default async function handler(request: Request) {
         maxOutputTokens: max_tokens,
     };
 
+    const getCandidateModels = (reqModel: string): string[] => {
+        const chain = [
+            reqModel,
+            "gemini-3.8-flash",
+            "gemini-3.7-flash",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-pro-preview",
+        ];
+        return Array.from(new Set(chain));
+    };
+
     if (stream) {
         let responseStream;
-        let attemptModel = resolvedModel;
-        const modelsToTry = [attemptModel];
-        if (attemptModel === "gemini-3.1-pro-preview") {
-            modelsToTry.push("gemini-3.5-flash");
-            modelsToTry.push("gemini-3.1-flash-lite");
-        } else if (attemptModel === "gemini-3.5-flash") {
-            modelsToTry.push("gemini-3.1-flash-lite");
-        } else if (attemptModel !== "gemini-3.1-flash-lite") {
-            modelsToTry.push("gemini-3.5-flash");
-            modelsToTry.push("gemini-3.1-flash-lite");
-        }
+        const modelsToTry = getCandidateModels(resolvedModel);
 
         let success = false;
         for (let idx = 0; idx < modelsToTry.length; idx++) {
@@ -180,17 +185,7 @@ export default async function handler(request: Request) {
         });
     } else {
         let response;
-        let attemptModel = resolvedModel;
-        const modelsToTry = [attemptModel];
-        if (attemptModel === "gemini-3.1-pro-preview") {
-            modelsToTry.push("gemini-3.5-flash");
-            modelsToTry.push("gemini-3.1-flash-lite");
-        } else if (attemptModel === "gemini-3.5-flash") {
-            modelsToTry.push("gemini-3.1-flash-lite");
-        } else if (attemptModel !== "gemini-3.1-flash-lite") {
-            modelsToTry.push("gemini-3.5-flash");
-            modelsToTry.push("gemini-3.1-flash-lite");
-        }
+        const modelsToTry = getCandidateModels(resolvedModel);
 
         let success = false;
         for (let idx = 0; idx < modelsToTry.length; idx++) {

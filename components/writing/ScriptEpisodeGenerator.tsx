@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { generateTextStream } from '../../services/geminiService';
-import { createProject, saveChapterToDB, updateProject, deleteProject, fetchProjects, matchDocumentsV3, InspirationNovelFragment, searchInspirationFragments, fetchAvailableTags } from '../../services/supabaseService';
+import { createProject, saveChapterToDB, updateProject, deleteProject, fetchProjects, matchDocumentsV3, InspirationNovelFragment, searchInspirationFragments, fetchAvailableTags, fetchPrompts } from '../../services/supabaseService';
+import { Prompt } from '../../types';
+import { PROMPTS } from '../../constants';
+import PromptSelectionModal from '../PromptSelectionModal';
 import { 
     Sparkles, Film, Database, Copy, Stop, AdjustmentsHorizontal, Check, ArrowPath, 
     Play, Pencil, ClipboardDocumentCheck, DocumentPlus, Trash, Plus, 
@@ -88,9 +91,13 @@ const toChineseNum = (num: number): string => {
 };
 
 const MODEL_OPTIONS = [
+    { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" },
+    { value: "gemini-3.7-flash", label: "Gemini 3.7 Flash" },
+    { value: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash Lite" },
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview" },
+    { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash" },
+    { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
     { value: "deepseek-chat", label: "奇思版 (DeepSeek)" },
-    { value: "gemini-3.5-flash", label: "妙写版 (Gemini 3.5 Flash)" },
-    { value: "gemini-3.5-pro", label: "深度版 (Gemini 3.5 Pro)" },
     { value: "doubao-flash", label: "速写版 (豆包)" }
 ];
 
@@ -165,6 +172,16 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
     const [saving, setSaving] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [error, setError] = useState('');
+
+    // Prompt Library Card States
+    const [selectedPromptCard, setSelectedPromptCard] = useState<Prompt | null>(null);
+    const [promptFormValues, setPromptFormValues] = useState<Record<string, string>>({});
+    const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+    const [promptCardsList, setPromptCardsList] = useState<Prompt[]>([]);
+    const [isLoadingPrompts, setIsLoadingPrompts] = useState(false);
+
+    // Project Delete Confirmation State
+    const [projectToDelete, setProjectToDelete] = useState<any | null>(null);
 
     // Script creation states
     const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
@@ -244,6 +261,63 @@ export const ScriptEpisodeGenerator: React.FC<ScriptEpisodeGeneratorProps> = ({ 
             setLoadingProjects(false);
         }
     };
+
+    useEffect(() => {
+        const loadPromptCards = async () => {
+            setIsLoadingPrompts(true);
+            try {
+                const dbPrompts = await fetchPrompts({ limit: 50 });
+                if (dbPrompts && dbPrompts.length > 0) {
+                    const mapped: Prompt[] = dbPrompts.map((p: any) => {
+                        let parsedContent: any = {};
+                        try {
+                            parsedContent = JSON.parse(p.content);
+                        } catch (e) {
+                            parsedContent = { template: p.content };
+                        }
+                        return {
+                            id: p.id,
+                            title: p.title,
+                            description: parsedContent.description || p.description || '提示词库卡片',
+                            example: parsedContent.example || '',
+                            content: parsedContent.template || p.content,
+                            category: (p.main_category as any) || 'script',
+                            subCategories: parsedContent.subCategories || (p.sub_category ? [p.sub_category] : []),
+                            fields: parsedContent.fields || [],
+                            template: parsedContent.template || p.content,
+                            heat: p.usage_count || 0,
+                            creator: 'system'
+                        };
+                    });
+                    const combined = [...mapped];
+                    PROMPTS.forEach(cp => {
+                        if (!combined.some(p => p.id === cp.id || p.title === cp.title)) {
+                            combined.push(cp);
+                        }
+                    });
+                    setPromptCardsList(combined);
+                    if (combined.length > 0) {
+                        const scriptCard = combined.find(c => c.category === 'script') || combined[0];
+                        setSelectedPromptCard(scriptCard);
+                    }
+                } else {
+                    setPromptCardsList(PROMPTS);
+                    if (PROMPTS.length > 0) {
+                        setSelectedPromptCard(PROMPTS[0]);
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load prompt cards:", e);
+                setPromptCardsList(PROMPTS);
+                if (PROMPTS.length > 0) {
+                    setSelectedPromptCard(PROMPTS[0]);
+                }
+            } finally {
+                setIsLoadingPrompts(false);
+            }
+        };
+        loadPromptCards();
+    }, []);
 
     const exportAllScriptsToWord = () => {
         let htmlContent = `
@@ -509,90 +583,20 @@ ${coreInstruction}
                     outlineMode: outlineMode,
                     aiChatMessages: aiChatMessages
                 };
-
                 await updateProject(currentProjectId, {
-                    title: projectTitle || '未命名剧本',
+                    title: projectTitle,
                     description: description,
                     script_data: scriptData
                 });
-
-                // Save chapters quietly as well
-                for (let i = 0; i < parsedEpisodes.length; i++) {
-                    const ep = parsedEpisodes[i];
-                    const content = `【分集故事梗概】：\n${ep.outline}\n\n=====================================\n\n【本集正式剧本】：\n${ep.script || '（未生成该集剧本）'}`;
-                    await saveChapterToDB(currentProjectId, `new-scene-${currentProjectId}-${i}`, ep.title, content, i + 1);
-                }
-
-                setSyncStatus('success');
+                setSyncStatus('synced');
             } catch (err) {
-                console.error('Auto save to cloud failed:', err);
-                setSyncStatus('error');
-            }
-        }, 1500); // 1.5 seconds debounce for faster feedback
-
-        return () => clearTimeout(timer);
-    }, [parsedEpisodes, projectTitle, aiChatMessages, stage]);
-
-    // Professional Screenplay Skill Workspace cloud auto-save
-    useEffect(() => {
-        if (stage !== 'skill_master_workspace') return;
-        if (!currentProjectId) return;
-
-        setSyncStatus('syncing');
-        const timer = setTimeout(async () => {
-            try {
-                const scriptData = {
-                    isSkillMaster: true,
-                    skillActiveStep,
-                    skillTopic,
-                    skillAudience,
-                    skillTone,
-                    skillSellingPoints,
-                    skillPlanEpisodes,
-                    skillMainChar,
-                    skillAntagonist,
-                    skillEpisodeNum,
-                    skillOverseasMode,
-                    skillReviewNum,
-                    skillOverseasRegion,
-                    
-                    skillStartOutput,
-                    skillPlanOutput,
-                    skillCharOutput,
-                    skillOutlineOutput,
-                    skillEpisodesStore,
-                    skillReviewsStore,
-                    skillComplianceStore,
-                    skillOverseasStore,
-                    skillExportOutput,
-                    
-                    settings: {
-                        model: model
-                    }
-                };
-
-                await updateProject(currentProjectId, {
-                    title: projectTitle || '未命名剧本 (大师版)',
-                    description: `编剧大师项目 | 选题: ${skillTopic}`,
-                    script_data: scriptData
-                });
-
-                setSyncStatus('success');
-            } catch (err) {
-                console.error('Skill Master Auto save failed:', err);
-                setSyncStatus('error');
+                console.error("Auto sync failed:", err);
+                setSyncStatus('failed');
             }
         }, 1500);
 
         return () => clearTimeout(timer);
-    }, [
-        stage, currentProjectId, projectTitle, skillActiveStep, skillTopic, skillAudience,
-        skillTone, skillSellingPoints, skillPlanEpisodes, skillMainChar, skillAntagonist,
-        skillEpisodeNum, skillOverseasMode, skillReviewNum, skillOverseasRegion,
-        skillStartOutput, skillPlanOutput, skillCharOutput, skillOutlineOutput,
-        skillEpisodesStore, skillReviewsStore, skillComplianceStore, skillOverseasStore,
-        skillExportOutput, model
-    ]);
+    }, [parsedEpisodes, aiChatMessages, stage, currentProjectId, model, outlineMode, theme, elements, existingOutline, coreIdea, outlineRawText, projectTitle]);
 
     const handleSelectProject = async (proj: any) => {
         setCurrentProjectId(proj.id);
@@ -660,15 +664,20 @@ ${coreInstruction}
         }
     };
 
-    const handleDeleteProject = async (id: string, e: React.MouseEvent) => {
+    const handleDeleteProjectClick = (proj: any, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm('确定要删除这个剧本项目吗？此操作无法撤销。')) return;
+        setProjectToDelete(proj);
+    };
+
+    const handleConfirmDeleteProject = async () => {
+        if (!projectToDelete) return;
         try {
-            await deleteProject(id);
-            setEpisodeProjects(prev => prev.filter(p => p.id !== id));
+            await deleteProject(projectToDelete.id);
+            setEpisodeProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
+            setProjectToDelete(null);
         } catch (err: any) {
             console.error("Failed to delete project:", err);
-            alert("删除项目失败，请重试");
+            alert("删除项目失败: " + (err.message || '请重试'));
         }
     };
 
@@ -737,8 +746,8 @@ ${coreInstruction}
     };
 
     // Parse partial JSON string during streaming to display clean preview outlines
-    const parsePartialOutlines = (jsonStr: string): { episodeNumber?: number; title?: string; outline?: string }[] => {
-        const results: { episodeNumber?: number; title?: string; outline?: string }[] = [];
+    const parsePartialOutlines = (jsonStr: string): { episodeNumber?: number; title?: string; outline?: string; version?: number }[] => {
+        const results: { episodeNumber?: number; title?: string; outline?: string; version?: number }[] = [];
         const objectBlocks = jsonStr.split(/\{/);
         
         for (let i = 1; i < objectBlocks.length; i++) {
@@ -748,6 +757,12 @@ ${coreInstruction}
             const numMatch = block.match(/["']episodeNumber["']\s*:\s*(\d+)/i);
             if (numMatch) {
                 episodeNumber = parseInt(numMatch[1]);
+            }
+
+            let version: number | undefined;
+            const verMatch = block.match(/["']version["']\s*:\s*(\d+)/i);
+            if (verMatch) {
+                version = parseInt(verMatch[1]);
             }
             
             let title: string | undefined;
@@ -772,8 +787,8 @@ ${coreInstruction}
                 }
             }
             
-            if (episodeNumber !== undefined || title !== undefined || outline !== undefined) {
-                results.push({ episodeNumber, title, outline });
+            if (episodeNumber !== undefined || title !== undefined || outline !== undefined || version !== undefined) {
+                results.push({ episodeNumber, title, outline, version });
             }
         }
         return results;
@@ -791,73 +806,147 @@ ${coreInstruction}
         setAiChatMessages(prev => [...prev, { role: 'user', content: userMsg }]);
         setAiIsGenerating(true);
 
-        const currentOutlinesStr = parsedEpisodes.map(ep => 
-            `【第${ep.episodeNumber}集：${ep.title}】\n${ep.outline}`
+        const currentOutlinesString = parsedEpisodes.map(ep => 
+            `第${ep.episodeNumber}集：${ep.title}\n大纲内容：${ep.outline}`
         ).join('\n\n');
 
-        let prompt = '';
-        if (chatScope === 'single') {
-            prompt = `你是一个顶级爆款短剧导演和编剧。用户想通过对话，协同优化这套分集剧情大纲中的【第 ${chatTargetEpisode} 集】。
+        const prompt = chatScope === 'single'
+            ? `【角色定位】：你是一位资深的爆款短剧导演与剧本总监，正在与编剧协作优化本剧的单集大纲。
+你现在需要对【第 ${chatTargetEpisode} 集】进行针对性优化。
 
-【当前优化范围】：【单集针对性修改】 - 仅修改【第 ${chatTargetEpisode} 集】。
-
-【用户的具体修改指令】：
-“${userMsg}”
-
-【当前第 ${chatTargetEpisode} 集的大纲内容】：
-${parsedEpisodes.find(ep => ep.episodeNumber === chatTargetEpisode)?.outline || ''}
-
-【全剧上下文参考】：
-${currentOutlinesStr}
+【当前整部短剧的分集大纲状态（共 ${parsedEpisodes.length} 集）】：
+${currentOutlinesString}
 
 ---
 
-【输出规范与要求】：
-1. 首先，请以专业编剧的视角，用亲切易懂的语言向用户分析和解释你对【第 ${chatTargetEpisode} 集】做出的具体内容优化思路，以及这一集在全剧大纲承上启下中的关键作用。
-2. 接着，你必须输出一个包含修改后大纲的 JSON 数组。
-3. 请只在 JSON 数组中输出【第 ${chatTargetEpisode} 集】（以及若有连锁关联的个别受影响集数）的更新大纲。绝对不要在 JSON 中输出未修改的其他集数大纲，避免冗余和打扰。
-4. 请将该JSON数组严格用代码块标记 \`\`\`json ... \`\`\` 包裹起来。
-5. JSON格式必须严格为以下格式，不要有任何多余的键名：
+【用户的修改/优化指令】：
+“${userMsg}”
+优化目标：专门针对【第 ${chatTargetEpisode} 集】。
+
+【单集修改极硬性指令】：
+为了给编剧提供更广阔的灵感和选择空间，你**必须一下子给到 3 个不同侧重点/戏剧走向的优化版本**（例如：版本1侧重强情节反转，版本2侧重情绪推高与爽点爆发，版本3侧重悬念拉满与情感羁绊等）。
+请注意：每一个版本都必须是第 ${chatTargetEpisode} 集，它们是并列的选择方案，**必须标注 "version" (分别为 1, 2, 3)**。
+**【核心要求】这 3 个版本的差异度一定要极大！它们必须代表完全不同的故事走向、戏剧冲突逻辑、节奏或切入视角，绝对不能只是简单的措辞微调或大同小异。**
+
+【单集结构硬性要求（极度重要，每一集的核心指标）】：
+- 每一集的大纲事件必须包含3个情节点。情节点的安排必须围绕着核心的主线进行，且3个情节点之间层层递进、情绪不断加深、有反转点。人物的戏剧性行为、动作、对抗性、情绪性清晰。
+- 大纲事件减少描述性话语，简明扼要地写清事件发展的过程、具体的细节点、人物的相关反映动作。减少形容词和副词的描述。
+- 大纲情节一定要具有逻辑性，情节点之间互相关联、推进，情节具有戏剧化效果，一波三折、跌宕起伏、调用观众的情绪，让观众代入。
+- 情节点设计一定要符合短剧的夸张感、情绪性和强情节性。
+- 结尾钩子是卡点事件，可以是悬念钩子/反转钩子/情绪钩子/危机钩子/，让观众有继续看下去的欲望，不要有描述性的话语。
+- 结尾钩子禁止出现以下情况：无钩子硬结尾 → 观众没有理由继续看；钩子悬念下集秒解 → 观众觉得被骗（虚假悬念）；连续用同一种钩子 → 观众产生免疫；钩子和剧情无关 → 观众觉得是凑数；钩子给出太多信息 → 观众已经猜到答案，不需要看下集。
+- 第一集：黄金五秒法则——第一秒：画面冲击或悬念抛出；第3秒：核心冲突或身份反差建立；第5秒：观众必须产生"接下来会怎样"的好奇心；前30秒必须完成：1. 建立核心冲突或悬念；2. 展示主角处境（弱势/困境/反差）；3. 抛出第一个钩子。
+- 每一个版本的大纲 "outline" 字段**必须且仅包含：【3个情节点】、【结尾悬念卡点事件】**！
+- 样式进行规范标注：
+  “【情节点1】... 【情节点2】... 【情节点3】...【卡点钩子1】”
+
+【极度重要：回复精简规范】：
+你的回复必须非常简短！无需寒暄或长篇大论。只需用一两句话（不超过30字）点出修改思路，然后直接开始输出 JSON 代码块。
+
+【输出格式与规范】：
+1. 首先，用极简的一两句导演分析点出修改思路（控制在30字以内）。
+2. 然后，直接输出对应的 JSON 格式代码块，代码块内是一个包含 3 个不同版本的 JSON 数组，格式必须完全符合下面示例（每个方案的 "episodeNumber" 均为 ${chatTargetEpisode}，且包含 "version" 1, 2, 3，禁止含有任何多余的键名）：
 \`\`\`json
 [
   {
     "episodeNumber": ${chatTargetEpisode},
-    "title": "第${chatTargetEpisode}集标题",
-    "outline": "本集优化后的具体大纲内容..."
+    "version": 1,
+    "title": "第${chatTargetEpisode}集标题 (方案1：侧重...)",
+    "outline": "【情节点1】... 【情节点2】... 【情节点3】... 【悬念钩子1】"
+  },
+  {
+    "episodeNumber": ${chatTargetEpisode},
+    "version": 2,
+    "title": "第${chatTargetEpisode}集标题 (方案2：侧重...)",
+    "outline": "【情节点1】... 【情节点2】...【情节点3】... 【悬念钩子1】"
+  },
+  {
+    "episodeNumber": ${chatTargetEpisode},
+    "version": 3,
+    "title": "第${chatTargetEpisode}集标题 (方案3：侧重...)",
+    "outline": "【情节点1】... 【情节点2】... 【情节点3】... 【悬念钩子1】"
   }
 ]
 \`\`\`
-注意：大纲内容应当保持在大约300字到450字左右的精炼梗概。`;
-        } else {
-            prompt = `你是一个顶级爆款短剧导演和编剧。用户想通过对话，协同优化这套【${parsedEpisodes.length}集】的全剧分集剧情大纲。
+3. 结尾不要输出任何多余总结、问候，主要是呈现输出的大纲。`
+            : `【角色定位】：你是一位资深的爆款短剧导演与剧本总监，精通市面上爆款男女频短剧的爆点剧情设计，你正在与编剧协作优化本剧的分集大纲。
 
-【当前优化范围】：【全剧整体修改】
-
-【用户的具体修改指令】：
-“${userMsg}”
-
-【当前所有集数的大纲内容如下】：
-${currentOutlinesStr}
+【当前整部短剧的分集大纲状态（共 ${parsedEpisodes.length} 集）】：
+${currentOutlinesString}
 
 ---
 
-【输出规范与要求】：
-1. 首先，请以专业编剧的视角，用亲切易懂的语言向用户详细分析本次整体优化调整了哪些冲突，强化了哪些钩子，如何让剧情更加抓人。
-2. 接着，你必须输出一份完整更新后的【各集大纲JSON数组】，以便系统能够自动解析并让用户一键应用修改。
-3. 请将该JSON数组严格用代码块标记 \`\`\`json ... \`\`\` 包裹起来。
-4. JSON数组的格式必须严格为以下格式，不要有任何多余的键名：
+【用户的修改/优化指令】：
+“${userMsg}”
+优化范围：全剧整体
+
+---
+
+【分批/分段输出大纲的黄金法则（硬性防截断策略）】：
+1. **防止截断，支持多次生成**：
+   - 鉴于大模型单次生成的最大 Token 限制，如果要对整部短剧（尤其是集数较多，如15集以上）的所有分集进行极其精彩、不缩水、不简化的高质量细节重构，一口气输出势必会被截断。
+   - 因此，你**必须采取「分批/分段优化」机制**：
+     - 如果总集数较多，请**每次只输出一个包含约 10-15 集左右 of JSON 数组代码块**（例如：默认先输出第 1 到 12 集，或在用户回复“继续生成第13-24集”时仅输出对应的 13-24 集）。
+     - 每一集必须确保戏剧张力拉满，绝对不能为了缩减 Token 而精简、缩水！
+     - 在大纲 JSON 代码块后，你**必须用极简的语言指导用户**如何获取后续集数。
+2. **当情节不够时的扩充与延展策略（硬性任务）**：
+   - 必须深度理解整个故事梗概的世界观、背景和人物设定，合理、合情、逻辑自洽地拓展和延伸全新的情节点、剧情冲突、反差对峙和打脸桥段，杜绝敷衍压缩。
+   - 每集结尾必须有事件作为悬念钩子/付费卡点。卡点必须采取三大设计原则——情绪峰值原则：在观众情绪最高涨的时刻设卡，而不是平淡处；悬念未解原则：卡点时必须有一个强烈的"未回答问题"悬在那里；沉没成本原则：观众已经投入了足够的情感，不舍得放弃。
+   - 每一集的情节点设计一定是层层递进的、事件的程度是逐渐加深的，情节点构成：事件钩子-人物的戏剧性动作。人物的戏剧性动作也是层层递进，不断加深的。每个情节场次之间要有递进关系，不能平行并列。中段不能出现"信息真空"（无新信息的过渡场景）。
+   - 每一集的大纲事件必须包含3个情节点。情节点的安排必须围绕着核心的主线进行，且3个情节点之间层层递进、情绪不断加深、有反转点。人物的戏剧性行为、动作、对抗性、情绪性清晰。
+   - 大纲事件减少描述性话语，简明扼要地写清事件发展的过程、具体的细节点、人物的相关反映动作。减少形容词和副词的描述。
+   - 大纲情节一定要具有逻辑性，情节点之间互相关联、推进，情节具有戏剧化效果，一波三折、跌宕起伏、调用观众的情绪，让观众代入。
+   - 情节点设计一定要符合短剧的夸张感、情绪性和强情节性。
+   - 结尾钩子是卡点事件，可以是悬念钩子/反转钩子/情绪钩子/危机钩子/，让观众有继续看下去的欲望，不要有描述性的话语。
+   - 结尾钩子禁止出现以下情况：无钩子硬结尾 → 观众没有理由继续看；钩子悬念下集秒解 → 观众觉得被骗（虚假悬念）；连续用同一种钩子 → 观众产生免疫；钩子和剧情无关 → 观众觉得是凑数；钩子给出太多信息 → 观众已经猜到答案，不需要看下集。
+   - 第1集：黄金五秒法则——第一秒：画面冲击或悬念抛出；第3秒：核心冲突或身份反差建立；第5秒：观众必须产生"接下来会怎样"的好奇心；前30秒必须完成：1. 建立核心冲突或悬念；2. 展示主角处境（弱势/困境/反差）；3. 抛出第一个钩子。
+   - 付费卡点位置规划：
+     - 首个卡点：第8-12集。最强悬念，这是付费转化的关键窗口，前面免费内容必须积累足够钩子。
+     - 第二卡点：第18-25集。身份揭露/反转，中段高潮，观众已深度投入。
+     - 第三卡点：第35-45集。感情线高潮，情感最浓时刻。
+     - 终极卡点：倒数3-5集。终极对决前，已投入全部情感，必须看到结局。
+   - 卡点设计的禁忌：
+     - 无悬念硬切：在平淡场景强行结束，观众没有付费动力。
+     - 虚假悬念：上集制造的悬念，下集开头 10 秒就化解了。
+     - 关键信息提前泄露：如果观众已经猜到了答案，卡点就失去了意义。
+     - 连续多集都在同一悬念上卡：第10集卡在身份揭露、第11集还是卡在身份揭露→观众愤怒。
+     - 卡在无关紧要的小事上：观众付费是为了看核心剧情推进，不是看支线小事。
+   - 免费集与付费集的节奏配合：
+     - 免费集（前 8-12 集）的任务：
+       - 建立角色和核心冲突。
+       - 累积至少 3 个未解悬念。
+       - 让观众对主角产生强烈情感投入。
+       - 展示"爽点"的味道（小规模打脸/撒糖）。
+       - 在最后一集免费内容的结尾放最强钩子 。  
+     - 付费集的节奏：
+       - 首个付费集必须立即兑现免费集积累的悬念（让观众觉得钱花得值）。
+       - 兑现旧悬念的同时制造新悬念（持续付费动力）。
+       - 每 5-8 集有一次中型爽点释放。
+       - 每 15-20 集有一次大型爽点释放。
+       - 结局前的最后爽点必须是全剧最大的。
+
+3. **单集结构硬性要求（极度重要，每一集的核心指标）**：
+   - 无论何时生成或修改任何一集，其 "outline" 字段**必须且仅包含：【3个情节点】、【结尾悬念卡点】**！
+   - 你在输出时，**必须明确、清晰地标注并展示这 3 个情节点和 1 个悬念钩子**，使用以下样式进行规范标注：
+     “【情节点1】... 【情节点2】... 【情节点3】... 【悬念钩子1】”
+
+【极度重要：回复精简规范】：
+你的回复必须非常简短！无需寒暄或长篇大论。只需用一两句话（不超过30字）点出修改思路，然后直接开始输出 JSON 代码块。
+
+【输出格式与规范】：
+1. 首先，用极简的一两句导演分析点出修改思路（不超过30字）。
+2. 然后，输出对应的 JSON 格式代码块，代码块内是一个包含更新后分集大纲的 JSON 数组，格式必须完全符合下面示例，**禁止含有任何多余的键名**（确保 "outline" 严格标注【情节点】【悬念钩子】）：
 \`\`\`json
 [
   {
     "episodeNumber": 1,
     "title": "第1集标题",
-    "outline": "本集具体大纲内容..."
-  },
-  ...
+    "outline": "【情节点1】... 【情节点2】... 【情节点3】... 【悬念钩子1】"
+  }
 ]
 \`\`\`
-注意：大纲内容应当保持在每集分集梗概的情节长度设计，完美契合单集大概1分半（90秒）左右的微短剧视频剧情量（对应每集大约300字到450字的精炼梗概）。请完整输出所有集数，不要简写。`;
-        }
+3. 接着在 JSON 代码块后提供下一步操作指引，告诉用户如何分批生成完接下来的剧情。
+4. 所有的回复文字请保持通俗、专业而亲切。`;
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -903,44 +992,72 @@ ${currentOutlinesStr}
     // Extract JSON outlines from AI reply
     const extractAndApplyOutlines = (content: string) => {
         try {
-            const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
-            const match = content.match(jsonRegex);
             let jsonText = '';
-
-            if (match && match[1]) {
-                jsonText = match[1].trim();
+            
+            // Try to match the markdown code block first, but don't strictly require the closing backticks if truncated
+            const jsonBlockRegex = /```json\s*([\s\S]*?)(?:```|$)/;
+            const blockMatch = content.match(jsonBlockRegex);
+            if (blockMatch && blockMatch[1]) {
+                jsonText = blockMatch[1].trim();
             } else {
+                // Look for first '[' and last ']' if no json codeblock
                 const startIdx = content.indexOf('[');
                 const endIdx = content.lastIndexOf(']');
                 if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
                     jsonText = content.substring(startIdx, endIdx + 1);
+                } else {
+                    // Try to find any partial bracket sequence starting with '['
+                    const fallbackStartIdx = content.indexOf('[');
+                    if (fallbackStartIdx !== -1) {
+                        jsonText = content.substring(fallbackStartIdx);
+                    }
                 }
             }
 
             if (!jsonText) {
-                alert('未在大师回复中检测到结构化大纲标记，请确保AI输出了标准JSON格式代码块！');
+                alert('未在大神导演的回复中检测到符合规范 of JSON 大纲格式块。');
                 return;
             }
 
-            const arr = JSON.parse(jsonText);
-            if (Array.isArray(arr)) {
+            let arr: any[] = [];
+            try {
+                // Try standard parsing
+                arr = JSON.parse(jsonText);
+            } catch (jsonErr) {
+                // If standard JSON parse fails due to truncation / trailing commas, use the robust regex-based split parser
+                console.warn("Standard JSON parsing failed, using robust partial parser fallback:", jsonErr);
+                const parsed = parsePartialOutlines(jsonText);
+                if (parsed && parsed.length > 0) {
+                    arr = parsed;
+                }
+            }
+
+            if (arr && Array.isArray(arr) && arr.length > 0) {
                 setParsedEpisodes(prev => {
                     const next = [...prev];
                     arr.forEach((item: any) => {
                         const epNum = parseInt(item.episodeNumber);
                         if (!isNaN(epNum)) {
                             const matchIdx = next.findIndex(x => x.episodeNumber === epNum);
+                            
+                            let titleStr = String(item.title || '');
+                            let outlineStr = String(item.outline || '');
+                            
+                            // Unescape basic string markers from manual parsing if necessary
+                            titleStr = titleStr.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t');
+                            outlineStr = outlineStr.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t');
+
                             if (matchIdx !== -1) {
                                 next[matchIdx] = {
                                     ...next[matchIdx],
-                                    title: String(item.title || next[matchIdx].title),
-                                    outline: String(item.outline || next[matchIdx].outline)
+                                    title: titleStr || next[matchIdx].title,
+                                    outline: outlineStr || next[matchIdx].outline
                                 };
                             } else {
                                 next.push({
                                     episodeNumber: epNum,
-                                    title: String(item.title || `第${epNum}集`),
-                                    outline: String(item.outline || ''),
+                                    title: titleStr || `第${epNum}集`,
+                                    outline: outlineStr,
                                     script: ''
                                 });
                             }
@@ -954,6 +1071,44 @@ ${currentOutlinesStr}
             }
         } catch (e: any) {
             alert(`大纲解析失败，请确保格式正确。错误: ${e.message}`);
+        }
+    };
+
+    // Apply a specific version of single episode outline
+    const applySingleEpisodeVersion = (episodeNumber: number, title: string, outline: string) => {
+        try {
+            setParsedEpisodes(prev => {
+                const next = [...prev];
+                const epNum = parseInt(String(episodeNumber));
+                if (!isNaN(epNum)) {
+                    const matchIdx = next.findIndex(x => x.episodeNumber === epNum);
+                    
+                    let titleStr = String(title || '');
+                    let outlineStr = String(outline || '');
+                    
+                    titleStr = titleStr.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t');
+                    outlineStr = outlineStr.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t');
+
+                    if (matchIdx !== -1) {
+                        next[matchIdx] = {
+                            ...next[matchIdx],
+                            title: titleStr || next[matchIdx].title,
+                            outline: outlineStr || next[matchIdx].outline
+                        };
+                    } else {
+                        next.push({
+                            episodeNumber: epNum,
+                            title: titleStr || `第${epNum}集`,
+                            outline: outlineStr,
+                            script: ''
+                        });
+                    }
+                }
+                return next.sort((a, b) => a.episodeNumber - b.episodeNumber);
+            });
+            alert(`✨ 成功应用第 ${episodeNumber} 集的所选优化版本！`);
+        } catch (err: any) {
+            alert(`应用大纲版本失败: ${err.message}`);
         }
     };
 
@@ -1034,7 +1189,7 @@ ${currentOutlinesStr}
 
         let prompt = '';
         if (outlineMode === 'existing') {
-            prompt = `【任务类型】：分集故事梗概拆分与续写
+            prompt = `【任务类型】：分集故事梗概拆分与续写（爆款短剧节奏深度优化）
 【目标集数】：${episodesCount} 集
 
 【原始故事梗概】：
@@ -1044,18 +1199,26 @@ ${existingOutline}
 
 【拆分与续写核心指令（极其重要，不折不扣执行）】：
 请严格基于上述【原始故事梗概】，将整篇故事按照其蕴含的事件节点、冲突爆点与剧情转折点，艺术化、戏剧化地拆分并扩写为【整整 ${episodesCount} 集】的AI短剧分集梗概。
+你必须对原始故事的节奏和情绪点进行爆款短剧化重构，确保每一集都拥有抓人的钩子和饱满的情绪波澜，杜绝平铺直叙。
+
+【爆款短剧黄金节奏与情绪曲线重构指令（核心要求）】：
+1. **黄金情绪波动曲线（虐爽结合、抑扬顿挫）**：
+   - 绝不能平铺直叙！必须按照“抑扬顿挫”的爆款情绪曲线重新编排，合理分布“憋屈/隐忍(抑)”与“打脸/反击(扬)”。
+   - **高频高潮分布**：每 3-5 集必须有一次情绪小爆发（如小误会化解、爽快反击、或强敌新一轮卑鄙挑衅）；每 10-15 集必须有一次核心大高潮（如重要身份首度揭晓、核心反派惨烈吃瘪、男女主宿命感羁绊极速升温）。
+2. **情节点的高密度与视觉化反差**：
+   - 将原始故事中的干瘪冲突，拆解为“冲突发生 -> 情绪积累(憋屈) -> 危机转折 -> 实力逆袭(打脸) -> 爽感释放、全场震撼”的完整情绪闭环。
+   - 所有矛盾冲突必须有具体、外化、可视觉化的情节点与行动（严禁只写“两人产生误会”，必须写清楚误会的具体导火索和具有张力的对峙行动）。
+3. **前3集黄金开局（极致拉满吸睛度）**：
+   - 前3集必须具有高强度、高密度、信息量炸裂的剧情。
+   - 第1集开头必须以最炸裂、最具情绪撕裂感的危机事件开局（如惨遭背叛、当众退婚、隐藏身份险遭拆穿、绝望处绝处逢生等），迅速把观众的情绪卷入，奠定非看不可的爽燃或虐恋基调！
 
 【大纲创作金牌规范要求（极其重要，严格执行）】：
 1. **严格确保输出集数完全符合要求**：你必须精准、无一遗漏地生成刚好【${episodesCount}集】大纲（必须从【第1集】连续不间断地输出到【第${episodesCount}集】），绝对不能中途截断、合并集数、敷衍了事或在半路戛然而止！
 2. **大纲字数与 Token 预算控制（防止大模型生成截断）**：
    - 如果目标集数较多（例如 ${episodesCount} >= 30 集），为了防止因大模型最大输出字数限制（maxOutputTokens）导致生成在半路中断，你**必须主动且精细地控制每集大纲的字数（每集梗概控制在 60-100 字左右，重点突出本集核心矛盾、打脸逆袭和结局悬念，字字珠玑）**，确保可以一口气完完整整地输出到最后一集【第${episodesCount}集】！
-   - 如果目标集数较少（例如 ${episodesCount} < 30 集），每集梗概应当更加充实饱满，不少于 150 字。
+   - 如果目标集数较少（例如 ${episodesCount} < 30 集），每集梗概应当更加充实饱满，在 120-180 字之间。
 3. **分集剧情的极致连贯性与层层递进**：整部短剧的分集大纲剧情必须**高度连贯、层层递进、环环相扣**。角色关系的演化、误会的堆叠、高潮打脸的清算、隐藏身份的层层解密，必须顺理成章、逻辑严密，绝不能出现剧情断代或莫名其妙的飞跃。
-4. **黄金前3集巨大信息量与炸裂事件开局**：
-   - **大纲前3集（第1集、第2集、第3集）必须包含极度饱满、高强度的剧情信息量**，用极快节奏瞬间铺开核心矛盾。
-   - **第1集必须以一个极其炸裂的事件（如惨烈背叛、当众羞辱、隐藏至尊身份揭晓、惊天机缘降临、重大家庭变故等）作为开头**，迅速激化不可调和的情绪和利益冲突，将戏剧张力拉满，奠定全剧高燃爽快的基调！
-5. **强节奏点与剧情卡点（Hook）**：在每一集的结尾，必须设置极具悬念的钩子、打脸的前奏或突如其来的反转，让观众产生强烈的“继续观看/自动解锁下一集”的冲动。
-6. **写清楚具体的情节点 and 行动**：绝不能使用笼统、空洞的词汇描述剧情（如：严禁只写“两人产生误会”，而要写清楚具体的人物理智/情感摩擦，以及视觉化、具有张力的情节行动画面）。
+4. **强节奏点与剧情卡点（Hook）**：在每一集的结尾，必须设置极具悬念的钩子、打脸的前奏或突如其来的反转，让观众产生强烈的“继续观看/自动解锁下一集”的冲动。
 
 ---
 
@@ -1067,40 +1230,56 @@ ${existingOutline}
 
 直接无缝输出，不要有任何多余的解释、开场白或引导语。`;
         } else {
-            const selectedTemplate = PROMPT_LIBRARY.find(p => p.id === selectedPromptId) || PROMPT_LIBRARY[0];
-            const genre = `${selectedEra}${theme ? ` - ${theme}` : ''}`;
-            const protagonistName = '主角';
-            const protagonistRole = selectedCharacters.join('、') || '神秘身份者';
-            const antagonistName = '对手';
-            const antagonistRole = '反派配角';
-            
+            let promptInstruction = selectedPromptCard?.template || selectedPromptCard?.content || selectedPromptCard?.description || '';
+            if (selectedPromptCard?.fields && selectedPromptCard.fields.length > 0) {
+                selectedPromptCard.fields.forEach(field => {
+                    const val = promptFormValues[field.id] || '';
+                    promptInstruction = promptInstruction.replace(new RegExp(`\\$\\{${field.id}\\}`, 'g'), val);
+                });
+            }
+
+            let filledFieldsText = '';
+            if (selectedPromptCard?.fields && selectedPromptCard.fields.length > 0) {
+                filledFieldsText = selectedPromptCard.fields
+                    .map(f => `${f.label}：${promptFormValues[f.id] || '（未填写）'}`)
+                    .join('\n');
+            } else if (coreIdea) {
+                filledFieldsText = `故事核心/雏形：${coreIdea}`;
+            }
+
+            const optionalEraText = selectedEra ? `【时代背景】：${selectedEra}` : '';
+            const optionalThemeText = selectedThemePlots.length > 0 ? `【主题情节】：${selectedThemePlots.join('、')}` : '';
+            const optionalCharText = selectedCharacters.length > 0 ? `【角色设定】：${selectedCharacters.join('、')}` : '';
+            const optionalTropeText = coreTrope ? `【核心梗】：${coreTrope}` : '';
+
             prompt = `【任务类型】：AI创意大纲一键批量生成
-【剧本类型/风格】：${genre}
+【提示词模板/卡片】：${selectedPromptCard?.title || '微短剧分集大纲生成'}
+${optionalEraText}
+${optionalThemeText}
+${optionalCharText}
+${optionalTropeText}
 【目标集数】：${episodesCount} 集
-【核心创意方向/故事内核】：${coreIdea}
-【主角设定】：主角名字：${protagonistName}，主角身份：${protagonistRole}
-【对手/反派设定】：对手名字：${antagonistName}，对手身份：${antagonistRole}
 
 ---
 
-【编剧指令（由选择提示词库加载）】：
-${selectedTemplate.prompt}
+【提示词表单填报内容】：
+${filledFieldsText}
+
+---
+
+【提示词指令】：
+${promptInstruction}
 
 ---
 
 【大纲创作金牌规范要求（极其重要，严格执行）】：
-1. **严格确保输出集数完全符合要求**：你必须精准、无一遗漏地生成刚好【${episodesCount}集】大纲（必须从【第1集】连续不间断地输出到【第${episodesCount}集】），绝对不能中途截断、合并集数、敷衍了事或在半路戛逐渐停止！
-2. **大纲字数与 Token 预算控制（防止大模型生成截断）**：
-   - 如果目标集数较多（例如 ${episodesCount} >= 30 集），为了防止因大模型最大输出字数限制（maxOutputTokens）导致生成在半路中断，你**必须主动且精细地控制每集大纲的字数（每集梗概控制在 60-100 字左右，重点突出本集核心矛盾、打脸逆袭和结局悬念，字字珠玑）**，确保可以一口气完完整整地输出到最后一集【第${episodesCount}集】！
-   - 如果目标集少（例如 ${episodesCount} < 30 集），每集梗概应当更加充实饱满，不少于 150 字。
-3. **分集剧情的极致连贯性与层层递进**：整部短剧的分集大纲剧情必须**高度连贯、层层递进、环环相扣**。角色关系的演化、误会的堆叠、高潮打脸的清算、隐藏身份的层层解密，必须顺理成章、逻辑严密，绝不能出现剧情断代或莫名其妙的飞跃。
-4. **黄金前3集巨大信息量与炸裂事件开局**：
-   - **大纲前3集（第1集、第2集、第3集）必须包含极度饱满、高强度的剧情信息量**，用极快节奏瞬间铺开核心矛盾。
-   - **第1集必须以一个极其炸裂的事件（如惨烈背叛、当众羞辱、隐藏至尊身份揭晓、惊天机缘降临、重大家庭变故等）作为开头**，迅速激化不可调和的情绪和利益冲突，将戏剧张力拉满，奠定全剧高燃爽快的基调！
-5. **强节奏点与剧情卡点（Hook）**：在每一集的结尾，必须设置极具悬念的钩子、打脸的前奏或突如其来的反转，让观众产生强烈的“继续观看/自动解锁下一集”的冲动。
-6. **写清楚具体的情节点和行动**：绝不能使用笼统、空洞的词汇描述剧情（如：严禁只写“两人产生误会”，而要写清楚具体的人物理智/情感摩擦，以及视觉化、具有张力的情节行动画面）。
-
----
+1. **严格确保输出集数完全符合要求**：你必须精准、无一遗漏地生成刚好【${episodesCount}集】大纲（必须从【第1集】连续不间断地输出到【第${episodesCount}集】），绝对不能中途截断、合并集数、敷衍了事或在半路戛然而止！
+2. **大纲字数与 Token 预算控制**：
+   - 如果目标集数较多（例如 ${episodesCount} >= 30 集），为了防止因大模型最大输出字数限制导致生成在半路中断，你必须主动精细地控制每集大纲字数（每集梗概控制在 60-100 字左右），确保可以一口气完完整整地输出到最后一集【第${episodesCount}集】！
+   - 如果目标集数较少（例如 ${episodesCount} < 30 集），每集梗概应当更加充实饱满，不少于 150 字。
+3. **分集剧情的极致连贯性与层层递进**：整部短剧的分集大纲剧情必须高度连贯、层层递进、环环相扣。
+4. **黄金前3集炸裂事件开局**：第1集必须以一个极其炸裂的事件作为开头，迅速激化不可调和的情绪和利益冲突。
+5. **强节奏点与剧情卡点（Hook）**：在每一集的结尾，设置极具悬念的钩子或打脸前奏。
 
 【输出格式规范】：
 请严格按照以下格式完整输出从【第1集】到【第${episodesCount}集】的详细大纲内容：
@@ -1132,15 +1311,18 @@ ${selectedTemplate.prompt}
                 }
             }
             
-            // Failsafe: Parse and apply the final episodes directly
-            const finalEpisodes = parseOutlines(finalText, episodesCount);
-            setParsedEpisodes(finalEpisodes);
-            
-            setStage('outline_results');
+            // If existing outline mode, auto transition to outline_results
+            if (outlineMode === 'existing') {
+                const finalEpisodes = parseOutlines(finalText, episodesCount);
+                setParsedEpisodes(finalEpisodes);
+                setStage('outline_results');
+            }
         } catch (err: any) {
             if (err.message !== 'Aborted') {
                 setError(err.message || '生成失败，请重试');
-                setStage(outlineMode === 'existing' ? 'outline_form_existing' : 'outline_form_new');
+                if (outlineMode === 'existing') {
+                    setStage('outline_form_existing');
+                }
             }
         } finally {
             setGlobalIsGenerating(false);
@@ -1213,12 +1395,15 @@ ${previousTail}
 3. **动作、神态与环境描写**：
    - 必须在独立行输出。
    - 动作描写一定要外化、夸张化，具有动漫感、分镜感。
+   - 减少使用副词、形容词等描述性话语，使用简洁的动作、神态描写。
    - 必须以三角形符号“△ ”（符号后跟一个空格）开头。
    - 例如：
    △ 她想悄悄退回去，但被周婉清一眼瞥见。
 
 4. **台词与对白**：
    - 必须在独立行输出。
+   - 人物的台词对话一定要符合人物的性格特点，具有短剧感。
+   - 对话必须推动剧情发展，拒绝任何的无用、闲聊式的话语。
    - 必须使用“人物名字（神态动作）：台词内容”格式。
    - 例如：
    周婉清（冷笑，上前一步）：哟，这不是我们的天才女编剧吗？
@@ -1894,7 +2079,7 @@ ${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本
                                                         {proj.title}
                                                     </h4>
                                                     <button 
-                                                        onClick={(e) => handleDeleteProject(proj.id, e)}
+                                                        onClick={(e) => handleDeleteProjectClick(proj, e)}
                                                         className="p-1 text-gray-400 hover:text-rose-500 rounded transition-colors"
                                                         title="删除项目"
                                                     >
@@ -2077,41 +2262,115 @@ ${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本
                 {stage === 'outline_form_new' && (
                     <div className="flex-1 flex overflow-hidden">
                         {/* Left Configuration */}
-                        <div className="w-full lg:w-[420px] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-y-auto p-6 space-y-6">
+                        <div className="w-full lg:w-[440px] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-y-auto p-6 space-y-6">
                             <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-1.5 border-b pb-3">
                                 <AdjustmentsHorizontal className="w-5 h-5 text-purple-500" />
                                 短剧生成高级设定
                             </h3>
 
-                            {/* Prompt Library */}
-                            <div className="space-y-2">
-                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">选择剧本模版 / 提示词库</label>
-                                <div className="grid grid-cols-1 gap-2">
-                                    {PROMPT_LIBRARY.map((item) => (
-                                        <div 
-                                            key={item.id}
-                                            onClick={() => setSelectedPromptId(item.id)}
-                                            className={`p-3 border rounded-xl cursor-pointer transition-all ${selectedPromptId === item.id ? 'bg-purple-50/60 border-purple-400 dark:bg-purple-950/20' : 'bg-white dark:bg-gray-900 border-gray-150 dark:border-gray-800 hover:border-gray-300'}`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-bold text-gray-800 dark:text-white">{item.name}</span>
-                                                {selectedPromptId === item.id && <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />}
+                            {/* Prompt Card Selection */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">选择提示词卡片</label>
+                                    <button
+                                        onClick={() => setIsPromptModalOpen(true)}
+                                        className="text-xs text-purple-600 hover:text-purple-700 font-bold flex items-center gap-1"
+                                    >
+                                        <Sparkles className="w-3.5 h-3.5" /> 提示词库
+                                    </button>
+                                </div>
+
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                                    {promptCardsList.slice(0, 6).map((card) => {
+                                        const isSelected = selectedPromptCard?.id === card.id;
+                                        return (
+                                            <div
+                                                key={card.id}
+                                                onClick={() => {
+                                                    setSelectedPromptCard(card);
+                                                    setPromptFormValues({});
+                                                }}
+                                                className={`p-3 border rounded-xl cursor-pointer transition-all ${isSelected ? 'bg-purple-50/70 border-purple-500 dark:bg-purple-950/30' : 'bg-white dark:bg-gray-900 border-gray-150 dark:border-gray-800 hover:border-purple-300'}`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold text-gray-800 dark:text-white line-clamp-1">{card.title}</span>
+                                                    {isSelected && <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse shrink-0" />}
+                                                </div>
+                                                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 line-clamp-2 leading-relaxed">{card.description}</p>
                                             </div>
-                                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 line-clamp-1 leading-normal">{item.desc}</p>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
 
-                            {/* Era option */}
+                            {/* Dynamic Form based on Selected Prompt Card */}
+                            {selectedPromptCard && (
+                                <div className="space-y-3 p-3.5 bg-purple-50/40 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40 rounded-2xl">
+                                    <div className="flex items-center justify-between border-b border-purple-100 dark:border-purple-900/40 pb-2">
+                                        <span className="text-xs font-bold text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
+                                            <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                                            提示词表单 ({selectedPromptCard.title})
+                                        </span>
+                                    </div>
+
+                                    {selectedPromptCard.fields && selectedPromptCard.fields.length > 0 ? (
+                                        <div className="space-y-2.5">
+                                            {selectedPromptCard.fields.map((field) => (
+                                                <div key={field.id} className="space-y-1">
+                                                    <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                                                        {field.label} {field.required && <span className="text-rose-500">*</span>}
+                                                    </label>
+                                                    {field.type === 'textarea' ? (
+                                                        <textarea
+                                                            value={promptFormValues[field.id] || ''}
+                                                            onChange={(e) => setPromptFormValues({ ...promptFormValues, [field.id]: e.target.value })}
+                                                            placeholder={field.placeholder || `请输入${field.label}...`}
+                                                            rows={2}
+                                                            className="w-full p-2.5 text-xs border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl outline-none focus:ring-1 focus:ring-purple-500 text-gray-900 dark:text-white"
+                                                        />
+                                                    ) : (
+                                                        <input
+                                                            type="text"
+                                                            value={promptFormValues[field.id] || ''}
+                                                            onChange={(e) => setPromptFormValues({ ...promptFormValues, [field.id]: e.target.value })}
+                                                            placeholder={field.placeholder || `请输入${field.label}...`}
+                                                            className="w-full p-2.5 text-xs border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl outline-none focus:ring-1 focus:ring-purple-500 text-gray-900 dark:text-white"
+                                                        />
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-1">
+                                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                                                剧情核心/故事雏形 (选填)
+                                            </label>
+                                            <textarea
+                                                value={coreIdea}
+                                                onChange={(e) => setCoreIdea(e.target.value)}
+                                                placeholder="请输入主角身份、核心冲突、打脸反转或故事核心梗..."
+                                                rows={3}
+                                                className="w-full p-2.5 text-xs border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl outline-none focus:ring-1 focus:ring-purple-500 text-gray-900 dark:text-white"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Era option (Optional) */}
                             <div className="space-y-2">
-                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">时代背景 (单选)</label>
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">时代背景 (单选 - 选填)</label>
+                                    {selectedEra && (
+                                        <button onClick={() => setSelectedEra('')} className="text-[10px] text-gray-400 hover:text-gray-600">清除选择</button>
+                                    )}
+                                </div>
                                 <div className="flex flex-wrap gap-1.5">
                                     {ERA_OPTIONS.map(opt => (
                                         <button 
                                             key={opt}
-                                            onClick={() => setSelectedEra(opt)}
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${selectedEra === opt ? 'bg-purple-50 text-purple-600 border-purple-300 dark:bg-purple-950/40 dark:text-purple-400' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}
+                                            onClick={() => setSelectedEra(selectedEra === opt ? '' : opt)}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${selectedEra === opt ? 'bg-purple-50 text-purple-600 border-purple-300 dark:bg-purple-950/40 dark:text-purple-400' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-purple-200'}`}
                                         >
                                             {opt}
                                         </button>
@@ -2119,10 +2378,15 @@ ${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本
                                 </div>
                             </div>
 
-                            {/* Theme plot option */}
+                            {/* Theme plot option (Optional) */}
                             <div className="space-y-2">
-                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">主题情节 (图二标签 - 可多选)</label>
-                                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto p-2 border border-gray-150 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-950/20 custom-scrollbar">
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">主题情节 (标签 - 可多选 - 选填)</label>
+                                    {selectedThemePlots.length > 0 && (
+                                        <button onClick={() => setSelectedThemePlots([])} className="text-[10px] text-gray-400 hover:text-gray-600">清空</button>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 border border-gray-150 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-950/20 custom-scrollbar">
                                     {THEME_PLOT_OPTIONS.map(opt => {
                                         const isSelected = selectedThemePlots.includes(opt);
                                         return (
@@ -2144,10 +2408,15 @@ ${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本
                                 </div>
                             </div>
 
-                            {/* Character Settings option */}
+                            {/* Character Settings option (Optional) */}
                             <div className="space-y-2">
-                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">角色设定 (图一标签 - 可多选)</label>
-                                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-2 border border-gray-150 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-950/20 custom-scrollbar">
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">角色设定 (标签 - 可多选 - 选填)</label>
+                                    {selectedCharacters.length > 0 && (
+                                        <button onClick={() => setSelectedCharacters([])} className="text-[10px] text-gray-400 hover:text-gray-600">清空</button>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 border border-gray-150 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-950/20 custom-scrollbar">
                                     {CHARACTER_TAG_OPTIONS.map(opt => {
                                         const isSelected = selectedCharacters.includes(opt);
                                         return (
@@ -2171,7 +2440,7 @@ ${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本
 
                             {/* Core Trope (Optional) */}
                             <div className="space-y-2">
-                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">核心梗 (非必填)</label>
+                                <label className="block text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">核心梗 (选填)</label>
                                 <input 
                                     type="text" 
                                     value={coreTrope} 
@@ -2204,30 +2473,75 @@ ${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本
                             <button 
                                 onClick={handleGenerateOutline}
                                 disabled={globalIsGenerating}
-                                className="w-full py-3.5 bg-purple-600 hover:bg-purple-550 text-white font-bold rounded-xl shadow-lg hover:shadow-purple-500/20 transition-all active:scale-95 disabled:bg-gray-300 disabled:shadow-none"
+                                className="w-full py-3.5 bg-purple-600 hover:bg-purple-550 text-white font-bold rounded-xl shadow-lg hover:shadow-purple-500/20 transition-all active:scale-95 disabled:bg-gray-300 disabled:shadow-none flex items-center justify-center gap-2"
                             >
-                                <Sparkles className="w-5 h-5 inline mr-1" /> 智能一键生成微短剧剧本大纲
+                                {globalIsGenerating ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        <span>AI 正在生成分集大纲...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="w-5 h-5" /> 智能一键生成微短剧剧本大纲
+                                    </>
+                                )}
                             </button>
                         </div>
 
-                        {/* Right Creative Hook Input */}
-                        <div className="flex-grow flex flex-col p-8 overflow-hidden bg-gray-50/50 dark:bg-gray-950/20">
-                            <div className="flex-1 bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded-2xl p-6 flex flex-col space-y-4 shadow-sm animate-fade-in" style={{ height: '600px' }}>
-                                <div className="flex items-center justify-between pb-2 border-b">
+                        {/* Right Output: Overall Episode Outline */}
+                        <div className="flex-grow flex flex-col p-6 overflow-hidden bg-gray-50/50 dark:bg-gray-950/20">
+                            <div className="flex-1 bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded-2xl p-6 flex flex-col space-y-4 shadow-sm animate-fade-in min-h-0">
+                                <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
                                     <div className="flex items-center gap-2">
-                                        <Sparkles className="text-purple-500 animate-pulse" style={{ width: '35px', height: '35px' }} />
-                                        <h4 className="text-sm font-bold text-gray-800 dark:text-white">请在此处输入核心梗或简单故事雏形：</h4>
+                                        <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+                                        <h4 className="text-sm font-bold text-gray-800 dark:text-white">输出整体的分集大纲</h4>
                                     </div>
-                                    <span className="text-[11px] text-gray-400">支持 1.5分钟/每集 情节智能生成</span>
+                                    {globalIsGenerating && (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-purple-600 font-medium animate-pulse flex items-center gap-1.5">
+                                                <div className="w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                                                正在生成分集大纲...
+                                            </span>
+                                            <button onClick={handleStop} className="px-2.5 py-1 bg-rose-50 text-rose-600 text-xs font-bold rounded-lg hover:bg-rose-100 transition-colors flex items-center gap-1">
+                                                <Stop className="w-3 h-3" /> 停止
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <textarea 
-                                    value={coreIdea} 
-                                    onChange={e => setCoreIdea(e.target.value)}
-                                    placeholder="例如：穷学生顾云在兼职外卖被富二代欺负时，突然接到一通神秘电话，原来自己竟然是华夏顶级财阀的第一顺位继承人，坐拥千亿资产！从此，顾云被迫踏上扮猪吃虎、隐藏身份清算仇敌的道路..."
-                                    className="flex-grow w-full p-4 bg-gray-50/50 dark:bg-gray-800 border border-gray-150 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none text-xs resize-none text-gray-800 dark:text-gray-150 leading-relaxed font-medium"
-                                    style={{ height: '500px' }}
-                                />
+                                <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 bg-gray-50/50 dark:bg-gray-950/50 rounded-xl border border-gray-150 dark:border-gray-800 text-xs font-mono leading-relaxed text-gray-800 dark:text-gray-200 custom-scrollbar [scrollbar-gutter:stable]">
+                                    {outlineRawText ? (
+                                        <div className="whitespace-pre-wrap">{outlineRawText}</div>
+                                    ) : (
+                                        <div className="h-full flex flex-col items-center justify-center text-center p-8 text-gray-400 space-y-3">
+                                            <Film className="w-10 h-10 text-gray-300 dark:text-gray-700" />
+                                            <p className="text-xs max-w-sm">
+                                                在左侧选择提示词卡片并配置填报表单（时代背景、主题情节、角色设定选填），点击「智能一键生成微短剧剧本大纲」，整体分集大纲将在此处实时输出展示。
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {outlineRawText && !globalIsGenerating && (
+                                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100 dark:border-gray-800 shrink-0">
+                                        <button
+                                            onClick={handleGenerateOutline}
+                                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
+                                        >
+                                            <ArrowPath className="w-4 h-4" /> 重新生成
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const finalEpisodes = parseOutlines(outlineRawText, episodesCount);
+                                                setParsedEpisodes(finalEpisodes);
+                                                setStage('outline_results');
+                                            }}
+                                            className="px-5 py-2 bg-purple-600 hover:bg-purple-550 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                                        >
+                                            进行下一步 <Play className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -2425,13 +2739,28 @@ ${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本
                                                             <div className="grid grid-cols-1 gap-2.5 max-h-60 overflow-y-auto pr-1">
                                                                 {previewEpisodes.map((ep, eIdx) => (
                                                                     <div key={eIdx} className="p-3 bg-purple-50/40 dark:bg-purple-950/20 border border-purple-100/70 dark:border-purple-900/40 rounded-xl space-y-1.5 shadow-sm transition-all hover:bg-purple-50/60">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="w-5 h-5 rounded-full bg-purple-500 text-white text-[10px] font-black flex items-center justify-center">
-                                                                                {ep.episodeNumber || '?'}
-                                                                            </span>
-                                                                            <span className="font-extrabold text-[11px] text-purple-900 dark:text-purple-200">
-                                                                                {ep.title || '标题生成中...'}
-                                                                            </span>
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="w-5 h-5 rounded-full bg-purple-500 text-white text-[10px] font-black flex items-center justify-center">
+                                                                                    {ep.episodeNumber || '?'}
+                                                                                </span>
+                                                                                <span className="font-extrabold text-[11px] text-purple-900 dark:text-purple-200">
+                                                                                    {ep.title || '标题生成中...'}
+                                                                                </span>
+                                                                                {ep.version && (
+                                                                                    <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 rounded text-[9px] font-bold">
+                                                                                        版本 {ep.version}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            {ep.version && !aiIsGenerating && ep.title && ep.outline && (
+                                                                                <button
+                                                                                    onClick={() => applySingleEpisodeVersion(ep.episodeNumber || chatTargetEpisode, ep.title, ep.outline)}
+                                                                                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[10px] flex items-center gap-0.5 transition-all shadow-sm active:scale-95"
+                                                                                >
+                                                                                    <Check className="w-3 h-3" /> 应用此版本
+                                                                                </button>
+                                                                            )}
                                                                         </div>
                                                                         <p className="text-[10px] text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap pl-7">
                                                                             {ep.outline || '情节概要生成中...'}
@@ -2444,16 +2773,41 @@ ${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本
                                                 })()}
                                                 
                                                 {/* If assistant message contains json blocks, show quick action button */}
-                                                {msg.role === 'assistant' && !aiIsGenerating && (msg.content.includes('```json') || msg.content.includes('[')) && (
-                                                    <div className="mt-3.5 pt-2.5 border-t border-gray-100 dark:border-gray-800 flex justify-end">
-                                                        <button 
-                                                            onClick={() => extractAndApplyOutlines(msg.content)}
-                                                            className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-sky-600 hover:opacity-90 text-white font-bold rounded-lg text-[11px] shadow-sm flex items-center gap-1 transition-all animate-bounce"
-                                                        >
-                                                            <Check className="w-3.5 h-3.5" /> 一键应用此优化方案到分集大纲
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                {msg.role === 'assistant' && !aiIsGenerating && (msg.content.includes('```json') || msg.content.includes('[')) && (() => {
+                                                    // Parse json block to see if it contains multiple versioned outcomes
+                                                    let jsonTextForCheck = '';
+                                                    const jsonRegex = /```json\s*([\s\S]*?)\s*(```|$)/;
+                                                    const match = msg.content.match(jsonRegex);
+                                                    if (match && match[1]) {
+                                                        jsonTextForCheck = match[1].trim();
+                                                    } else {
+                                                        const startIdx = msg.content.indexOf('[');
+                                                        if (startIdx !== -1) {
+                                                            jsonTextForCheck = msg.content.substring(startIdx).trim();
+                                                        }
+                                                    }
+                                                    const previewEpisodes = parsePartialOutlines(jsonTextForCheck);
+                                                    const hasVersions = previewEpisodes.some(ep => ep.version !== undefined);
+
+                                                    if (hasVersions) {
+                                                        return (
+                                                            <div className="mt-2.5 text-[10px] text-amber-600 dark:text-amber-400 font-bold text-right italic">
+                                                                💡 请在上方选择一个满意的版本并点击「应用此版本」进行单集覆盖
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <div className="mt-3.5 pt-2.5 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+                                                            <button 
+                                                                onClick={() => extractAndApplyOutlines(msg.content)}
+                                                                className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-sky-600 hover:opacity-90 text-white font-bold rounded-lg text-[11px] shadow-sm flex items-center gap-1 transition-all animate-bounce"
+                                                            >
+                                                                <Check className="w-3.5 h-3.5" /> 一键应用此优化方案到分集大纲
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     ))
@@ -3751,6 +4105,48 @@ ${skillEpisodesStore[skillReviewNum] || "请先在第五步中生成该集剧本
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Project Delete Confirmation Modal */}
+            {projectToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4">
+                    <div className="bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-xl">
+                        <div className="flex items-center gap-3 text-rose-500">
+                            <Trash className="w-6 h-6" />
+                            <h4 className="font-extrabold text-base text-gray-900 dark:text-white">确认删除剧本项目？</h4>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                            您确定要删除项目 <span className="font-bold text-gray-800 dark:text-gray-200">《{projectToDelete.title}》</span> 吗？此操作将彻底删除该项目下的所有分集剧本和大纲，且无法恢复。
+                        </p>
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                            <button
+                                onClick={() => setProjectToDelete(null)}
+                                className="px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition-all"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleConfirmDeleteProject}
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md transition-all active:scale-95"
+                            >
+                                确认删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Prompt Selection Modal */}
+            {isPromptModalOpen && (
+                <PromptSelectionModal
+                    isOpen={isPromptModalOpen}
+                    onClose={() => setIsPromptModalOpen(false)}
+                    onSelect={(prompt) => {
+                        setSelectedPromptCard(prompt);
+                        setPromptFormValues({});
+                        setIsPromptModalOpen(false);
+                    }}
+                />
             )}
         </div>
     );
