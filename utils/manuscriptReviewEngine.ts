@@ -14,6 +14,7 @@ export interface ReviewedCharacterEntity {
 
 export interface CharacterConflictItem {
     id: string;
+    conflictKey: string;
     originalName: string;
     imitationName: string;
     originalEntityDisplay: string;
@@ -28,7 +29,7 @@ export interface CharacterConflictItem {
     imitationPinyin: string;
     count: number;
     recommendedNames: string[];
-    resolved?: boolean;
+    ignored?: boolean;
 }
 
 export interface TypoAuditItem {
@@ -97,9 +98,12 @@ export interface SentenceSimilarity {
 
 export interface FailedAuditTask {
     id: string;
-    kind: 'original_chunk' | 'imitation_chunk' | 'cross_similarity';
+    kind: 'original_chunk' | 'imitation_chunk' | 'imitation_dirty_range' | 'cross_similarity';
     chunkIndex?: number;
     totalChunks?: number;
+    startOffset?: number;
+    endOffset?: number;
+    segmentText?: string;
     label: string;
     errorMessage: string;
 }
@@ -122,14 +126,6 @@ export interface AuditCacheState {
     originalText: string;
     imitationText: string;
     modelUsed: string;
-    originalEntities: ReviewedCharacterEntity[];
-    originalChunkCharacters?: Map<number, any[]>;
-    imitationChunkResults?: Map<number, { characters: any[]; issues: any[] }>;
-    imitationParagraphResults: Map<string, {
-        entities: ReviewedCharacterEntity[];
-        typos: TypoAuditItem[];
-        manualItems: ManualReviewItem[];
-    }>;
 }
 
 export interface ComprehensiveAuditReport {
@@ -272,7 +268,7 @@ export async function callReviewModel(
     options?: ReviewModelCallOptions
 ): Promise<{ text: string; actualModel: string }> {
     const controller = new AbortController();
-    const timeoutMs = options?.timeoutMs ?? 45000;
+    const timeoutMs = options?.timeoutMs ?? 58000;
     const jsonMode = options?.jsonMode ?? true;
     const maxTokens = options?.maxTokens ?? 8192;
     const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
@@ -488,13 +484,17 @@ const recoverTruncatedJsonArrayObjects = (rawSlice: string, expectedArrayKey: st
     return null;
 };
 
-const parseJsonObjectSafe = (raw: string, expectedArrayKey: 'characters' | 'issues' | 'findings' = 'characters'): any => {
-    if (!raw || typeof raw !== 'string') return null;
-    const cleaned = raw
+const cleanRawModelOutput = (raw: string): string => {
+    if (!raw || typeof raw !== 'string') return '';
+    return raw
         .replace(/<think>[\s\S]*?<\/think>/gi, '')
         .replace(/```json\s*/gi, '')
         .replace(/```\s*/g, '')
         .trim();
+};
+
+const parseJsonObjectSafe = (raw: string, expectedArrayKey: 'characters' | 'issues' | 'findings' = 'characters'): any => {
+    const cleaned = cleanRawModelOutput(raw);
     if (!cleaned) return null;
 
     // 1. 直接解析整段（兼容外层为对象或纯数组的情况）
@@ -531,9 +531,20 @@ const parseJsonObjectSafe = (raw: string, expectedArrayKey: 'characters' | 'issu
                 return Array.isArray(parsedObj) ? { [expectedArrayKey]: parsedObj } : parsedObj;
             }
         }
-        // 4. 输出截断恢复（保留完整已闭合对象前缀）
-        const recovered = recoverTruncatedJsonArrayObjects(cleaned.slice(objStart), expectedArrayKey);
-        if (recovered) return recovered;
+        // 4. 输出截断恢复（保留完整已闭合对象前缀，支持多数组字段同时恢复）
+        const sliceFromObj = cleaned.slice(objStart);
+        const recoveredPrimary = recoverTruncatedJsonArrayObjects(sliceFromObj, expectedArrayKey);
+        if (expectedArrayKey === 'characters') {
+            const recoveredIssues = recoverTruncatedJsonArrayObjects(sliceFromObj, 'issues');
+            if (recoveredPrimary || recoveredIssues) {
+                return {
+                    characters: recoveredPrimary?.characters || [],
+                    issues: recoveredIssues?.issues || []
+                };
+            }
+        } else if (recoveredPrimary) {
+            return recoveredPrimary;
+        }
     }
 
     if (arrStart !== -1) {
@@ -542,6 +553,36 @@ const parseJsonObjectSafe = (raw: string, expectedArrayKey: 'characters' | 'issu
     }
 
     return null;
+};
+
+const extractFlexibleArray = (parsed: any, candidateKeys: string[]): any[] | null => {
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (Array.isArray(parsed)) return parsed;
+    for (const k of candidateKeys) {
+        if (Array.isArray(parsed[k])) return parsed[k];
+    }
+    // 若是合法 JSON 对象但模型因该段无结果返回了 {} 或对应字段为 null，视为空数组而非解析错误
+    const values = Object.values(parsed);
+    if (values.length === 0 || candidateKeys.some(k => parsed[k] === null)) {
+        return [];
+    }
+    return null;
+};
+
+const isNonRetryableModelError = (err: any, signal?: AbortSignal): boolean => {
+    const msg = String(err?.message || err || '');
+    const lower = msg.toLowerCase();
+    return Boolean(
+        signal?.aborted ||
+        msg.includes('取消') ||
+        lower.includes('not configured') ||
+        lower.includes('api_key') ||
+        lower.includes('permission_denied') ||
+        lower.includes('403') ||
+        lower.includes('resource_exhausted') ||
+        lower.includes('429') ||
+        msg.includes('模型路由不一致')
+    );
 };
 
 async function withSingleAutoRetry<T>(
@@ -553,21 +594,10 @@ async function withSingleAutoRetry<T>(
     try {
         return await operation();
     } catch (firstErr: any) {
-        const msg = String(firstErr?.message || firstErr || '');
-        const lower = msg.toLowerCase();
-        if (
-            signal?.aborted ||
-            msg.includes('取消') ||
-            lower.includes('not configured') ||
-            lower.includes('api_key') ||
-            lower.includes('permission_denied') ||
-            lower.includes('403') ||
-            lower.includes('resource_exhausted') ||
-            lower.includes('429') ||
-            msg.includes('模型路由不一致')
-        ) {
+        if (isNonRetryableModelError(firstErr, signal)) {
             throw firstErr;
         }
+        const msg = String(firstErr?.message || firstErr || '');
         console.warn(`[审稿分段自动重试] ${taskLabel} 首次失败（${msg}），正在自动重试 1 次...`);
         onRetryNotice?.(`${taskLabel} 首次处理异常，正在自动重试...`);
         await new Promise((resolve) => setTimeout(resolve, 450));
@@ -581,7 +611,9 @@ interface TextChunk {
     endOffset: number;
 }
 
-const splitIntoParagraphChunks = (text: string, maxChunkChars = 8500): TextChunk[] => {
+const DEFAULT_CHUNK_CHARS = 5000;
+
+const splitIntoParagraphChunks = (text: string, maxChunkChars = DEFAULT_CHUNK_CHARS): TextChunk[] => {
     if (!text) return [];
     const lines = text.split('\n');
     const chunks: TextChunk[] = [];
@@ -654,10 +686,25 @@ const verifyAndRegisterCharacters = (
 
     for (const item of rawItems) {
         if (!item || typeof item !== 'object') continue;
-        const rawCanonical = typeof item.canonical === 'string' ? item.canonical.trim() : '';
-        const rawMentions: string[] = Array.isArray(item.mentions)
-            ? item.mentions.filter((m: unknown): m is string => typeof m === 'string').map((m: string) => m.trim())
+        const rawCanonicalField =
+            typeof item.canonical === 'string'
+                ? item.canonical
+                : typeof item.name === 'string'
+                ? item.name
+                : typeof item.character === 'string'
+                ? item.character
+                : '';
+        const rawCanonical = rawCanonicalField.trim();
+        const rawMentionsArr = Array.isArray(item.mentions)
+            ? item.mentions
+            : Array.isArray(item.aliases)
+            ? item.aliases
+            : Array.isArray(item.titles)
+            ? item.titles
             : [];
+        const rawMentions: string[] = rawMentionsArr
+            .filter((m: unknown): m is string => typeof m === 'string')
+            .map((m: string) => m.trim());
         const allCandidates = Array.from(new Set([rawCanonical, ...rawMentions].filter(Boolean)));
 
         // Strict verbatim verification: must exist verbatim in manuscript text, not excluded, not pure pronoun/generic title or clan name
@@ -724,8 +771,7 @@ const verifyAndRegisterCharacters = (
 // --- 1. 原稿 AI 全语义解析（人物/别名/专属称谓/不确定项） ---
 async function analyzeOriginalChunkWithAI(
     chunkText: string,
-    chunkIndex: number,
-    totalChunks: number,
+    segmentLabel: string,
     model: string,
     knownCharactersHint: string[],
     signal?: AbortSignal
@@ -734,7 +780,7 @@ async function analyzeOriginalChunkWithAI(
         ? `\n前文已确认人物参考（若本段出现同一人物的别名/封号请自动关联）：${knownCharactersHint.slice(0, 40).join('、')}`
         : '';
 
-    const prompt = `你是一名精通中国古代言情、宫斗、现言与悬疑小说的资深审稿编辑。请仔细阅读下面【原稿第 ${chunkIndex + 1}/${totalChunks} 段】完整上下文，通过语义理解提取文中**所有真实出现的人物**（包括主角、丫鬟、太医、太监、配角与仅出场一次的低频人物）。${hintText}
+    const prompt = `你是一名精通中国古代言情、宫斗、现言与悬疑小说的资深审稿编辑。请仔细阅读下面【${segmentLabel}】完整上下文，通过语义理解提取文中**所有真实出现的人物**（包括主角、丫鬟、太医、太监、配角与仅出场一次的低频人物）。${hintText}
 
 严格要求：
 1. 必须先基于全文语境判断其是否真的是“人物”，然后再提取姓名、字号、小名/昵称、封号或明确指向单人的专属称谓。
@@ -746,7 +792,7 @@ async function analyzeOriginalChunkWithAI(
    - 严禁拼接或截断词组（如“容枝死了”只能提“容枝”，不能提“容枝死”）。
 4. 明确指向特定单人的专属称谓（如：柔妃、韵妃、昭妃、顾嬷嬷、钱嬷嬷、刘公公）必须保留。
 5. 如果某处疑似人物小名、称谓或冷僻称呼你**不能完全确定**是否真为人名，请照实标记 "confidence": "uncertain" 并说明简短 reason，切勿强行当成确认人物，也不要直接丢弃。
-6. 所有 canonical、mentions、evidence 必须是下方原文中**逐字真实出现**的文本。
+6. 所有 canonical、mentions、evidence 必须是下方原文中**逐字真实出现**的文本。若本段无具体人物，返回 {"characters": []}。
 
 仅返回严格 JSON 对象（不要额外解释）：
 {
@@ -771,16 +817,10 @@ ${chunkText}`;
         maxTokens: 8192
     });
     const parsed = parseJsonObjectSafe(res.text, 'characters');
-    const chars = Array.isArray(parsed?.characters)
-        ? parsed.characters
-        : Array.isArray(parsed?.roles)
-        ? parsed.roles
-        : Array.isArray(parsed?.items)
-        ? parsed.items
-        : null;
+    const chars = extractFlexibleArray(parsed, ['characters', 'roles', 'items', 'character_list', 'characterList', 'data']);
     if (!parsed || !Array.isArray(chars)) {
-        console.error(`[原稿第 ${chunkIndex + 1} 段 JSON 解析失败] 原始返回前400字:`, res.text.slice(0, 400));
-        throw new Error(`原稿第 ${chunkIndex + 1} 段 AI 返回结构无法解析`);
+        console.error(`[${segmentLabel} JSON 解析失败] 原始返回前400字:`, res.text.slice(0, 400));
+        throw new Error(`${segmentLabel} AI 返回结构无法解析`);
     }
     return { characters: chars, actualModel: res.actualModel };
 }
@@ -788,8 +828,7 @@ ${chunkText}`;
 // --- 2. 仿写稿 AI 合并语义审稿（单次调用同时完成：人物抽取 + 人物一致性 + 错别字/语句不通 + 待人工核对） ---
 async function analyzeImitationChunkWithAI(
     chunkText: string,
-    chunkIndex: number,
-    totalChunks: number,
+    segmentLabel: string,
     model: string,
     knownCharactersHint: string[],
     signal?: AbortSignal
@@ -802,7 +841,7 @@ async function analyzeImitationChunkWithAI(
         ? `\n前文已确认人物参考（供别名合并与名字前后一致性核查）：${knownCharactersHint.slice(0, 40).join('、')}`
         : '';
 
-    const prompt = `你是一名精通中文网络小说与出版校对的高级审稿编辑。请仔细通读下面【仿写稿第 ${chunkIndex + 1}/${totalChunks} 段】上下文，一次性完成三项语义审稿任务：人物提取、人物一致性审查、错别字与语句校对。${hintText}
+    const prompt = `你是一名精通中文网络小说与出版校对的高级审稿编辑。请仔细通读下面【${segmentLabel}】上下文，一次性完成三项语义审稿任务：人物提取、人物一致性审查、错别字与语句校对。${hintText}
 
 【任务一：人物姓名与专属称谓提取（characters）】
 1. 基于上下文确认所有真实出现的人物（含主角、丫鬟、太医、太监、低频配角），合并同一人物的姓名、昵称、封号与专属称谓（如 ["陆未央", "未央"]、["顾嬷嬷", "顾氏"]）。
@@ -818,7 +857,7 @@ async function analyzeImitationChunkWithAI(
 - **严厉防误报**：正常小说口语、古言文白词（岂敢、罢了、奴婢、臣妾）、对话省略句、刻意排比强调**不要报错**！不确定时设为 "confidence": "uncertain"。
 
 【重要规则】
-所有 canonical、mentions、evidence、wrongText、sentence 必须是下方原文中**逐字真实存在**的原文片段，不得自行编造或拼接。
+所有 canonical、mentions、evidence、wrongText、sentence 必须是下方原文中**逐字真实存在**的原文片段，不得自行编造或拼接。若无人物或无问题请返回空数组 []。
 
 仅返回严格 JSON 对象：
 {
@@ -835,7 +874,7 @@ async function analyzeImitationChunkWithAI(
   "issues": [
     {
       "type": "consistency | typo | homophone | missing_char | extra_char | collocation | grammar",
-      "confidence": "confirmed 或 uncertain",
+      "confidence": "confirmed | uncertain",
       "wrongText": "原文需要修改的精确短片段",
       "correctText": "建议修改后的文本",
       "sentence": "包含该问题的原文完整原句",
@@ -853,21 +892,152 @@ ${chunkText}`;
         maxTokens: 8192
     });
     const parsed = parseJsonObjectSafe(res.text, 'characters');
-    const chars = Array.isArray(parsed?.characters)
-        ? parsed.characters
-        : Array.isArray(parsed?.roles)
-        ? parsed.roles
-        : null;
-    if (!parsed || !Array.isArray(chars)) {
-        console.error(`[仿写第 ${chunkIndex + 1} 段 JSON 解析失败] 原始返回前400字:`, res.text.slice(0, 400));
-        throw new Error(`仿写稿第 ${chunkIndex + 1} 段 AI 返回结构无法解析`);
+    if (!parsed || typeof parsed !== 'object') {
+        console.error(`[${segmentLabel} JSON 解析失败] 原始返回前400字:`, res.text.slice(0, 400));
+        throw new Error(`${segmentLabel} AI 返回结构无法解析`);
     }
-    const issues = Array.isArray(parsed.issues) ? parsed.issues : [];
+    const chars = extractFlexibleArray(parsed, ['characters', 'roles', 'character_list', 'characterList']) ?? [];
+    const issues = extractFlexibleArray(parsed, ['issues', 'errors', 'typos', 'problems']) ?? [];
     return {
         characters: chars,
         issues,
         actualModel: res.actualModel
     };
+}
+
+// --- 统一底层分段执行器（支持自适应二分拆段重试：解决长段截断/超时导致“重试失败部分”反复失败的问题） ---
+async function executeOriginalSegmentUnified(params: {
+    segmentText: string;
+    startOffset: number;
+    label: string;
+    model: string;
+    knownHints: string[];
+    signal?: AbortSignal;
+    onProgress?: (msg: string) => void;
+}): Promise<{
+    subResults: Array<{ startOffset: number; characters: any[] }>;
+    actualModel: string;
+}> {
+    const { segmentText, startOffset, label, model, knownHints, signal, onProgress } = params;
+    try {
+        const res = await analyzeOriginalChunkWithAI(segmentText, label, model, knownHints, signal);
+        return {
+            subResults: [{ startOffset, characters: res.characters }],
+            actualModel: res.actualModel
+        };
+    } catch (firstErr: any) {
+        if (isNonRetryableModelError(firstErr, signal)) {
+            throw firstErr;
+        }
+        const halfLimit = Math.max(1400, Math.ceil(segmentText.length / 2));
+        const subChunks = segmentText.length > 1800 ? splitIntoParagraphChunks(segmentText, halfLimit) : [];
+
+        if (subChunks.length >= 2) {
+            console.warn(`[自适应拆段重试] ${label} 整段处理异常（${firstErr?.message}），自动拆分为 ${subChunks.length} 个子段重试...`);
+            onProgress?.(`${label} 正在自动细分重试（1/${subChunks.length}）...`);
+            const subResults: Array<{ startOffset: number; characters: any[] }> = [];
+            let actualModel = model;
+            const localHints = [...knownHints];
+
+            for (let sIdx = 0; sIdx < subChunks.length; sIdx++) {
+                const sub = subChunks[sIdx];
+                onProgress?.(`${label} 正在自动细分重试（${sIdx + 1}/${subChunks.length}）...`);
+                const subRes = await analyzeOriginalChunkWithAI(
+                    sub.text,
+                    `${label}（子段 ${sIdx + 1}/${subChunks.length}）`,
+                    model,
+                    localHints,
+                    signal
+                );
+                actualModel = subRes.actualModel;
+                subResults.push({
+                    startOffset: startOffset + sub.startOffset,
+                    characters: subRes.characters
+                });
+                subRes.characters.forEach((c: any) => {
+                    const name = typeof c?.canonical === 'string' ? c.canonical.trim() : '';
+                    if (name && !localHints.includes(name)) localHints.push(name);
+                });
+            }
+            return { subResults, actualModel };
+        }
+
+        console.warn(`[分段自动重试] ${label} 首次异常（${firstErr?.message}），等待后重试 1 次...`);
+        onProgress?.(`${label} 首次处理异常，正在自动重试...`);
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        const retryRes = await analyzeOriginalChunkWithAI(segmentText, label, model, knownHints, signal);
+        return {
+            subResults: [{ startOffset, characters: retryRes.characters }],
+            actualModel: retryRes.actualModel
+        };
+    }
+}
+
+async function executeImitationSegmentUnified(params: {
+    segmentText: string;
+    startOffset: number;
+    label: string;
+    model: string;
+    knownHints: string[];
+    signal?: AbortSignal;
+    onProgress?: (msg: string) => void;
+}): Promise<{
+    subResults: Array<{ startOffset: number; characters: any[]; issues: any[] }>;
+    actualModel: string;
+}> {
+    const { segmentText, startOffset, label, model, knownHints, signal, onProgress } = params;
+    try {
+        const res = await analyzeImitationChunkWithAI(segmentText, label, model, knownHints, signal);
+        return {
+            subResults: [{ startOffset, characters: res.characters, issues: res.issues }],
+            actualModel: res.actualModel
+        };
+    } catch (firstErr: any) {
+        if (isNonRetryableModelError(firstErr, signal)) {
+            throw firstErr;
+        }
+        const halfLimit = Math.max(1400, Math.ceil(segmentText.length / 2));
+        const subChunks = segmentText.length > 1800 ? splitIntoParagraphChunks(segmentText, halfLimit) : [];
+
+        if (subChunks.length >= 2) {
+            console.warn(`[自适应拆段重试] ${label} 整段处理异常（${firstErr?.message}），自动拆分为 ${subChunks.length} 个子段重试...`);
+            const subResults: Array<{ startOffset: number; characters: any[]; issues: any[] }> = [];
+            let actualModel = model;
+            const localHints = [...knownHints];
+
+            for (let sIdx = 0; sIdx < subChunks.length; sIdx++) {
+                const sub = subChunks[sIdx];
+                onProgress?.(`${label} 正在自动细分重试（${sIdx + 1}/${subChunks.length}）...`);
+                const subRes = await analyzeImitationChunkWithAI(
+                    sub.text,
+                    `${label}（子段 ${sIdx + 1}/${subChunks.length}）`,
+                    model,
+                    localHints,
+                    signal
+                );
+                actualModel = subRes.actualModel;
+                subResults.push({
+                    startOffset: startOffset + sub.startOffset,
+                    characters: subRes.characters,
+                    issues: subRes.issues
+                });
+                subRes.characters.forEach((c: any) => {
+                    const name = typeof c?.canonical === 'string' ? c.canonical.trim() : '';
+                    if (name && !localHints.includes(name)) localHints.push(name);
+                });
+            }
+            return { subResults, actualModel };
+        }
+
+        console.warn(`[分段自动重试] ${label} 首次异常（${firstErr?.message}），等待后重试 1 次...`);
+        onProgress?.(`${label} 首次处理异常，正在自动重试...`);
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        const retryRes = await analyzeImitationChunkWithAI(segmentText, label, model, knownHints, signal);
+        return {
+            subResults: [{ startOffset, characters: retryRes.characters, issues: retryRes.issues }],
+            actualModel: retryRes.actualModel
+        };
+    }
 }
 
 // --- 3. 同字换序 / 同音 / 近音 / 重名 / 专属称谓比对 ---
@@ -973,11 +1143,15 @@ const CONFLICT_PRIORITY: Record<CharacterConflictItem['conflictType'], number> =
     near_homophone: 1
 };
 
+export const makeCharacterConflictKey = (originalName: string, imitationName: string): string =>
+    `${originalName}::${imitationName}`;
+
 export const compareCharacterConflicts = (
     originalText: string,
     imitationText: string,
     origEntities: ReviewedCharacterEntity[],
-    imitEntities: ReviewedCharacterEntity[]
+    imitEntities: ReviewedCharacterEntity[],
+    ignoredConflictKeys?: Set<string>
 ): {
     confirmedConflicts: CharacterConflictItem[];
     uncertainConflictManualItems: ManualReviewItem[];
@@ -1014,16 +1188,16 @@ export const compareCharacterConflicts = (
             }
 
             bestForImit.forEach((m) => {
-                const pairKey = `${m.origM}->${m.imitM}`;
-                if (seenPairs.has(pairKey)) return;
+                const conflictKey = makeCharacterConflictKey(m.origM, m.imitM);
+                if (seenPairs.has(conflictKey)) return;
                 const count = countExactOccurrences(imitationText, m.imitM);
                 if (count === 0) return;
-                seenPairs.add(pairKey);
+                seenPairs.add(conflictKey);
 
                 const origIdx = Math.max(0, originalText.indexOf(m.origM));
                 const imitIdx = Math.max(0, imitationText.indexOf(m.imitM));
 
-                // 若单字通用称谓外或任一方置信度不确定，或某些近音存疑，放入待人工核对；否则进入确认冲突
+                // 若任一方置信度不确定，放入待人工核对；否则进入确认冲突（支持忽略状态保留）
                 const isBothConfirmed = origEnt.confidence === 'confirmed' && imitEnt.confidence === 'confirmed';
                 const labelMap: Record<CharacterConflictItem['conflictType'], string> = {
                     exact: '完全重名',
@@ -1034,8 +1208,10 @@ export const compareCharacterConflicts = (
                 };
 
                 if (isBothConfirmed) {
+                    const isIgnored = ignoredConflictKeys ? ignoredConflictKeys.has(conflictKey) : false;
                     confirmedConflicts.push({
-                        id: `conflict-${confirmedConflicts.length}-${m.origM}-${m.imitM}`,
+                        id: `conflict-${hashString(conflictKey)}`,
+                        conflictKey,
                         originalName: m.origM,
                         imitationName: m.imitM,
                         originalEntityDisplay: origEnt.mentions.join(' / '),
@@ -1049,12 +1225,13 @@ export const compareCharacterConflicts = (
                         originalPinyin: m.origPinyin,
                         imitationPinyin: m.imitPinyin,
                         count,
-                        recommendedNames: NAME_RECOMMENDATIONS.slice(0, 3)
+                        recommendedNames: NAME_RECOMMENDATIONS.slice(0, 3),
+                        ignored: isIgnored
                     });
                 } else {
                     const loc = getLocationInfo(imitationText, imitIdx);
                     uncertainConflictManualItems.push({
-                        id: `manual-conflict-${uncertainConflictManualItems.length}-${m.origM}-${m.imitM}`,
+                        id: `manual-conflict-${hashString(conflictKey)}`,
                         issueType: 'conflict',
                         aiJudgment: `AI不确定：疑似与原稿角色「${m.origM}」构成${labelMap[m.conflictType]}`,
                         originalTextSnippet: origEnt.evidence[0] || m.origM,
@@ -1074,7 +1251,10 @@ export const compareCharacterConflicts = (
     }
 
     return {
-        confirmedConflicts: confirmedConflicts.sort((a, b) => CONFLICT_PRIORITY[b.conflictType] - CONFLICT_PRIORITY[a.conflictType]),
+        confirmedConflicts: confirmedConflicts.sort((a, b) => {
+            if (Boolean(a.ignored) !== Boolean(b.ignored)) return a.ignored ? 1 : -1;
+            return CONFLICT_PRIORITY[b.conflictType] - CONFLICT_PRIORITY[a.conflictType];
+        }),
         uncertainConflictManualItems
     };
 };
@@ -1236,41 +1416,38 @@ ${origSample}
 ${imitSample}`;
     };
 
-    let parsed: any = null;
+    let findingsList: any[] | null = null;
     let lastError: Error | null = null;
     for (const windowSize of [6800, 4200]) {
         if (signal?.aborted) throw new Error('审稿任务已被用户取消');
         try {
             const res = await callReviewModel(buildPrompt(windowSize), model, signal, {
                 jsonMode: true,
-                timeoutMs: 36000,
+                timeoutMs: 48000,
                 thinkingLevel: 'LOW',
                 maxTokens: 4096
             });
-            parsed = parseJsonObjectSafe(res.text, 'findings');
-            if (parsed && Array.isArray(parsed.findings)) {
+            const parsed = parseJsonObjectSafe(res.text, 'findings');
+            const extracted = extractFlexibleArray(parsed, ['findings', 'similarities', 'items', 'alerts', 'results']);
+            if (parsed && Array.isArray(extracted)) {
+                findingsList = extracted;
                 break;
             }
             console.error('[跨稿语义查重 JSON 解析失败] 原始返回前400字:', res.text.slice(0, 400));
             lastError = new Error('跨稿语义查重返回结构非标准 JSON');
         } catch (err: any) {
             lastError = err instanceof Error ? err : new Error(String(err));
-            if (
-                signal?.aborted ||
-                lastError.message.includes('取消') ||
-                lastError.message.includes('not configured') ||
-                lastError.message.includes('模型路由不一致')
-            ) {
+            if (isNonRetryableModelError(lastError, signal)) {
                 throw lastError;
             }
         }
     }
 
-    if (!parsed || !Array.isArray(parsed.findings)) {
+    if (!Array.isArray(findingsList)) {
         throw lastError || new Error('跨稿语义查重未返回有效结果');
     }
 
-    const findings = parsed.findings;
+    const findings = findingsList;
     const confirmedSimilarities: DialogueSimilarityItem[] = [];
     const uncertainSimilarityManualItems: ManualReviewItem[] = [];
 
@@ -1452,23 +1629,147 @@ export const computeSentenceSimilarityPalette = (
     });
 };
 
-// --- 7. 统一审稿执行器（支持全文首审 & 修改后仅重检受影响段落） ---
+// --- 7. 审稿结果校验吸收与三大独立执行器（全文审稿 / 局部复检变更 / 重试失败部分） ---
+const VALID_TYPO_CATS = new Set<TypoAuditItem['category']>([
+    'typo', 'homophone', 'extra_char', 'missing_char', 'collocation', 'consistency', 'grammar'
+]);
+
+const collectImitationIssuesIntoLists = (
+    imitationText: string,
+    rawIssues: any[],
+    searchOffset: number,
+    typoIssues: TypoAuditItem[],
+    manualReviewItems: ManualReviewItem[],
+    idPrefix: string
+) => {
+    if (!Array.isArray(rawIssues)) return;
+    for (const item of rawIssues) {
+        if (!item || typeof item !== 'object') continue;
+        const wrongText = typeof item.wrongText === 'string' ? item.wrongText.trim() : '';
+        const correctText = typeof item.correctText === 'string' ? item.correctText.trim() : '';
+        const sentence = typeof item.sentence === 'string' ? item.sentence.trim() : '';
+        const reason = typeof item.reason === 'string' ? item.reason.trim() : '';
+        if (!wrongText) continue;
+
+        const idx = locateVerbatimSpan(imitationText, wrongText, sentence, searchOffset);
+        if (idx === -1) continue;
+
+        const loc = getLocationInfo(imitationText, idx);
+        const verifiedSentence = sentence && imitationText.includes(sentence)
+            ? sentence
+            : extractSnippetNear(imitationText, wrongText, idx);
+        const cat: TypoAuditItem['category'] = VALID_TYPO_CATS.has(item.type) ? item.type : 'typo';
+
+        if (item.confidence === 'uncertain') {
+            // 不覆盖用户已处理过（confirmed/ignored/modified）或已存在的同一位置待核对项
+            const existsInManual = manualReviewItems.some(
+                m => m.wrongText === wrongText && (m.imitationIndex === idx || m.imitationTextSnippet === verifiedSentence)
+            );
+            if (!existsInManual) {
+                manualReviewItems.push({
+                    id: `manual-${idPrefix}-${idx}-${hashString(wrongText)}`,
+                    issueType: cat === 'consistency' ? 'consistency' : 'typo',
+                    aiJudgment: `AI不确定：疑似${cat === 'consistency' ? '人物前后不一致' : '错别字或语句欠妥'}`,
+                    originalTextSnippet: '—（仅涉及仿写正文）',
+                    imitationTextSnippet: verifiedSentence,
+                    imitationIndex: idx,
+                    locationLabel: loc.label,
+                    reason: reason || 'AI 无法确认属于笔误还是刻意小说表达，请人工核对',
+                    suggestedFix: correctText ? `建议改为：${correctText}` : '请结合上下文确认是否需要修改',
+                    wrongText,
+                    correctText: correctText && correctText !== wrongText ? correctText : undefined,
+                    status: 'pending'
+                });
+            }
+        } else {
+            if (!correctText || correctText === wrongText) continue;
+            const duplicate = typoIssues.some(
+                t => !(idx + wrongText.length <= t.index || idx >= t.index + t.wrongText.length)
+            );
+            if (!duplicate) {
+                typoIssues.push({
+                    id: `typo-${idPrefix}-${idx}-${hashString(wrongText)}`,
+                    index: idx,
+                    wrongText,
+                    correctText,
+                    sentence: verifiedSentence,
+                    explanation: reason || '上下文校对发现用词或人物前后不一致错误',
+                    locationLabel: loc.label,
+                    category: cat
+                });
+            }
+        }
+    }
+};
+
+const buildCoverageFromFailedList = (
+    origTotalChunks: number,
+    imitTotalChunks: number,
+    failedTaskDetails: FailedAuditTask[]
+): CoverageStatus => {
+    const failedOrigCount = failedTaskDetails.filter(f => f.kind === 'original_chunk').length;
+    const failedImitCount = failedTaskDetails.filter(
+        f => f.kind === 'imitation_chunk' || f.kind === 'imitation_dirty_range'
+    ).length;
+    const failedSim = failedTaskDetails.some(f => f.kind === 'cross_similarity');
+
+    const originalSucceededChunks = Math.max(0, origTotalChunks - failedOrigCount);
+    const imitationSucceededChunks = Math.max(0, imitTotalChunks - failedImitCount);
+    const characterCheckComplete = failedOrigCount === 0 && failedImitCount === 0;
+    const typoCheckComplete = failedImitCount === 0;
+    const similarityChecked = !failedSim;
+    const isComplete = failedTaskDetails.length === 0;
+
+    return {
+        originalTotalChunks: origTotalChunks,
+        originalSucceededChunks,
+        imitationTotalChunks: imitTotalChunks,
+        imitationSucceededChunks,
+        characterCheckComplete,
+        typoCheckComplete,
+        similarityChecked,
+        isComplete,
+        failedTasks: failedTaskDetails.map(d => `${d.label}未完成`),
+        failedTaskDetails,
+        warningMessage: !isComplete ? '审稿未完成，部分内容需要重试' : undefined
+    };
+};
+
+const applyCustomCharactersToEntities = (
+    entities: ReviewedCharacterEntity[],
+    fullText: string,
+    customAddedCharacters: string[],
+    excludedCharacters: Set<string>,
+    idPrefix: string
+): ReviewedCharacterEntity[] => {
+    let next = [...entities];
+    for (const customName of customAddedCharacters) {
+        const clean = customName.trim();
+        if (!clean || excludedCharacters.has(clean) || !fullText.includes(clean)) continue;
+        next = mergeCharacterIntoEntities(next, fullText, {
+            canonical: clean,
+            mentions: [clean],
+            role: '人工加入人物',
+            evidence: extractSnippetNear(fullText, clean, fullText.indexOf(clean)),
+            firstIndex: Math.max(0, fullText.indexOf(clean)),
+            idPrefix
+        });
+    }
+    return next;
+};
+
 export interface RunAuditParams {
     originalText: string;
     imitationText: string;
     model: string;
     excludedCharacters: Set<string>;
     customAddedCharacters: string[];
-    previousCache: AuditCacheState | null;
-    forceFull?: boolean;
+    ignoredConflictKeys?: Set<string>;
     signal?: AbortSignal;
     onProgress?: (msg: string) => void;
 }
 
-const VALID_TYPO_CATS = new Set<TypoAuditItem['category']>([
-    'typo', 'homophone', 'extra_char', 'missing_char', 'collocation', 'consistency', 'grammar'
-]);
-
+// --- A. 全文完整语义审稿（用于「开始智能审稿」与「全篇重审」） ---
 export async function runComprehensiveManuscriptAudit(params: RunAuditParams): Promise<{
     report: AuditReportResult;
     nextCache: AuditCacheState;
@@ -1479,8 +1780,7 @@ export async function runComprehensiveManuscriptAudit(params: RunAuditParams): P
         model,
         excludedCharacters,
         customAddedCharacters,
-        previousCache,
-        forceFull = false,
+        ignoredConflictKeys,
         signal,
         onProgress
     } = params;
@@ -1488,34 +1788,8 @@ export async function runComprehensiveManuscriptAudit(params: RunAuditParams): P
     const startTime = performance.now();
     let actualModelUsed = model;
 
-    // 段落快照辅助，用于增量重检判定
-    const imitParagraphs = imitationText.split('\n');
-    const canIncrementalOriginal =
-        !forceFull &&
-        previousCache !== null &&
-        previousCache.modelUsed === model &&
-        previousCache.originalText === originalText;
-
-    const prevImitLines = canIncrementalOriginal ? previousCache!.imitationText.split('\n') : [];
-    const dirtyLineIndices: number[] = [];
-
-    if (canIncrementalOriginal && prevImitLines.length > 0 && previousCache!.imitationParagraphResults.size > 0) {
-        const maxLines = Math.max(prevImitLines.length, imitParagraphs.length);
-        for (let i = 0; i < maxLines; i++) {
-            if ((prevImitLines[i] || '') !== (imitParagraphs[i] || '')) {
-                dirtyLineIndices.push(i);
-            }
-        }
-    }
-
-    // 当且仅当原稿未变、模型未变，且仿写修改比例 < 55% 时执行局部增量复检
-    const shouldRunIncremental =
-        canIncrementalOriginal &&
-        dirtyLineIndices.length > 0 &&
-        dirtyLineIndices.length <= Math.max(2, Math.floor(imitParagraphs.length * 0.55));
-
-    const origChunks = splitIntoParagraphChunks(originalText, 8500);
-    const imitChunks = splitIntoParagraphChunks(imitationText, 8500);
+    const origChunks = splitIntoParagraphChunks(originalText, DEFAULT_CHUNK_CHARS);
+    const imitChunks = splitIntoParagraphChunks(imitationText, DEFAULT_CHUNK_CHARS);
 
     const origConfirmedMap = new Map<string, {
         canonical: string;
@@ -1551,359 +1825,143 @@ export async function runComprehensiveManuscriptAudit(params: RunAuditParams): P
 
     const typoIssues: TypoAuditItem[] = [];
     const manualReviewItems: ManualReviewItem[] = [];
-
-    let originalSucceededChunks = 0;
-    let imitationSucceededChunks = 0;
     const failedTaskDetails: FailedAuditTask[] = [];
-    const originalChunkCharacters = new Map<number, any[]>();
-    const imitationChunkResults = new Map<number, { characters: any[]; issues: any[] }>();
+    let firstFatalErr: Error | null = null;
 
-    // Helper: 校验并吸收仿写 issues（明确错误进 typoIssues，不确定进 manualReviewItems）
-    const absorbImitationIssues = (rawIssues: any[], searchOffset: number) => {
-        if (!Array.isArray(rawIssues)) return;
-        for (const item of rawIssues) {
-            if (!item || typeof item !== 'object') continue;
-            const wrongText = typeof item.wrongText === 'string' ? item.wrongText.trim() : '';
-            const correctText = typeof item.correctText === 'string' ? item.correctText.trim() : '';
-            const sentence = typeof item.sentence === 'string' ? item.sentence.trim() : '';
-            const reason = typeof item.reason === 'string' ? item.reason.trim() : '';
-            if (!wrongText) continue;
+    onProgress?.(`正在并行调用 ${model} 执行全文审稿分析...`);
 
-            const idx = locateVerbatimSpan(imitationText, wrongText, sentence, searchOffset);
-            if (idx === -1) continue; // 必须逐字存在于仿写正文中
-
-            const loc = getLocationInfo(imitationText, idx);
-            const verifiedSentence = sentence && imitationText.includes(sentence)
-                ? sentence
-                : extractSnippetNear(imitationText, wrongText, idx);
-
-            const issueTypeMap: Record<string, ManualReviewItem['issueType']> = {
-                consistency: 'consistency',
-                typo: 'typo',
-                homophone: 'typo',
-                missing_char: 'typo',
-                extra_char: 'typo',
-                collocation: 'typo',
-                grammar: 'typo'
-            };
-
-            const cat: TypoAuditItem['category'] = VALID_TYPO_CATS.has(item.type) ? item.type : 'typo';
-
-            if (item.confidence === 'uncertain') {
-                if (!manualReviewItems.some(m => m.imitationIndex === idx && m.wrongText === wrongText)) {
-                    manualReviewItems.push({
-                        id: `manual-issue-${idx}-${wrongText}`,
-                        issueType: issueTypeMap[cat] || 'typo',
-                        aiJudgment: `AI不确定：疑似${cat === 'consistency' ? '人物前后不一致' : '错别字或语句欠妥'}`,
-                        originalTextSnippet: '—（仅涉及仿写正文）',
-                        imitationTextSnippet: verifiedSentence,
-                        imitationIndex: idx,
-                        locationLabel: loc.label,
-                        reason: reason || 'AI 无法确认属于笔误还是刻意小说表达，请人工核对',
-                        suggestedFix: correctText ? `建议改为：${correctText}` : '请结合上下文确认是否需要修改',
-                        wrongText,
-                        correctText: correctText && correctText !== wrongText ? correctText : undefined,
-                        status: 'pending'
-                    });
-                }
-            } else {
-                if (!correctText || correctText === wrongText) continue;
-                const duplicate = typoIssues.some(
-                    t => !(idx + wrongText.length <= t.index || idx >= t.index + t.wrongText.length)
-                );
-                if (!duplicate) {
-                    typoIssues.push({
-                        id: `typo-ai-${idx}-${wrongText}`,
-                        index: idx,
-                        wrongText,
-                        correctText,
-                        sentence: verifiedSentence,
-                        explanation: reason || '上下文校对发现用词或人物前后不一致错误',
-                        locationLabel: loc.label,
-                        category: cat
-                    });
-                }
-            }
-        }
-    };
-
-    const nextParagraphCache = new Map<string, {
-        entities: ReviewedCharacterEntity[];
-        typos: TypoAuditItem[];
-        manualItems: ManualReviewItem[];
-    }>();
-
-    let precomputedSimSettled: PromiseSettledResult<{
-        confirmedSimilarities: DialogueSimilarityItem[];
-        uncertainSimilarityManualItems: ManualReviewItem[];
-    }>;
-
-    if (shouldRunIncremental && previousCache) {
-        onProgress?.(`正在局部增量复检（仅重检变更内容及邻接上下文，原稿复用缓存）...`);
-        previousCache.originalEntities.forEach((ent) => {
-            if (ent.confidence === 'confirmed') {
-                origConfirmedMap.set(ent.canonical, {
-                    canonical: ent.canonical,
-                    mentions: new Set(ent.mentions.filter(m => !excludedCharacters.has(m))),
-                    role: ent.role,
-                    evidence: new Set(ent.evidence),
-                    firstIndex: ent.firstIndex
-                });
-            }
-        });
-        originalSucceededChunks = origChunks.length;
-
-        const minDirtyLine = Math.max(0, Math.min(...dirtyLineIndices) - 1);
-        const maxDirtyLine = Math.min(imitParagraphs.length - 1, Math.max(...dirtyLineIndices) + 1);
-        const dirtySegmentText = imitParagraphs.slice(minDirtyLine, maxDirtyLine + 1).join('\n');
-        let dirtyOffset = 0;
-        for (let i = 0; i < minDirtyLine; i++) {
-            dirtyOffset += imitParagraphs[i].length + 1;
-        }
-        const dirtyEndOffset = dirtyOffset + dirtySegmentText.length;
-
-        previousCache.imitationParagraphResults.forEach((cached, hashKey) => {
-            if (hashKey === '__FULL__') {
-                cached.entities.forEach((ent) => {
-                    const mentionsAlive = ent.mentions.filter(m => !excludedCharacters.has(m) && imitationText.includes(m));
-                    if (mentionsAlive.length > 0) {
-                        imitConfirmedMap.set(ent.canonical, {
-                            canonical: ent.canonical,
-                            mentions: new Set(mentionsAlive),
-                            role: ent.role,
-                            evidence: new Set(ent.evidence),
-                            firstIndex: Math.max(0, imitationText.indexOf(mentionsAlive[0]))
-                        });
-                    }
-                });
-                cached.typos.forEach((t) => {
-                    if (t.index >= dirtyOffset && t.index <= dirtyEndOffset) return;
-                    const reIdx = locateVerbatimSpan(imitationText, t.wrongText, t.sentence);
-                    if (reIdx !== -1 && (reIdx < dirtyOffset || reIdx > dirtyEndOffset)) {
-                        typoIssues.push({
-                            ...t,
-                            index: reIdx,
-                            locationLabel: getLocationInfo(imitationText, reIdx).label
-                        });
-                    }
-                });
-                cached.manualItems.forEach((m) => {
-                    if (m.issueType === 'similarity') return;
-                    if (m.imitationIndex !== undefined && m.imitationIndex >= dirtyOffset && m.imitationIndex <= dirtyEndOffset) return;
-                    if (m.status !== 'pending') return;
-                    const searchTarget = m.wrongText || m.candidateName || '';
-                    if (searchTarget && !imitationText.includes(searchTarget)) return;
-                    if (m.imitationIndex !== undefined && searchTarget) {
-                        const reIdx = locateVerbatimSpan(imitationText, searchTarget, m.imitationTextSnippet);
-                        if (reIdx !== -1 && (reIdx < dirtyOffset || reIdx > dirtyEndOffset)) {
-                            manualReviewItems.push({
-                                ...m,
-                                imitationIndex: reIdx,
-                                locationLabel: m.candidateTarget === 'original' ? m.locationLabel : getLocationInfo(imitationText, reIdx).label
-                            });
-                        }
-                    } else {
-                        manualReviewItems.push(m);
-                    }
-                });
-            }
-        });
-
-        const knownHint = Array.from(imitConfirmedMap.keys());
-        const dirtySubChunks = splitIntoParagraphChunks(dirtySegmentText, 8500);
-
-        const runDirty = async () => {
-            let dirtyCursor = dirtyOffset;
-            for (let i = 0; i < dirtySubChunks.length; i++) {
-                const sub = dirtySubChunks[i];
-                const aiRes = await withSingleAutoRetry(
-                    () => analyzeImitationChunkWithAI(sub.text, i, dirtySubChunks.length, model, knownHint, signal),
-                    `仿写变更段 ${i + 1}`,
+    const runOriginalFull = async () => {
+        const hintAcc: string[] = [];
+        for (let i = 0; i < origChunks.length; i++) {
+            const c = origChunks[i];
+            const label = `原稿第 ${i + 1}/${origChunks.length} 段`;
+            try {
+                onProgress?.(`正在审查${label}人物语境...`);
+                const res = await executeOriginalSegmentUnified({
+                    segmentText: c.text,
+                    startOffset: c.startOffset,
+                    label,
+                    model,
+                    knownHints: hintAcc,
                     signal,
                     onProgress
-                );
-                actualModelUsed = aiRes.actualModel;
-                verifyAndRegisterCharacters(
-                    imitationText,
-                    dirtyCursor,
-                    aiRes.characters,
-                    excludedCharacters,
-                    imitConfirmedMap,
-                    imitUncertainRaw
-                );
-                absorbImitationIssues(aiRes.issues, dirtyCursor);
-                dirtyCursor += sub.text.length + 1;
-            }
-            imitationSucceededChunks = imitChunks.length;
-        };
-
-        const crossSimPromise = withSingleAutoRetry(
-            () => analyzeCrossSimilarityWithAI(originalText, imitationText, model, signal),
-            '跨稿语义查重',
-            signal,
-            onProgress
-        );
-        const [dirtySettled, simSettled] = await Promise.allSettled([runDirty(), crossSimPromise]);
-        if (dirtySettled.status === 'rejected') {
-            const msg = dirtySettled.reason?.message || '变更段落复检失败';
-            if (msg.includes('取消')) throw dirtySettled.reason;
-            console.error('[局部复检失败]', dirtySettled.reason);
-            failedTaskDetails.push({
-                id: 'imit-dirty-recheck',
-                kind: 'imitation_chunk',
-                chunkIndex: 0,
-                totalChunks: imitChunks.length,
-                label: '仿写变更段落',
-                errorMessage: msg
-            });
-        }
-        precomputedSimSettled = simSettled;
-    } else {
-        // --- 完整全文语义审稿（原稿人物 + 仿写人物/错别字/一致性 + 跨稿语义查重 三路并行） ---
-        onProgress?.(`正在并行调用 ${model} 执行审稿分析...`);
-
-        let firstFatalErr: Error | null = null;
-
-        const runOriginalFull = async () => {
-            const hintAcc: string[] = [];
-            for (let i = 0; i < origChunks.length; i++) {
-                const c = origChunks[i];
-                try {
-                    onProgress?.(`正在审查原稿第 ${i + 1}/${origChunks.length} 段人物语境...`);
-                    const res = await withSingleAutoRetry(
-                        () => analyzeOriginalChunkWithAI(c.text, i, origChunks.length, model, hintAcc, signal),
-                        `原稿第 ${i + 1} 段`,
-                        signal,
-                        onProgress
-                    );
-                    actualModelUsed = res.actualModel;
-                    originalSucceededChunks++;
-                    originalChunkCharacters.set(i, res.characters);
+                });
+                actualModelUsed = res.actualModel;
+                for (const sub of res.subResults) {
                     verifyAndRegisterCharacters(
                         originalText,
-                        c.startOffset,
-                        res.characters,
+                        sub.startOffset,
+                        sub.characters,
                         excludedCharacters,
                         origConfirmedMap,
                         origUncertainRaw
                     );
-                    origConfirmedMap.forEach((_, k) => {
-                        if (!hintAcc.includes(k)) hintAcc.push(k);
-                    });
-                } catch (err: any) {
-                    const eObj = err instanceof Error ? err : new Error(String(err));
-                    if (eObj.message.includes('取消')) throw eObj;
-                    console.error(`[审稿分段失败] 原稿第 ${i + 1}/${origChunks.length} 段:`, eObj);
-                    if (!firstFatalErr) firstFatalErr = eObj;
-                    failedTaskDetails.push({
-                        id: `orig-chunk-${i}`,
-                        kind: 'original_chunk',
-                        chunkIndex: i,
-                        totalChunks: origChunks.length,
-                        label: `原稿第 ${i + 1} 段`,
-                        errorMessage: eObj.message
-                    });
                 }
+                origConfirmedMap.forEach((_, k) => {
+                    if (!hintAcc.includes(k)) hintAcc.push(k);
+                });
+            } catch (err: any) {
+                const eObj = err instanceof Error ? err : new Error(String(err));
+                if (eObj.message.includes('取消')) throw eObj;
+                console.error(`[审稿分段失败] ${label}:`, eObj);
+                if (!firstFatalErr) firstFatalErr = eObj;
+                failedTaskDetails.push({
+                    id: `orig-chunk-${i}`,
+                    kind: 'original_chunk',
+                    chunkIndex: i,
+                    totalChunks: origChunks.length,
+                    startOffset: c.startOffset,
+                    endOffset: c.endOffset,
+                    segmentText: c.text,
+                    label: `原稿第 ${i + 1} 段`,
+                    errorMessage: eObj.message
+                });
             }
-        };
+        }
+    };
 
-        const runImitationFull = async () => {
-            const hintAcc: string[] = [];
-            for (let i = 0; i < imitChunks.length; i++) {
-                const c = imitChunks[i];
-                try {
-                    onProgress?.(`正在审查仿写第 ${i + 1}/${imitChunks.length} 段人物、一致性与错别字...`);
-                    const res = await withSingleAutoRetry(
-                        () => analyzeImitationChunkWithAI(c.text, i, imitChunks.length, model, hintAcc, signal),
-                        `仿写第 ${i + 1} 段`,
-                        signal,
-                        onProgress
-                    );
-                    actualModelUsed = res.actualModel;
-                    imitationSucceededChunks++;
-                    imitationChunkResults.set(i, { characters: res.characters, issues: res.issues });
+    const runImitationFull = async () => {
+        const hintAcc: string[] = [];
+        for (let i = 0; i < imitChunks.length; i++) {
+            const c = imitChunks[i];
+            const label = `仿写稿第 ${i + 1}/${imitChunks.length} 段`;
+            try {
+                onProgress?.(`正在审查${label}人物、一致性与错别字...`);
+                const res = await executeImitationSegmentUnified({
+                    segmentText: c.text,
+                    startOffset: c.startOffset,
+                    label,
+                    model,
+                    knownHints: hintAcc,
+                    signal,
+                    onProgress
+                });
+                actualModelUsed = res.actualModel;
+                for (const sub of res.subResults) {
                     verifyAndRegisterCharacters(
                         imitationText,
-                        c.startOffset,
-                        res.characters,
+                        sub.startOffset,
+                        sub.characters,
                         excludedCharacters,
                         imitConfirmedMap,
                         imitUncertainRaw
                     );
-                    absorbImitationIssues(res.issues, c.startOffset);
-                    imitConfirmedMap.forEach((_, k) => {
-                        if (!hintAcc.includes(k)) hintAcc.push(k);
-                    });
-                } catch (err: any) {
-                    const eObj = err instanceof Error ? err : new Error(String(err));
-                    if (eObj.message.includes('取消')) throw eObj;
-                    console.error(`[审稿分段失败] 仿写第 ${i + 1}/${imitChunks.length} 段:`, eObj);
-                    if (!firstFatalErr) firstFatalErr = eObj;
-                    failedTaskDetails.push({
-                        id: `imit-chunk-${i}`,
-                        kind: 'imitation_chunk',
-                        chunkIndex: i,
-                        totalChunks: imitChunks.length,
-                        label: `仿写第 ${i + 1} 段`,
-                        errorMessage: eObj.message
-                    });
+                    collectImitationIssuesIntoLists(
+                        imitationText,
+                        sub.issues,
+                        sub.startOffset,
+                        typoIssues,
+                        manualReviewItems,
+                        `ai-${i}`
+                    );
                 }
+                imitConfirmedMap.forEach((_, k) => {
+                    if (!hintAcc.includes(k)) hintAcc.push(k);
+                });
+            } catch (err: any) {
+                const eObj = err instanceof Error ? err : new Error(String(err));
+                if (eObj.message.includes('取消')) throw eObj;
+                console.error(`[审稿分段失败] ${label}:`, eObj);
+                if (!firstFatalErr) firstFatalErr = eObj;
+                failedTaskDetails.push({
+                    id: `imit-chunk-${i}`,
+                    kind: 'imitation_chunk',
+                    chunkIndex: i,
+                    totalChunks: imitChunks.length,
+                    startOffset: c.startOffset,
+                    endOffset: c.endOffset,
+                    segmentText: c.text,
+                    label: `仿写第 ${i + 1} 段`,
+                    errorMessage: eObj.message
+                });
             }
-        };
-
-        const [origSettled, imitSettled, simSettled] = await Promise.allSettled([
-            runOriginalFull(),
-            runImitationFull(),
-            withSingleAutoRetry(
-                () => analyzeCrossSimilarityWithAI(originalText, imitationText, model, signal),
-                '跨稿语义查重',
-                signal,
-                onProgress
-            )
-        ]);
-
-        if (signal?.aborted) {
-            throw new Error('审稿任务已被用户取消');
         }
-        if (origSettled.status === 'rejected' && String(origSettled.reason?.message || '').includes('取消')) {
-            throw origSettled.reason;
-        }
-        if (imitSettled.status === 'rejected' && String(imitSettled.reason?.message || '').includes('取消')) {
-            throw imitSettled.reason;
-        }
+    };
 
-        // 若双侧全部分段均彻底失败，直接报错中断，让用户检查当前模型并自主决定是否切换
-        if (originalSucceededChunks === 0 && imitationSucceededChunks === 0) {
-            throw firstFatalErr || new Error(`所选模型 ${model} 接口调用失败，请检查接口配置或切换模型重试`);
-        }
+    const [origSettled, imitSettled, simSettled] = await Promise.allSettled([
+        runOriginalFull(),
+        runImitationFull(),
+        withSingleAutoRetry(
+            () => analyzeCrossSimilarityWithAI(originalText, imitationText, model, signal),
+            '跨稿语义查重',
+            signal,
+            onProgress
+        )
+    ]);
 
-        precomputedSimSettled = simSettled;
+    if (signal?.aborted) throw new Error('审稿任务已被用户取消');
+    if (origSettled.status === 'rejected' && String(origSettled.reason?.message || '').includes('取消')) {
+        throw origSettled.reason;
+    }
+    if (imitSettled.status === 'rejected' && String(imitSettled.reason?.message || '').includes('取消')) {
+        throw imitSettled.reason;
     }
 
-    // 加入用户手动补充的关键人物
-    for (const customName of customAddedCharacters) {
-        const clean = customName.trim();
-        if (!clean || excludedCharacters.has(clean)) continue;
-        if (originalText.includes(clean) && !origConfirmedMap.has(clean)) {
-            const idx = originalText.indexOf(clean);
-            origConfirmedMap.set(clean, {
-                canonical: clean,
-                mentions: new Set([clean]),
-                role: '人工加入人物',
-                evidence: new Set([extractSnippetNear(originalText, clean, idx)]),
-                firstIndex: Math.max(0, idx)
-            });
-        }
-        if (imitationText.includes(clean) && !imitConfirmedMap.has(clean)) {
-            const idx = imitationText.indexOf(clean);
-            imitConfirmedMap.set(clean, {
-                canonical: clean,
-                mentions: new Set([clean]),
-                role: '人工加入人物',
-                evidence: new Set([extractSnippetNear(imitationText, clean, idx)]),
-                firstIndex: Math.max(0, idx)
-            });
-        }
+    const failedOrigChunks = failedTaskDetails.filter(f => f.kind === 'original_chunk').length;
+    const failedImitChunks = failedTaskDetails.filter(f => f.kind === 'imitation_chunk').length;
+
+    if (failedOrigChunks === origChunks.length && failedImitChunks === imitChunks.length) {
+        throw firstFatalErr || new Error(`所选模型 ${model} 接口调用失败，请检查接口配置或切换模型重试`);
     }
 
     const toEntityList = (
@@ -1932,10 +1990,22 @@ export async function runComprehensiveManuscriptAudit(params: RunAuditParams): P
         return out.sort((a, b) => b.count - a.count);
     };
 
-    const originalEntities = toEntityList(originalText, origConfirmedMap, 'orig');
-    const imitationEntities = toEntityList(imitationText, imitConfirmedMap, 'imit');
+    const originalEntities = applyCustomCharactersToEntities(
+        toEntityList(originalText, origConfirmedMap, 'orig'),
+        originalText,
+        customAddedCharacters,
+        excludedCharacters,
+        'orig-custom'
+    ).sort((a, b) => b.count - a.count);
 
-    // 将 AI 不确定的人物候选加入「待人工核对」（保留全部 candidateMentions 以便确认时正确归并别名）
+    const imitationEntities = applyCustomCharactersToEntities(
+        toEntityList(imitationText, imitConfirmedMap, 'imit'),
+        imitationText,
+        customAddedCharacters,
+        excludedCharacters,
+        'imit-custom'
+    ).sort((a, b) => b.count - a.count);
+
     const origConfirmedMentions = new Set(originalEntities.flatMap(e => e.mentions));
     origUncertainRaw.forEach((u, idx) => {
         if (u.mentions.some(m => origConfirmedMentions.has(m))) return;
@@ -1980,7 +2050,6 @@ export async function runComprehensiveManuscriptAudit(params: RunAuditParams): P
         });
     });
 
-    // 构建用于碰撞的临时 uncertain 实体（帮助识别待定角色潜在同音冲突）
     const origForConflict: ReviewedCharacterEntity[] = [
         ...originalEntities,
         ...origUncertainRaw
@@ -2014,23 +2083,21 @@ export async function runComprehensiveManuscriptAudit(params: RunAuditParams): P
         originalText,
         imitationText,
         origForConflict,
-        imitForConflict
+        imitForConflict,
+        ignoredConflictKeys
     );
     manualReviewItems.push(...uncertainConflictManualItems);
 
-    // 跨稿相似度审查（汇总并行 AI 语义查重结果 + 确定性 15 字连续重复台词）
     onProgress?.('正在汇总 15 字以上重复台词与调色盘计算...');
     const dialogue15Overlaps = detectDialogue15CharOverlaps(originalText, imitationText);
 
-    let similarityChecked = false;
     let aiSimilarities: DialogueSimilarityItem[] = [];
-    if (precomputedSimSettled.status === 'fulfilled') {
-        similarityChecked = true;
-        aiSimilarities = precomputedSimSettled.value.confirmedSimilarities;
-        manualReviewItems.push(...precomputedSimSettled.value.uncertainSimilarityManualItems);
+    if (simSettled.status === 'fulfilled') {
+        aiSimilarities = simSettled.value.confirmedSimilarities;
+        manualReviewItems.push(...simSettled.value.uncertainSimilarityManualItems);
     } else {
-        const simMsg = precomputedSimSettled.reason?.message || '未知错误';
-        console.error('[跨稿语义查重失败]', precomputedSimSettled.reason);
+        const simMsg = simSettled.reason?.message || '未知错误';
+        console.error('[跨稿语义查重失败]', simSettled.reason);
         failedTaskDetails.push({
             id: 'cross-similarity',
             kind: 'cross_similarity',
@@ -2044,67 +2111,27 @@ export async function runComprehensiveManuscriptAudit(params: RunAuditParams): P
         const overlapsExisting = mergedSimilarityAlerts.some(
             ex => !(sItem.imitationIndex + sItem.imitationSnippet.length <= ex.imitationIndex || sItem.imitationIndex >= ex.imitationIndex + ex.imitationSnippet.length)
         );
-        if (!overlapsExisting) {
-            mergedSimilarityAlerts.push(sItem);
-        }
+        if (!overlapsExisting) mergedSimilarityAlerts.push(sItem);
     }
 
-    // 句子级调色盘
     const sentenceSimilarities = computeSentenceSimilarityPalette(
         originalText,
         imitationText,
         dialogue15Overlaps
     );
 
-    const cleanOrigLen = originalText.replace(/\s+/g, '').length;
-    const cleanImitLen = imitationText.replace(/\s+/g, '').length;
-    const characterCheckComplete =
-        originalSucceededChunks === origChunks.length &&
-        imitationSucceededChunks === imitChunks.length;
-    const typoCheckComplete =
-        imitationSucceededChunks === imitChunks.length &&
-        !failedTaskDetails.some(d => d.kind === 'imitation_chunk');
-    const allChunksOk =
-        characterCheckComplete &&
-        typoCheckComplete &&
-        similarityChecked &&
-        failedTaskDetails.length === 0;
-
-    const failedTaskLabels = failedTaskDetails.map(d => `${d.label}未完成`);
-
-    const coverage: CoverageStatus = {
-        originalTotalChunks: origChunks.length,
-        originalSucceededChunks,
-        imitationTotalChunks: imitChunks.length,
-        imitationSucceededChunks,
-        characterCheckComplete,
-        typoCheckComplete,
-        similarityChecked,
-        isComplete: allChunksOk,
-        failedTasks: failedTaskLabels,
-        failedTaskDetails,
-        warningMessage: !allChunksOk ? '审稿未完成，部分内容需要重试' : undefined
-    };
-
-    // 更新缓存供后续局部增量复检或失败分段单独重试使用
-    nextParagraphCache.set('__FULL__', {
-        entities: imitationEntities,
-        typos: typoIssues,
-        manualItems: manualReviewItems
-    });
-
+    const coverage = buildCoverageFromFailedList(origChunks.length, imitChunks.length, failedTaskDetails);
     const durationMs = Math.round(performance.now() - startTime);
 
-    const draftReport: ComprehensiveAuditReport = {
+    const report = recalculateAuditReport({
         timestamp: Date.now(),
         durationMs,
         modelRequested: model,
         modelUsed: actualModelUsed,
-        isIncremental: shouldRunIncremental,
-        recheckedParagraphCount: shouldRunIncremental ? dirtyLineIndices.length : undefined,
+        isIncremental: false,
         overallSimilarity: 0,
-        originalWordCount: cleanOrigLen,
-        imitationWordCount: cleanImitLen,
+        originalWordCount: originalText.replace(/\s+/g, '').length,
+        imitationWordCount: imitationText.replace(/\s+/g, '').length,
         originalEntities,
         imitationEntities,
         characterConflicts: confirmedConflicts,
@@ -2116,24 +2143,440 @@ export async function runComprehensiveManuscriptAudit(params: RunAuditParams): P
         coverage,
         verdict: 'warning',
         verdictMessage: ''
-    };
-
-    const report = recalculateAuditReport(draftReport);
+    });
 
     const nextCache: AuditCacheState = {
         originalText,
         imitationText,
-        modelUsed: model,
-        originalEntities,
-        originalChunkCharacters,
-        imitationChunkResults,
-        imitationParagraphResults: nextParagraphCache
+        modelUsed: actualModelUsed
     };
 
     return { report, nextCache };
 }
 
-// --- 失败分段单独重试（保留全部已成功结果及人工核对记录，严禁重审已成功段落） ---
+// --- B. 局部复检变更（仅重新检查修改后受影响的仿写段落；绝不偷跑无关失败分段，完整保留已成功结果、人工处理记录及忽略冲突） ---
+export interface RunIncrementalRecheckParams {
+    originalText: string;
+    imitationText: string;
+    baselineImitationText: string;
+    model: string;
+    currentReport: AuditReportResult;
+    excludedCharacters: Set<string>;
+    customAddedCharacters: string[];
+    ignoredConflictKeys: Set<string>;
+    signal?: AbortSignal;
+    onProgress?: (msg: string) => void;
+}
+
+interface DirtyBlockRange {
+    startLine: number;
+    endLine: number;
+    startOffset: number;
+    endOffset: number;
+    text: string;
+}
+
+const computeDirtyParagraphBlocks = (prevText: string, nextText: string): {
+    dirtyLineCount: number;
+    blocks: DirtyBlockRange[];
+} => {
+    const prevLines = prevText.split('\n');
+    const nextLines = nextText.split('\n');
+
+    // 前缀与后缀相同行快速收敛，精确锁定受影响段落区间（即使中间插入/删除了段落也能准确定位）
+    let prefixLen = 0;
+    const minLen = Math.min(prevLines.length, nextLines.length);
+    while (prefixLen < minLen && prevLines[prefixLen] === nextLines[prefixLen]) {
+        prefixLen++;
+    }
+
+    let prevSuffixIdx = prevLines.length - 1;
+    let nextSuffixIdx = nextLines.length - 1;
+    while (
+        prevSuffixIdx >= prefixLen &&
+        nextSuffixIdx >= prefixLen &&
+        prevLines[prevSuffixIdx] === nextLines[nextSuffixIdx]
+    ) {
+        prevSuffixIdx--;
+        nextSuffixIdx--;
+    }
+
+    if (prefixLen > nextSuffixIdx && prefixLen > prevSuffixIdx) {
+        return { dirtyLineCount: 0, blocks: [] };
+    }
+
+    // 在变更区间内按非相同行聚类，附带前后各1段紧邻语境
+    const dirtySet = new Set<number>();
+    if (nextSuffixIdx >= prefixLen) {
+        for (let i = prefixLen; i <= nextSuffixIdx; i++) {
+            if (prevLines[i] !== nextLines[i]) {
+                dirtySet.add(i);
+            }
+        }
+        if (dirtySet.size === 0) {
+            dirtySet.add(Math.min(prefixLen, Math.max(0, nextLines.length - 1)));
+        }
+    } else if (nextLines.length > 0) {
+        // 纯删除段落时复检删除位置紧邻段落
+        dirtySet.add(Math.min(prefixLen, nextLines.length - 1));
+    }
+
+    const sortedDirty = Array.from(dirtySet).sort((a, b) => a - b);
+    if (sortedDirty.length === 0) return { dirtyLineCount: 0, blocks: [] };
+
+    const rawRanges: Array<{ startLine: number; endLine: number }> = [];
+    for (const ln of sortedDirty) {
+        const s = Math.max(0, ln - 1);
+        const e = Math.min(nextLines.length - 1, ln + 1);
+        const last = rawRanges[rawRanges.length - 1];
+        if (last && s <= last.endLine + 1) {
+            last.endLine = Math.max(last.endLine, e);
+        } else {
+            rawRanges.push({ startLine: s, endLine: e });
+        }
+    }
+
+    const lineStartOffsets: number[] = [];
+    let cursor = 0;
+    for (let i = 0; i < nextLines.length; i++) {
+        lineStartOffsets.push(cursor);
+        cursor += nextLines[i].length + (i < nextLines.length - 1 ? 1 : 0);
+    }
+
+    const blocks: DirtyBlockRange[] = rawRanges
+        .map((r) => {
+            const text = nextLines.slice(r.startLine, r.endLine + 1).join('\n');
+            const startOffset = lineStartOffsets[r.startLine] ?? 0;
+            return {
+                startLine: r.startLine,
+                endLine: r.endLine,
+                startOffset,
+                endOffset: startOffset + text.length,
+                text
+            };
+        })
+        .filter(b => b.text.trim().length > 0);
+
+    return { dirtyLineCount: sortedDirty.length, blocks };
+};
+
+export async function runIncrementalImitationRecheck(params: RunIncrementalRecheckParams): Promise<{
+    report: AuditReportResult;
+    nextCache: AuditCacheState;
+}> {
+    const {
+        originalText,
+        imitationText,
+        baselineImitationText,
+        model,
+        currentReport,
+        excludedCharacters,
+        customAddedCharacters,
+        ignoredConflictKeys,
+        signal,
+        onProgress
+    } = params;
+
+    const startTime = performance.now();
+    let actualModelUsed = model;
+    const { dirtyLineCount, blocks } = computeDirtyParagraphBlocks(baselineImitationText, imitationText);
+
+    const isInsideDirtyBlocks = (idx: number, len = 1): boolean => {
+        const end = idx + Math.max(1, len);
+        return blocks.some(b => !(end <= b.startOffset || idx >= b.endOffset));
+    };
+
+    // 1. 保留未受影响区域的错别字，并重定位偏移
+    const preservedTypos: TypoAuditItem[] = [];
+    for (const t of currentReport.typoIssues) {
+        const reIdx = locateVerbatimSpan(imitationText, t.wrongText, t.sentence);
+        if (reIdx === -1) continue;
+        if (isInsideDirtyBlocks(reIdx, t.wrongText.length)) continue;
+        preservedTypos.push({
+            ...t,
+            index: reIdx,
+            locationLabel: getLocationInfo(imitationText, reIdx).label
+        });
+    }
+
+    // 2. 完整保留人工已处理记录（confirmed / ignored / modified）及未受影响区域的待核对项
+    const nextManualItems: ManualReviewItem[] = [];
+    const resolvedTokens = new Set<string>();
+    for (const m of currentReport.manualReviewItems) {
+        if (m.status !== 'pending') {
+            nextManualItems.push(m);
+            if (m.candidateName) resolvedTokens.add(m.candidateName);
+            if (m.wrongText) resolvedTokens.add(m.wrongText);
+            continue;
+        }
+        if (m.candidateTarget === 'original' || m.imitationIndex === undefined) {
+            nextManualItems.push(m);
+            continue;
+        }
+        const targetStr = m.wrongText || m.candidateName || '';
+        if (targetStr) {
+            const reIdx = locateVerbatimSpan(imitationText, targetStr, m.imitationTextSnippet);
+            if (reIdx === -1) continue;
+            if (isInsideDirtyBlocks(reIdx, targetStr.length)) continue;
+            nextManualItems.push({
+                ...m,
+                imitationIndex: reIdx,
+                locationLabel: getLocationInfo(imitationText, reIdx).label
+            });
+        } else if (!isInsideDirtyBlocks(m.imitationIndex, m.imitationTextSnippet.length)) {
+            nextManualItems.push(m);
+        }
+    }
+
+    // 3. 保留仿写已确认人物（剔除正文中已彻底删去的名字）
+    let nextImitEntities: ReviewedCharacterEntity[] = currentReport.imitationEntities
+        .map((ent) => {
+            const aliveMentions = ent.mentions.filter(m => !excludedCharacters.has(m) && imitationText.includes(m));
+            if (aliveMentions.length === 0) return null;
+            const count = aliveMentions.reduce((sum, m) => sum + countExactOccurrences(imitationText, m), 0);
+            if (count === 0) return null;
+            return {
+                ...ent,
+                canonical: aliveMentions.includes(ent.canonical) ? ent.canonical : aliveMentions[0],
+                mentions: aliveMentions,
+                count,
+                firstIndex: Math.max(0, imitationText.indexOf(aliveMentions[0]))
+            };
+        })
+        .filter((x): x is ReviewedCharacterEntity => x !== null);
+
+    // 4. 严格保持与「重试失败部分」边界独立：保留此前未完成的原稿分段/其他分段失败记录，绝不在局部复检中偷跑全篇或抹除无关失败状态
+    const preservedFailedTasks: FailedAuditTask[] = currentReport.coverage.failedTaskDetails.filter(
+        t => t.kind !== 'imitation_dirty_range'
+    );
+
+    const imitTempMap = new Map<string, {
+        canonical: string;
+        mentions: Set<string>;
+        role?: string;
+        evidence: Set<string>;
+        firstIndex: number;
+    }>();
+    const imitUncertainTemp: Array<{
+        name: string;
+        mentions: string[];
+        role?: string;
+        evidence: string;
+        reason: string;
+        index: number;
+    }> = [];
+
+    const knownHints = nextImitEntities.map(e => e.canonical);
+    let dirtyFailedCount = 0;
+
+    for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
+        const block = blocks[bIdx];
+        const label = `仿写变更区域 ${bIdx + 1}/${blocks.length}`;
+        try {
+            onProgress?.(`正在局部复检${label}（仅检查修改受影响段落）...`);
+            const subChunks = splitIntoParagraphChunks(block.text, DEFAULT_CHUNK_CHARS);
+            for (let sIdx = 0; sIdx < subChunks.length; sIdx++) {
+                const sub = subChunks[sIdx];
+                const res = await executeImitationSegmentUnified({
+                    segmentText: sub.text,
+                    startOffset: block.startOffset + sub.startOffset,
+                    label: subChunks.length > 1 ? `${label}-${sIdx + 1}` : label,
+                    model,
+                    knownHints,
+                    signal,
+                    onProgress
+                });
+                actualModelUsed = res.actualModel;
+                for (const sr of res.subResults) {
+                    verifyAndRegisterCharacters(
+                        imitationText,
+                        sr.startOffset,
+                        sr.characters,
+                        excludedCharacters,
+                        imitTempMap,
+                        imitUncertainTemp
+                    );
+                    collectImitationIssuesIntoLists(
+                        imitationText,
+                        sr.issues,
+                        sr.startOffset,
+                        preservedTypos,
+                        nextManualItems,
+                        `inc-${bIdx}`
+                    );
+                }
+            }
+        } catch (err: any) {
+            const eObj = err instanceof Error ? err : new Error(String(err));
+            if (eObj.message.includes('取消')) throw eObj;
+            dirtyFailedCount++;
+            console.error(`[局部复检变更段落失败] ${label}:`, eObj);
+            preservedFailedTasks.push({
+                id: `imit-dirty-${Date.now()}-${bIdx}`,
+                kind: 'imitation_dirty_range',
+                startOffset: block.startOffset,
+                endOffset: block.endOffset,
+                segmentText: block.text,
+                label: `仿写变更段落 ${bIdx + 1}`,
+                errorMessage: eObj.message
+            });
+        }
+    }
+
+    if (blocks.length > 0 && dirtyFailedCount === blocks.length) {
+        const lastFail = preservedFailedTasks[preservedFailedTasks.length - 1];
+        throw new Error(lastFail?.errorMessage || `局部复检调用 ${model} 失败`);
+    }
+
+    imitTempMap.forEach((val) => {
+        nextImitEntities = mergeCharacterIntoEntities(nextImitEntities, imitationText, {
+            canonical: val.canonical,
+            mentions: Array.from(val.mentions),
+            role: val.role,
+            evidence: Array.from(val.evidence)[0],
+            firstIndex: val.firstIndex,
+            idPrefix: 'imit-inc'
+        });
+    });
+
+    nextImitEntities = applyCustomCharactersToEntities(
+        nextImitEntities,
+        imitationText,
+        customAddedCharacters,
+        excludedCharacters,
+        'imit-custom'
+    ).sort((a, b) => b.count - a.count);
+
+    const imitConfirmedSet = new Set(nextImitEntities.flatMap(e => e.mentions));
+    imitUncertainTemp.forEach((u, idx) => {
+        if (u.mentions.some(m => imitConfirmedSet.has(m) || excludedCharacters.has(m) || resolvedTokens.has(m))) return;
+        if (nextManualItems.some(m => m.issueType === 'character' && m.candidateTarget === 'imitation' && m.candidateName === u.name)) return;
+        const loc = getLocationInfo(imitationText, u.index);
+        nextManualItems.push({
+            id: `manual-imit-char-inc-${idx}-${u.name}`,
+            issueType: 'character',
+            aiJudgment: `AI不确定：仿写中「${u.name}」是否属于独立人物`,
+            originalTextSnippet: '—（仿写人物待确认）',
+            imitationTextSnippet: u.evidence || u.name,
+            imitationIndex: u.index,
+            locationLabel: `仿写 ${loc.label}`,
+            reason: u.reason,
+            suggestedFix: `若确为人物或已有角色别名，点「确认为人物」自动归并；非人物请点「不是人物」`,
+            candidateName: u.name,
+            candidateMentions: u.mentions,
+            candidateRole: u.role,
+            candidateTarget: 'imitation',
+            status: 'pending'
+        });
+    });
+
+    // 5. 重算人物冲突（严格保留已忽略的冲突记录，绝不在局部复检时无故重新弹出）
+    const { confirmedConflicts, uncertainConflictManualItems } = compareCharacterConflicts(
+        originalText,
+        imitationText,
+        currentReport.originalEntities,
+        nextImitEntities,
+        ignoredConflictKeys
+    );
+    uncertainConflictManualItems.forEach((cItem) => {
+        if (
+            !nextManualItems.some(
+                m => m.issueType === 'conflict' && m.wrongText === cItem.wrongText && m.originalTextSnippet === cItem.originalTextSnippet
+            )
+        ) {
+            nextManualItems.push(cItem);
+        }
+    });
+
+    // 6. 更新 15 字连续重合 & 保留未受影响区域的 AI 语义查重提醒；若变更段落较长则仅针对变更片段做增量相似核查
+    const fresh15Overlaps = detectDialogue15CharOverlaps(originalText, imitationText);
+    const keptAiSims = currentReport.similarityAlerts
+        .filter(a => a.kind !== 'dialogue_15')
+        .map((a) => {
+            const newIdx = imitationText.indexOf(a.imitationSnippet);
+            if (newIdx === -1) return null;
+            if (isInsideDirtyBlocks(newIdx, a.imitationSnippet.length)) return null;
+            return { ...a, imitationIndex: newIdx };
+        })
+        .filter((x): x is DialogueSimilarityItem => x !== null);
+
+    const combinedDirtyText = blocks.map(b => b.text).join('\n\n').trim();
+    if (combinedDirtyText.length >= 18) {
+        try {
+            onProgress?.('正在检查变更段落与原稿的语义重合度...');
+            const dirtySimRes = await withSingleAutoRetry(
+                () => analyzeCrossSimilarityWithAI(originalText, combinedDirtyText, model, signal),
+                '变更段落语义查重',
+                signal,
+                onProgress
+            );
+            for (const sItem of dirtySimRes.confirmedSimilarities) {
+                const fullIdx = imitationText.indexOf(sItem.imitationSnippet);
+                if (fullIdx !== -1) {
+                    keptAiSims.push({ ...sItem, imitationIndex: fullIdx });
+                }
+            }
+            for (const mItem of dirtySimRes.uncertainSimilarityManualItems) {
+                const fullIdx = imitationText.indexOf(mItem.imitationTextSnippet);
+                if (
+                    fullIdx !== -1 &&
+                    !nextManualItems.some(m => m.imitationTextSnippet === mItem.imitationTextSnippet)
+                ) {
+                    nextManualItems.push({
+                        ...mItem,
+                        imitationIndex: fullIdx,
+                        locationLabel: getLocationInfo(imitationText, fullIdx).label
+                    });
+                }
+            }
+        } catch (simErr) {
+            console.warn('[局部复检变更段查重跳过]', simErr);
+        }
+    }
+
+    const mergedSimAlerts: DialogueSimilarityItem[] = [...fresh15Overlaps];
+    for (const item of keptAiSims) {
+        const overlaps = mergedSimAlerts.some(
+            ex => !(item.imitationIndex + item.imitationSnippet.length <= ex.imitationIndex || item.imitationIndex >= ex.imitationIndex + ex.imitationSnippet.length)
+        );
+        if (!overlaps) mergedSimAlerts.push(item);
+    }
+
+    const sentenceSimilarities = computeSentenceSimilarityPalette(originalText, imitationText, fresh15Overlaps);
+    const origChunks = splitIntoParagraphChunks(originalText, DEFAULT_CHUNK_CHARS);
+    const imitChunks = splitIntoParagraphChunks(imitationText, DEFAULT_CHUNK_CHARS);
+    const coverage = buildCoverageFromFailedList(origChunks.length, imitChunks.length, preservedFailedTasks);
+    const durationMs = Math.round(performance.now() - startTime);
+
+    const report = recalculateAuditReport({
+        ...currentReport,
+        timestamp: Date.now(),
+        durationMs,
+        modelRequested: model,
+        modelUsed: actualModelUsed,
+        isIncremental: true,
+        recheckedParagraphCount: Math.max(1, dirtyLineCount),
+        originalWordCount: originalText.replace(/\s+/g, '').length,
+        imitationWordCount: imitationText.replace(/\s+/g, '').length,
+        imitationEntities: nextImitEntities,
+        characterConflicts: confirmedConflicts,
+        typoIssues: preservedTypos.sort((a, b) => a.index - b.index),
+        similarityAlerts: mergedSimAlerts,
+        manualReviewItems: nextManualItems,
+        sentenceSimilarities,
+        coverage
+    });
+
+    const nextCache: AuditCacheState = {
+        originalText,
+        imitationText,
+        modelUsed: actualModelUsed
+    };
+
+    return { report, nextCache };
+}
+
+// --- C. 失败部分独立重试（仅重新处理 failedTaskDetails 中的失败内容，不触碰已成功分段与局部复检基线） ---
 export interface RetryFailedAuditParams {
     originalText: string;
     imitationText: string;
@@ -2141,6 +2584,8 @@ export interface RetryFailedAuditParams {
     currentReport: AuditReportResult;
     previousCache: AuditCacheState | null;
     excludedCharacters: Set<string>;
+    customAddedCharacters?: string[];
+    ignoredConflictKeys?: Set<string>;
     signal?: AbortSignal;
     onProgress?: (msg: string) => void;
 }
@@ -2156,6 +2601,8 @@ export async function retryFailedAuditParts(params: RetryFailedAuditParams): Pro
         currentReport,
         previousCache,
         excludedCharacters,
+        customAddedCharacters = [],
+        ignoredConflictKeys,
         signal,
         onProgress
     } = params;
@@ -2167,16 +2614,14 @@ export async function retryFailedAuditParts(params: RetryFailedAuditParams): Pro
             nextCache: previousCache || {
                 originalText,
                 imitationText,
-                modelUsed: model,
-                originalEntities: currentReport.originalEntities,
-                imitationParagraphResults: new Map()
+                modelUsed: model
             }
         };
     }
 
     const retryStart = performance.now();
-    const origChunks = splitIntoParagraphChunks(originalText, 8500);
-    const imitChunks = splitIntoParagraphChunks(imitationText, 8500);
+    const origChunks = splitIntoParagraphChunks(originalText, DEFAULT_CHUNK_CHARS);
+    const imitChunks = splitIntoParagraphChunks(imitationText, DEFAULT_CHUNK_CHARS);
 
     let nextOrigEntities = [...currentReport.originalEntities];
     let nextImitEntities = [...currentReport.imitationEntities];
@@ -2184,12 +2629,9 @@ export async function retryFailedAuditParts(params: RetryFailedAuditParams): Pro
     const nextManualItems = [...currentReport.manualReviewItems];
     const nextSimAlerts = [...currentReport.similarityAlerts];
 
-    let originalSucceededChunks = currentReport.coverage.originalSucceededChunks;
-    let imitationSucceededChunks = currentReport.coverage.imitationSucceededChunks;
-    let similarityChecked = currentReport.coverage.similarityChecked;
     let actualModelUsed = model;
-
     const remainingFailed: FailedAuditTask[] = [];
+
     const origHints = nextOrigEntities.map(e => e.canonical);
     const imitHints = nextImitEntities.map(e => e.canonical);
 
@@ -2198,153 +2640,123 @@ export async function retryFailedAuditParts(params: RetryFailedAuditParams): Pro
     const imitTempMap = new Map<string, { canonical: string; mentions: Set<string>; role?: string; evidence: Set<string>; firstIndex: number }>();
     const imitUncertainTemp: Array<{ name: string; mentions: string[]; role?: string; evidence: string; reason: string; index: number }> = [];
 
-    const origChunkCharMap = new Map<number, any[]>(previousCache?.originalChunkCharacters || []);
-    const imitChunkResMap = new Map<number, { characters: any[]; issues: any[] }>(previousCache?.imitationChunkResults || []);
+    onProgress?.(`正在仅重试 ${failedList.length} 项失败内容（已保留成功结果与人工记录）...`);
 
-    onProgress?.(`正在仅重试 ${failedList.length} 项未完成内容（已保留其余已完成结果与人工核对记录）...`);
+    for (let tIdx = 0; tIdx < failedList.length; tIdx++) {
+        const task = failedList[tIdx];
+        if (signal?.aborted) throw new Error('审稿任务已被用户取消');
 
-    const taskResults = await Promise.allSettled(
-        failedList.map(async (task) => {
+        try {
+            onProgress?.(`正在重试 (${tIdx + 1}/${failedList.length})：${task.label}...`);
+
             if (task.kind === 'original_chunk') {
                 const idx = task.chunkIndex ?? 0;
-                const chunk = origChunks[idx];
-                if (!chunk) return { task, ok: true as const };
-                const res = await withSingleAutoRetry(
-                    () => analyzeOriginalChunkWithAI(chunk.text, idx, origChunks.length, model, origHints, signal),
+                const fallbackChunk = origChunks[idx];
+                const segText = task.segmentText && originalText.includes(task.segmentText)
+                    ? task.segmentText
+                    : fallbackChunk?.text || '';
+                const segStart = task.segmentText && originalText.includes(task.segmentText)
+                    ? (task.startOffset ?? originalText.indexOf(task.segmentText))
+                    : (fallbackChunk?.startOffset ?? 0);
+
+                if (segText.trim()) {
+                    const res = await executeOriginalSegmentUnified({
+                        segmentText: segText,
+                        startOffset: segStart,
+                        label: task.label,
+                        model,
+                        knownHints: origHints,
+                        signal,
+                        onProgress
+                    });
+                    actualModelUsed = res.actualModel;
+                    for (const sub of res.subResults) {
+                        verifyAndRegisterCharacters(
+                            originalText,
+                            sub.startOffset,
+                            sub.characters,
+                            excludedCharacters,
+                            origTempMap,
+                            origUncertainTemp
+                        );
+                    }
+                    origTempMap.forEach((_, k) => {
+                        if (!origHints.includes(k)) origHints.push(k);
+                    });
+                }
+            } else if (task.kind === 'imitation_chunk' || task.kind === 'imitation_dirty_range') {
+                let segText = '';
+                let segStart = 0;
+
+                if (task.segmentText && imitationText.includes(task.segmentText)) {
+                    segText = task.segmentText;
+                    segStart = imitationText.indexOf(task.segmentText, Math.max(0, (task.startOffset ?? 0) - 100));
+                    if (segStart === -1) segStart = imitationText.indexOf(task.segmentText);
+                } else if (task.kind === 'imitation_chunk' && task.chunkIndex !== undefined && imitChunks[task.chunkIndex]) {
+                    segText = imitChunks[task.chunkIndex].text;
+                    segStart = imitChunks[task.chunkIndex].startOffset;
+                } else if (task.startOffset !== undefined && task.endOffset !== undefined && task.startOffset < imitationText.length) {
+                    segStart = Math.max(0, task.startOffset);
+                    segText = imitationText.slice(segStart, Math.min(imitationText.length, task.endOffset));
+                }
+
+                if (segText.trim()) {
+                    const res = await executeImitationSegmentUnified({
+                        segmentText: segText,
+                        startOffset: segStart,
+                        label: task.label,
+                        model,
+                        knownHints: imitHints,
+                        signal,
+                        onProgress
+                    });
+                    actualModelUsed = res.actualModel;
+                    for (const sub of res.subResults) {
+                        verifyAndRegisterCharacters(
+                            imitationText,
+                            sub.startOffset,
+                            sub.characters,
+                            excludedCharacters,
+                            imitTempMap,
+                            imitUncertainTemp
+                        );
+                        collectImitationIssuesIntoLists(
+                            imitationText,
+                            sub.issues,
+                            sub.startOffset,
+                            nextTypos,
+                            nextManualItems,
+                            `retry-${tIdx}`
+                        );
+                    }
+                    imitTempMap.forEach((_, k) => {
+                        if (!imitHints.includes(k)) imitHints.push(k);
+                    });
+                }
+            } else if (task.kind === 'cross_similarity') {
+                const simRes = await withSingleAutoRetry(
+                    () => analyzeCrossSimilarityWithAI(originalText, imitationText, model, signal),
                     task.label,
                     signal,
                     onProgress
                 );
-                return { task, ok: true as const, kind: 'original_chunk' as const, idx, chunk, res };
-            }
-            if (task.kind === 'imitation_chunk') {
-                const idx = task.chunkIndex ?? 0;
-                const chunk = imitChunks[idx];
-                if (!chunk) return { task, ok: true as const };
-                const res = await withSingleAutoRetry(
-                    () => analyzeImitationChunkWithAI(chunk.text, idx, imitChunks.length, model, imitHints, signal),
-                    task.label,
-                    signal,
-                    onProgress
-                );
-                return { task, ok: true as const, kind: 'imitation_chunk' as const, idx, chunk, res };
-            }
-            const simRes = await withSingleAutoRetry(
-                () => analyzeCrossSimilarityWithAI(originalText, imitationText, model, signal),
-                task.label,
-                signal,
-                onProgress
-            );
-            return { task, ok: true as const, kind: 'cross_similarity' as const, simRes };
-        })
-    );
-
-    if (signal?.aborted) {
-        throw new Error('审稿任务已被用户取消');
-    }
-
-    for (let tIdx = 0; tIdx < taskResults.length; tIdx++) {
-        const settled = taskResults[tIdx];
-        const origTask = failedList[tIdx];
-
-        if (settled.status === 'rejected') {
-            const err = settled.reason instanceof Error ? settled.reason : new Error(String(settled.reason));
-            if (err.message.includes('取消')) throw err;
-            console.error(`[局部重试仍失败] ${origTask.label}:`, err);
-            remainingFailed.push({ ...origTask, errorMessage: err.message });
-            continue;
-        }
-
-        const val = settled.value;
-        if (val.kind === 'original_chunk') {
-            actualModelUsed = val.res.actualModel;
-            originalSucceededChunks = Math.min(origChunks.length, originalSucceededChunks + 1);
-            origChunkCharMap.set(val.idx, val.res.characters);
-            verifyAndRegisterCharacters(
-                originalText,
-                val.chunk.startOffset,
-                val.res.characters,
-                excludedCharacters,
-                origTempMap,
-                origUncertainTemp
-            );
-        } else if (val.kind === 'imitation_chunk') {
-            actualModelUsed = val.res.actualModel;
-            imitationSucceededChunks = Math.min(imitChunks.length, imitationSucceededChunks + 1);
-            imitChunkResMap.set(val.idx, { characters: val.res.characters, issues: val.res.issues });
-            verifyAndRegisterCharacters(
-                imitationText,
-                val.chunk.startOffset,
-                val.res.characters,
-                excludedCharacters,
-                imitTempMap,
-                imitUncertainTemp
-            );
-
-            // 吸收仿写 issues（不覆盖已存在的错别字与已有人工核对状态）
-            for (const item of val.res.issues) {
-                if (!item || typeof item !== 'object') continue;
-                const wrongText = typeof item.wrongText === 'string' ? item.wrongText.trim() : '';
-                const correctText = typeof item.correctText === 'string' ? item.correctText.trim() : '';
-                const sentence = typeof item.sentence === 'string' ? item.sentence.trim() : '';
-                const reason = typeof item.reason === 'string' ? item.reason.trim() : '';
-                if (!wrongText) continue;
-
-                const idx = locateVerbatimSpan(imitationText, wrongText, sentence, val.chunk.startOffset);
-                if (idx === -1) continue;
-
-                const loc = getLocationInfo(imitationText, idx);
-                const verifiedSentence = sentence && imitationText.includes(sentence)
-                    ? sentence
-                    : extractSnippetNear(imitationText, wrongText, idx);
-                const cat: TypoAuditItem['category'] = VALID_TYPO_CATS.has(item.type) ? item.type : 'typo';
-
-                if (item.confidence === 'uncertain') {
-                    if (!nextManualItems.some(m => m.imitationIndex === idx && m.wrongText === wrongText)) {
-                        nextManualItems.push({
-                            id: `manual-issue-retry-${idx}-${wrongText}`,
-                            issueType: cat === 'consistency' ? 'consistency' : 'typo',
-                            aiJudgment: `AI不确定：疑似${cat === 'consistency' ? '人物前后不一致' : '错别字或语句欠妥'}`,
-                            originalTextSnippet: '—（仅涉及仿写正文）',
-                            imitationTextSnippet: verifiedSentence,
-                            imitationIndex: idx,
-                            locationLabel: loc.label,
-                            reason: reason || 'AI 无法确认属于笔误还是刻意小说表达，请人工核对',
-                            suggestedFix: correctText ? `建议改为：${correctText}` : '请结合上下文确认是否需要修改',
-                            wrongText,
-                            correctText: correctText && correctText !== wrongText ? correctText : undefined,
-                            status: 'pending'
-                        });
-                    }
-                } else if (correctText && correctText !== wrongText) {
-                    const dup = nextTypos.some(t => !(idx + wrongText.length <= t.index || idx >= t.index + t.wrongText.length));
-                    if (!dup) {
-                        nextTypos.push({
-                            id: `typo-retry-${idx}-${wrongText}`,
-                            index: idx,
-                            wrongText,
-                            correctText,
-                            sentence: verifiedSentence,
-                            explanation: reason || '上下文校对发现用词或人物前后不一致错误',
-                            locationLabel: loc.label,
-                            category: cat
-                        });
+                for (const sItem of simRes.confirmedSimilarities) {
+                    const overlapsExisting = nextSimAlerts.some(
+                        ex => !(sItem.imitationIndex + sItem.imitationSnippet.length <= ex.imitationIndex || sItem.imitationIndex >= ex.imitationIndex + ex.imitationSnippet.length)
+                    );
+                    if (!overlapsExisting) nextSimAlerts.push(sItem);
+                }
+                for (const mItem of simRes.uncertainSimilarityManualItems) {
+                    if (!nextManualItems.some(m => m.imitationTextSnippet === mItem.imitationTextSnippet)) {
+                        nextManualItems.push(mItem);
                     }
                 }
             }
-        } else if (val.kind === 'cross_similarity') {
-            similarityChecked = true;
-            for (const sItem of val.simRes.confirmedSimilarities) {
-                const overlapsExisting = nextSimAlerts.some(
-                    ex => !(sItem.imitationIndex + sItem.imitationSnippet.length <= ex.imitationIndex || sItem.imitationIndex >= ex.imitationIndex + ex.imitationSnippet.length)
-                );
-                if (!overlapsExisting) nextSimAlerts.push(sItem);
-            }
-            for (const mItem of val.simRes.uncertainSimilarityManualItems) {
-                if (!nextManualItems.some(m => m.imitationIndex === mItem.imitationIndex && m.imitationTextSnippet === mItem.imitationTextSnippet)) {
-                    nextManualItems.push(mItem);
-                }
-            }
+        } catch (err: any) {
+            const eObj = err instanceof Error ? err : new Error(String(err));
+            if (eObj.message.includes('取消')) throw eObj;
+            console.error(`[重试失败部分仍异常] ${task.label}:`, eObj);
+            remainingFailed.push({ ...task, errorMessage: eObj.message });
         }
     }
 
@@ -2371,10 +2783,26 @@ export async function retryFailedAuditParts(params: RetryFailedAuditParams): Pro
         });
     });
 
+    nextOrigEntities = applyCustomCharactersToEntities(
+        nextOrigEntities,
+        originalText,
+        customAddedCharacters,
+        excludedCharacters,
+        'orig-custom'
+    ).sort((a, b) => b.count - a.count);
+
+    nextImitEntities = applyCustomCharactersToEntities(
+        nextImitEntities,
+        imitationText,
+        customAddedCharacters,
+        excludedCharacters,
+        'imit-custom'
+    ).sort((a, b) => b.count - a.count);
+
     const resolvedNames = new Set(
         nextManualItems
-            .filter(m => m.status !== 'pending' && m.issueType === 'character' && m.candidateName)
-            .map(m => m.candidateName!)
+            .filter(m => m.status !== 'pending')
+            .flatMap(m => [m.candidateName, m.wrongText].filter((x): x is string => Boolean(x)))
     );
 
     const origConfirmedSet = new Set(nextOrigEntities.flatMap(e => e.mentions));
@@ -2423,53 +2851,30 @@ export async function retryFailedAuditParts(params: RetryFailedAuditParams): Pro
         });
     });
 
-    // 重新计算角色冲突（保留已忽略/已处理的待定冲突状态）
+    // 重新计算角色冲突（完整保留已忽略状态与已处理的人工冲突项）
     const { confirmedConflicts, uncertainConflictManualItems } = compareCharacterConflicts(
         originalText,
         imitationText,
         nextOrigEntities,
-        nextImitEntities
+        nextImitEntities,
+        ignoredConflictKeys
     );
     uncertainConflictManualItems.forEach((cItem) => {
-        if (!nextManualItems.some(m => m.issueType === 'conflict' && m.wrongText === cItem.wrongText && m.originalTextSnippet === cItem.originalTextSnippet)) {
+        if (
+            !nextManualItems.some(
+                m => m.issueType === 'conflict' && m.wrongText === cItem.wrongText && m.originalTextSnippet === cItem.originalTextSnippet
+            )
+        ) {
             nextManualItems.push(cItem);
         }
     });
 
     const retryDurationMs = Math.round(performance.now() - retryStart);
-    const characterCheckComplete =
-        originalSucceededChunks === origChunks.length &&
-        imitationSucceededChunks === imitChunks.length &&
-        !remainingFailed.some(f => f.kind === 'original_chunk' || f.kind === 'imitation_chunk');
-    const typoCheckComplete =
-        imitationSucceededChunks === imitChunks.length &&
-        !remainingFailed.some(f => f.kind === 'imitation_chunk');
-    const allChunksOk =
-        characterCheckComplete &&
-        typoCheckComplete &&
-        similarityChecked &&
-        remainingFailed.length === 0;
-
-    const coverage: CoverageStatus = {
-        originalTotalChunks: origChunks.length,
-        originalSucceededChunks,
-        imitationTotalChunks: imitChunks.length,
-        imitationSucceededChunks,
-        characterCheckComplete,
-        typoCheckComplete,
-        similarityChecked,
-        isComplete: allChunksOk,
-        failedTasks: remainingFailed.map(f => `${f.label}未完成`),
-        failedTaskDetails: remainingFailed,
-        warningMessage: !allChunksOk ? '审稿未完成，部分内容需要重试' : undefined
-    };
-
-    const nextParagraphCache = new Map(previousCache?.imitationParagraphResults || []);
-    nextParagraphCache.set('__FULL__', {
-        entities: nextImitEntities,
-        typos: nextTypos,
-        manualItems: nextManualItems
-    });
+    const coverage = buildCoverageFromFailedList(
+        currentReport.coverage.originalTotalChunks || origChunks.length,
+        currentReport.coverage.imitationTotalChunks || imitChunks.length,
+        remainingFailed
+    );
 
     const report = recalculateAuditReport({
         ...currentReport,
@@ -2477,8 +2882,8 @@ export async function retryFailedAuditParts(params: RetryFailedAuditParams): Pro
         durationMs: currentReport.durationMs + retryDurationMs,
         modelRequested: model,
         modelUsed: actualModelUsed,
-        originalEntities: nextOrigEntities.sort((a, b) => b.count - a.count),
-        imitationEntities: nextImitEntities.sort((a, b) => b.count - a.count),
+        originalEntities: nextOrigEntities,
+        imitationEntities: nextImitEntities,
         characterConflicts: confirmedConflicts,
         typoIssues: nextTypos.sort((a, b) => a.index - b.index),
         similarityAlerts: nextSimAlerts,
@@ -2486,15 +2891,10 @@ export async function retryFailedAuditParts(params: RetryFailedAuditParams): Pro
         coverage
     });
 
-    const nextCache: AuditCacheState = {
-        originalText,
-        imitationText,
-        modelUsed: model,
-        originalEntities: report.originalEntities,
-        originalChunkCharacters: origChunkCharMap,
-        imitationChunkResults: imitChunkResMap,
-        imitationParagraphResults: nextParagraphCache
-    };
+    // 保持 previousCache 的仿写基线不被覆盖，防止干扰用户尚未执行的「局部复检变更」判断
+    const nextCache: AuditCacheState = previousCache
+        ? { ...previousCache, modelUsed: actualModelUsed }
+        : { originalText, imitationText, modelUsed: actualModelUsed };
 
     return { report, nextCache };
 }
@@ -2596,6 +2996,7 @@ export function recalculateAuditReport(report: ComprehensiveAuditReport): Compre
 
     const dialogue15Count = report.similarityAlerts.filter(a => a.kind === 'dialogue_15').length;
     const pendingManualCount = report.manualReviewItems.filter(m => m.status === 'pending').length;
+    const activeConflictCount = report.characterConflicts.filter(c => !c.ignored).length;
 
     let verdict: ComprehensiveAuditReport['verdict'] = 'pass';
     let verdictMessage = '';
@@ -2609,7 +3010,7 @@ export function recalculateAuditReport(report: ComprehensiveAuditReport): Compre
         verdict = 'warning';
         verdictMessage = '审稿未完成，部分内容需要重试';
     } else if (
-        report.characterConflicts.length > 0 ||
+        activeConflictCount > 0 ||
         report.typoIssues.length > 0 ||
         report.similarityAlerts.length > 0 ||
         dangerCount >= 1 ||

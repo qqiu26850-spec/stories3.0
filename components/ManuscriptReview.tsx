@@ -1,9 +1,9 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import mammoth from 'mammoth';
 import {
     Sparkles, DocumentArrowDown, ArrowPath, Check, Trash,
     Copy, FloppyDisk, ClipboardDocumentCheck, ExclamationCircle,
-    Eye, Pencil, Plus
+    Eye, Pencil, Plus, ChevronDown, ChevronUp, ArrowUturnLeft
 } from './Icon';
 import { ALL_MODEL_OPTIONS } from '../constants';
 import { saveMaterial } from '../services/supabaseService';
@@ -23,10 +23,12 @@ import {
     detectDialogue15CharOverlaps,
     getLocationInfo,
     locateVerbatimSpan,
+    makeCharacterConflictKey,
     mergeCharacterIntoEntities,
     recalculateAuditReport,
     retryFailedAuditParts,
-    runComprehensiveManuscriptAudit
+    runComprehensiveManuscriptAudit,
+    runIncrementalImitationRecheck
 } from '../utils/manuscriptReviewEngine';
 
 export type {
@@ -80,9 +82,10 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
     const [originalText, setOriginalText] = useState<string>('');
     const [imitationText, setImitationText] = useState<string>('');
 
-    // 模型选择与审核参数（默认优先 DeepSeek V3 通道，保留其他模型切换）
+    // 模型选择与审核运行模式（区分全文审稿 / 局部复检变更 / 重试失败部分，避免状态与加载互相干扰）
     const [selectedModel, setSelectedModel] = useState<string>('deepseek-chat');
-    const [isAuditing, setIsAuditing] = useState<boolean>(false);
+    const [activeTaskMode, setActiveTaskMode] = useState<'idle' | 'full' | 'incremental' | 'retry'>('idle');
+    const isBusy = activeTaskMode !== 'idle';
     const [auditProgress, setAuditProgress] = useState<string>('');
     const [auditError, setAuditError] = useState<string | null>(null);
     const [report, setReport] = useState<AuditReportResult | null>(null);
@@ -105,14 +108,19 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
     const [manualCustomEdits, setManualCustomEdits] = useState<Record<string, string>>({});
     const [activeLocate, setActiveLocate] = useState<ActiveLocateState | null>(null);
 
+    // 右侧仿写正文高亮工具栏悬浮折叠状态（与原工具栏共用同一套模式/筛选状态）
+    const [isInlineToolbarOutOfView, setIsInlineToolbarOutOfView] = useState<boolean>(false);
+    const [isFloatingToolbarExpanded, setIsFloatingToolbarExpanded] = useState<boolean>(false);
+
     // AI 降重状态
     const [isAiRewriting, setIsAiRewriting] = useState<boolean>(false);
     const [aiRewriteSuggestions, setAiRewriteSuggestions] = useState<Array<{ style: string; text: string }>>([]);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-    // 人物名称自定义微调
+    // 人物名称自定义微调 & 姓名冲突忽略记录
     const [customAddedCharacters, setCustomAddedCharacters] = useState<string[]>([]);
     const [excludedCharacters, setExcludedCharacters] = useState<Set<string>>(new Set());
+    const [ignoredConflictKeys, setIgnoredConflictKeys] = useState<Set<string>>(new Set());
     const [newCharInput, setNewCharInput] = useState<string>('');
     const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
 
@@ -121,6 +129,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
     const bannerRef = useRef<HTMLDivElement>(null);
     const origScrollContainerRef = useRef<HTMLDivElement>(null);
     const imitScrollContainerRef = useRef<HTMLDivElement>(null);
+    const inlineToolbarRef = useRef<HTMLDivElement>(null);
     const fileInputOriginalRef = useRef<HTMLInputElement>(null);
     const fileInputImitationRef = useRef<HTMLInputElement>(null);
 
@@ -251,6 +260,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                     setOriginalText(result.value);
                     setReport(null);
                     auditCacheRef.current = null;
+                    setIgnoredConflictKeys(new Set());
                 } else {
                     handleImitationTextEdit(result.value);
                 }
@@ -263,6 +273,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                         setOriginalText(content);
                         setReport(null);
                         auditCacheRef.current = null;
+                        setIgnoredConflictKeys(new Set());
                     } else {
                         handleImitationTextEdit(content);
                     }
@@ -284,6 +295,9 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
         setAuditError(null);
         setActiveLocate(null);
         setExcludedCharacters(new Set());
+        setIgnoredConflictKeys(new Set());
+        setIsInlineToolbarOutOfView(false);
+        setIsFloatingToolbarExpanded(false);
         showToast('已载入演示样本（含同音、换序命名、错别字、漏字及15字+重复句），点击“开始智能审稿”运行测试');
     };
 
@@ -293,6 +307,8 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
 
     const executeClearAll = () => {
         auditAbortRef.current?.abort();
+        setActiveTaskMode('idle');
+        setAuditProgress('');
         setOriginalText('');
         setImitationText('');
         setReport(null);
@@ -306,10 +322,13 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
         setCustomReplaceNames({});
         setManualCustomEdits({});
         setActiveLocate(null);
+        setIsInlineToolbarOutOfView(false);
+        setIsFloatingToolbarExpanded(false);
         setAiRewriteSuggestions([]);
         setIsAiRewriting(false);
         setCustomAddedCharacters([]);
         setExcludedCharacters(new Set());
+        setIgnoredConflictKeys(new Set());
         setNewCharInput('');
         setIsCollapsed(false);
         setDrawerHeight(360);
@@ -320,12 +339,14 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
         showToast('已全部清除，恢复到初始待输入界面');
     };
 
-    // 同步正文手工修改或一键替换后，实时更新各问题索引、调色盘和汇总状态
+    // 同步正文手工修改或一键替换后，实时更新各问题索引、调色盘和汇总状态（完整保留已忽略冲突）
     const syncReportWithUpdatedImitation = (
         nextImitText: string,
         currentReport: AuditReportResult,
-        overrides?: Partial<AuditReportResult>
+        overrides?: Partial<AuditReportResult>,
+        customIgnoredSet?: Set<string>
     ): AuditReportResult => {
+        const effectiveIgnoredKeys = customIgnoredSet ?? ignoredConflictKeys;
         const mergedReport: AuditReportResult = {
             ...currentReport,
             ...overrides,
@@ -346,7 +367,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
             .filter((x): x is TypoAuditItem => x !== null)
             .sort((a, b) => a.index - b.index);
 
-        // 2. 同步仿写人物计数与位置，并重算跨稿人物冲突
+        // 2. 同步仿写人物计数与位置，并重算跨稿人物冲突（保留已忽略冲突状态）
         const syncedImitEntities = mergedReport.imitationEntities
             .map((ent) => {
                 const aliveMentions = ent.mentions.filter(m => nextImitText.includes(m));
@@ -366,7 +387,8 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
             originalText,
             nextImitText,
             mergedReport.originalEntities,
-            syncedImitEntities
+            syncedImitEntities,
+            effectiveIgnoredKeys
         );
 
         // 3. 同步待人工核对列表
@@ -425,8 +447,22 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
         }
     };
 
-    // --- 执行一次完整审稿 / 局部增量复检 ---
-    const handleRunAudit = async (forceFull = false) => {
+    const formatModelFailureMessage = (rawMsg: string): string => {
+        if (rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED') || rawMsg.toLowerCase().includes('quota')) {
+            return `当前所选模型（${selectedModel}）额度不足或请求受限，未自动切换其他模型。请切换上方模型或稍后重试。`;
+        }
+        if (rawMsg.includes('取消')) {
+            return '审稿任务已取消';
+        }
+        if (rawMsg.includes('超时')) {
+            return `当前所选模型（${selectedModel}）响应超时，请点击重试或切换上方模型。`;
+        }
+        return `当前所选模型（${selectedModel}）接口调用异常，未自动切换其他模型。请重试或切换上方模型。`;
+    };
+
+    // --- A. 全文完整审稿（「开始智能审稿」或「全篇重审」：重新判断全文冲突，清空此前忽略记录） ---
+    const handleRunFullAudit = async () => {
+        if (isBusy) return;
         if (!originalText.trim()) {
             showToast('请先在左侧输入或上传原稿内容！');
             return;
@@ -436,14 +472,15 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
             return;
         }
 
-        auditAbortRef.current?.abort();
         const controller = new AbortController();
         auditAbortRef.current = controller;
 
-        setIsAuditing(true);
+        const freshIgnored = new Set<string>();
+        setIgnoredConflictKeys(freshIgnored);
+        setActiveTaskMode('full');
         setAuditError(null);
         setActiveLocate(null);
-        setAuditProgress(`正在连接 ${selectedModel} 进行上下文语义审稿...`);
+        setAuditProgress(`正在连接 ${selectedModel} 进行全文语义审稿...`);
 
         try {
             const { report: nextReport, nextCache } = await runComprehensiveManuscriptAudit({
@@ -452,8 +489,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                 model: selectedModel,
                 excludedCharacters,
                 customAddedCharacters,
-                previousCache: auditCacheRef.current,
-                forceFull,
+                ignoredConflictKeys: freshIgnored,
                 signal: controller.signal,
                 onProgress: (msg) => setAuditProgress(msg)
             });
@@ -464,11 +500,12 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
             setPaletteMode('issues');
 
             const pendingManual = nextReport.manualReviewItems.filter(m => m.status === 'pending').length;
-            if (pendingManual > 0 && nextReport.typoIssues.length === 0 && nextReport.characterConflicts.length === 0) {
+            const activeConflicts = nextReport.characterConflicts.filter(c => !c.ignored).length;
+            if (pendingManual > 0 && nextReport.typoIssues.length === 0 && activeConflicts === 0) {
                 setActiveTab('manual');
             } else if (nextReport.typoIssues.length > 0) {
                 setActiveTab('typo');
-            } else if (nextReport.characterConflicts.length > 0 || !nextReport.coverage.isComplete) {
+            } else if (activeConflicts > 0 || !nextReport.coverage.isComplete) {
                 setActiveTab('character');
             } else if (pendingManual > 0) {
                 setActiveTab('manual');
@@ -479,41 +516,77 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
             const secs = (nextReport.durationMs / 1000).toFixed(1);
             if (!nextReport.coverage.isComplete) {
                 showToast('审稿未完成，部分内容需要重试');
-            } else if (nextReport.isIncremental) {
-                showToast(`局部增量复检完成（耗时 ${secs}秒）`);
             } else {
-                showToast(`审稿完成（耗时 ${secs}秒）`);
+                showToast(`全文审稿完成（耗时 ${secs}秒）`);
             }
         } catch (e: any) {
-            console.error('Audit failed:', e);
-            const rawMsg = String(e?.message || '未知错误');
-            const userFriendlyMsg =
-                rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED') || rawMsg.toLowerCase().includes('quota')
-                    ? `当前所选模型（${selectedModel}）额度不足或请求受限，未自动切换其他模型。请切换上方模型或稍后重试。`
-                    : rawMsg.includes('取消')
-                    ? '审稿任务已取消'
-                    : rawMsg.includes('超时')
-                    ? `当前所选模型（${selectedModel}）响应超时，请点击重试或切换上方模型。`
-                    : `当前所选模型（${selectedModel}）接口调用异常，未自动切换其他模型。请重试或切换上方模型。`;
+            console.error('Full audit failed:', e);
+            const userFriendlyMsg = formatModelFailureMessage(String(e?.message || '未知错误'));
             setAuditError(userFriendlyMsg);
             showToast(userFriendlyMsg);
         } finally {
-            setIsAuditing(false);
+            setActiveTaskMode('idle');
             setAuditProgress('');
         }
     };
 
-    // --- 仅重试失败分段（保留已成功内容与人工核对记录，不重审已完成段落） ---
-    const handleRetryFailedParts = async () => {
-        if (!report || report.coverage.failedTaskDetails.length === 0) return;
+    // --- B. 局部复检变更（严格只重新检查修改后受影响的仿写内容；保留已忽略冲突、人工处理记录及无关失败项） ---
+    const handleRunIncrementalRecheck = async () => {
+        if (isBusy) return;
+        if (!report || !auditCacheRef.current || auditCacheRef.current.originalText !== originalText) {
+            await handleRunFullAudit();
+            return;
+        }
 
-        auditAbortRef.current?.abort();
         const controller = new AbortController();
         auditAbortRef.current = controller;
 
-        setIsAuditing(true);
+        setActiveTaskMode('incremental');
         setAuditError(null);
-        setAuditProgress('正在仅重试未完成分段...');
+        setActiveLocate(null);
+        setAuditProgress('正在检查修改受影响的段落...');
+
+        try {
+            const { report: nextReport, nextCache } = await runIncrementalImitationRecheck({
+                originalText,
+                imitationText,
+                baselineImitationText: auditCacheRef.current.imitationText,
+                model: selectedModel,
+                currentReport: report,
+                excludedCharacters,
+                customAddedCharacters,
+                ignoredConflictKeys,
+                signal: controller.signal,
+                onProgress: (msg) => setAuditProgress(msg)
+            });
+
+            auditCacheRef.current = nextCache;
+            setReport(nextReport);
+            setViewMode('audit');
+
+            const secs = (nextReport.durationMs / 1000).toFixed(1);
+            showToast(`局部复检变更完成（耗时 ${secs}秒，已保留人工核对与忽略记录）`);
+        } catch (e: any) {
+            console.error('Incremental recheck failed:', e);
+            const userFriendlyMsg = formatModelFailureMessage(String(e?.message || '未知错误'));
+            setAuditError(userFriendlyMsg);
+            showToast(userFriendlyMsg);
+        } finally {
+            setActiveTaskMode('idle');
+            setAuditProgress('');
+        }
+    };
+
+    // --- C. 重试失败部分（严格只重新处理失败内容；保留已成功结果、人工记录、忽略冲突及局部复检基线） ---
+    const handleRetryFailedParts = async () => {
+        if (isBusy || !report || report.coverage.failedTaskDetails.length === 0) return;
+
+        const controller = new AbortController();
+        auditAbortRef.current = controller;
+
+        setActiveTaskMode('retry');
+        setAuditError(null);
+        setAuditProgress('正在仅重试失败部分...');
 
         try {
             const { report: nextReport, nextCache } = await retryFailedAuditParts({
@@ -523,6 +596,8 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                 currentReport: report,
                 previousCache: auditCacheRef.current,
                 excludedCharacters,
+                customAddedCharacters,
+                ignoredConflictKeys,
                 signal: controller.signal,
                 onProgress: (msg) => setAuditProgress(msg)
             });
@@ -531,19 +606,17 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
             setReport(nextReport);
 
             if (nextReport.coverage.isComplete) {
-                showToast(`失败部分重试成功，全文审稿已完成（总耗时 ${(nextReport.durationMs / 1000).toFixed(1)}秒）`);
+                showToast(`失败部分重试成功，全文审稿已完成（累计耗时 ${(nextReport.durationMs / 1000).toFixed(1)}秒）`);
             } else {
-                showToast('部分内容仍未完成，请再次重试或切换上方模型');
+                showToast('仍有部分内容未完成，请稍后再次重试或切换上方模型');
             }
         } catch (e: any) {
             console.error('Retry failed parts error:', e);
-            const rawMsg = String(e?.message || '');
-            const msg = rawMsg.includes('取消')
-                ? '已取消重试'
-                : `所选模型（${selectedModel}）重试仍异常，请稍后重试或切换模型`;
-            showToast(msg);
+            const userFriendlyMsg = formatModelFailureMessage(String(e?.message || ''));
+            setAuditError(userFriendlyMsg);
+            showToast(userFriendlyMsg);
         } finally {
-            setIsAuditing(false);
+            setActiveTaskMode('idle');
             setAuditProgress('');
         }
     };
@@ -677,6 +750,56 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
         showToast(`已一键将仿写稿中的【${target}】全部替换为【${cleanReplacement}】！`);
     };
 
+    // --- 忽略 / 撤销忽略人物同音换序冲突（不修改正文，不计入待处理冲突，局部复检保留忽略状态） ---
+    const handleIgnoreCharacterConflict = (conflict: CharacterConflictItem) => {
+        const key = conflict.conflictKey || makeCharacterConflictKey(conflict.originalName, conflict.imitationName);
+        const nextSet = new Set(ignoredConflictKeys);
+        nextSet.add(key);
+        setIgnoredConflictKeys(nextSet);
+
+        if (report) {
+            const updatedConflicts = report.characterConflicts
+                .map((c) => {
+                    const cKey = c.conflictKey || makeCharacterConflictKey(c.originalName, c.imitationName);
+                    return cKey === key ? { ...c, ignored: true } : c;
+                })
+                .sort((a, b) => (Boolean(a.ignored) === Boolean(b.ignored) ? 0 : a.ignored ? 1 : -1));
+            setReport(
+                recalculateAuditReport({
+                    ...report,
+                    characterConflicts: updatedConflicts
+                })
+            );
+        }
+        if (activeLocate?.id === conflict.id) {
+            setActiveLocate(null);
+        }
+        showToast(`已忽略「${conflict.originalName} ↔ ${conflict.imitationName}」（不修改正文，支持在下方已忽略记录中撤销）`);
+    };
+
+    const handleUndoIgnoreCharacterConflict = (conflict: CharacterConflictItem) => {
+        const key = conflict.conflictKey || makeCharacterConflictKey(conflict.originalName, conflict.imitationName);
+        const nextSet = new Set(ignoredConflictKeys);
+        nextSet.delete(key);
+        setIgnoredConflictKeys(nextSet);
+
+        if (report) {
+            const updatedConflicts = report.characterConflicts
+                .map((c) => {
+                    const cKey = c.conflictKey || makeCharacterConflictKey(c.originalName, c.imitationName);
+                    return cKey === key ? { ...c, ignored: false } : c;
+                })
+                .sort((a, b) => (Boolean(a.ignored) === Boolean(b.ignored) ? 0 : a.ignored ? 1 : -1));
+            setReport(
+                recalculateAuditReport({
+                    ...report,
+                    characterConflicts: updatedConflicts
+                })
+            );
+        }
+        showToast(`已撤销忽略「${conflict.originalName} ↔ ${conflict.imitationName}」，重新计入待处理冲突`);
+    };
+
     const handleExcludeCharacter = (entity: ReviewedCharacterEntity) => {
         const mentionsToExclude = entity.mentions;
         const label = mentionsToExclude.join(' / ');
@@ -699,7 +822,8 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                 originalText,
                 imitationText,
                 nextOrigEntities,
-                nextImitEntities
+                nextImitEntities,
+                ignoredConflictKeys
             );
             setReport(
                 recalculateAuditReport({
@@ -749,7 +873,13 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                     firstIndex: Math.max(0, imitationText.indexOf(name))
                 });
             }
-            const { confirmedConflicts } = compareCharacterConflicts(originalText, imitationText, nextOrig, nextImit);
+            const { confirmedConflicts } = compareCharacterConflicts(
+                originalText,
+                imitationText,
+                nextOrig,
+                nextImit,
+                ignoredConflictKeys
+            );
             setReport(recalculateAuditReport({
                 ...report,
                 originalEntities: nextOrig,
@@ -828,7 +958,8 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                 originalText,
                 imitationText,
                 nextOrigEntities,
-                nextImitEntities
+                nextImitEntities,
+                ignoredConflictKeys
             ).confirmedConflicts;
         } else if (item.issueType === 'similarity') {
             nextSimAlerts.push({
@@ -844,8 +975,10 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                 suggestedRewrite: item.suggestedFix
             });
         } else if (item.issueType === 'conflict' && item.wrongText) {
+            const cKey = makeCharacterConflictKey(item.originalTextSnippet, item.wrongText);
             nextConflicts.push({
                 id: `confirmed-conflict-${item.id}`,
+                conflictKey: cKey,
                 originalName: item.originalTextSnippet,
                 imitationName: item.wrongText,
                 originalEntityDisplay: item.originalTextSnippet,
@@ -859,7 +992,8 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                 originalPinyin: '',
                 imitationPinyin: '',
                 count: countExactOccurrences(imitationText, item.wrongText),
-                recommendedNames: ['沈砚', '周妄', '陆司沉']
+                recommendedNames: ['沈砚', '周妄', '陆司沉'],
+                ignored: ignoredConflictKeys.has(cKey)
             });
         }
 
@@ -959,7 +1093,8 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                     originalText,
                     imitationText,
                     nextOrigEntities,
-                    report.imitationEntities
+                    report.imitationEntities,
+                    ignoredConflictKeys
                 ).confirmedConflicts;
 
                 setReport(
@@ -1168,6 +1303,15 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
         return accepted.sort((a, b) => a.start - b.start);
     };
 
+    const activeCharacterConflicts = useMemo(
+        () => report?.characterConflicts.filter(c => !c.ignored) || [],
+        [report]
+    );
+    const ignoredCharacterConflicts = useMemo(
+        () => report?.characterConflicts.filter(c => Boolean(c.ignored)) || [],
+        [report]
+    );
+
     const originalIssueSegments = useMemo(() => {
         if (!report) return [];
         const raw: HighlightSegment[] = [];
@@ -1182,7 +1326,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
             });
         }
 
-        report.characterConflicts.forEach((c) => {
+        activeCharacterConflicts.forEach((c) => {
             if (c.originalIndex >= 0) {
                 raw.push({
                     start: c.originalIndex,
@@ -1224,7 +1368,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
             });
 
         return buildNonOverlappingSegments(originalText, raw);
-    }, [report, originalText, activeLocate]);
+    }, [report, activeCharacterConflicts, originalText, activeLocate]);
 
     const imitationIssueSegments = useMemo(() => {
         if (!report) return [];
@@ -1251,7 +1395,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
             });
         });
 
-        report.characterConflicts.forEach((c) => {
+        activeCharacterConflicts.forEach((c) => {
             let pos = 0;
             while (pos < imitationText.length) {
                 const idx = imitationText.indexOf(c.imitationName, pos);
@@ -1299,7 +1443,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
             });
 
         return buildNonOverlappingSegments(imitationText, raw);
-    }, [report, imitationText, activeLocate]);
+    }, [report, activeCharacterConflicts, imitationText, activeLocate]);
 
     const renderSegmentsContent = (
         text: string,
@@ -1364,6 +1508,201 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
         () => report?.manualReviewItems.filter(m => m.status !== 'pending') || [],
         [report]
     );
+    const activeConfirmedIssueCount = useMemo(
+        () => (report ? report.typoIssues.length + activeCharacterConflicts.length + report.similarityAlerts.length : 0),
+        [report, activeCharacterConflicts]
+    );
+
+    // 监听仿写顶部原高亮工具栏是否离开滚动可视区（离开自动显示小型悬浮入口，重回可视区自动隐藏且不改滚动位置）
+    const checkInlineToolbarVisibility = useCallback(() => {
+        const scrollEl = imitScrollContainerRef.current;
+        const toolbarEl = inlineToolbarRef.current;
+        if (!report || viewMode !== 'audit' || !scrollEl || !toolbarEl) {
+            setIsInlineToolbarOutOfView(false);
+            setIsFloatingToolbarExpanded(false);
+            return;
+        }
+        const scrollRect = scrollEl.getBoundingClientRect();
+        const toolbarRect = toolbarEl.getBoundingClientRect();
+        const outOfView = toolbarRect.bottom <= scrollRect.top + 2;
+        setIsInlineToolbarOutOfView((prev) => {
+            if (prev !== outOfView && !outOfView) {
+                setIsFloatingToolbarExpanded(false);
+            }
+            return outOfView;
+        });
+    }, [report, viewMode]);
+
+    useEffect(() => {
+        checkInlineToolbarVisibility();
+        const scrollEl = imitScrollContainerRef.current;
+        const toolbarEl = inlineToolbarRef.current;
+        if (!report || viewMode !== 'audit' || !scrollEl || !toolbarEl) return;
+
+        let observer: IntersectionObserver | null = null;
+        if (typeof IntersectionObserver !== 'undefined') {
+            observer = new IntersectionObserver(
+                () => checkInlineToolbarVisibility(),
+                { root: scrollEl, threshold: 0 }
+            );
+            observer.observe(toolbarEl);
+        }
+
+        window.addEventListener('resize', checkInlineToolbarVisibility);
+        return () => {
+            observer?.disconnect();
+            window.removeEventListener('resize', checkInlineToolbarVisibility);
+        };
+    }, [report, viewMode, drawerHeight, isCollapsed, checkInlineToolbarVisibility]);
+
+    // 原地工具栏与悬浮展开工具栏共用的唯一控件渲染逻辑（共享同一套状态与操作，零重复逻辑）
+    const renderImitationToolbarControls = (isFloating: boolean) => {
+        if (!report) return null;
+        return (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1 bg-slate-200/80 dark:bg-slate-900 p-0.5 rounded-lg">
+                    <button
+                        type="button"
+                        onClick={() => setPaletteMode('issues')}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition ${
+                            paletteMode === 'issues'
+                                ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-300 shadow-xs'
+                                : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                    >
+                        🔴 审稿问题高亮
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setPaletteMode('similarity')}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition ${
+                            paletteMode === 'similarity'
+                                ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-300 shadow-xs'
+                                : 'text-slate-600 dark:text-slate-400'
+                        }`}
+                    >
+                        🎨 相似度调色盘
+                    </button>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    {paletteMode === 'issues' ? (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (report.typoIssues.length > 0) setActiveTab('typo');
+                                    else if (activeCharacterConflicts.length > 0) setActiveTab('character');
+                                    else if (report.similarityAlerts.length > 0) setActiveTab('similarity');
+                                    if (isCollapsed) handleToggleCollapse();
+                                }}
+                                title="点击在下方审稿面板查看待处理的确认问题"
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 hover:bg-red-200/80 dark:bg-red-950/70 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800 text-[11px] transition cursor-pointer"
+                            >
+                                <span className="w-2 h-2 rounded-full bg-red-600"></span>
+                                红色：确认问题 ({activeConfirmedIssueCount})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setActiveTab('manual');
+                                    if (isCollapsed) handleToggleCollapse();
+                                }}
+                                title="点击在下方审稿面板查看待人工核对项"
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 hover:bg-yellow-200/80 dark:bg-yellow-950/70 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-800 text-[11px] transition cursor-pointer"
+                            >
+                                <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                                黄色：待人工核对 ({pendingManualItems.length})
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setPaletteFilter('all')}
+                                className={`px-2 py-0.5 rounded-full border text-[11px] transition ${
+                                    paletteFilter === 'all'
+                                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-bold'
+                                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200'
+                                }`}
+                            >
+                                全部
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPaletteFilter('danger')}
+                                className={`px-2 py-0.5 rounded-full border text-[11px] transition flex items-center gap-1 ${
+                                    paletteFilter === 'danger'
+                                        ? 'bg-red-600 text-white font-bold'
+                                        : 'bg-red-100 dark:bg-red-950/70 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
+                                }`}
+                            >
+                                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                极高重合/15字+台词 ({report.colorStats.dangerCount})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPaletteFilter('warning')}
+                                className={`px-2 py-0.5 rounded-full border text-[11px] transition flex items-center gap-1 ${
+                                    paletteFilter === 'warning'
+                                        ? 'bg-amber-600 text-white font-bold'
+                                        : 'bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                                }`}
+                            >
+                                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                高度相仿 ({report.colorStats.warningCount})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPaletteFilter('caution')}
+                                className={`px-2 py-0.5 rounded-full border text-[11px] transition flex items-center gap-1 ${
+                                    paletteFilter === 'caution'
+                                        ? 'bg-yellow-600 text-white font-bold'
+                                        : 'bg-yellow-100 dark:bg-yellow-950/70 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-800'
+                                }`}
+                            >
+                                <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                                中度借鉴 ({report.colorStats.cautionCount})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPaletteFilter('safe')}
+                                className={`px-2 py-0.5 rounded-full border text-[11px] transition flex items-center gap-1 ${
+                                    paletteFilter === 'safe'
+                                        ? 'bg-emerald-600 text-white font-bold'
+                                        : 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                                }`}
+                            >
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                安全原创 ({report.colorStats.safeCount})
+                            </button>
+                        </>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={() => setViewMode('edit')}
+                        className="px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold transition"
+                    >
+                        直接修改正文
+                    </button>
+
+                    {isFloating && (
+                        <button
+                            type="button"
+                            data-testid="floating-highlight-toolbar-collapse"
+                            onClick={() => setIsFloatingToolbarExpanded(false)}
+                            className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold inline-flex items-center gap-0.5 transition"
+                            title="收起悬浮工具栏"
+                        >
+                            <span>收起</span>
+                            <ChevronUp className="w-3 h-3" />
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
 
     if (!isActive) return null;
 
@@ -1441,22 +1780,23 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                     {hasPendingIncrementalChanges && (
                         <button
                             type="button"
-                            onClick={() => handleRunAudit(true)}
-                            disabled={isAuditing}
-                            className="h-8 px-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs leading-none font-semibold rounded-xl transition disabled:opacity-50 inline-flex items-center justify-center whitespace-nowrap"
-                            title="忽略增量缓存，对全篇全文重审"
+                            onClick={handleRunFullAudit}
+                            disabled={isBusy}
+                            className="h-8 px-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs leading-none font-semibold rounded-xl transition disabled:opacity-50 inline-flex items-center justify-center gap-1 whitespace-nowrap"
+                            title="忽略增量缓存，对全篇重新审稿（包括重新判断已忽略的冲突）"
                         >
-                            全篇重审
+                            {activeTaskMode === 'full' && <ArrowPath className="w-3 h-3 animate-spin flex-shrink-0" />}
+                            <span>全篇重审</span>
                         </button>
                     )}
 
                     <button
                         type="button"
-                        onClick={() => handleRunAudit(false)}
-                        disabled={isAuditing}
+                        onClick={() => (hasPendingIncrementalChanges ? handleRunIncrementalRecheck() : handleRunFullAudit())}
+                        disabled={isBusy}
                         className="h-8 px-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs leading-none font-bold rounded-xl shadow-md shadow-sky-500/25 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
                     >
-                        {isAuditing ? (
+                        {activeTaskMode === 'full' || activeTaskMode === 'incremental' ? (
                             <>
                                 <ArrowPath className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
                                 <span className="max-w-[200px] truncate">{auditProgress || '正在分析...'}</span>
@@ -1481,11 +1821,19 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                     <div className="flex items-center gap-2 flex-shrink-0">
                         <button
                             type="button"
-                            onClick={() => handleRunAudit(false)}
-                            disabled={isAuditing}
-                            className="h-6 px-2.5 rounded bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold inline-flex items-center"
+                            onClick={() => {
+                                if (report && !report.coverage.isComplete) {
+                                    handleRetryFailedParts();
+                                } else if (hasPendingIncrementalChanges) {
+                                    handleRunIncrementalRecheck();
+                                } else {
+                                    handleRunFullAudit();
+                                }
+                            }}
+                            disabled={isBusy}
+                            className="h-6 px-2.5 rounded bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold inline-flex items-center disabled:opacity-50"
                         >
-                            重新审稿
+                            {report && !report.coverage.isComplete ? '重试失败部分' : '重新审稿'}
                         </button>
                         <button
                             type="button"
@@ -1524,11 +1872,11 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                                 <button
                                     type="button"
                                     onClick={handleRetryFailedParts}
-                                    disabled={isAuditing}
+                                    disabled={isBusy}
                                     className="h-6 px-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-md text-[11px] leading-none font-bold shadow-2xs transition disabled:opacity-50 inline-flex items-center gap-1 whitespace-nowrap"
                                 >
-                                    <ArrowPath className={`w-3 h-3 ${isAuditing ? 'animate-spin' : ''}`} />
-                                    重试失败部分
+                                    <ArrowPath className={`w-3 h-3 ${activeTaskMode === 'retry' ? 'animate-spin' : ''}`} />
+                                    <span>{activeTaskMode === 'retry' ? (auditProgress || '重试中...') : '重试失败部分'}</span>
                                 </button>
                             </div>
                         )}
@@ -1692,112 +2040,50 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                         </div>
                     </div>
 
-                    <div ref={imitScrollContainerRef} className="flex-1 p-4 overflow-y-auto">
-                        {report && viewMode === 'audit' ? (
-                            <div className="space-y-3">
-                                {/* Palette Mode Switcher: 审稿问题高亮模式 vs 原有相似度调色盘模式 */}
-                                <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2 text-xs">
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <div className="flex items-center gap-1 bg-slate-200/80 dark:bg-slate-900 p-0.5 rounded-lg">
-                                            <button
-                                                onClick={() => setPaletteMode('issues')}
-                                                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition ${
-                                                    paletteMode === 'issues'
-                                                        ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-300 shadow-xs'
-                                                        : 'text-slate-600 dark:text-slate-400'
-                                                }`}
-                                            >
-                                                🔴 审稿问题高亮
-                                            </button>
-                                            <button
-                                                onClick={() => setPaletteMode('similarity')}
-                                                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition ${
-                                                    paletteMode === 'similarity'
-                                                        ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-300 shadow-xs'
-                                                        : 'text-slate-600 dark:text-slate-400'
-                                                }`}
-                                            >
-                                                🎨 相似度调色盘
-                                            </button>
-                                        </div>
-
-                                        {paletteMode === 'issues' ? (
-                                            <div className="flex items-center gap-2 text-[11px] flex-wrap">
-                                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-950/70 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800">
-                                                    <span className="w-2 h-2 rounded-full bg-red-600"></span>
-                                                    红色：确认问题 ({report.typoIssues.length + report.characterConflicts.length + report.similarityAlerts.length})
-                                                </span>
-                                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-950/70 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-800">
-                                                    <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
-                                                    黄色：待人工核对 ({pendingManualItems.length})
-                                                </span>
-                                                <button
-                                                    onClick={() => setViewMode('edit')}
-                                                    className="px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white font-semibold"
-                                                >
-                                                    直接修改正文
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                <button
-                                                    onClick={() => setPaletteFilter('all')}
-                                                    className={`px-2 py-0.5 rounded-full border text-[11px] transition ${
-                                                        paletteFilter === 'all'
-                                                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-bold'
-                                                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200'
-                                                    }`}
-                                                >
-                                                    全部
-                                                </button>
-                                                <button
-                                                    onClick={() => setPaletteFilter('danger')}
-                                                    className={`px-2 py-0.5 rounded-full border text-[11px] transition flex items-center gap-1 ${
-                                                        paletteFilter === 'danger'
-                                                            ? 'bg-red-600 text-white font-bold'
-                                                            : 'bg-red-100 dark:bg-red-950/70 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
-                                                    }`}
-                                                >
-                                                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                                    极高重合/15字+台词 ({report.colorStats.dangerCount})
-                                                </button>
-                                                <button
-                                                    onClick={() => setPaletteFilter('warning')}
-                                                    className={`px-2 py-0.5 rounded-full border text-[11px] transition flex items-center gap-1 ${
-                                                        paletteFilter === 'warning'
-                                                            ? 'bg-amber-600 text-white font-bold'
-                                                            : 'bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800'
-                                                    }`}
-                                                >
-                                                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                                    高度相仿 ({report.colorStats.warningCount})
-                                                </button>
-                                                <button
-                                                    onClick={() => setPaletteFilter('caution')}
-                                                    className={`px-2 py-0.5 rounded-full border text-[11px] transition flex items-center gap-1 ${
-                                                        paletteFilter === 'caution'
-                                                            ? 'bg-yellow-600 text-white font-bold'
-                                                            : 'bg-yellow-100 dark:bg-yellow-950/70 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-800'
-                                                    }`}
-                                                >
-                                                    <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
-                                                    中度借鉴 ({report.colorStats.cautionCount})
-                                                </button>
-                                                <button
-                                                    onClick={() => setPaletteFilter('safe')}
-                                                    className={`px-2 py-0.5 rounded-full border text-[11px] transition flex items-center gap-1 ${
-                                                        paletteFilter === 'safe'
-                                                            ? 'bg-emerald-600 text-white font-bold'
-                                                            : 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
-                                                    }`}
-                                                >
-                                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                                    安全原创 ({report.colorStats.safeCount})
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
+                    <div className="flex-1 relative overflow-hidden min-h-0 flex flex-col">
+                        {/* 悬浮折叠工具栏：原工具栏滚出视野后自动显示小型悬浮按钮，点击展开完整工具栏，回滚后自动隐藏 */}
+                        {report && viewMode === 'audit' && isInlineToolbarOutOfView && (
+                            isFloatingToolbarExpanded ? (
+                                <div
+                                    data-testid="floating-highlight-toolbar-expanded"
+                                    className="absolute top-2.5 left-3 right-5 z-20 p-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-sky-300/90 dark:border-sky-700/80 shadow-lg text-xs"
+                                >
+                                    {renderImitationToolbarControls(true)}
                                 </div>
+                            ) : (
+                                <div className="absolute top-2.5 right-5 z-20 pointer-events-none">
+                                    <button
+                                        type="button"
+                                        data-testid="floating-highlight-toolbar-trigger"
+                                        onClick={() => setIsFloatingToolbarExpanded(true)}
+                                        className="pointer-events-auto h-7 px-2.5 rounded-full bg-white/95 dark:bg-slate-900/95 hover:bg-sky-50 dark:hover:bg-slate-800 backdrop-blur-md border border-slate-300/90 dark:border-slate-700 shadow-md text-[11px] font-bold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5 transition cursor-pointer"
+                                        title="展开审稿高亮与相似度调色盘工具栏（不改变当前滚动位置）"
+                                    >
+                                        <span>{paletteMode === 'issues' ? '🔴 问题高亮' : '🎨 调色盘'}</span>
+                                        <span className="px-1.5 py-0.5 rounded-full text-[10px] leading-none bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300">
+                                            {paletteMode === 'issues' ? activeConfirmedIssueCount : `${report.overallSimilarity}%`}
+                                        </span>
+                                        <ChevronDown className="w-3 h-3 text-slate-500" />
+                                    </button>
+                                </div>
+                            )
+                        )}
+
+                        <div
+                            ref={imitScrollContainerRef}
+                            onScroll={checkInlineToolbarVisibility}
+                            className="flex-1 p-4 overflow-y-auto [overflow-anchor:none]"
+                        >
+                            {report && viewMode === 'audit' ? (
+                                <div className="space-y-3">
+                                    {/* Inline Palette Mode Switcher (shares exact state & controls with floating toolbar) */}
+                                    <div
+                                        ref={inlineToolbarRef}
+                                        data-testid="inline-highlight-toolbar"
+                                        className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 text-xs"
+                                    >
+                                        {renderImitationToolbarControls(false)}
+                                    </div>
 
                                 {/* Palette Content Rendering */}
                                 {paletteMode === 'issues' ? (
@@ -1861,6 +2147,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                                 className="w-full h-full resize-none bg-transparent outline-none text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-sans placeholder:text-slate-400 dark:placeholder:text-slate-600 selection:bg-indigo-200 dark:selection:bg-indigo-900/60"
                             />
                         )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1916,9 +2203,9 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                             >
                                 <span>👥 人物/同音换序排查</span>
                                 <span className={`px-1.5 py-0.5 leading-none inline-flex items-center rounded-full text-[10px] ${
-                                    report.characterConflicts.length > 0 ? 'bg-red-500 text-white' : 'bg-slate-200 dark:bg-slate-800'
+                                    activeCharacterConflicts.length > 0 ? 'bg-red-500 text-white' : 'bg-slate-200 dark:bg-slate-800'
                                 }`}>
-                                    {report.characterConflicts.length}
+                                    {activeCharacterConflicts.length}
                                 </span>
                             </button>
 
@@ -1989,10 +2276,10 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                                             <button
                                                 type="button"
                                                 onClick={handleRetryFailedParts}
-                                                disabled={isAuditing}
+                                                disabled={isBusy}
                                                 className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-md text-[11px] font-bold flex-shrink-0 disabled:opacity-50"
                                             >
-                                                重试失败部分
+                                                {activeTaskMode === 'retry' ? '重试中...' : '重试失败部分'}
                                             </button>
                                         </div>
                                     )}
@@ -2190,7 +2477,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                                         </div>
                                     </div>
 
-                                    {report.characterConflicts.length === 0 ? (
+                                    {activeCharacterConflicts.length === 0 ? (
                                         !report.coverage.isComplete ? (
                                             <div className="text-center py-6 px-4 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 rounded-xl text-amber-700 dark:text-amber-300 text-xs font-bold flex flex-col items-center justify-center gap-2">
                                                 <ExclamationCircle className="w-6 h-6 text-amber-600" />
@@ -2198,10 +2485,10 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                                                 <button
                                                     type="button"
                                                     onClick={handleRetryFailedParts}
-                                                    disabled={isAuditing}
+                                                    disabled={isBusy}
                                                     className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-md text-[11px] font-bold disabled:opacity-50"
                                                 >
-                                                    重试失败部分
+                                                    {activeTaskMode === 'retry' ? '重试中...' : '重试失败部分'}
                                                 </button>
                                             </div>
                                         ) : (
@@ -2209,12 +2496,16 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                                                 <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center">
                                                     <Check className="w-6 h-6 text-emerald-600" />
                                                 </div>
-                                                <span>人物核验通过！原稿与仿写间未发现重名、相同专属称号、同音/近音或同字换序冲突。</span>
+                                                <span>
+                                                    {ignoredCharacterConflicts.length > 0
+                                                        ? `当前无待处理的人物姓名冲突（已忽略 ${ignoredCharacterConflicts.length} 项，可在下方随时撤销）。`
+                                                        : '人物核验通过！原稿与仿写间未发现重名、相同专属称号、同音/近音或同字换序冲突。'}
+                                                </span>
                                             </div>
                                         )
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                            {report.characterConflicts.map((c) => {
+                                            {activeCharacterConflicts.map((c) => {
                                                 const customName = customReplaceNames[c.id] || '';
                                                 const badgeLabel =
                                                     c.conflictType === 'exact'
@@ -2230,6 +2521,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                                                 return (
                                                     <div
                                                         key={c.id}
+                                                        data-testid={`character-conflict-card-${c.id}`}
                                                         onClick={() => handleLocateProblem({
                                                             id: c.id,
                                                             origTextToFind: c.originalName,
@@ -2279,6 +2571,7 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                                                                 {c.recommendedNames.map((rName, rIdx) => (
                                                                     <button
                                                                         key={rIdx}
+                                                                        type="button"
                                                                         onClick={() => handleReplaceCharacter(c, rName)}
                                                                         className="px-1.5 py-0.5 bg-white dark:bg-slate-800 hover:bg-sky-50 text-sky-600 dark:text-sky-300 rounded border border-slate-200 dark:border-slate-700 text-[10px] font-semibold transition"
                                                                     >
@@ -2293,19 +2586,95 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                                                                     value={customName}
                                                                     onChange={(e) => setCustomReplaceNames({ ...customReplaceNames, [c.id]: e.target.value })}
                                                                     placeholder="自定义新名字..."
-                                                                    className="flex-1 px-2 py-1 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 text-xs outline-none focus:ring-1 focus:ring-sky-500"
+                                                                    className="flex-1 min-w-0 px-2 py-1 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 text-xs outline-none focus:ring-1 focus:ring-sky-500"
                                                                 />
                                                                 <button
+                                                                    type="button"
                                                                     onClick={() => handleReplaceCharacter(c, customName)}
-                                                                    className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-xs font-bold shadow-xs transition"
+                                                                    className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-xs font-bold shadow-xs transition whitespace-nowrap"
                                                                 >
                                                                     一键替换
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    data-testid="ignore-conflict-btn"
+                                                                    onClick={() => handleIgnoreCharacterConflict(c)}
+                                                                    className="px-2.5 py-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded text-xs font-bold transition whitespace-nowrap"
+                                                                    title="忽略此冲突（不修改正文，不计入待处理数量，可随时撤销）"
+                                                                >
+                                                                    忽略
                                                                 </button>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 );
                                             })}
+                                        </div>
+                                    )}
+
+                                    {/* 已忽略的姓名冲突记录（保留忽略状态，支持撤销忽略） */}
+                                    {ignoredCharacterConflicts.length > 0 && (
+                                        <div
+                                            data-testid="ignored-conflicts-section"
+                                            className="p-3 bg-slate-100/80 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 text-xs"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-bold text-slate-600 dark:text-slate-300">
+                                                    已忽略的姓名冲突记录 ({ignoredCharacterConflicts.length})
+                                                </span>
+                                                <span className="text-[11px] text-slate-400">
+                                                    局部复检变更时保持忽略；全篇重审时重新判断
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                                {ignoredCharacterConflicts.map((c) => {
+                                                    const typeText =
+                                                        c.conflictType === 'exact'
+                                                            ? '完全重名'
+                                                            : c.conflictType === 'title'
+                                                            ? '相同专属称谓'
+                                                            : c.conflictType === 'swapped'
+                                                            ? '同字换序'
+                                                            : c.conflictType === 'homophone'
+                                                            ? '同音谐音'
+                                                            : '近音谐音';
+                                                    return (
+                                                        <div
+                                                            key={`ignored-${c.id}`}
+                                                            onClick={() => handleLocateProblem({
+                                                                id: c.id,
+                                                                origTextToFind: c.originalName,
+                                                                origIndexHint: c.originalIndex,
+                                                                imitTextToFind: c.imitationName,
+                                                                imitIndexHint: c.imitationIndex,
+                                                                level: 'warning'
+                                                            })}
+                                                            className="px-2.5 py-2 bg-white dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 cursor-pointer hover:border-slate-300 transition"
+                                                        >
+                                                            <div className="min-w-0 truncate text-slate-600 dark:text-slate-300">
+                                                                <span className="font-semibold text-slate-800 dark:text-slate-100">{c.originalName}</span>
+                                                                <span className="mx-1 text-slate-400">↔</span>
+                                                                <span className="font-semibold text-slate-700 dark:text-slate-200">{c.imitationName}</span>
+                                                                <span className="ml-1.5 text-[10px] text-slate-400">
+                                                                    ({typeText} · {c.count}次)
+                                                                </span>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                data-testid="undo-ignore-conflict-btn"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUndoIgnoreCharacterConflict(c);
+                                                                }}
+                                                                className="px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-sky-50 dark:hover:bg-sky-900/40 text-sky-600 dark:text-sky-300 rounded border border-slate-200 dark:border-slate-600 text-[11px] font-bold inline-flex items-center gap-1 flex-shrink-0 transition"
+                                                            >
+                                                                <ArrowUturnLeft className="w-3 h-3" />
+                                                                <span>撤销忽略</span>
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -2466,10 +2835,10 @@ export const ManuscriptReview: React.FC<{ isActive: boolean }> = ({ isActive }) 
                                             <button
                                                 type="button"
                                                 onClick={handleRetryFailedParts}
-                                                disabled={isAuditing}
+                                                disabled={isBusy}
                                                 className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-md text-[11px] font-bold flex-shrink-0 disabled:opacity-50"
                                             >
-                                                重试失败部分
+                                                {activeTaskMode === 'retry' ? '重试中...' : '重试失败部分'}
                                             </button>
                                         </div>
                                     )}

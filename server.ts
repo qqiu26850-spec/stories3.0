@@ -32,7 +32,12 @@ async function startServer() {
       const normalizeGeminiModel = (rawModel?: string): string => {
         const m = typeof rawModel === "string" ? rawModel.toLowerCase().trim() : "";
         if (!m) return "gemini-4-hydrogen";
-        if (m === "gemini-3.1-flash-lite" || m === "flash lite" || m === "gemini lite") {
+        if (
+          m === "gemini-3.1-flash-lite" ||
+          m === "gemini-3.1-flash-lite-preview" ||
+          m === "flash lite" ||
+          m === "gemini lite"
+        ) {
           return "gemini-3.1-flash-lite";
         }
         if (
@@ -43,20 +48,26 @@ async function startServer() {
           return m;
         }
         if (
-          m === "gemini-3.8-flash" ||
-          m === "gemini-3.7-flash" ||
-          m === "gemini-3.6-flash" ||
-          m === "gemini-3.5-flash" ||
-          m === "gemini-3-flash-preview" ||
-          m === "gemini-1.5-flash" ||
-          m === "gemini-2.0-flash" ||
-          m === "gemini-2.0-flash-thinking" ||
-          m === "gemini-1.5-pro" ||
-          m === "gemini-2.0-pro" ||
+          m.startsWith("gemini-3.5") ||
+          m.includes("3-5") ||
+          m.includes("3.5") ||
+          m.includes("flash") ||
+          m === "gemini-2.0" ||
+          m === "gemini-1.5"
+        ) {
+          return "gemini-3.1-flash-lite";
+        }
+        if (
+          m.startsWith("gemini-3.8") ||
+          m.startsWith("gemini-3.7") ||
+          m.startsWith("gemini-3.6") ||
+          m.startsWith("gemini-2.5") ||
+          m.startsWith("gemini-2.0") ||
+          m.startsWith("gemini-1.5") ||
           m === "gemini-pro" ||
           m === "gemini-3-pro-preview" ||
-          m === "gemini-3.5-pro" ||
-          m === "gemini-3.1-pro-preview"
+          m === "gemini-3.1-pro-preview" ||
+          m.startsWith("claude-3")
         ) {
           return "gemini-4-hydrogen";
         }
@@ -74,12 +85,23 @@ async function startServer() {
         },
       });
 
-      const resolveThinkingLevel = (targetModel: string, levelRaw?: string): ThinkingLevel | undefined => {
-        if (!levelRaw || typeof levelRaw !== "string") return undefined;
-        const upper = levelRaw.trim().toUpperCase();
+      const resolveThinkingLevel = (
+        targetModel: string,
+        levelRaw?: string,
+        isStreamRequest = false
+      ): ThinkingLevel | undefined => {
         if (!(targetModel.startsWith("gemini-4-") || targetModel.startsWith("gemini-3"))) {
           return undefined;
         }
+        if (!levelRaw || typeof levelRaw !== "string") {
+          // Default gemini-4-hydrogen uses HIGH thinking which stalls creative streaming for 50-90s with 0 bytes.
+          // Default streaming creative requests to LOW thinking for ~2-4s first-token response while keeping quality.
+          if (isStreamRequest && targetModel.startsWith("gemini-4-")) {
+            return ThinkingLevel.LOW;
+          }
+          return undefined;
+        }
+        const upper = levelRaw.trim().toUpperCase();
         if (upper === "MINIMAL") {
           // gemini-4-* does not support MINIMAL; clamp to LOW
           return targetModel.startsWith("gemini-4-") ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL;
@@ -96,11 +118,17 @@ async function startServer() {
       const buildGenerateConfig = (
         targetModel: string,
         includeThinking = true,
-        includeResponseMime = true
+        includeResponseMime = true,
+        isStreamRequest = false
       ) => {
         const cfg: Record<string, any> = {};
         if (typeof max_tokens === "number" && max_tokens > 0) {
-          cfg.maxOutputTokens = max_tokens;
+          // Note: maxOutputTokens includes both visible tokens and internal thinking tokens.
+          // Add headroom on creative text calls so thinking tokens never starve visible output length.
+          const isJsonCall = Boolean(responseMimeType && String(responseMimeType).includes("json"));
+          cfg.maxOutputTokens = isJsonCall
+            ? Math.min(65536, max_tokens)
+            : Math.min(65536, Math.max(max_tokens, Math.round(max_tokens * 1.25)));
         }
         // Do not pass deprecated sampling parameters (temperature, topP, topK, candidateCount) to gemini-4-*
         if (!targetModel.startsWith("gemini-4-")) {
@@ -111,7 +139,7 @@ async function startServer() {
           cfg.responseMimeType = responseMimeType.trim();
         }
         if (includeThinking) {
-          const resolvedLevel = resolveThinkingLevel(targetModel, thinkingLevel);
+          const resolvedLevel = resolveThinkingLevel(targetModel, thinkingLevel, isStreamRequest);
           if (resolvedLevel) {
             cfg.thinkingConfig = { thinkingLevel: resolvedLevel };
           }
@@ -214,37 +242,109 @@ async function startServer() {
       };
 
       if (stream) {
-        res.setHeader("Content-Type", "text/plain");
-        res.setHeader("Access-Control-Allow-Origin", "*");
-
         console.log(`[Gemini API] Stream generation with selected model: ${resolvedModel}`);
-        const responseStream = await executeWithRetry(
-          () =>
+        const openStream = async (includeThinking: boolean) =>
+          withTimeout(
             ai.models.generateContentStream({
               model: resolvedModel,
               contents: contents,
-              config: buildGenerateConfig(resolvedModel, true, true),
+              config: buildGenerateConfig(resolvedModel, includeThinking, true, true),
             }),
+            45000,
+            `Stream connect ${resolvedModel}`
+          );
+
+        const responseStream = await executeWithRetry(
+          async () => {
+            try {
+              return await openStream(true);
+            } catch (cfgErr: any) {
+              const cfgMsg = String(cfgErr?.message || cfgErr).toLowerCase();
+              if (cfgMsg.includes("invalid_argument") || cfgMsg.includes("thinking") || cfgMsg.includes("400")) {
+                console.warn(`[Gemini API] Retrying stream ${resolvedModel} without thinkingConfig`);
+                return await openStream(false);
+              }
+              throw cfgErr;
+            }
+          },
           resolvedModel
         );
 
-        for await (const chunk of responseStream) {
-          let text = "";
-          try {
-            text = chunk.text || "";
-          } catch {
-            // ignore blocked content errors
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache, no-transform");
+        res.setHeader("X-Accel-Buffering", "no");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        if (typeof res.flushHeaders === "function") {
+          res.flushHeaders();
+        }
+
+        let wroteAnyText = false;
+        let lastFinishReason = "";
+        const iterator = responseStream[Symbol.asyncIterator]();
+
+        while (true) {
+          const iterResult = await withTimeout(
+            iterator.next(),
+            45000,
+            `Stream chunk ${resolvedModel}`
+          );
+          if (iterResult.done) break;
+          const chunk = iterResult.value;
+          if (chunk?.candidates?.[0]?.finishReason) {
+            lastFinishReason = String(chunk.candidates[0].finishReason);
           }
 
-          if (!text && Array.isArray(chunk.candidates?.[0]?.content?.parts)) {
+          let text = "";
+          if (Array.isArray(chunk?.candidates?.[0]?.content?.parts)) {
             text = chunk.candidates[0].content.parts
               .filter((p: any) => typeof p?.text === "string" && !p?.thought)
               .map((p: any) => p.text)
               .join("");
           }
+          if (!text) {
+            try {
+              text = chunk?.text || "";
+            } catch {
+              // ignore blocked content getter error
+            }
+          }
 
           if (text) {
+            wroteAnyText = true;
             res.write(text);
+          }
+        }
+
+        // Fallback if stream returned 0 visible characters (e.g. blocked or thought-only response)
+        if (!wroteAnyText) {
+          const upperReason = lastFinishReason.toUpperCase();
+          if (
+            upperReason.includes("SAFETY") ||
+            upperReason.includes("PROHIBITED") ||
+            upperReason.includes("BLOCK") ||
+            upperReason.includes("RECITATION")
+          ) {
+            res.write(`⚠️ 当前生成请求触发了模型内容安全拦截（原因：${lastFinishReason}），未返回正文。请调整敏感冲突词汇或切换至其他模型后重试。`);
+          } else {
+            try {
+              const fallbackResp = await withTimeout(
+                ai.models.generateContent({
+                  model: resolvedModel,
+                  contents: contents,
+                  config: buildGenerateConfig(resolvedModel, false, true, false),
+                }),
+                45000,
+                `Fallback non-stream ${resolvedModel}`
+              );
+              const extracted = extractGeminiResponseText(fallbackResp);
+              if (extracted.text) {
+                res.write(extracted.text);
+              } else {
+                res.write(`⚠️ 模型未返回有效文本（状态：${extracted.finishReason || lastFinishReason || "EMPTY"}），请稍后重试或切换其他模型。`);
+              }
+            } catch (fbErr: any) {
+              res.write(`⚠️ 模型响应超时或为空（${fbErr?.message || "EMPTY"}），请重试或切换其他模型。`);
+            }
           }
         }
         res.end();
@@ -257,9 +357,9 @@ async function startServer() {
                 ai.models.generateContent({
                   model: resolvedModel,
                   contents: contents,
-                  config: buildGenerateConfig(resolvedModel, true, true),
+                  config: buildGenerateConfig(resolvedModel, true, true, false),
                 }),
-                42000,
+                55000,
                 `Model ${resolvedModel}`
               );
             } catch (cfgErr: any) {
@@ -277,9 +377,9 @@ async function startServer() {
                     ai.models.generateContent({
                       model: resolvedModel,
                       contents: contents,
-                      config: buildGenerateConfig(resolvedModel, false, true),
+                      config: buildGenerateConfig(resolvedModel, false, true, false),
                     }),
-                    42000,
+                    55000,
                     `Model ${resolvedModel}`
                   );
                 } catch (mimeErr: any) {
@@ -290,9 +390,9 @@ async function startServer() {
                       ai.models.generateContent({
                         model: resolvedModel,
                         contents: contents,
-                        config: buildGenerateConfig(resolvedModel, false, false),
+                        config: buildGenerateConfig(resolvedModel, false, false, false),
                       }),
-                      42000,
+                      55000,
                       `Model ${resolvedModel}`
                     );
                   }
@@ -319,6 +419,15 @@ async function startServer() {
     } catch (error: any) {
       const msg = error?.message || String(error);
       console.error("[Gemini API Error inside Express]:", msg);
+      if (res.headersSent) {
+        try {
+          res.write(`\n\n⚠️ 生成连接中断：${msg.slice(0, 160)}`);
+          res.end();
+        } catch {
+          // ignore secondary write errors
+        }
+        return;
+      }
       const status = msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") ? 429 : 500;
       res.status(status).json({ error: msg });
     }
@@ -385,10 +494,13 @@ async function startServer() {
           "Accept": "application/json",
         },
         body: JSON.stringify(req.body),
+        signal: AbortSignal.timeout(45000),
       });
 
       res.status(response.status);
       res.setHeader("Content-Type", response.headers.get("Content-Type") || "application/json");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("X-Accel-Buffering", "no");
       res.setHeader("Access-Control-Allow-Origin", "*");
 
       if (response.body) {
@@ -402,6 +514,12 @@ async function startServer() {
       res.end();
     } catch (error: any) {
       console.error("DeepSeek API Error inside Express:", error);
+      if (res.headersSent) {
+        try {
+          res.end();
+        } catch {}
+        return;
+      }
       res.status(500).json({ error: error.message || String(error) });
     }
   });
@@ -435,13 +553,16 @@ async function startServer() {
           messages,
           temperature,
           top_p,
-          max_tokens,
+          max_tokens: typeof max_tokens === "number" ? Math.min(max_tokens, 16384) : max_tokens,
           stream,
         }),
+        signal: AbortSignal.timeout(45000),
       });
 
       res.status(response.status);
       res.setHeader("Content-Type", response.headers.get("Content-Type") || "application/json");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("X-Accel-Buffering", "no");
       res.setHeader("Access-Control-Allow-Origin", "*");
 
       if (response.body) {
@@ -455,6 +576,12 @@ async function startServer() {
       res.end();
     } catch (error: any) {
       console.error("Doubao API Error inside Express:", error);
+      if (res.headersSent) {
+        try {
+          res.end();
+        } catch {}
+        return;
+      }
       res.status(500).json({ error: error.message || String(error) });
     }
   });

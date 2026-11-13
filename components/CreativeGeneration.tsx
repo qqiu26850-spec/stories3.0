@@ -274,10 +274,21 @@ const CreativeGeneration: React.FC<CreativeGenerationProps> = ({ initialData, on
                 }
                 setGeneratedText(prev => prev + chunk);
             }
-            setSuccessMessage('生成完毕');
-            setShowInlineSuccess(true);
-            setTimeout(() => setShowInlineSuccess(false), 3000);
-        } catch (e) {} finally { setIsGenerating(false); setIsWaitingForFirstChunk(false); setShowLoadingOverlay(false); }
+            if (!controller.signal.aborted) {
+                setSuccessMessage('生成完毕');
+                setShowInlineSuccess(true);
+                setTimeout(() => setShowInlineSuccess(false), 3000);
+            }
+        } catch (e: any) {
+            if (!controller.signal.aborted && e?.message !== 'Aborted') {
+                const errMsg = e?.message || '生成请求异常，请重试或切换其他模型。';
+                setGeneratedText(prev => prev ? `${prev}\n\n⚠️ ${errMsg}` : `⚠️ ${errMsg}`);
+            }
+        } finally {
+            setIsGenerating(false);
+            setIsWaitingForFirstChunk(false);
+            setShowLoadingOverlay(false);
+        }
     };
 
     const handleContinue = async () => {
@@ -420,11 +431,12 @@ ${FORCE_LONG_INSTRUCTION}
                                         <div className="space-y-2">
                                             <label className="block text-[10px] font-black text-sky-400 flex justify-between uppercase">
                                                 <span>最大长度 (Max Tokens): {maxOutputTokens}</span>
+                                                <span className="text-sky-600 dark:text-sky-300">{maxOutputTokens >= 12288 ? `长篇直出 ≈ ${maxOutputTokens >= 28672 ? '1.2万+' : maxOutputTokens >= 20480 ? '1万' : maxOutputTokens >= 16384 ? '8500' : '6500'}字` : '常规篇幅'}</span>
                                             </label>
-                                            <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-100 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <input type="range" min="1024" max="32768" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-100 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                                             <p className="text-[10px] text-gray-400 leading-relaxed italic">
                                                 <InformationCircle className="w-3 h-3 inline mr-1" />
-                                                控制生成内容的最大长度。
+                                                控制生成内容的最大长度。拉高至 16384~32768 时将自动启用多幕无缝长篇直出（可达万字以上）。
                                             </p>
                                         </div>
                                     </div>

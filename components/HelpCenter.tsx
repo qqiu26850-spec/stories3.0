@@ -135,16 +135,16 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                             onNavigate={onNavigate}
                             color="sky"
                             steps={[
-                                "在首页选择任意一个创意模块卡片",
-                                "配置左侧 AI 模型参数（如 DeepSeek）",
-                                "关联角色库或剧情库中的相关素材",
-                                "点击“开始创作”，获取灵感初稿"
+                                "在首页选择任意一个创意模块卡片（如文风仿写、创意脑洞）",
+                                "配置左侧 AI 模型参数，长篇创作可将「最大长度」拉至 16384~32768",
+                                "选择结构化提示词或关联角色库、剧情库素材",
+                                "点击“开始创作”，自动流式生成初稿或万字长篇"
                             ]}
                         >
-                            <SubModule name="创意脑洞">生成小说故事雏形。只需提供一个主题，AI 就会为您构建多个充满反转的故事点子。</SubModule>
-                            <SubModule name="金手指">为主角定制特殊能力或系统。AI 会根据世界观设计合理、有趣且具备爽感的金手指设定。</SubModule>
-                            <SubModule name="人物设定">输入角色雏形，AI 生成包含性格、外貌、隐藏秘密和具体标签的完整人设方案。</SubModule>
-                            <SubModule name="大纲与细纲">从全局视角生成故事脉络，并进一步拆解到章节级，详细规划每一章的冲突点。</SubModule>
+                            <SubModule name="文风仿写与万字长篇直出">支持上传或粘贴参考文本进行深度仿写；将「最大长度」滑块拉高至 16384~32768 时（含 Gemini 3.1 Flash Lite 等模型），自动启用多幕无缝接力，单次连续生成可达万字以上且不提前烂尾。</SubModule>
+                            <SubModule name="创意脑洞与金手指">只需提供一个核心母题或世界观，AI 自动构建具备强反转的故事雏形与契合爽点的专属金手指设定。</SubModule>
+                            <SubModule name="人物设定">输入角色雏形，AI 生成包含性格弧光、外貌特征、隐藏秘密和人物关系网的完整人设方案。</SubModule>
+                            <SubModule name="大纲与细纲">从全局视角生成故事脉络，并进一步拆解到章节级，详细规划每一章的情节推进与冲突点。</SubModule>
                         </HelpSection>
 
                         {/* Section: Writing Center */}
@@ -167,7 +167,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                             <SubModule name="分集管理">无论是章节还是剧本集数，都可以通过左侧侧边栏进行快速切换、排序和重命名。</SubModule>
                         </HelpSection>
 
-                        {/* Section: Manuscript Review (New v1.8.0) */}
+                        {/* Section: Manuscript Review (Upgraded v1.9.0) */}
                         <HelpSection 
                             title="智能审稿比对中心" 
                             target="manuscript-review" 
@@ -176,22 +176,22 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                             color="indigo"
                             steps={[
                                 "在左侧栏点击「审稿」，分别录入/上传原稿与仿写稿件（支持 .txt / .docx / .md）",
-                                "点击右上角「开始智能审稿」，自动触发错别字、人物同音与查重调色盘全维扫描",
-                                "依次排查错别字、人物同音及调色盘标红句，支持自由拖拽审稿面板高度与一键 AI 降重",
-                                "修改完成后可「复制终稿」「导出」TXT 或「存素材」；点击垃圾桶图标弹窗确认可一键全清"
+                                "选择审稿模型并点击「开始智能审稿」，一次完成人物、一致性、错别字与相似度全维语义审查",
+                                "对存疑项人工核对（确认为人物/不是人物/修改、忽略无碍冲突），正文修改后可点「局部复检变更」",
+                                "向下阅读可呼出右上角悬浮工具栏切换高亮，完成后支持「复制终稿」「导出」或「全部清除」复位"
                             ]}
                         >
-                            <SubModule name="双栏对照与一键复位">
-                                左侧原稿（标杆参照）与右侧仿写（待审目标）同屏展示，支持 Word（.docx）等格式直接解析及「填入演示样本」体验；右上角删除按钮支持防误触二次确认弹窗，一键清空所有内容并恢复初始待输入界面，方便连续审稿多本小说。
+                            <SubModule name="双栏同步导航 & 悬浮折叠工具栏">
+                                左侧原稿（只读对照）与右侧仿写（可直接编辑）双栏对齐展示。向下滚动仿写正文离开顶部工具栏时，右上角自动出现小型悬浮展开按钮，不改变当前滚动位置即可随时切换「审稿问题高亮 / 相似度调色盘」。
                             </SubModule>
-                            <SubModule name="1. 错别字智能检测">
-                                自动扫描仿写稿件中的常见易错成语与规范汉字错别字，标注详细成因说明，支持单条采纳修正或一键修复全部错别字。
+                            <SubModule name="1. 错别字与人物前后一致性">
+                                由大模型结合全文上下文检测错字、别字、漏字、多字、搭配不当及同一篇小说内的人物名字写错、称谓混乱或关系前后矛盾，精准保护正常小说口语，支持单处采纳或一键批量修复。
                             </SubModule>
-                            <SubModule name="2. 人物/称谓同音排查">
-                                结合上下文语境与百家姓/称谓规则精准提取角色（自动剥离“给/的”等介词，过滤“给多少、嫌钱少、三年前、不告而别”等普通词，完整识别“宋自深、孟瑶然、宋启、老陈、姜队长”等），严查重名与拼音同音/谐音，支持手动增删名单及一键全局替换。
+                            <SubModule name="2. 人物同音换序排查 & 人工核对/忽略">
+                                自动提取包括低频配角在内的真实角色并归并同一人物的姓名、昵称、封号与专属称谓（过滤家族名与普通词）；存疑项交由人工「确认为人物 / 不是人物 / 修改」，同音或换序冲突支持「一键替换」或「忽略 / 取消忽略」。
                             </SubModule>
-                            <SubModule name="3. 调色盘查重 & AI 降重">
-                                按字数加权评估整体相似度并智能豁免“不救”等日常简短口语，分别说明整体相似与局部实质雷同长句；调色盘分级高亮句子，点击即可对照原句并一键生成 3 组 AI 降重方案；下方审稿面板支持收起态（44px）至紧贴汇总栏之间任意高度自由拖拽与收放记忆。
+                            <SubModule name="3. 调色盘查重、失败分段重试 & 局部复检">
+                                重点标记连续高重合台词与桥段并提供 3 组 AI 降重方案；支持单分段异常时点击「重试失败部分」（保留已成功结果不重跑全文），以及修改正文后点击「局部复检变更」快速刷新受影响段落。
                             </SubModule>
                         </HelpSection>
 
@@ -271,11 +271,11 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                                                 智能审稿比对中心 · 全流程使用教程
                                             </h2>
                                             <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-600 text-white rounded-full">
-                                                v1.8.0 新增
+                                                v1.9.0 全面升级
                                             </span>
                                         </div>
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                            位于左侧导航栏「创作中心」下方，专为小说仿写校对、避坑洗稿与角色合规排查打造。
+                                            位于左侧导航栏「创作中心」下方，基于大模型全文语义审查 + 人工协同核对打造。
                                         </p>
                                     </div>
                                 </div>
@@ -291,46 +291,45 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                                 <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
                                     <h4 className="text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
                                         <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">1</span>
-                                        双栏上传稿件与快速切换下一本
+                                        双栏上传、模型选择与失败分段独立重试
                                     </h4>
                                     <ul className="text-[11px] text-gray-600 dark:text-gray-400 space-y-1.5 leading-relaxed">
-                                        <li>• <strong>录入/导入</strong>：左侧栏填写或点击「上传原稿」导入标杆原稿，右侧栏填写或「上传仿写」导入待审稿件（支持 <code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">.txt</code>、<code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">.docx</code>、<code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">.md</code>）。</li>
-                                        <li>• <strong>演示体验</strong>：首次使用可点击右上角「填入演示样本」，快速查看三大维度审稿效果。</li>
-                                        <li>• <strong>全部清除（防误触）</strong>：审完一本小说需换下一本时，点击「填入演示样本」右侧的垃圾桶图标，在弹出窗口中点击「确认全部清除」即可清空文本、报告与自定义名单，恢复初始待输入状态。</li>
+                                        <li>• <strong>录入与模型一致调用</strong>：左栏上传标杆原稿（只读保护），右栏上传待审仿写稿（支持 <code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">.txt</code>、<code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">.docx</code>、<code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">.md</code>），严格按所选模型执行全文语义审查。</li>
+                                        <li>• <strong>重试失败部分 vs 局部复检变更</strong>：若长文个别分段因网络波动未完成，点击汇总栏「重试失败部分」仅补跑失败分段并完整保留已有结果与人工核对记录；修改仿写正文后点击「局部复检变更」则仅重检受影响段落。</li>
+                                        <li>• <strong>全部清除（防误触）</strong>：点击右上角垃圾桶图标并确认，即可一键清空双栏稿件、审稿记录与忽略状态，快速切换下一本小说。</li>
                                     </ul>
                                 </div>
 
                                 <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
                                     <h4 className="text-xs font-black text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                                         <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px]">2</span>
-                                        第一维：错别字自动标注与修复
+                                        第一维：上下文错别字与人物一致性检查
                                     </h4>
                                     <ul className="text-[11px] text-gray-600 dark:text-gray-400 space-y-1.5 leading-relaxed">
-                                        <li>• <strong>智能扫描</strong>：点击「开始智能审稿」后，面板首个标签页自动展示仿写稿中的易错词与规范用字问题（如“按步就班→按部就班”）。</li>
-                                        <li>• <strong>单处/全局修复</strong>：每条标注均附带用字原理解析，支持单条「一键替换修复」，也可点击标签栏右上角「一键修复所有错别字」批量改写。</li>
+                                        <li>• <strong>语境级纠错</strong>：结合前后文精准检出错字、别字、多字、漏字及固定搭配错误，自动区分正常文学口语，点击问题卡片直接定位到原文对应句子。</li>
+                                        <li>• <strong>前后一致性核查</strong>：自动排查同篇小说中角色名字前后不一致、称谓错乱或身份关系矛盾，支持单条采纳修复或批量修正确定性错字。</li>
                                     </ul>
                                 </div>
 
                                 <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
                                     <h4 className="text-xs font-black text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
                                         <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">3</span>
-                                        第二维：人物/称谓同音严谨排查
+                                        第二维：人物同音换序排查、人工核对与忽略
                                     </h4>
                                     <ul className="text-[11px] text-gray-600 dark:text-gray-400 space-y-1.5 leading-relaxed">
-                                        <li>• <strong>精准识别语境</strong>：自动剥离“给/的”等前导介词（如将“给姜队长”准确提取为“姜队长”），严防“给多少、嫌钱少、三年前、不告而别”等普通词汇误判，同时完整识别“宋自深、孟瑶然、宋启、老陈”等姓名与称谓。</li>
-                                        <li>• <strong>冲突与微调</strong>：支持「补充要重点排查的人物」加入扫描，或点击人物标签上的 <code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">×</code> 排除非角色项。检测到重名或谐音冲突时，可用推荐名或自定义名称一键全局替换。</li>
+                                        <li>• <strong>全角色识别与别名归并</strong>：完整提取主角与低频配角，自动合并同一人物的本名、小名、封号与专属称谓（如“沈霁/阿霁/昭妃”），不把“沈家/陆家”等家族名或通用称谓误算作独立姓名。</li>
+                                        <li>• <strong>待核对与忽略机制</strong>：AI 不确定的称呼提供「确认为人物 / 不是人物 / 修改」人工裁定；检测到原稿与仿写重名、谐音、近音或同字换序时，可一键全局替换姓名，也可对确认无碍的条目点击「忽略」（底部可随时展开「已忽略冲突」并恢复）。</li>
                                     </ul>
                                 </div>
 
                                 <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
                                     <h4 className="text-xs font-black text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
                                         <span className="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[10px]">4</span>
-                                        第三维：调色盘查重、AI 降重与面板拖拽
+                                        第三维：悬浮折叠工具栏、调色盘与面板拖拽
                                     </h4>
                                     <ul className="text-[11px] text-gray-600 dark:text-gray-400 space-y-1.5 leading-relaxed">
-                                        <li>• <strong>科学预警与短句豁免</strong>：汇总栏区分展示「整体相似度」与「局部实质雷同长句」，对“不救”等简短口语智能豁免，避免日常短句触发严重超标误报。</li>
-                                        <li>• <strong>调色盘联动降重</strong>：右侧仿写稿以红/橙/黄/绿四色标记句级重合，点击任意高亮句即可在下方「查重调色盘 &amp; AI 降重」中对照原句并一键生成 3 组全新句式改写（内置超时保底引擎），点击即可采纳替换。</li>
-                                        <li>• <strong>窗口自由拖拽</strong>：按住面板上方分隔条上下拖动，可在最小收起态（44px）至紧贴汇总栏底缘（完全覆盖上方稿件）之间的任意高度停留；点击「收起 ▼ / 展开 ▲」自动记忆并恢复上次拖动高度。</li>
+                                        <li>• <strong>悬浮折叠工具栏</strong>：向下滚动阅读仿写长文、原工具栏离开可视区时，右上角自动浮现紧凑按钮，点击即可就地展开切换高亮模式而无需滚回顶部。</li>
+                                        <li>• <strong>调色盘联动降重 &amp; 自由拖拽</strong>：连续 15 字以上高重合台词与相似桥段分级着色，点击即可对照原句并生成 3 组 AI 改写方案；底部审稿工作台支持任意高度自由拖拽与收放记忆。</li>
                                     </ul>
                                 </div>
                             </div>
@@ -340,10 +339,10 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
                                 <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <Sparkles className="w-4 h-4 text-sky-500" /> 创意与提示词教程
+                                    <Sparkles className="w-4 h-4 text-sky-500" /> 创意与万字仿写教程
                                 </h4>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                                    在「提示词库」选取结构化卡片后可直接填入参数并关联素材库角色，生成脑洞、金手指与故事大纲，一键沉淀至素材库。
+                                    选取仿写或正文提示词后，点击「参数」将最大长度拉至 16384~32768，即使选用轻快模型（如 Gemini 3.1 Flash Lite）也能自动分幕无缝生成万字完整小说。
                                 </p>
                             </div>
                             <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
@@ -377,9 +376,21 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                         
                         <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
                             <VersionItem 
+                                version="v1.9.0" 
+                                date="2026.11.13"
+                                isLatest={true}
+                                features={[
+                                    "审稿全面升级为「大模型全文语义审校」：一次审稿完成真实人物及别名归并、人物前后一致性、上下文语境错别字及高相似桥段检查，彻底告别机械截取误报。",
+                                    "新增人工协同核对与冲突忽略：存疑角色支持「确认为人物 / 不是人物 / 修改」，人物同音换序冲突新增「忽略」与底部「已忽略冲突（支持恢复）」折叠区，统计角标实时同步。",
+                                    "审稿悬浮折叠工具栏 & 独立重试机制：向下滚动仿写稿自动出现右上角悬浮工具栏按钮，不跳动滚动条即可切换高亮模式；明确拆分「重试失败部分」与「局部复检变更」，保留已成功结果与人工核对记录；顶部汇总栏精简为「整体相似度｜审稿耗时」。",
+                                    "流式生成秒级响应修复：解决历史 3.5 模型标识及高阶推理模型流式长考导致的无响应/空白跳回问题，全创作面板补齐可视化异常反馈与服务端连接超时保护。",
+                                    "3.1 万字仿写多幕无缝直出：全站创作面板「最大长度 (Max Tokens)」滑块上限扩展至 32768；拉高滑块生成仿写或长篇正文时自动启用多幕无缝接力并去重衔接，突破单轮 4000 字瓶颈，单次连续输出可达万字以上。"
+                                ]}
+                            />
+                            <VersionItem 
                                 version="v1.8.0" 
                                 date="2026.11.12"
-                                isLatest={true}
+                                isLatest={false}
                                 features={[
                                     "新增「智能审稿比对中心」模块：位于左侧创作中心下方，支持原稿（左栏）与仿写稿件（右栏）双栏对照，支持 .txt / .docx（Word）/ .md 文档导入及演示样本一键体验。",
                                     "错别字自动标注与修复：内置常见易错词规则库，自动高亮错别字与解析说明，支持单处采纳及一键修复全部错别字。",

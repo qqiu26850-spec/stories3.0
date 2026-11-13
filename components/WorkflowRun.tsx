@@ -522,7 +522,7 @@ ${FORCE_LONG_INSTRUCTION}
                                         <label className="block text-[10px] font-black text-sky-500 flex justify-between">
                                             <span>最大长度: {maxOutputTokens}</span>
                                         </label>
-                                        <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                        <input type="range" min="1024" max="32768" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                                     </div>
                                     <div className="space-y-1">
                                         <label className="block text-[10px] font-black text-sky-500 flex justify-between">

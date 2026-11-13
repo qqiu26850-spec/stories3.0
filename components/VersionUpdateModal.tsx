@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Sparkles, ClipboardDocumentCheck, AdjustmentsHorizontal } from './Icon';
 
-const CURRENT_VERSION = 'v1.8.0';
+const CURRENT_VERSION = 'v1.9.0';
 const STORAGE_KEY = `qisimiaoxie_version_seen_${CURRENT_VERSION}`;
 
 const VersionUpdateModal: React.FC = () => {
@@ -40,49 +39,49 @@ const VersionUpdateModal: React.FC = () => {
                     {/* Header */}
                     <div className="flex items-center gap-4 mb-5 mt-1">
                         <div className="w-12 h-12 bg-gradient-to-br from-sky-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-xl text-white shrink-0 ring-4 ring-white dark:ring-gray-900">
-                            <ClipboardDocumentCheck className="w-6 h-6" />
+                            <Sparkles className="w-6 h-6" />
                         </div>
                         <div className="flex flex-col pt-1">
                             <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
                                 奇思妙写 <span className="text-indigo-600 dark:text-indigo-400">{CURRENT_VERSION}</span>
                             </h2>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-bold tracking-wide">
-                                2026.11.12 · 智能审稿比对中心重磅上线
+                                2026.11.13 · 全文语义审稿与万字长篇直出升级
                             </p>
                         </div>
                     </div>
 
                     <div className="space-y-3.5">
-                        {/* Feature 1: Manuscript Review & Typo & Character Check */}
+                        {/* Feature 1: Full-Context AI Semantic Review & Verification */}
                         <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-1.5 flex items-center gap-2">
                                 <ClipboardDocumentCheck className="w-4 h-4 text-indigo-500" />
-                                双栏智能审稿 · 错别字与人物同音严查
+                                AI 全文语义审稿 · 待核对与冲突忽略
                             </h3>
                             <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                创作中心下方新增「审稿」入口，支持原稿/仿写双栏录入与 Word 导入。自动标注错别字并支持一键修复；结合语境与百家姓规则精准提取人物称谓（杜绝常见词误判，自动剥离前导介词），严查重名与同音谐音并支持手动增删名单及一键替换。
+                                结合双栏完整语境精准识别真实人物与别名归并、人设前后一致性、上下文错别字及高相似桥段；支持存疑角色人工「确认为人物 / 不是人物 / 修改」、同音换序冲突「忽略 / 取消忽略」，并区分「重试失败部分」与「局部复检变更」。
                             </p>
                         </div>
 
-                        {/* Feature 2: Similarity Palette & AI Rewrite */}
+                        {/* Feature 2: Floating Toolbar & Clean Summary Header */}
                         <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-1.5 flex items-center gap-2">
-                                <Sparkles className="w-4 h-4 text-sky-500" />
-                                调色盘查重分级 &amp; AI 智能降重
+                                <AdjustmentsHorizontal className="w-4 h-4 text-sky-500" />
+                                审稿悬浮折叠工具栏 &amp; 精简汇总栏
                             </h3>
                             <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                按字数加权评估整体相似度并智能豁免日常简短口语，分别提示整体与局部实质雷同长句。点击调色盘任意高亮句即可对照原句并生成 3 组全新句式的 AI 降重方案（内置超时保底，流畅不卡顿）。
+                                向下滚动仿写正文离开原工具栏时，右上角自动浮现轻量展开入口，随时切换「审稿问题高亮 / 相似度调色盘」且不改变阅读滚动位置；顶部汇总栏精简为「整体相似度｜审稿耗时」，视野更开阔。
                             </p>
                         </div>
 
-                        {/* Feature 3: Free Resizing & One-Click Clear */}
+                        {/* Feature 3: Fast Streaming & Multi-Act 10k+ Imitation Generation */}
                         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
                             <h3 className="text-sm font-bold text-indigo-800 dark:text-indigo-300 mb-1.5 flex items-center gap-2">
-                                <AdjustmentsHorizontal className="w-4 h-4" />
-                                面板自由拖拽 &amp; 一键全清复位
+                                <Sparkles className="w-4 h-4" />
+                                流式秒级响应 &amp; 3.1 万字仿写多幕直出
                             </h3>
                             <p className="text-xs text-indigo-900 dark:text-indigo-200 leading-relaxed">
-                                下方审稿面板可在收起态至紧贴汇总栏之间任意高度自由拖拽并支持「收起/展开」高度记忆；顶部新增带二次确认弹窗的「全部清除」按钮，一键恢复初始待输入界面，方便连续检查多本小说。
+                                全面修复历史 3.5 模型及流式长考无响应问题；各创作面板「最大长度」滑块上限提升至 <span className="font-bold">32768</span>，使用 Gemini 3.1 Flash Lite 等模型拉高滑块生成仿写或长篇正文时，自动启用多幕无缝接力直出万字长文。
                             </p>
                         </div>
                     </div>

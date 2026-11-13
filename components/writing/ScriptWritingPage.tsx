@@ -7,7 +7,7 @@ import { saveChapterToDB, updateProject, fetchChapters, fetchChapterContent, fet
 import { createPortal } from 'react-dom';
 import FollowUpModal from '../FollowUpModal';
 import CustomSelect from '../CustomSelect';
-import { generateTextStream } from '../../services/geminiService';
+import { generateTextStream, normalizeClientModel } from '../../services/geminiService';
 import AssetSelectionModal from '../AssetSelectionModal';
 import LoadingOverlay from '../LoadingOverlay';
 import { GENRE_TAGS } from '../../constants';
@@ -353,7 +353,12 @@ const ScriptWritingPage: React.FC<ScriptWritingPageProps> = ({ script: initialSc
             if (data) {
                setScript(prev => ({ ...prev, scenes: data.map((c: any) => ({ id: c.id, title: c.title, content: '', isContentLoaded: false })) }));
                let loadedData: any = script.scriptData;
-               if (loadedData && loadedData.settings) setSettings(loadedData.settings);
+               if (loadedData && loadedData.settings) {
+                   setSettings({
+                       ...loadedData.settings,
+                       model: normalizeClientModel(loadedData.settings.model)
+                   });
+               }
             }
             const userAssets = await fetchMaterials();
             setAssets(userAssets.map((item: any) => ({ id: item.id, name: item.name || item.title, type: item.type === 'idea' ? 'inspiration' : item.type, content: item.content, tags: item.tags || [] })));
@@ -952,7 +957,7 @@ ${FORCE_LONG_INSTRUCTION}`;
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold text-sky-600 dark:text-sky-400 flex justify-between"><span>最大长度 (Tokens): {maxOutputTokens}</span></label>
-                                    <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                    <input type="range" min="1024" max="32768" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                                     <p className="text-[9px] text-gray-400 mt-0.5">限制单次请求生成的最大文本量（包括标点和换行）。</p>
                                 </div>
                             </div>

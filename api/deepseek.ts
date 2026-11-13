@@ -1,56 +1,85 @@
-
 export const config = {
-  runtime: 'edge',
+  runtime: "edge",
 };
 
 export default async function handler(request: Request) {
-  // 处理 OPTIONS 预检请求
-  if (request.method === 'OPTIONS') {
+  if (request.method === "OPTIONS") {
     return new Response(null, {
       headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
       },
     });
   }
 
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405 });
+  if (request.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
+      status: 405,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
   }
 
   try {
     const body = await request.json();
-    
-    // 获取环境变量中的 API Key
     const apiKey = process.env.DEEPSEEK_API_KEY;
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'DeepSeek API Key not configured on server' }), { status: 500 });
+      return new Response(JSON.stringify({ error: "DeepSeek API Key not configured on server" }), {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
     }
 
-    // 转发请求到 DeepSeek 官方 API
+    const safeBody = {
+      ...body,
+      max_tokens: typeof body.max_tokens === "number" ? Math.min(body.max_tokens, 8192) : body.max_tokens,
+    };
+
     const response = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
-        "Accept": "application/json"
+        "Accept": "application/json",
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(safeBody),
+      signal: AbortSignal.timeout(50000),
     });
 
-    // 直接透传 DeepSeek 的响应（包括流式响应）
+    if (!response.ok) {
+      const errorText = await response.text();
+      return new Response(JSON.stringify({ error: `DeepSeek API Error: ${response.status} ${errorText}` }), {
+        status: response.status,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    }
+
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers: {
-        'Content-Type': response.headers.get('Content-Type') || 'application/json',
-        'Access-Control-Allow-Origin': '*', // 允许前端访问
+        "Content-Type": response.headers.get("Content-Type") || "application/json",
+        "Cache-Control": "no-cache, no-transform",
+        "Access-Control-Allow-Origin": "*",
       },
     });
-
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: error?.message || "DeepSeek request failed" }), {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
   }
 }

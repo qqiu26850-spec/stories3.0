@@ -396,7 +396,7 @@ ${FORCE_LONG_INSTRUCTION}
                                         </div>
                                         <div className="space-y-1">
                                             <label className="block font-bold text-gray-700 dark:text-gray-300 flex justify-between"><span>最大长度 (Tokens): {maxOutputTokens}</span></label>
-                                            <input type="range" min="1024" max="16384" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                                            <input type="range" min="1024" max="32768" step="1024" value={maxOutputTokens} onChange={e => setMaxOutputTokens(parseInt(e.target.value))} className="w-full h-1 bg-sky-200 rounded-lg appearance-none cursor-pointer accent-sky-500" />
                                         </div>
                                     </div>
                                 )}
@@ -445,6 +445,11 @@ ${FORCE_LONG_INSTRUCTION}
                         {!selectedPrompt && <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800"><label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">自定义要求</label><textarea value={customInput} onChange={(e) => setCustomInput(e.target.value)} placeholder="请输入具体的创作要求..." className="w-full h-24 p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none resize-none shadow-inner" /></div>}
                     </div>
                 </div>
+                {error && (
+                    <div className="p-3 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-600 dark:text-rose-400 leading-relaxed">
+                        {error}
+                    </div>
+                )}
                 {!isGenerating && !resultText && <button onClick={handleGenerate} className="w-full py-3.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] font-sans bg-sky-600 hover:bg-sky-500 text-white disabled:bg-gray-400"><Sparkles className="w-5 h-5" />{activeTab === 'review' ? '开始智能评审' : '立即生成内容'}</button>}
             </div>
         </div>

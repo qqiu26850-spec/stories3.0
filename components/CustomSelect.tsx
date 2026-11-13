@@ -73,7 +73,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, c
                 onClick={() => { setIsOpen(!isOpen); }}
                 className={`w-full flex items-center justify-between px-3 py-2 bg-white dark:bg-gray-800 border border-sky-500 rounded-lg shadow-sm transition-all text-xs font-bold text-gray-700 dark:text-gray-200 hover:shadow-md outline-none ${isOpen ? 'ring-2 ring-sky-200 dark:ring-sky-900' : ''}`}
             >
-                <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
+                <span className="truncate">{selectedOption ? selectedOption.label : (value || placeholder)}</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-sky-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
