@@ -21,6 +21,7 @@ const viewToLabel: Record<View, string> = {
     'prompt-library-novel': '小说提示词库',
     'prompt-library-marketing': '营销提示词库',
     'prompt-library-image': '绘图提示词库',
+    'manuscript-review': '审稿',
 };
 
 const Placeholder: React.FC<PlaceholderProps> = ({ view }) => {

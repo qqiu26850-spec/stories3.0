@@ -7,6 +7,10 @@
       "destination": "/api/$1"
     },
     {
+      "source": "/supabase-proxy/:path*",
+      "destination": "https://kuvfgccoyekvkolkgwby.supabase.co/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

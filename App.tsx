@@ -15,6 +15,7 @@ import ScriptManagement from './components/ScriptManagement';
 import PersonalCenter from './components/PersonalCenter';
 import WorkflowManagement from './components/WorkflowManagement';
 import HelpCenter from './components/HelpCenter';
+import ManuscriptReview from './components/ManuscriptReview';
 
 export type Theme = 'light' | 'dark';
 
@@ -25,6 +26,7 @@ const App: React.FC = () => {
   
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isGuestMode, setIsGuestMode] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // State to pass prompt data from Library to Generation
@@ -32,11 +34,17 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
-        const userId = await getCurrentUserId();
-        if (userId) {
-            setIsAuthenticated(true);
-            setShowAuthModal(false);
-        } else {
+        try {
+            const userId = await getCurrentUserId();
+            if (userId) {
+                setIsAuthenticated(true);
+                setShowAuthModal(false);
+            } else {
+                setIsAuthenticated(false);
+                setShowAuthModal(true);
+            }
+        } catch (e) {
+            console.warn("Auth check failed:", e);
             setIsAuthenticated(false);
             setShowAuthModal(true);
         }
@@ -45,8 +53,13 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogout = async () => {
-      await signOut();
+      try {
+          await signOut();
+      } catch (e) {
+          // ignore
+      }
       setIsAuthenticated(false);
+      setIsGuestMode(false);
       setShowAuthModal(true);
       setActiveView('creative-generation'); // Reset view
   };
@@ -76,15 +89,20 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 font-sans transition-colors duration-300">
       <AuthModal 
-        isOpen={showAuthModal} 
+        isOpen={showAuthModal && !isGuestMode} 
         onSuccess={() => {
             setIsAuthenticated(true);
+            setIsGuestMode(false);
             setShowAuthModal(false);
             window.location.reload();
-        }} 
+        }}
+        onGuestMode={() => {
+            setIsGuestMode(true);
+            setShowAuthModal(false);
+        }}
       />
       
-      {isAuthenticated && (
+      {(isAuthenticated || isGuestMode) && (
           <>
             <VersionUpdateModal /> {/* Add VersionUpdateModal here */}
             <Sidebar 
@@ -95,7 +113,21 @@ const App: React.FC = () => {
                 theme={theme}
                 toggleTheme={toggleTheme}
             />
-            <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-black relative">
+            <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-black relative flex flex-col">
+                {isGuestMode && (
+                    <div className="bg-sky-50 dark:bg-sky-950/40 border-b border-sky-100 dark:border-sky-900/40 px-4 py-2 flex items-center justify-between text-xs text-sky-700 dark:text-sky-300 z-20">
+                        <div className="flex items-center gap-2">
+                            <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                            <span>当前处于<strong>访客体验模式</strong>（创作内容保存在本地），登录可开启云端自动同步。</span>
+                        </div>
+                        <button
+                            onClick={() => setShowAuthModal(true)}
+                            className="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-xs font-semibold shadow-sm transition-all"
+                        >
+                            立即登录 / 注册
+                        </button>
+                    </div>
+                )}
                 
                 {/* Modified: Only render when active to force reset state on revisit */}
                 {activeView === 'creative-generation' && (
@@ -153,6 +185,10 @@ const App: React.FC = () => {
 
                 <div className={activeView === 'script-management' ? 'block h-full' : 'hidden h-full'}>
                     <ScriptManagement isActive={activeView === 'script-management'} />
+                </div>
+
+                <div className={activeView === 'manuscript-review' ? 'block h-full' : 'hidden h-full'}>
+                    <ManuscriptReview isActive={activeView === 'manuscript-review'} />
                 </div>
 
                 <div className={activeView === 'personal-center' ? 'block h-full' : 'hidden h-full'}>

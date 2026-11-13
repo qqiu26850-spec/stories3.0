@@ -13,7 +13,8 @@ export type View =
   'plot-library' |
   'inspiration-library' |
   'personal-center' |
-  'help';
+  'help' |
+  'manuscript-review';
 
 export interface ModulePromptTemplate {
   id: string;

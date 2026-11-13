@@ -6,22 +6,34 @@ import { BookSolid, X, Eye, EyeSlash } from './Icon';
 interface AuthModalProps {
     isOpen: boolean;
     onSuccess: () => void;
+    onGuestMode?: () => void;
 }
 
-// 错误信息翻译映射
+// 错误信息翻译映射与友好提示
 const ERROR_MAP: Record<string, string> = {
-    'Invalid login credentials': '邮箱或密码不正确，请重新输入',
-    'Email not confirmed': '邮箱尚未验证，请检查您的收件箱',
-    'User not found': '该账号不存在',
-    'Signup disabled': '当前已关闭注册功能',
-    'Password is too short': '密码长度不足，请输入至少 6 位密码',
-    'User already registered': '该邮箱已被注册',
-    'Email link expired': '链接已失效，请重新发送',
-    'Requested entity was not found.': 'API 配置错误，请检查您的 Key',
-    'Network request failed': '网络连接失败，请检查网络设置'
+    'invalid login credentials': '邮箱或密码不正确，请重新输入',
+    'invalid_credentials': '邮箱或密码不正确，请重新输入',
+    'email not confirmed': '邮箱尚未验证，请检查您的收件箱确认邮件',
+    'email_not_confirmed': '邮箱尚未验证，请检查您的收件箱确认邮件',
+    'user not found': '该账号不存在，请先点击下方“立即注册”',
+    'user_not_found': '该账号不存在，请先点击下方“立即注册”',
+    'signup disabled': '当前已关闭注册功能',
+    'password is too short': '密码长度不足，请输入至少 6 位密码',
+    'weak_password': '密码强度不足，请输入更复杂的密码',
+    'user already registered': '该邮箱已被注册，请直接输入密码登录',
+    'user_already_exists': '该邮箱已被注册，请直接输入密码登录',
+    'email link expired': '重置密码链接已失效，请重新发送',
+    'requested entity was not found.': 'API 配置错误，请检查您的配置',
+    'network request failed': '网络连接失败，请检查网络设置或开启代理',
+    'failed to fetch': '网络连接超时：无法直连账号数据库服务器（国内网络直连 Supabase 常受限，请开启科学上网或选择下方访客模式）',
+    'fetch failed': '网络连接超时：无法直连账号数据库服务器，请开启网络代理或选择下方访客模式',
+    'authretryablefetcherror': '连接数据库服务器超时，请检查网络环境或开启代理',
+    'load failed': '网络请求加载失败，请检查网络连接',
+    'rate_limit': '操作过于频繁，请稍后再试',
+    'over_email_send_rate_limit': '邮件发送过于频繁，请稍后再试'
 };
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess, onGuestMode }) => {
     const [mode, setMode] = useState<'login' | 'register' | 'forgot-password'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -85,10 +97,26 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                 }, 3000);
             }
         } catch (err: any) {
-            // 翻译错误信息
-            const rawMessage = err.message || '';
-            const translatedMessage = ERROR_MAP[Object.keys(ERROR_MAP).find(key => rawMessage.includes(key)) || ''] || '操作失败，请重试';
-            setError(translatedMessage);
+            console.error("Auth error caught in modal:", err);
+            const rawMessage = String(err?.message || err?.error_description || err?.code || err || '').trim();
+            const lowerRaw = rawMessage.toLowerCase();
+            
+            // 匹配友好的中文错误
+            let matchedMessage = '';
+            for (const [key, text] of Object.entries(ERROR_MAP)) {
+                if (lowerRaw.includes(key)) {
+                    matchedMessage = text;
+                    break;
+                }
+            }
+
+            if (matchedMessage) {
+                setError(matchedMessage);
+            } else if (rawMessage && rawMessage !== '{}') {
+                setError(`登录受阻 (${rawMessage})，请检查网络或账号信息`);
+            } else {
+                setError('网络连接异常：无法直连账号数据库服务器，请检查网络或选择下方访客模式');
+            }
         } finally {
             setLoading(false);
         }
@@ -188,10 +216,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                 </form>
 
                 {/* Footer */}
-                <div className="p-6 bg-gray-50 dark:bg-gray-800/50 text-center border-t border-gray-100 dark:border-gray-800">
+                <div className="p-6 bg-gray-50 dark:bg-gray-800/50 text-center border-t border-gray-100 dark:border-gray-800 space-y-3">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                         {mode === 'login' ? '还没有账号？' : '已有账号？'}
                         <button 
+                            type="button"
                             onClick={() => {
                                 setMode(mode === 'login' ? 'register' : 'login');
                                 setError('');
@@ -202,6 +231,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
                             {mode === 'login' ? '立即注册' : '直接登录'}
                         </button>
                     </p>
+
+                    {onGuestMode && (
+                        <div className="pt-2 border-t border-gray-200/60 dark:border-gray-700/60 flex flex-col items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={onGuestMode}
+                                className="text-xs text-sky-600 dark:text-sky-400 font-medium hover:underline flex items-center gap-1"
+                            >
+                                <span>暂不登录，直接以访客模式体验（本地创作）</span>
+                                <span>&rarr;</span>
+                            </button>
+                            <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                                💡 提示：国内网络若遇连接数据库超时，可开启科学上网/网络代理，或直接使用访客模式
+                            </span>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

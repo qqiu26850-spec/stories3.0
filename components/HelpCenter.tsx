@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { View } from '../types';
-import { Sparkles, BookOpen, Box, Workflow, Database, UserCircle, ChevronRight, Check, Play, Film, DocumentText, ArrowPath, QuestionMarkCircle } from './Icon';
+import { Sparkles, BookOpen, Box, Workflow, Database, UserCircle, ChevronRight, Check, Play, Film, DocumentText, ArrowPath, QuestionMarkCircle, ClipboardDocumentCheck } from './Icon';
 
 interface HelpCenterProps {
     onNavigate: (view: View) => void;
@@ -84,7 +84,7 @@ const VersionItem: React.FC<{ version: string; date: string; features: string[];
                 {features.map((feature, i) => (
                     <li key={i} className="text-xs text-gray-600 dark:text-gray-400 flex items-start gap-2">
                         <span className="text-sky-500 mt-0.5">•</span>
-                        {feature}
+                        <span>{feature}</span>
                     </li>
                 ))}
             </ul>
@@ -93,7 +93,7 @@ const VersionItem: React.FC<{ version: string; date: string; features: string[];
 );
 
 const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
-    const [activeTab, setActiveTab] = useState<'guide' | 'updates'>('guide');
+    const [activeTab, setActiveTab] = useState<'guide' | 'tutorials' | 'updates'>('guide');
 
     return (
         <div className="p-2 sm:p-4 h-full max-w-6xl mx-auto animate-fade-in flex flex-col font-sans">
@@ -107,14 +107,12 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                             <span className="flex items-center gap-2"><QuestionMarkCircle className="w-4 h-4"/> 功能简介</span>
                         </button>
                         
-                        <a 
-                            href="https://my.feishu.cn/wiki/NQcDwXqTLiRAsRk14TCc5y6fnke?from=from_copylink"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-6 py-2 rounded-lg text-sm font-bold transition-all text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700/50"
+                        <button 
+                            onClick={() => setActiveTab('tutorials')}
+                            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'tutorials' ? 'bg-white dark:bg-gray-700 text-sky-600 dark:text-sky-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
                         >
                             <span className="flex items-center gap-2"><BookOpen className="w-4 h-4"/> 使用教程</span>
-                        </a>
+                        </button>
 
                         <button 
                             onClick={() => setActiveTab('updates')}
@@ -127,7 +125,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar pb-4">
-                {activeTab === 'guide' ? (
+                {activeTab === 'guide' && (
                     <div className="flex flex-col gap-4 animate-fade-in">
                         {/* Section: Creative Generation */}
                         <HelpSection 
@@ -169,6 +167,34 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                             <SubModule name="分集管理">无论是章节还是剧本集数，都可以通过左侧侧边栏进行快速切换、排序和重命名。</SubModule>
                         </HelpSection>
 
+                        {/* Section: Manuscript Review (New v1.8.0) */}
+                        <HelpSection 
+                            title="智能审稿比对中心" 
+                            target="manuscript-review" 
+                            icon={ClipboardDocumentCheck} 
+                            onNavigate={onNavigate}
+                            color="indigo"
+                            steps={[
+                                "在左侧栏点击「审稿」，分别录入/上传原稿与仿写稿件（支持 .txt / .docx / .md）",
+                                "点击右上角「开始智能审稿」，自动触发错别字、人物同音与查重调色盘全维扫描",
+                                "依次排查错别字、人物同音及调色盘标红句，支持自由拖拽审稿面板高度与一键 AI 降重",
+                                "修改完成后可「复制终稿」「导出」TXT 或「存素材」；点击垃圾桶图标弹窗确认可一键全清"
+                            ]}
+                        >
+                            <SubModule name="双栏对照与一键复位">
+                                左侧原稿（标杆参照）与右侧仿写（待审目标）同屏展示，支持 Word（.docx）等格式直接解析及「填入演示样本」体验；右上角删除按钮支持防误触二次确认弹窗，一键清空所有内容并恢复初始待输入界面，方便连续审稿多本小说。
+                            </SubModule>
+                            <SubModule name="1. 错别字智能检测">
+                                自动扫描仿写稿件中的常见易错成语与规范汉字错别字，标注详细成因说明，支持单条采纳修正或一键修复全部错别字。
+                            </SubModule>
+                            <SubModule name="2. 人物/称谓同音排查">
+                                结合上下文语境与百家姓/称谓规则精准提取角色（自动剥离“给/的”等介词，过滤“给多少、嫌钱少、三年前、不告而别”等普通词，完整识别“宋自深、孟瑶然、宋启、老陈、姜队长”等），严查重名与拼音同音/谐音，支持手动增删名单及一键全局替换。
+                            </SubModule>
+                            <SubModule name="3. 调色盘查重 & AI 降重">
+                                按字数加权评估整体相似度并智能豁免“不救”等日常简短口语，分别说明整体相似与局部实质雷同长句；调色盘分级高亮句子，点击即可对照原句并一键生成 3 组 AI 降重方案；下方审稿面板支持收起态（44px）至紧贴汇总栏之间任意高度自由拖拽与收放记忆。
+                            </SubModule>
+                        </HelpSection>
+
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             {/* Section: Asset Management */}
                             <HelpSection 
@@ -189,7 +215,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                             {/* Section: Prompt Library */}
                             <HelpSection 
                                 title="提示词库" 
-                                target="prompt-library" 
+                                target="prompt-library-novel" 
                                 icon={Box} 
                                 onNavigate={onNavigate}
                                 color="orange"
@@ -203,7 +229,144 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                             </HelpSection>
                         </div>
                     </div>
-                ) : (
+                )}
+
+                {activeTab === 'tutorials' && (
+                    <div className="flex flex-col gap-4 animate-fade-in">
+                        {/* External Feishu Wiki Banner */}
+                        <div className="bg-gradient-to-r from-sky-50 to-indigo-50 dark:from-sky-950/40 dark:to-indigo-950/40 rounded-2xl p-5 border border-sky-200 dark:border-sky-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-white dark:bg-gray-900 rounded-xl text-sky-600 dark:text-sky-400 shadow-sm">
+                                    <BookOpen className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-gray-900 dark:text-white">
+                                        奇思妙写 · 飞书完整版图文视频教程手册
+                                    </h3>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                        涵盖全平台基础操作、长短篇写作流及进阶创作技巧的云端详细文档。
+                                    </p>
+                                </div>
+                            </div>
+                            <a
+                                href="https://my.feishu.cn/wiki/NQcDwXqTLiRAsRk14TCc5y6fnke?from=from_copylink"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 flex-shrink-0"
+                            >
+                                打开飞书教程文档 <ChevronRight className="w-3.5 h-3.5" />
+                            </a>
+                        </div>
+
+                        {/* Detailed Tutorial for Manuscript Review */}
+                        <section className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-indigo-200 dark:border-indigo-900/60 shadow-sm space-y-5">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400">
+                                        <ClipboardDocumentCheck className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h2 className="text-lg font-black text-gray-900 dark:text-white">
+                                                智能审稿比对中心 · 全流程使用教程
+                                            </h2>
+                                            <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-600 text-white rounded-full">
+                                                v1.8.0 新增
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                            位于左侧导航栏「创作中心」下方，专为小说仿写校对、避坑洗稿与角色合规排查打造。
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => onNavigate('manuscript-review')}
+                                    className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-300 text-xs font-bold rounded-lg transition flex items-center gap-1"
+                                >
+                                    立即体验 <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
+                                    <h4 className="text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                        <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">1</span>
+                                        双栏上传稿件与快速切换下一本
+                                    </h4>
+                                    <ul className="text-[11px] text-gray-600 dark:text-gray-400 space-y-1.5 leading-relaxed">
+                                        <li>• <strong>录入/导入</strong>：左侧栏填写或点击「上传原稿」导入标杆原稿，右侧栏填写或「上传仿写」导入待审稿件（支持 <code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">.txt</code>、<code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">.docx</code>、<code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">.md</code>）。</li>
+                                        <li>• <strong>演示体验</strong>：首次使用可点击右上角「填入演示样本」，快速查看三大维度审稿效果。</li>
+                                        <li>• <strong>全部清除（防误触）</strong>：审完一本小说需换下一本时，点击「填入演示样本」右侧的垃圾桶图标，在弹出窗口中点击「确认全部清除」即可清空文本、报告与自定义名单，恢复初始待输入状态。</li>
+                                    </ul>
+                                </div>
+
+                                <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
+                                    <h4 className="text-xs font-black text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                                        <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px]">2</span>
+                                        第一维：错别字自动标注与修复
+                                    </h4>
+                                    <ul className="text-[11px] text-gray-600 dark:text-gray-400 space-y-1.5 leading-relaxed">
+                                        <li>• <strong>智能扫描</strong>：点击「开始智能审稿」后，面板首个标签页自动展示仿写稿中的易错词与规范用字问题（如“按步就班→按部就班”）。</li>
+                                        <li>• <strong>单处/全局修复</strong>：每条标注均附带用字原理解析，支持单条「一键替换修复」，也可点击标签栏右上角「一键修复所有错别字」批量改写。</li>
+                                    </ul>
+                                </div>
+
+                                <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
+                                    <h4 className="text-xs font-black text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                                        <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">3</span>
+                                        第二维：人物/称谓同音严谨排查
+                                    </h4>
+                                    <ul className="text-[11px] text-gray-600 dark:text-gray-400 space-y-1.5 leading-relaxed">
+                                        <li>• <strong>精准识别语境</strong>：自动剥离“给/的”等前导介词（如将“给姜队长”准确提取为“姜队长”），严防“给多少、嫌钱少、三年前、不告而别”等普通词汇误判，同时完整识别“宋自深、孟瑶然、宋启、老陈”等姓名与称谓。</li>
+                                        <li>• <strong>冲突与微调</strong>：支持「补充要重点排查的人物」加入扫描，或点击人物标签上的 <code className="px-1 bg-gray-200 dark:bg-gray-800 rounded">×</code> 排除非角色项。检测到重名或谐音冲突时，可用推荐名或自定义名称一键全局替换。</li>
+                                    </ul>
+                                </div>
+
+                                <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
+                                    <h4 className="text-xs font-black text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
+                                        <span className="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[10px]">4</span>
+                                        第三维：调色盘查重、AI 降重与面板拖拽
+                                    </h4>
+                                    <ul className="text-[11px] text-gray-600 dark:text-gray-400 space-y-1.5 leading-relaxed">
+                                        <li>• <strong>科学预警与短句豁免</strong>：汇总栏区分展示「整体相似度」与「局部实质雷同长句」，对“不救”等简短口语智能豁免，避免日常短句触发严重超标误报。</li>
+                                        <li>• <strong>调色盘联动降重</strong>：右侧仿写稿以红/橙/黄/绿四色标记句级重合，点击任意高亮句即可在下方「查重调色盘 &amp; AI 降重」中对照原句并一键生成 3 组全新句式改写（内置超时保底引擎），点击即可采纳替换。</li>
+                                        <li>• <strong>窗口自由拖拽</strong>：按住面板上方分隔条上下拖动，可在最小收起态（44px）至紧贴汇总栏底缘（完全覆盖上方稿件）之间的任意高度停留；点击「收起 ▼ / 展开 ▲」自动记忆并恢复上次拖动高度。</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Quick Tutorial Summary for Other Core Modules */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Sparkles className="w-4 h-4 text-sky-500" /> 创意与提示词教程
+                                </h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    在「提示词库」选取结构化卡片后可直接填入参数并关联素材库角色，生成脑洞、金手指与故事大纲，一键沉淀至素材库。
+                                </p>
+                            </div>
+                            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Film className="w-4 h-4 text-emerald-500" /> 长短篇与剧本教程
+                                </h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    在「创作中心」选定长篇、短篇或分集剧本模块，支持右键呼出 AI 追问/润色/扩写菜单，单集优化可生成多套差异化版本供选择。
+                                </p>
+                            </div>
+                            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2">
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Workflow className="w-4 h-4 text-purple-500" /> 自动化工作流教程
+                                </h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    通过「工作流」将大纲拆分、章节扩写、人设核对等提示词串联成流水线，支持运行结果选中定向追问，成倍提升日更效率。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'updates' && (
                     <div className="bg-gray-50 dark:bg-gray-900/50 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 animate-fade-in">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="p-2.5 bg-gray-200 dark:bg-gray-800 rounded-xl text-gray-600 dark:text-gray-300">
@@ -214,9 +377,20 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ onNavigate }) => {
                         
                         <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm">
                             <VersionItem 
+                                version="v1.8.0" 
+                                date="2026.11.12"
+                                isLatest={true}
+                                features={[
+                                    "新增「智能审稿比对中心」模块：位于左侧创作中心下方，支持原稿（左栏）与仿写稿件（右栏）双栏对照，支持 .txt / .docx（Word）/ .md 文档导入及演示样本一键体验。",
+                                    "错别字自动标注与修复：内置常见易错词规则库，自动高亮错别字与解析说明，支持单处采纳及一键修复全部错别字。",
+                                    "人物/称谓同音严谨排查：结合上下文语境与百家姓/称谓规则先确认人物再查重名与同音谐音；自动剥离“给/的”等前导词并排除“给多少、嫌钱少、三年前、不告而别”等普通词汇误判，完整提取真实人名与“老[姓]”称呼；支持手动增删名单及一键全局替换。",
+                                    "调色盘查重分级 & AI 智能降重：按字数加权计算整体相似度并智能豁免“不救”等日常短句（避免低整体相似却触发严重超标误报），分别展示整体相似度与局部实质雷同长句；点击任意调色盘高亮句即可对照原句并生成 3 组 AI 降重方案（含超时本地保底，响应不卡顿）。",
+                                    "审稿面板自由拖拽 & 一键全部清除：移除固定高度档位，下方审稿面板可在收起状态（44px）至紧贴汇总栏底缘之间任意高度自由拖拽与收放记忆；新增带二次确认弹窗的“全部清除”按钮，点击确认即可恢复最初待输入界面，便于连续审稿多本小说。"
+                                ]}
+                            />
+                            <VersionItem 
                                 version="v1.7.0" 
                                 date="2026.02.26"
-                                isLatest={true}
                                 features={[
                                     "剧本生成重构：全屏沉浸式布局，移除冗余边距，支持直接编辑生成内容与实时保存。",
                                     "智能右键菜单：在剧本正文中右键即可唤起 AI 菜单，支持「智能追问」、「润色」与「扩写」。",
