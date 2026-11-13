@@ -1,6 +1,4 @@
 
-import { GoogleGenAI } from "@google/genai";
-
 interface GenerationOptions {
     model: string;
     temperature: number;
@@ -29,12 +27,11 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3,
             // Clone response to read text for error analysis
             const errorText = await response.clone().text();
             
-            // Check for retryable conditions:
-            // 503: Service Unavailable (Overloaded)
-            // 429: Too Many Requests (Rate Limit)
-            // 500: Internal Server Error (Often wraps upstream 503s)
+            // Check for retryable conditions (do not retry daily quota exhaustion)
+            const lowerErr = errorText.toLowerCase();
+            const isDailyQuota = lowerErr.includes('perday') || lowerErr.includes('requestsperday') || lowerErr.includes('exceeded your current quota') || lowerErr.includes('resource_exhausted');
             const isRetryableStatus = [500, 503, 429].includes(response.status);
-            const isOverloaded = errorText.includes('overloaded') || errorText.includes('503') || errorText.includes('quota') || errorText.includes('rate limit');
+            const isOverloaded = !isDailyQuota && (lowerErr.includes('overloaded') || lowerErr.includes('503') || lowerErr.includes('rate limit'));
 
             if (isRetryableStatus && isOverloaded && i < maxRetries) {
                 const delay = baseDelay * Math.pow(2, i); // Exponential backoff: 2s, 4s, 8s
@@ -172,7 +169,7 @@ export const generateText = async (prompt: string, options: GenerationOptions): 
         console.warn(`Error generating text with ${options.model}, falling back to Gemini:`, error);
         return generateText(prompt, {
             ...options,
-            model: 'gemini-3.8-flash'
+            model: 'gemini-4-hydrogen'
         });
     }
   } else {
@@ -334,7 +331,7 @@ export const generateTextStream = async function* (prompt: string, options: Gene
             console.warn(`Error generating text stream with ${options.model}, falling back to Gemini:`, error);
             yield* generateTextStream(prompt, {
                 ...options,
-                model: 'gemini-3.8-flash'
+                model: 'gemini-4-hydrogen'
             });
         }
     } else {

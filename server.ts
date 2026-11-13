@@ -1,162 +1,185 @@
 import express from "express";
 import path from "path";
-import { GoogleGenAI } from "@google/genai";
-
-// Helper functions for fallback providers when Gemini is exhausted/429
-async function handleFallbackStream(provider: "deepseek" | "doubao", apiKey: string, prompt: string, res: any) {
-  const url = provider === "deepseek" 
-    ? "https://api.deepseek.com/chat/completions" 
-    : "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
-  
-  const modelId = provider === "deepseek" ? "deepseek-chat" : "ep-20251229180745-tbpdh";
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: modelId,
-      messages: [
-        { role: "system", content: "You are a helpful creative writing assistant. Write detailed, expansive, and high-quality content. Do not summarize unless asked. Use Markdown headers (# ## ###) for structure." },
-        { role: "user", content: prompt }
-      ],
-      stream: true,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Fallback ${provider} API error: ${response.status}`);
-  }
-
-  if (response.body) {
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) continue;
-        const jsonStr = trimmed.slice(6);
-        if (jsonStr === "[DONE]") continue;
-
-        try {
-          const json = JSON.parse(jsonStr);
-          const content = json.choices?.[0]?.delta?.content || "";
-          if (content) {
-            res.write(content);
-          }
-        } catch (e) {
-          // ignore parsing error for chunk
-        }
-      }
-    }
-  }
-}
-
-async function handleFallbackContent(provider: "deepseek" | "doubao", apiKey: string, prompt: string): Promise<string> {
-  const url = provider === "deepseek" 
-    ? "https://api.deepseek.com/chat/completions" 
-    : "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
-  
-  const modelId = provider === "deepseek" ? "deepseek-chat" : "ep-20251229180745-tbpdh";
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: modelId,
-      messages: [
-        { role: "system", content: "You are a helpful creative writing assistant. Write detailed, expansive, and high-quality content. Do not summarize unless asked. Use Markdown headers (# ## ###) for structure." },
-        { role: "user", content: prompt }
-      ],
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Fallback ${provider} API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
-}
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
   // Middleware for parsing JSON requests
-  app.use(express.json());
+  app.use(express.json({ limit: "10mb" }));
 
-  // API Route: Gemini
+  // API Route: Gemini (strictly uses user-selected model, never silently switches models)
   app.post("/api/gemini", async (req, res) => {
     try {
-      const { model, contents, temperature, top_p, max_tokens, stream } = req.body;
+      const {
+        model,
+        contents,
+        temperature,
+        top_p,
+        max_tokens,
+        stream,
+        responseMimeType,
+        thinkingLevel,
+      } = req.body;
       const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 
       if (!apiKey) {
         return res.status(500).json({ error: "Google API Key not configured on server" });
       }
 
-      // Support user-selected models directly with fallback
-      let resolvedModel = model || "gemini-3.8-flash";
-      if (typeof model === 'string') {
-        const m = model.toLowerCase().trim();
-        if (m === "gemini-3-flash-preview" || m === "gemini-1.5-flash") {
-          resolvedModel = "gemini-3.5-flash";
-        } else if (m === "gemini-3-pro-preview" || m === "gemini-1.5-pro" || m === "gemini-3.5-pro") {
-          resolvedModel = "gemini-3.1-pro-preview";
-        } else {
-          resolvedModel = model;
+      // Normalize deprecated/sunset model aliases while preserving exact active model choice
+      const normalizeGeminiModel = (rawModel?: string): string => {
+        const m = typeof rawModel === "string" ? rawModel.toLowerCase().trim() : "";
+        if (!m) return "gemini-4-hydrogen";
+        if (m === "gemini-3.1-flash-lite" || m === "flash lite" || m === "gemini lite") {
+          return "gemini-3.1-flash-lite";
         }
-      }
+        if (
+          m === "gemini-4-hydrogen" ||
+          m === "gemini-4-argon" ||
+          m === "gemini-4-carbon"
+        ) {
+          return m;
+        }
+        if (
+          m === "gemini-3.8-flash" ||
+          m === "gemini-3.7-flash" ||
+          m === "gemini-3.6-flash" ||
+          m === "gemini-3.5-flash" ||
+          m === "gemini-3-flash-preview" ||
+          m === "gemini-1.5-flash" ||
+          m === "gemini-2.0-flash" ||
+          m === "gemini-2.0-flash-thinking" ||
+          m === "gemini-1.5-pro" ||
+          m === "gemini-2.0-pro" ||
+          m === "gemini-pro" ||
+          m === "gemini-3-pro-preview" ||
+          m === "gemini-3.5-pro" ||
+          m === "gemini-3.1-pro-preview"
+        ) {
+          return "gemini-4-hydrogen";
+        }
+        return rawModel!.trim();
+      };
 
-      const ai = new GoogleGenAI({ 
+      const resolvedModel = normalizeGeminiModel(model);
+
+      const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
+            "User-Agent": "aistudio-build",
+          },
+        },
       });
-      const generateConfig = {
-        temperature: temperature,
-        topP: top_p,
-        maxOutputTokens: max_tokens,
+
+      const resolveThinkingLevel = (targetModel: string, levelRaw?: string): ThinkingLevel | undefined => {
+        if (!levelRaw || typeof levelRaw !== "string") return undefined;
+        const upper = levelRaw.trim().toUpperCase();
+        if (!(targetModel.startsWith("gemini-4-") || targetModel.startsWith("gemini-3"))) {
+          return undefined;
+        }
+        if (upper === "MINIMAL") {
+          // gemini-4-* does not support MINIMAL; clamp to LOW
+          return targetModel.startsWith("gemini-4-") ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL;
+        }
+        if (upper === "LOW") return ThinkingLevel.LOW;
+        if (upper === "MEDIUM") return ThinkingLevel.MEDIUM;
+        if (upper === "HIGH") return ThinkingLevel.HIGH;
+        if (upper === "XHIGH" && targetModel === "gemini-4-hydrogen") {
+          return ThinkingLevel.XHIGH;
+        }
+        return undefined;
       };
 
-      // Helper for fallback chains on free tier quota exhaustion (429)
-      const getFallbackModels = (requestedModel: string): string[] => {
-        const candidateChain = [
-          requestedModel,
-          "gemini-3.8-flash",
-          "gemini-3.7-flash",
-          "gemini-3.5-flash",
-          "gemini-3.6-flash",
-          "gemini-3.5-flash-lite",
-          "gemini-3.1-pro-preview"
-        ];
-        return Array.from(new Set(candidateChain));
+      const buildGenerateConfig = (
+        targetModel: string,
+        includeThinking = true,
+        includeResponseMime = true
+      ) => {
+        const cfg: Record<string, any> = {};
+        if (typeof max_tokens === "number" && max_tokens > 0) {
+          cfg.maxOutputTokens = max_tokens;
+        }
+        // Do not pass deprecated sampling parameters (temperature, topP, topK, candidateCount) to gemini-4-*
+        if (!targetModel.startsWith("gemini-4-")) {
+          if (typeof temperature === "number") cfg.temperature = temperature;
+          if (typeof top_p === "number") cfg.topP = top_p;
+        }
+        if (includeResponseMime && typeof responseMimeType === "string" && responseMimeType.trim()) {
+          cfg.responseMimeType = responseMimeType.trim();
+        }
+        if (includeThinking) {
+          const resolvedLevel = resolveThinkingLevel(targetModel, thinkingLevel);
+          if (resolvedLevel) {
+            cfg.thinkingConfig = { thinkingLevel: resolvedLevel };
+          }
+        }
+        return cfg;
+      };
+
+      const extractGeminiResponseText = (resp: any): { text: string; finishReason?: string } => {
+        const finishReason = resp?.candidates?.[0]?.finishReason;
+        let text = "";
+        const parts = resp?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(parts)) {
+          text = parts
+            .filter((p: any) => typeof p?.text === "string" && !p?.thought)
+            .map((p: any) => p.text)
+            .join("")
+            .trim();
+        }
+        if (!text) {
+          try {
+            if (typeof resp?.text === "string") {
+              text = resp.text.trim();
+            }
+          } catch {
+            // ignore getter error when response contains only thought/blocked parts
+          }
+        }
+        return { text, finishReason };
+      };
+
+      const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+        return new Promise<T>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`));
+          }, ms);
+          promise.then(
+            (val) => {
+              clearTimeout(timer);
+              resolve(val);
+            },
+            (err) => {
+              clearTimeout(timer);
+              reject(err);
+            }
+          );
+        });
+      };
+
+      const isDailyQuotaOrFatalError = (errMsg: string): boolean => {
+        const lower = errMsg.toLowerCase();
+        return (
+          lower.includes("perday") ||
+          lower.includes("requestsperday") ||
+          lower.includes("exceeded your current quota") ||
+          lower.includes("limit: 0") ||
+          lower.includes("not_found") ||
+          lower.includes("404") ||
+          lower.includes("api_key_invalid") ||
+          lower.includes("permission_denied") ||
+          lower.includes("403")
+        );
       };
 
       const executeWithRetry = async <T>(
         operation: () => Promise<T>,
         modelName: string,
-        maxRetries = 2,
-        baseDelay = 1000
+        maxRetries = 1,
+        baseDelay = 800
       ): Promise<T> => {
         let lastError: any = null;
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -165,21 +188,23 @@ async function startServer() {
           } catch (error: any) {
             lastError = error;
             const errMsg = String(error.message || error);
-            const isRetryable = 
-              errMsg.toLowerCase().includes("503") || 
-              errMsg.toLowerCase().includes("429") || 
-              errMsg.toLowerCase().includes("500") || 
-              errMsg.toLowerCase().includes("overloaded") || 
-              errMsg.toLowerCase().includes("quota") || 
-              errMsg.toLowerCase().includes("rate limit") || 
-              errMsg.toLowerCase().includes("unavailable") || 
-              errMsg.toLowerCase().includes("busy") ||
-              errMsg.toLowerCase().includes("temporary");
+            if (isDailyQuotaOrFatalError(errMsg)) {
+              throw error;
+            }
+            const lower = errMsg.toLowerCase();
+            const isRetryable =
+              lower.includes("503") ||
+              lower.includes("500") ||
+              lower.includes("overloaded") ||
+              lower.includes("unavailable") ||
+              lower.includes("busy") ||
+              lower.includes("temporary") ||
+              (lower.includes("429") && !lower.includes("quota"));
 
             if (isRetryable && attempt < maxRetries) {
               const delay = baseDelay * Math.pow(2, attempt);
-              console.warn(`[Gemini API Retry] Model ${modelName} encountered retryable error: ${errMsg.substring(0, 150)}. Retrying in ${delay}ms (Attempt ${attempt + 1}/${maxRetries})...`);
-              await new Promise(resolve => setTimeout(resolve, delay));
+              console.warn(`[Gemini API Retry] Model ${modelName} transient error: ${errMsg.substring(0, 150)}. Retrying in ${delay}ms...`);
+              await new Promise((resolve) => setTimeout(resolve, delay));
             } else {
               throw error;
             }
@@ -191,135 +216,111 @@ async function startServer() {
       if (stream) {
         res.setHeader("Content-Type", "text/plain");
         res.setHeader("Access-Control-Allow-Origin", "*");
-        
-        const modelsToTry = getFallbackModels(resolvedModel);
-        let success = false;
-        let lastError: any = null;
 
-        for (const currentModel of modelsToTry) {
+        console.log(`[Gemini API] Stream generation with selected model: ${resolvedModel}`);
+        const responseStream = await executeWithRetry(
+          () =>
+            ai.models.generateContentStream({
+              model: resolvedModel,
+              contents: contents,
+              config: buildGenerateConfig(resolvedModel, true, true),
+            }),
+          resolvedModel
+        );
+
+        for await (const chunk of responseStream) {
+          let text = "";
           try {
-            console.log(`[Gemini API] Attempting stream generation with model: ${currentModel}`);
-            const responseStream = await executeWithRetry(
-              () => ai.models.generateContentStream({
-                model: currentModel,
-                contents: contents,
-                config: generateConfig,
-              }),
-              currentModel
-            );
-            
-            for await (const chunk of responseStream) {
-              let text = "";
-              try {
-                text = chunk.text || "";
-              } catch (e) {
-                // ignore blocked content errors
-              }
-
-              if (!text && chunk.candidates?.[0]?.content?.parts?.[0]?.text) {
-                text = chunk.candidates[0].content.parts[0].text;
-              }
-
-              if (text) {
-                res.write(text);
-              }
-            }
-            success = true;
-            break; // Break out on success
-          } catch (streamError: any) {
-            lastError = streamError;
-            const errorMsg = String(streamError.message || streamError);
-            console.warn(`[Gemini API] Model ${currentModel} failed in stream:`, errorMsg);
-            
-            // Continue to the next fallback model for any network, 429, or quota error
-            continue;
+            text = chunk.text || "";
+          } catch {
+            // ignore blocked content errors
           }
-        }
 
-        if (!success) {
-          if (process.env.DEEPSEEK_API_KEY) {
-            console.log("[Gemini API] Falling back to DeepSeek Chat due to Gemini exhaustion in stream");
-            try {
-              await handleFallbackStream("deepseek", process.env.DEEPSEEK_API_KEY, contents, res);
-              success = true;
-            } catch (err: any) {
-              console.error("[Gemini API] Fallback to DeepSeek failed:", err);
-              throw err;
-            }
-          } else if (process.env.ARK_API_KEY) {
-            console.log("[Gemini API] Falling back to Doubao Chat due to Gemini exhaustion in stream");
-            try {
-              await handleFallbackStream("doubao", process.env.ARK_API_KEY, contents, res);
-              success = true;
-            } catch (err: any) {
-              console.error("[Gemini API] Fallback to Doubao failed:", err);
-              throw err;
-            }
-          } else {
-            throw lastError || new Error("All fallback Gemini models exhausted in stream");
+          if (!text && Array.isArray(chunk.candidates?.[0]?.content?.parts)) {
+            text = chunk.candidates[0].content.parts
+              .filter((p: any) => typeof p?.text === "string" && !p?.thought)
+              .map((p: any) => p.text)
+              .join("");
+          }
+
+          if (text) {
+            res.write(text);
           }
         }
         res.end();
       } else {
-        const modelsToTry = getFallbackModels(resolvedModel);
-        let response = null;
-        let success = false;
-        let lastError: any = null;
+        console.log(`[Gemini API] Content generation with selected model: ${resolvedModel}`);
+        const response = await executeWithRetry(
+          async () => {
+            try {
+              return await withTimeout(
+                ai.models.generateContent({
+                  model: resolvedModel,
+                  contents: contents,
+                  config: buildGenerateConfig(resolvedModel, true, true),
+                }),
+                42000,
+                `Model ${resolvedModel}`
+              );
+            } catch (cfgErr: any) {
+              const cfgMsg = String(cfgErr?.message || cfgErr).toLowerCase();
+              const isConfigRejection =
+                cfgMsg.includes("invalid_argument") ||
+                cfgMsg.includes("thinking") ||
+                cfgMsg.includes("responsemimetype") ||
+                cfgMsg.includes("400");
 
-        for (const currentModel of modelsToTry) {
-          try {
-            console.log(`[Gemini API] Attempting content generation with model: ${currentModel}`);
-            response = await executeWithRetry(
-              () => ai.models.generateContent({
-                model: currentModel,
-                contents: contents,
-                config: generateConfig,
-              }),
-              currentModel
-            );
-            success = true;
-            break;
-          } catch (contentError: any) {
-            lastError = contentError;
-            const errorMsg = String(contentError.message || contentError);
-            console.warn(`[Gemini API] Model ${currentModel} failed in generation:`, errorMsg);
-            
-            // Continue to the next fallback model for any network, 429, or quota error
-            continue;
-          }
+              if (thinkingLevel !== undefined && isConfigRejection) {
+                console.warn(`[Gemini API] Retrying ${resolvedModel} without thinkingConfig (preserving responseMimeType)`);
+                try {
+                  return await withTimeout(
+                    ai.models.generateContent({
+                      model: resolvedModel,
+                      contents: contents,
+                      config: buildGenerateConfig(resolvedModel, false, true),
+                    }),
+                    42000,
+                    `Model ${resolvedModel}`
+                  );
+                } catch (mimeErr: any) {
+                  const mimeMsg = String(mimeErr?.message || mimeErr).toLowerCase();
+                  if (responseMimeType !== undefined && (mimeMsg.includes("responsemimetype") || mimeMsg.includes("invalid_argument"))) {
+                    console.warn(`[Gemini API] Retrying ${resolvedModel} without responseMimeType`);
+                    return await withTimeout(
+                      ai.models.generateContent({
+                        model: resolvedModel,
+                        contents: contents,
+                        config: buildGenerateConfig(resolvedModel, false, false),
+                      }),
+                      42000,
+                      `Model ${resolvedModel}`
+                    );
+                  }
+                  throw mimeErr;
+                }
+              }
+              throw cfgErr;
+            }
+          },
+          resolvedModel
+        );
+
+        const extracted = extractGeminiResponseText(response);
+        if (!extracted.text) {
+          throw new Error(`Model ${resolvedModel} returned empty text (finishReason: ${extracted.finishReason || "EMPTY"})`);
         }
 
-        if (!success || !response) {
-          if (process.env.DEEPSEEK_API_KEY) {
-            console.log("[Gemini API] Falling back to DeepSeek Chat due to Gemini exhaustion in generation");
-            try {
-              const text = await handleFallbackContent("deepseek", process.env.DEEPSEEK_API_KEY, contents);
-              res.json({ text });
-              return;
-            } catch (err: any) {
-              console.error("[Gemini API] Fallback to DeepSeek failed:", err);
-              throw err;
-            }
-          } else if (process.env.ARK_API_KEY) {
-            console.log("[Gemini API] Falling back to Doubao Chat due to Gemini exhaustion in generation");
-            try {
-              const text = await handleFallbackContent("doubao", process.env.ARK_API_KEY, contents);
-              res.json({ text });
-              return;
-            } catch (err: any) {
-              console.error("[Gemini API] Fallback to Doubao failed:", err);
-              throw err;
-            }
-          } else {
-            throw lastError || new Error("All fallback Gemini models exhausted in generation");
-          }
-        }
-
-        res.json({ text: response.text });
+        res.json({
+          text: extracted.text,
+          modelUsed: resolvedModel,
+          finishReason: extracted.finishReason,
+        });
       }
     } catch (error: any) {
-      console.error("Gemini API Error inside Express:", error);
-      res.status(500).json({ error: error.message || String(error) });
+      const msg = error?.message || String(error);
+      console.error("[Gemini API Error inside Express]:", msg);
+      const status = msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") ? 429 : 500;
+      res.status(status).json({ error: msg });
     }
   });
 
@@ -347,7 +348,7 @@ async function startServer() {
       });
 
       const response = await ai.models.embedContent({
-        model: 'gemini-embedding-001',
+        model: 'gemini-embedding-2',
         contents: text,
         config: {
           outputDimensionality: 768

@@ -434,12 +434,8 @@ ${FORCE_LONG_INSTRUCTION}
     const hasResults = Object.keys(stepResults).length > 0;
 
     const MODEL_OPTIONS = [
-        { value: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
-        { value: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash' },
-        { value: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite' },
-        { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro Preview' },
-        { value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
-        { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+        { value: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen' },
+        { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite' },
         { value: 'deepseek-chat', label: 'DeepSeek V3' },
         { value: 'deepseek-reasoner', label: 'DeepSeek R1 (推理)' }
     ];

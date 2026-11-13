@@ -262,12 +262,8 @@ ${FORCE_LONG_INSTRUCTION}
                                 <div className="flex gap-2 font-sans">
                                     <div className="relative flex-1">
                                         <select value={model} onChange={e => setModel(e.target.value)} className="w-full py-1.5 pl-2 pr-6 text-xs font-medium rounded-lg bg-white dark:bg-gray-800 border border-sky-100 dark:border-sky-800 focus:ring-1 focus:ring-sky-500 outline-none appearance-none cursor-pointer">
-                                            <option value="gemini-3.8-flash">Gemini 3.8 Flash</option>
-                                            <option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
-                                            <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option>
-                                            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
-                                            <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
-                                            <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                                            <option value="gemini-4-hydrogen">Gemini 4 Hydrogen</option>
+                                            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
                                             <option value="deepseek-chat">奇思版 (DeepSeek)</option>
                                             <option value="doubao-flash">速写版 (豆包)</option>
                                         </select>
